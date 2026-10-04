@@ -109,7 +109,8 @@ class SessionServicesProviderRoutingTest {
     every { context.applicationContext } returns context
     every { context.packageManager } returns mockk<PackageManager>(relaxed = true)
     every { context.filesDir } returns tempDir.newFolder("files")
-    val sharedPrefs = FakeSharedPreferences()\n    every { context.getSharedPreferences(any(), any()) } returns sharedPrefs
+    val sharedPrefs = FakeSharedPreferences()
+    every { context.getSharedPreferences(any(), any()) } returns sharedPrefs
     every { assets.list(any<String>()) } answers {
       val file = File("src/main/assets", firstArg<String>())
       if (file.isDirectory) file.list().orEmpty() else emptyArray()
