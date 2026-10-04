@@ -2,6 +2,7 @@ package ai.closepaw.session
 
 import android.content.Context
 import android.content.res.AssetManager
+import android.content.pm.PackageManager
 import com.google.common.truth.Truth.assertThat
 import ai.closepaw.auth.AuthCredential
 import ai.closepaw.auth.AuthStore
@@ -105,6 +106,7 @@ class SessionServicesProviderRoutingTest {
     val assets = mockk<AssetManager>()
     every { context.assets } returns assets
     every { context.applicationContext } returns context
+    every { context.packageManager } returns mockk<PackageManager>(relaxed = true)
     every { context.filesDir } returns tempDir.newFolder("files")
     every { context.getSharedPreferences(any(), any()) } returns FakeSharedPreferences()
     every { assets.list(any<String>()) } answers {
