@@ -43,6 +43,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ai.closepaw.BuildConfig
+import ai.closepaw.update.AppUpdater
 import ai.closepaw.ui.theme.Fleuron
 import ai.closepaw.ui.theme.PageMastheadDrillDown
 import ai.closepaw.ui.theme.closePaw
@@ -132,6 +133,8 @@ internal fun PermissionsAdvancedSettingsPage(
                 }
             }
             Spacer(modifier = Modifier.height(20.dp))
+            UpdateSection()
+            Spacer(modifier = Modifier.height(20.dp))
             DataStorageSection(
                 traceEnabled = traceEnabled,
                 onTraceEnabledChange = onTraceEnabledChange
@@ -146,6 +149,86 @@ internal fun PermissionsAdvancedSettingsPage(
             )
             Fleuron()
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun UpdateSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    var installing by remember { mutableStateOf(false) }
+    var release by remember { mutableStateOf<AppUpdater.Release?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    SettingsSection(title = "Updates") {
+        Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.closePaw.spacing.md)) {
+            Button(
+                onClick = {
+                    checking = true
+                    message = null
+                    scope.launch {
+                        when (val result = withContext(Dispatchers.IO) { AppUpdater.check() }) {
+                            AppUpdater.CheckResult.UpToDate -> {
+                                release = null
+                                message = "You are on the latest release."
+                            }
+                            is AppUpdater.CheckResult.Available -> {
+                                release = result.release
+                                message = "Version ${result.release.version} is available."
+                            }
+                            is AppUpdater.CheckResult.Failed -> {
+                                release = null
+                                message = "Update check failed: ${result.message}"
+                            }
+                        }
+                        checking = false
+                    }
+                },
+                enabled = !checking && !installing,
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Text(if (checking) "Checking..." else "Check for Update")
+            }
+
+            release?.let { available ->
+                Button(
+                    onClick = {
+                        installing = true
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) {
+                                AppUpdater.downloadAndVerify(context.applicationContext, available)
+                            }
+                            result.onSuccess { apk ->
+                                val launched = AppUpdater.requestInstall(context, apk)
+                                message = if (launched) {
+                                    "Update verified. Confirm installation in Android."
+                                } else {
+                                    "Allow ClosePaw to install unknown apps, then tap Download & Install again."
+                                }
+                            }.onFailure {
+                                message = "Update failed: ${it.message ?: it.javaClass.simpleName}"
+                            }
+                            installing = false
+                        }
+                    },
+                    enabled = !installing,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large
+                ) {
+                    Text(if (installing) "Downloading & Verifying..." else "Download & Install ${available.version}")
+                }
+            }
+
+            message?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
