@@ -15,6 +15,7 @@ import pytest
 
 HOST = "127.0.0.1"
 BRIDGE_SCRIPT = Path(__file__).resolve().parents[1] / "closepaw_bridge.py"
+AUTH_TOKEN = "test-token-0123456789abcdef0123456789abcdef"
 
 
 @dataclass
@@ -76,6 +77,7 @@ def start_process(port, home, idle_timeout_sec=0, watchdog_tick_sec=None, extra_
     env = os.environ.copy()
     env["HOME"] = str(home)
     env["PYTHONUNBUFFERED"] = "1"
+    env["CLOSEPAW_BRIDGE_TOKEN"] = AUTH_TOKEN
     if extra_env:
         env.update(extra_env)
     args = [
@@ -133,7 +135,7 @@ def wait_for_health(bridge):
 
 def request_json(port, method, path, payload=None, timeout=5):
     data = None
-    headers = {}
+    headers = {"X-ClosePaw-Token": AUTH_TOKEN}
     if payload is not None:
         data = json.dumps(payload, separators=(",", ":")).encode()
         headers["Content-Type"] = "application/json"
