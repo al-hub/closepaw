@@ -44,7 +44,8 @@ class SessionServicesProviderRoutingTest {
   fun `openrouter model works without openai key`() {
     val context = contextWithCatalog()
     installFixtureCatalogRepo(context)
-    val authStore = AuthStore(context, prefsProvider = { FakeSharedPreferences() })
+    val authPrefs = FakeSharedPreferences()
+    val authStore = AuthStore(context, prefsProvider = { authPrefs })
     runBlocking {
       authStore.set(LLMProvider.OPENROUTER, AuthCredential.ApiKey("sk-or-test"))
     }
@@ -74,7 +75,8 @@ class SessionServicesProviderRoutingTest {
   fun `main model requires its provider credential`() {
     val context = contextWithCatalog()
     installFixtureCatalogRepo(context)
-    val authStore = AuthStore(context, prefsProvider = { FakeSharedPreferences() })
+    val authPrefs = FakeSharedPreferences()
+    val authStore = AuthStore(context, prefsProvider = { authPrefs })
     runBlocking {
       authStore.set(LLMProvider.OPENAI_API, AuthCredential.ApiKey("sk-openai-test"))
     }
