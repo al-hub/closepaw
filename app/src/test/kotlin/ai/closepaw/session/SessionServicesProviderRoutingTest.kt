@@ -2,6 +2,7 @@ package ai.closepaw.session
 
 import android.content.Context
 import android.content.res.AssetManager
+import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.SharedPreferences
 import com.google.common.truth.Truth.assertThat
@@ -109,7 +110,10 @@ class SessionServicesProviderRoutingTest {
     val assets = mockk<AssetManager>()
     every { context.assets } returns assets
     every { context.applicationContext } returns context
-    every { context.packageManager } returns mockk<PackageManager>(relaxed = true)
+    val packageManager = mockk<PackageManager>(relaxed = true)
+    val packageInfo = mockk<PackageInfo>(relaxed = true)
+    every { packageManager.getPackageInfo(any<String>(), any<Int>()) } returns packageInfo
+    every { context.packageManager } returns packageManager
     every { context.filesDir } returns tempDir.newFolder("files")
     val sharedPrefs = FakeSharedPreferences()
     every { context.getSharedPreferences(any(), any()) } returns sharedPrefs
