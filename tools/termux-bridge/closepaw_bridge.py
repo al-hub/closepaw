@@ -369,7 +369,7 @@ def parse_args():
     return parser.parse_args()
 def main():
     args = parse_args()
-    pidfile = closepaw_dir() / "bridge.pid"
+    # Security boundary: never expose the command bridge beyond this device.\n    # Android apps share the network namespace, so loopback is necessary but not\n    # sufficient; app-side approval remains mandatory for command execution.\n    if args.host not in ("127.0.0.1", "localhost", "::1"):\n        print("refusing_non_loopback_host", file=sys.stderr)\n        return 2\n    pidfile = closepaw_dir() / "bridge.pid"
     kill_old_bridge(pidfile)
     try:
         server = BridgeServer((args.host, args.port), Handler,
