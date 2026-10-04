@@ -275,7 +275,7 @@ class TermuxBridgeManager internal constructor(
     private suspend fun startBridge(): StartResult {
         val result =
             try {
-                commandRunner.runShell(START_BRIDGE_COMMAND, timeoutMs = START_TIMEOUT_MS)
+                commandRunner.runShell(startBridgeCommand(), timeoutMs = START_TIMEOUT_MS)
             } catch (e: RunCommandError) {
                 return StartResult.Failed(e.toReason(NeedsSetupReason.UNKNOWN))
             }
