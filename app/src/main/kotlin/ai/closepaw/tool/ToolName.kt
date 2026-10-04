@@ -11,9 +11,9 @@ sealed class ToolName(
     val isScreenChanging: Boolean
         get() =
             when (this) {
-                MobileAction, OpenApp, SystemButton, DelegateTask, BrowserScript -> true
+                MobileAction, OpenApp, SystemButton, DelegateTask, BrowserScript, TermuxShell -> true
                 Wait, CompleteTask, WriteTodos, Scratchpad, RememberExperience, AskUser,
-                Shell, TermuxShell, ActivateSkill -> false
+                Shell, ActivateSkill -> false
                 is Unknown -> true
             }
 
