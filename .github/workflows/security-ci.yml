@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -nEI '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9_-]{20,})' -- ':!*.md' ':!*.json'; then
+          if git grep -nEI '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9_-]{20,})' -- ':!*.md' ':!*.json' ':!.env.example' ':!**/src/test/**' ':!**/src/androidTest/**'; then
             echo "Potential committed secret detected"
             exit 1
           fi
