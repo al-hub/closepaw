@@ -106,6 +106,7 @@ class SessionServicesProviderRoutingTest {
     every { context.assets } returns assets
     every { context.applicationContext } returns context
     every { context.filesDir } returns tempDir.newFolder("files")
+    every { context.getSharedPreferences(any(), any()) } returns FakeSharedPreferences()
     every { assets.list(any<String>()) } answers {
       val file = File("src/main/assets", firstArg<String>())
       if (file.isDirectory) file.list().orEmpty() else emptyArray()
