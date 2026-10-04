@@ -1,5 +1,8 @@
 package ai.closepaw.ui.settings
 
+import android.content.ContentValues
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,6 +50,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.FileInputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 @Composable
 internal fun PermissionsAdvancedSettingsPage(
@@ -165,6 +171,8 @@ private fun DataStorageSection(
     var sessionClearState by remember { mutableStateOf<ClearDataState>(ClearDataState.Idle) }
     var showClearTracesConfirm by remember { mutableStateOf(false) }
     var showClearSessionsConfirm by remember { mutableStateOf(false) }
+    var exportMessage by remember { mutableStateOf<String?>(null) }
+    var exporting by remember { mutableStateOf(false) }
 
     fun clearTraces() {
         if (traceClearState is ClearDataState.Clearing) return
@@ -285,6 +293,30 @@ private fun DataStorageSection(
                 }
             }
 
+            Button(
+                onClick = {
+                    if (!exporting) {
+                        exporting = true
+                        scope.launch {
+                            exportMessage = withContext(Dispatchers.IO) { exportTracesToDownloads(context) }
+                            exporting = false
+                        }
+                    }
+                },
+                enabled = !exporting,
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Text(if (exporting) "Exporting..." else "Export Diagnostic Logs")
+            }
+            exportMessage?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             // Clear traces button
             ClearDataButton(
                 label = clearDataButtonLabel(traceClearState, idle = "Clear Traces", clearing = "Clearing Traces", cleared = "Traces Cleared"),
@@ -370,5 +402,42 @@ private fun ClearDataButton(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(text = label, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+
+private fun exportTracesToDownloads(context: android.content.Context): String {
+    val source = context.getExternalFilesDir(TRACE_DIR)
+        ?: return "Could not access trace storage."
+    if (!source.exists() || source.walkTopDown().none { it.isFile }) {
+        return "No diagnostic logs yet. Enable Session Traces and run a test first."
+    }
+    val name = "closepaw-diagnostics-" + System.currentTimeMillis() + ".zip"
+    return try {
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, name)
+            put(MediaStore.Downloads.MIME_TYPE, "application/zip")
+            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/ClosePaw")
+            put(MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: return "Could not create the diagnostic ZIP in Downloads."
+        resolver.openOutputStream(uri)?.use { output ->
+            ZipOutputStream(output).use { zip ->
+                source.walkTopDown().filter { it.isFile }.forEach { file ->
+                    val relative = file.relativeTo(source).invariantSeparatorsPath
+                    zip.putNextEntry(ZipEntry(relative))
+                    FileInputStream(file).use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
+        } ?: return "Could not open the diagnostic ZIP for writing."
+        values.clear()
+        values.put(MediaStore.Downloads.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
+        "Saved to Downloads/ClosePaw/$name — attach this ZIP in ChatGPT."
+    } catch (e: Exception) {
+        "Diagnostic export failed: " + (e.message ?: e.javaClass.simpleName)
     }
 }
