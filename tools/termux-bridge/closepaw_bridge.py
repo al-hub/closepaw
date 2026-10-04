@@ -3,6 +3,7 @@
 BRIDGE_VERSION = "1"
 import argparse
 import errno
+import hmac
 import json
 import os
 import select
@@ -23,6 +24,7 @@ DEFAULT_TIMEOUT_MS = MAX_TIMEOUT_MS = 120_000
 DEFAULT_OUTPUT_BYTES = 65536
 POLL_SEC = 0.25
 exec_lock = threading.Lock()
+AUTH_HEADER = "X-ClosePaw-Token"
 class InvalidRequest(Exception): pass
 class WorkspaceEscape(Exception): pass
 def closepaw_dir():
@@ -271,8 +273,9 @@ def run_command(request, spec):
     }, disconnected
 class BridgeServer(ThreadingHTTPServer):
     daemon_threads = True
-    def __init__(self, address, handler, idle_timeout_sec, watchdog_tick_sec):
+    def __init__(self, address, handler, idle_timeout_sec, watchdog_tick_sec, auth_token):
         super().__init__(address, handler)
+        self.auth_token = auth_token
         self.started_at = time.monotonic()
         self.last_request_at = self.started_at
         self.last_request_lock = threading.Lock()
@@ -333,6 +336,10 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split("?", 1)[0] != "/v1/exec":
             self.send_json(404, {"error": "not_found"})
             return
+        supplied_token = self.headers.get(AUTH_HEADER, "")
+        if not supplied_token or not hmac.compare_digest(supplied_token, self.server.auth_token):
+            self.send_json(401, {"error": "unauthorized"})
+            return
         try:
             spec = parse_exec(self.read_json())
         except WorkspaceEscape:
@@ -366,6 +373,7 @@ def parse_args():
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--idle-timeout-sec", type=int, default=1800)
     parser.add_argument("--watchdog-tick-sec", type=float, default=60, help=argparse.SUPPRESS)
+    parser.add_argument("--auth-token", default=os.environ.get("CLOSEPAW_BRIDGE_TOKEN"))
     return parser.parse_args()
 def main():
     args = parse_args()
@@ -375,11 +383,14 @@ def main():
     if args.host not in ("127.0.0.1", "localhost", "::1"):
         print("refusing_non_loopback_host", file=sys.stderr)
         return 2
+    if not args.auth_token or len(args.auth_token) < 32:
+        print("missing_or_weak_auth_token", file=sys.stderr)
+        return 2
     pidfile = closepaw_dir() / "bridge.pid"
     kill_old_bridge(pidfile)
     try:
         server = BridgeServer((args.host, args.port), Handler,
-                              args.idle_timeout_sec, args.watchdog_tick_sec)
+                              args.idle_timeout_sec, args.watchdog_tick_sec, args.auth_token)
     except OSError as exc:
         if exc.errno == errno.EADDRINUSE:
             print("port_in_use", file=sys.stderr)
