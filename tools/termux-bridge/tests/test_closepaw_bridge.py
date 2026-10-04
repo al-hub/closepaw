@@ -58,6 +58,16 @@ def test_health_endpoint_returns_ok_version_and_identity(bridge_server):
     assert isinstance(response.body["last_request_ms_ago"], int)
 
 
+def test_exec_endpoint_rejects_missing_or_wrong_token(bridge_server):
+    missing = bridge_server.post_json("/v1/exec", {"command": "echo nope"}, auth_token=None)
+    wrong = bridge_server.post_json("/v1/exec", {"command": "echo nope"}, auth_token="x" * 40)
+
+    assert missing.status == 401
+    assert missing.body == {"error": "unauthorized"}
+    assert wrong.status == 401
+    assert wrong.body == {"error": "unauthorized"}
+
+
 def test_exec_endpoint_runs_simple_command(bridge_server):
     response = bridge_server.post_json("/v1/exec", {"command": "echo hi"})
 
