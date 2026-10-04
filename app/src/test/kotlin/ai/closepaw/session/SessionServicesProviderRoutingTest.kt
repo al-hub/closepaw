@@ -124,18 +124,7 @@ class SessionServicesProviderRoutingTest {
     return context
   }
 
-  private fun fakeSharedPreferences(): SharedPreferences {
-    val prefs = FakeSharedPreferences()
-    val editor = mockk<SharedPreferences.Editor>(relaxed = true)
-    every { prefs.edit() } returns editor
-    every { editor.putString(any(), any()) } returns editor
-    every { editor.putBoolean(any(), any()) } returns editor
-    every { editor.putStringSet(any(), any()) } returns editor
-    every { editor.remove(any()) } returns editor
-    every { editor.clear() } returns editor
-    every { editor.commit() } returns true
-    return prefs
-  }
+  private fun fakeSharedPreferences(): SharedPreferences = FakeSharedPreferences()
 
   /**
    * Install a fixture [ModelCatalogRepository] backed by [context]'s mocked assets so
