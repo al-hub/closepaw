@@ -3,6 +3,7 @@ package ai.closepaw.session
 import android.content.Context
 import android.content.res.AssetManager
 import android.content.pm.PackageManager
+import android.content.SharedPreferences
 import com.google.common.truth.Truth.assertThat
 import ai.closepaw.auth.AuthCredential
 import ai.closepaw.auth.AuthStore
@@ -108,7 +109,7 @@ class SessionServicesProviderRoutingTest {
     every { context.applicationContext } returns context
     every { context.packageManager } returns mockk<PackageManager>(relaxed = true)
     every { context.filesDir } returns tempDir.newFolder("files")
-    every { context.getSharedPreferences(any(), any()) } returns FakeSharedPreferences()
+    every { context.getSharedPreferences(any(), any()) } answers { fakeSharedPreferences() }
     every { assets.list(any<String>()) } answers {
       val file = File("src/main/assets", firstArg<String>())
       if (file.isDirectory) file.list().orEmpty() else emptyArray()
@@ -121,6 +122,19 @@ class SessionServicesProviderRoutingTest {
       }
     }
     return context
+  }
+
+  private fun fakeSharedPreferences(): SharedPreferences {
+    val prefs = FakeSharedPreferences()
+    val editor = mockk<SharedPreferences.Editor>(relaxed = true)
+    every { prefs.edit() } returns editor
+    every { editor.putString(any(), any()) } returns editor
+    every { editor.putBoolean(any(), any()) } returns editor
+    every { editor.putStringSet(any(), any()) } returns editor
+    every { editor.remove(any()) } returns editor
+    every { editor.clear() } returns editor
+    every { editor.commit() } returns true
+    return prefs
   }
 
   /**
