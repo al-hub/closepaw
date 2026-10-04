@@ -33,8 +33,8 @@ class BridgeProcess:
     def get_json(self, path, timeout=5):
         return request_json(self.port, "GET", path, timeout=timeout)
 
-    def post_json(self, path, payload, timeout=10):
-        return request_json(self.port, "POST", path, payload=payload, timeout=timeout)
+    def post_json(self, path, payload, timeout=10, auth_token=AUTH_TOKEN):
+        return request_json(self.port, "POST", path, payload=payload, timeout=timeout, auth_token=auth_token)
 
 
 @pytest.fixture
@@ -133,9 +133,11 @@ def wait_for_health(bridge):
     raise AssertionError(f"bridge did not become healthy on port {bridge.port}: {last_error!r}")
 
 
-def request_json(port, method, path, payload=None, timeout=5):
+def request_json(port, method, path, payload=None, timeout=5, auth_token=AUTH_TOKEN):
     data = None
-    headers = {"X-ClosePaw-Token": AUTH_TOKEN}
+    headers = {}
+    if auth_token is not None:
+        headers["X-ClosePaw-Token"] = auth_token
     if payload is not None:
         data = json.dumps(payload, separators=(",", ":")).encode()
         headers["Content-Type"] = "application/json"
