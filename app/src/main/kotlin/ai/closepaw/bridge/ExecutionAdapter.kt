@@ -18,6 +18,7 @@ data class ExecutionRequest(
     val command: String,
     val workingDirectory: String? = null,
     val timeoutMs: Long = 120_000L,
+    val environment: Map<String, String> = emptyMap(),
 )
 
 data class ExecutionResult(
