@@ -2,6 +2,7 @@ package ai.closepaw.termux
 
 import android.content.Context
 import android.util.Base64
+import java.util.Base64 as JavaBase64
 
 internal object TermuxManualBootstrap {
     private const val BOOT_SCRIPT_PATH = "~/.termux/boot/10-closepaw-bridge"
@@ -23,7 +24,7 @@ CLOSEPAW_BRIDGE_TOKEN="$(cat "$TOKEN_FILE")" nohup python3 "$BRIDGE" >/dev/null 
 
     fun command(): String {
         val bootScriptBase64 =
-            Base64.encodeToString(bootScript().toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+            JavaBase64.getEncoder().encodeToString(bootScript().toByteArray(Charsets.UTF_8))
         return "umask 077; mkdir -p ~/.closepaw ~/closepaw/workspace ~/closepaw/logs ~/.termux/boot; " +
             "read -r CLOSEPAW_TOKEN; printf '%s' "$CLOSEPAW_TOKEN" > ~/.closepaw/token; " +
             "chmod 600 ~/.closepaw/token; unset CLOSEPAW_TOKEN; " +
