@@ -1,7 +1,7 @@
 # Termux Shell
 
 > Full Linux bash runtime for the agent through a Termux bridge daemon.
-> Last updated: 2026-10-05
+> Last updated: 2026-10-05 (pairing bootstrap CI validation)
 
 ## Overview
 
