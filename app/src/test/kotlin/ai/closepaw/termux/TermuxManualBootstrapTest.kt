@@ -29,7 +29,8 @@ class TermuxManualBootstrapTest {
 
     @Test fun `boot script reads token at runtime instead of embedding secret`() {
         val script = TermuxManualBootstrap.bootScript()
-        assertThat(script).contains("cat \"\$HOME/.closepaw/token\"")
+        assertThat(script).contains("TOKEN_FILE=\"\$HOME/.closepaw/token\"")
+        assertThat(script).contains("cat \"\$TOKEN_FILE\"")
         assertThat(script).doesNotContain("test-token")
         assertThat(script).contains("127.0.0.1:18422")
     }
