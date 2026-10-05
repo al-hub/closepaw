@@ -1,6 +1,13 @@
 package ai.closepaw.tool.impl
 
 import com.google.common.truth.Truth.assertThat
+import ai.closepaw.bridge.AdapterAvailability
+import ai.closepaw.bridge.CapabilityExecutionGateway
+import ai.closepaw.bridge.ExecutionAdapter
+import ai.closepaw.bridge.ExecutionAdapterRegistry
+import ai.closepaw.bridge.ExecutionCapability
+import ai.closepaw.bridge.ExecutionRequest
+import ai.closepaw.bridge.ExecutionResult
 import ai.closepaw.tool.ValidationResult
 import org.json.JSONObject
 import org.junit.Test
@@ -10,7 +17,7 @@ import org.junit.Test
  */
 class ShellToolBlocklistTest {
 
-    private val tool = ShellTool()
+    private val tool = ShellTool(testGateway())
 
     // ── Blocklist completeness ──────────────────────────────────────
 
@@ -162,4 +169,15 @@ class ShellToolBlocklistTest {
         val result = tool.validate(JSONObject().put("command", command))
         assertThat(result).isEqualTo(ValidationResult.Valid)
     }
+    private fun testGateway() = CapabilityExecutionGateway(
+        ExecutionAdapterRegistry(
+            listOf(object : ExecutionAdapter {
+                override val id = "test-shell"
+                override val capabilities = setOf(ExecutionCapability.ANDROID_SHELL)
+                override suspend fun probe() = AdapterAvailability.Available
+                override suspend fun execute(request: ExecutionRequest) =
+                    ExecutionResult(id, 0, "", "")
+            })
+        )
+    )
 }

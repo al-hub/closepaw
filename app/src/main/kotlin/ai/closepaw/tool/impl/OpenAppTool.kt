@@ -1,7 +1,8 @@
 package ai.closepaw.tool.impl
 
 import android.util.Log
-import ai.closepaw.platform.ActionResult
+import ai.closepaw.bridge.CapabilityExecutionGateway
+import ai.closepaw.bridge.ExecutionCapability
 import ai.closepaw.protocol.AppTier
 import ai.closepaw.tool.action.buildObservation
 import ai.closepaw.tool.ToolExecutionContext
@@ -68,7 +69,9 @@ internal object AppAliases {
  * 5. Package-name-shaped input → direct launch
  * 6. Fuzzy suggestions on failure
  */
-class OpenAppTool : ToolSpec {
+class OpenAppTool(
+    private val gateway: CapabilityExecutionGateway,
+) : ToolSpec {
 
     companion object {
         private const val TAG = "OpenAppTool"
@@ -114,7 +117,7 @@ If the app is not found, suggestions will be provided.
 
         val desc = appendReason("Open app: $appName", agentThought)
 
-        return OpenAppInvocation(params, desc, appName)
+        return OpenAppInvocation(params, desc, appName, gateway)
     }
 }
 
@@ -126,7 +129,8 @@ If the app is not found, suggestions will be provided.
 private class OpenAppInvocation(
     override val params: JSONObject,
     private val description: String,
-    private val appName: String
+    private val appName: String,
+    private val gateway: CapabilityExecutionGateway,
 ) : ToolInvocation {
 
     companion object {
@@ -206,33 +210,39 @@ private class OpenAppInvocation(
         }
 
         // --- Launch ---
-        val result = context.platform.launchApp(targetPackage)
-
-        return when (result) {
-            is ActionResult.Success -> {
-                delay(UI_SETTLE_DELAY_MS)
-
-                val snapshot = try {
-                    context.platform.captureScreen()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to capture screen after app launch", e)
-                    null
-                }
-
-                val observation = snapshot?.let {
-                    buildObservation(it, context.platform, context.appClassifier)
-                }
-
-                ToolExecutionResult.Success(
-                    output = "Launched ${match.label} ($targetPackage)",
-                    observation = observation
+        val result =
+            try {
+                gateway.execute(
+                    capability = ExecutionCapability.ANDROID_INTENT,
+                    command = targetPackage,
+                )
+            } catch (e: Exception) {
+                return ToolExecutionResult.Failure(
+                    "Failed to launch '${match.label}': ${e.message}",
+                    e
                 )
             }
-            is ActionResult.Failure -> ToolExecutionResult.Failure(
-                "Failed to launch '${match.label}': ${result.reason}"
+
+        if (result.exitCode != 0) {
+            return ToolExecutionResult.Failure(
+                "Failed to launch '${match.label}': ${result.stderr.ifBlank { "Android intent execution failed" }}"
             )
-            else -> ToolExecutionResult.Failure("Unexpected result: $result")
         }
+
+        delay(UI_SETTLE_DELAY_MS)
+        val snapshot = try {
+            context.platform.captureScreen()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to capture screen after app launch", e)
+            null
+        }
+        val observation = snapshot?.let {
+            buildObservation(it, context.platform, context.appClassifier)
+        }
+        return ToolExecutionResult.Success(
+            output = "Launched ${match.label} ($targetPackage) via ${result.adapterId}",
+            observation = observation
+        )
     }
 
     // ---- Helpers ----

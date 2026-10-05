@@ -1,19 +1,19 @@
 package ai.closepaw.tool.impl
 
+import ai.closepaw.bridge.CapabilityExecutionGateway
+import ai.closepaw.bridge.ExecutionCapability
 import ai.closepaw.tool.ToolExecutionContext
 import ai.closepaw.tool.ToolExecutionResult
 import ai.closepaw.tool.ToolInvocation
 import ai.closepaw.tool.ToolSpec
 import ai.closepaw.tool.ValidationResult
 import ai.closepaw.tool.textToolSuccess
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class ShellTool(
+    private val gateway: CapabilityExecutionGateway,
     private val timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS,
 ) : ToolSpec {
     override val name: String = "shell"
@@ -59,7 +59,7 @@ class ShellTool(
 
     override fun createInvocation(params: JSONObject): ToolInvocation {
         val command = params.getString("command").trim()
-        return ShellInvocation(command = command, params = params, timeoutSeconds = timeoutSeconds)
+        return ShellInvocation(command = command, params = params, timeoutSeconds = timeoutSeconds, gateway = gateway)
     }
 
     companion object {
@@ -83,6 +83,7 @@ class ShellTool(
         private val command: String,
         override val params: JSONObject,
         private val timeoutSeconds: Long,
+        private val gateway: CapabilityExecutionGateway,
     ) : ToolInvocation {
         override val toolName: String = "shell"
 
@@ -93,49 +94,32 @@ class ShellTool(
                 return ToolExecutionResult.Cancelled("Cancelled before execution")
             }
 
-            return withContext(Dispatchers.IO) {
-                try {
-                    val process = ProcessBuilder("sh", "-c", command)
-                        .redirectErrorStream(true)
-                        .start()
-
-                    // Read output concurrently to prevent pipe deadlock.
-                    // Must read BEFORE/during waitFor — if the process fills the
-                    // OS pipe buffer (~64KB) before we read, it blocks and waitFor
-                    // never returns.
-                    val outputDeferred = async(Dispatchers.IO) {
-                        process.inputStream.bufferedReader().use { reader ->
-                            buildString {
-                                val buf = CharArray(1024)
-                                while (length < MAX_OUTPUT_CHARS) {
-                                    val n = reader.read(
-                                        buf, 0,
-                                        minOf(buf.size, MAX_OUTPUT_CHARS - length)
-                                    )
-                                    if (n < 0) break
-                                    append(buf, 0, n)
-                                }
+            return try {
+                val result =
+                    gateway.execute(
+                        capability = ExecutionCapability.ANDROID_SHELL,
+                        command = command,
+                        timeoutMs = TimeUnit.SECONDS.toMillis(timeoutSeconds),
+                    )
+                if (result.timedOut) {
+                    ToolExecutionResult.Failure("Command timed out after ${timeoutSeconds}s")
+                } else {
+                    val output =
+                        buildString {
+                            append("exit=${result.exitCode ?: -1}\n")
+                            append(result.stdout)
+                            if (result.stderr.isNotBlank()) {
+                                if (result.stdout.isNotBlank()) append('\n')
+                                append(result.stderr)
                             }
-                        }
-                    }
-
-                    val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
-                    if (!completed) {
-                        process.destroyForcibly()
-                        outputDeferred.cancel()
-                        return@withContext ToolExecutionResult.Failure(
-                            "Command timed out after ${timeoutSeconds}s"
-                        )
-                    }
-
-                    val output = outputDeferred.await()
-                    val exitCode = process.exitValue()
-                    val truncationNote = if (output.length >= MAX_OUTPUT_CHARS)
-                        "\n[output truncated at $MAX_OUTPUT_CHARS chars]" else ""
-                    textToolSuccess(output = "exit=$exitCode\n$output$truncationNote")
-                } catch (e: Exception) {
-                    ToolExecutionResult.Failure("Shell execution failed: ${e.message}", e)
+                        }.take(MAX_OUTPUT_CHARS)
+                    val truncationNote =
+                        if (output.length >= MAX_OUTPUT_CHARS) "\n[output truncated at $MAX_OUTPUT_CHARS chars]"
+                        else ""
+                    textToolSuccess(output = output + truncationNote)
                 }
+            } catch (e: Exception) {
+                ToolExecutionResult.Failure("Shell execution failed: ${e.message}", e)
             }
         }
     }

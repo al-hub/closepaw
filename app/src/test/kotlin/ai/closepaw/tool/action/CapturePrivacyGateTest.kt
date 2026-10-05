@@ -1,6 +1,10 @@
 package ai.closepaw.tool.action
 
 import com.google.common.truth.Truth.assertThat
+import ai.closepaw.bridge.AdapterAvailability
+import ai.closepaw.bridge.AndroidIntentExecutionAdapter
+import ai.closepaw.bridge.CapabilityExecutionGateway
+import ai.closepaw.bridge.ExecutionAdapterRegistry
 import ai.closepaw.model.Bounds
 import ai.closepaw.model.PerceptionElement
 import ai.closepaw.model.Point
@@ -104,7 +108,7 @@ class CapturePrivacyGateTest {
         )
         val context = contextWith(platform, classifier())
 
-        val invocation = OpenAppTool()
+        val invocation = OpenAppTool(intentGateway(platform))
             .createInvocation(JSONObject().put("app_name", "Chase"))
         val result = invocation.execute(context)
 
@@ -122,7 +126,7 @@ class CapturePrivacyGateTest {
         )
         val context = contextWith(platform, classifier())
 
-        val invocation = OpenAppTool()
+        val invocation = OpenAppTool(intentGateway(platform))
             .createInvocation(JSONObject().put("app_name", "Settings"))
         val result = invocation.execute(context)
 
@@ -218,6 +222,11 @@ class CapturePrivacyGateTest {
         assertThat(obs).isNotNull()
         assertThat(obs!!.elementCount).isGreaterThan(0)
     }
+
+    private fun intentGateway(platform: AndroidPlatform) =
+        CapabilityExecutionGateway(
+            ExecutionAdapterRegistry(listOf(AndroidIntentExecutionAdapter(platform)))
+        )
 
     // ---- Helpers ----
 
