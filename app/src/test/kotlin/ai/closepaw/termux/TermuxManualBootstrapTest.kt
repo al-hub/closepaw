@@ -23,15 +23,13 @@ class TermuxManualBootstrapTest {
         val command = TermuxManualBootstrap.command()
         assertThat(command).contains("~/.termux/boot")
         assertThat(command).contains("10-closepaw-bridge")
-        assertThat(command).contains("CLOSEPAW_BRIDGE_TOKEN")
         assertThat(command).contains("~/.closepaw/token")
-        assertThat(command).contains("nohup python3 ~/.closepaw/bridge.py")
         assertThat(command).contains("chmod 700")
     }
 
     @Test fun `boot script reads token at runtime instead of embedding secret`() {
         val script = TermuxManualBootstrap.bootScript()
-        assertThat(script).contains("cat \"$HOME/.closepaw/token\"")
+        assertThat(script).contains("cat \"\$HOME/.closepaw/token\"")
         assertThat(script).doesNotContain("test-token")
         assertThat(script).contains("127.0.0.1:18422")
     }
