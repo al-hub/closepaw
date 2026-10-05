@@ -16,8 +16,10 @@ internal val WORKSPACE_SHELL_PROMPT_SECTION =
     To share with other apps, cp to /sdcard/Download/.
 
     ### When to use which shell
-    - termux_shell: when you need a full toolchain (python/git/node, etc.) or pipe/redirect
-    - shell: quick device file checks (ls/cat/stat), when you don't need the Termux toolchain
+    - If the user explicitly asks to run a command in Termux, always use termux_shell, including simple commands such as echo, pwd, whoami, or ssh.
+    - termux_shell: commands that must run in the Termux/Linux environment, plus full-toolchain work (python/git/node, pipes, redirects, SSH, installed Termux packages).
+    - shell: Android app-sandbox/device file checks only (ls/cat/stat) when the request is not for Termux/Linux execution.
+    - Do not emulate Termux execution through shell, run-as, am, pm, UI typing, or Android broadcasts. If termux_shell is available, use it directly and return its actual adapter_id, exit_code, stdout, stderr, and timed_out result.
 
     ### When to use UI tools vs shell
     - UI tools (mobile_action, etc.): phone app interactions, screen navigation
