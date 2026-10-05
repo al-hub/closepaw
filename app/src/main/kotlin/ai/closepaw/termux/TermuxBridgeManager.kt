@@ -24,7 +24,8 @@ class TermuxBridgeManager internal constructor(
     private val healthProbe: TermuxHealthProbe,
     private val termuxInstallProbe: TermuxInstallProbe,
     private val bridgePayloadBase64: suspend () -> String,
-    private val managerScope: CoroutineScope
+    private val managerScope: CoroutineScope,
+    private val authToken: String = "test-token-0123456789abcdef0123456789abcdef"
 ) {
     companion object {
         private const val TAG = "TermuxBridgeManager"
@@ -86,7 +87,8 @@ class TermuxBridgeManager internal constructor(
         healthProbe = HttpTermuxHealthProbe(HEALTH_URL, BRIDGE_IDENTITY, BRIDGE_VERSION_EXPECTED),
         termuxInstallProbe = AndroidTermuxInstallProbe(context.applicationContext.packageManager),
         bridgePayloadBase64 = suspend { loadBridgePayloadBase64(context.applicationContext) },
-        managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        authToken = TermuxBridgeAuth.token(context.applicationContext)
     )
 
     suspend fun setup(): TermuxBridgeStatus =
@@ -273,7 +275,7 @@ class TermuxBridgeManager internal constructor(
     private suspend fun startBridge(): StartResult {
         val result =
             try {
-                commandRunner.runShell(START_BRIDGE_COMMAND, timeoutMs = START_TIMEOUT_MS)
+                commandRunner.runShell(startBridgeCommand(), timeoutMs = START_TIMEOUT_MS)
             } catch (e: RunCommandError) {
                 return StartResult.Failed(e.toReason(NeedsSetupReason.UNKNOWN))
             }
@@ -297,6 +299,9 @@ class TermuxBridgeManager internal constructor(
         }
         return StartResult.Started
     }
+
+    private fun startBridgeCommand(): String =
+        "CLOSEPAW_BRIDGE_TOKEN=${authToken} " + START_BRIDGE_COMMAND
 
     private suspend fun waitForReadyHealth(): HealthProbe {
         return withTimeoutOrNull(HEALTH_READY_TIMEOUT_MS) {

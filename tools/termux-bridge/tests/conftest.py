@@ -15,6 +15,7 @@ import pytest
 
 HOST = "127.0.0.1"
 BRIDGE_SCRIPT = Path(__file__).resolve().parents[1] / "closepaw_bridge.py"
+AUTH_TOKEN = "test-token-0123456789abcdef0123456789abcdef"
 
 
 @dataclass
@@ -32,8 +33,8 @@ class BridgeProcess:
     def get_json(self, path, timeout=5):
         return request_json(self.port, "GET", path, timeout=timeout)
 
-    def post_json(self, path, payload, timeout=10):
-        return request_json(self.port, "POST", path, payload=payload, timeout=timeout)
+    def post_json(self, path, payload, timeout=10, auth_token=AUTH_TOKEN):
+        return request_json(self.port, "POST", path, payload=payload, timeout=timeout, auth_token=auth_token)
 
 
 @pytest.fixture
@@ -76,6 +77,7 @@ def start_process(port, home, idle_timeout_sec=0, watchdog_tick_sec=None, extra_
     env = os.environ.copy()
     env["HOME"] = str(home)
     env["PYTHONUNBUFFERED"] = "1"
+    env["CLOSEPAW_BRIDGE_TOKEN"] = AUTH_TOKEN
     if extra_env:
         env.update(extra_env)
     args = [
@@ -131,9 +133,11 @@ def wait_for_health(bridge):
     raise AssertionError(f"bridge did not become healthy on port {bridge.port}: {last_error!r}")
 
 
-def request_json(port, method, path, payload=None, timeout=5):
+def request_json(port, method, path, payload=None, timeout=5, auth_token=AUTH_TOKEN):
     data = None
     headers = {}
+    if auth_token is not None:
+        headers["X-ClosePaw-Token"] = auth_token
     if payload is not None:
         data = json.dumps(payload, separators=(",", ":")).encode()
         headers["Content-Type"] = "application/json"

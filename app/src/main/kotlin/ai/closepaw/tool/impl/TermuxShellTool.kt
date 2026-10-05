@@ -27,6 +27,7 @@ import kotlin.coroutines.resumeWithException
 class TermuxShellTool(
     private val httpClient: OkHttpClient = OkHttpClient(),
     private val bridgeBaseUrl: String = DEFAULT_BRIDGE_BASE_URL,
+    private val authToken: String = "",
 ) : ToolSpec {
     override val name: String = "termux_shell"
 
@@ -127,7 +128,8 @@ class TermuxShellTool(
             validationErrors = validationErrors,
             params = invocationParams,
             httpClient = httpClient,
-            bridgeBaseUrl = bridgeBaseUrl.trimEnd('/')
+            bridgeBaseUrl = bridgeBaseUrl.trimEnd('/'),
+            authToken = authToken
         )
     }
 
@@ -170,6 +172,7 @@ class TermuxShellTool(
         override val params: JSONObject,
         private val httpClient: OkHttpClient,
         private val bridgeBaseUrl: String,
+        private val authToken: String,
     ) : ToolInvocation {
         override val toolName: String = "termux_shell"
 
@@ -219,6 +222,7 @@ class TermuxShellTool(
             }
             return Request.Builder()
                 .url("$bridgeBaseUrl/v1/exec")
+                .header("X-ClosePaw-Token", authToken)
                 .post(bodyJson.toString().toRequestBody(JSON_MEDIA_TYPE))
                 .build()
         }

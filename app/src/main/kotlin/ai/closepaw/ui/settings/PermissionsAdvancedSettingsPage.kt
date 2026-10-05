@@ -1,5 +1,8 @@
 package ai.closepaw.ui.settings
 
+import android.content.ContentValues
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,6 +43,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ai.closepaw.BuildConfig
+import ai.closepaw.update.AppUpdater
 import ai.closepaw.ui.theme.Fleuron
 import ai.closepaw.ui.theme.PageMastheadDrillDown
 import ai.closepaw.ui.theme.closePaw
@@ -47,6 +51,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.FileInputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 @Composable
 internal fun PermissionsAdvancedSettingsPage(
@@ -126,6 +133,8 @@ internal fun PermissionsAdvancedSettingsPage(
                 }
             }
             Spacer(modifier = Modifier.height(20.dp))
+            UpdateSection()
+            Spacer(modifier = Modifier.height(20.dp))
             DataStorageSection(
                 traceEnabled = traceEnabled,
                 onTraceEnabledChange = onTraceEnabledChange
@@ -140,6 +149,86 @@ internal fun PermissionsAdvancedSettingsPage(
             )
             Fleuron()
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun UpdateSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    var installing by remember { mutableStateOf(false) }
+    var release by remember { mutableStateOf<AppUpdater.Release?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    SettingsSection(title = "Updates") {
+        Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.closePaw.spacing.md)) {
+            Button(
+                onClick = {
+                    checking = true
+                    message = null
+                    scope.launch {
+                        when (val result = withContext(Dispatchers.IO) { AppUpdater.check() }) {
+                            AppUpdater.CheckResult.UpToDate -> {
+                                release = null
+                                message = "You are on the latest release."
+                            }
+                            is AppUpdater.CheckResult.Available -> {
+                                release = result.release
+                                message = "Version ${result.release.version} is available."
+                            }
+                            is AppUpdater.CheckResult.Failed -> {
+                                release = null
+                                message = "Update check failed: ${result.message}"
+                            }
+                        }
+                        checking = false
+                    }
+                },
+                enabled = !checking && !installing,
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Text(if (checking) "Checking..." else "Check for Update")
+            }
+
+            release?.let { available ->
+                Button(
+                    onClick = {
+                        installing = true
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) {
+                                AppUpdater.downloadAndVerify(context.applicationContext, available)
+                            }
+                            result.onSuccess { apk ->
+                                val launched = AppUpdater.requestInstall(context, apk)
+                                message = if (launched) {
+                                    "Update verified. Confirm installation in Android."
+                                } else {
+                                    "Allow ClosePaw to install unknown apps, then tap Download & Install again."
+                                }
+                            }.onFailure {
+                                message = "Update failed: ${it.message ?: it.javaClass.simpleName}"
+                            }
+                            installing = false
+                        }
+                    },
+                    enabled = !installing,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large
+                ) {
+                    Text(if (installing) "Downloading & Verifying..." else "Download & Install ${available.version}")
+                }
+            }
+
+            message?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -165,6 +254,8 @@ private fun DataStorageSection(
     var sessionClearState by remember { mutableStateOf<ClearDataState>(ClearDataState.Idle) }
     var showClearTracesConfirm by remember { mutableStateOf(false) }
     var showClearSessionsConfirm by remember { mutableStateOf(false) }
+    var exportMessage by remember { mutableStateOf<String?>(null) }
+    var exporting by remember { mutableStateOf(false) }
 
     fun clearTraces() {
         if (traceClearState is ClearDataState.Clearing) return
@@ -285,6 +376,30 @@ private fun DataStorageSection(
                 }
             }
 
+            Button(
+                onClick = {
+                    if (!exporting) {
+                        exporting = true
+                        scope.launch {
+                            exportMessage = withContext(Dispatchers.IO) { exportTracesToDownloads(context) }
+                            exporting = false
+                        }
+                    }
+                },
+                enabled = !exporting,
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Text(if (exporting) "Exporting..." else "Export Diagnostic Logs")
+            }
+            exportMessage?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             // Clear traces button
             ClearDataButton(
                 label = clearDataButtonLabel(traceClearState, idle = "Clear Traces", clearing = "Clearing Traces", cleared = "Traces Cleared"),
@@ -370,5 +485,42 @@ private fun ClearDataButton(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(text = label, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+
+private fun exportTracesToDownloads(context: android.content.Context): String {
+    val source = context.getExternalFilesDir(TRACE_DIR)
+        ?: return "Could not access trace storage."
+    if (!source.exists() || source.walkTopDown().none { it.isFile }) {
+        return "No diagnostic logs yet. Enable Session Traces and run a test first."
+    }
+    val name = "closepaw-diagnostics-" + System.currentTimeMillis() + ".zip"
+    return try {
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, name)
+            put(MediaStore.Downloads.MIME_TYPE, "application/zip")
+            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/ClosePaw")
+            put(MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: return "Could not create the diagnostic ZIP in Downloads."
+        resolver.openOutputStream(uri)?.use { output ->
+            ZipOutputStream(output).use { zip ->
+                source.walkTopDown().filter { it.isFile }.forEach { file ->
+                    val relative = file.relativeTo(source).invariantSeparatorsPath
+                    zip.putNextEntry(ZipEntry(relative))
+                    FileInputStream(file).use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
+        } ?: return "Could not open the diagnostic ZIP for writing."
+        values.clear()
+        values.put(MediaStore.Downloads.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
+        "Saved to Downloads/ClosePaw/$name — attach this ZIP in ChatGPT."
+    } catch (e: Exception) {
+        "Diagnostic export failed: " + (e.message ?: e.javaClass.simpleName)
     }
 }

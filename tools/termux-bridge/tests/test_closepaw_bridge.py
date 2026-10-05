@@ -8,7 +8,7 @@ import threading
 import time
 from pathlib import Path
 
-from conftest import HOST, BridgeProcess, start_process, stop_process, wait_for_health
+from conftest import AUTH_TOKEN, HOST, BridgeProcess, start_process, stop_process, wait_for_health
 
 
 OUTPUT_CAP_BYTES = 65536
@@ -56,6 +56,16 @@ def test_health_endpoint_returns_ok_version_and_identity(bridge_server):
     assert response.body["identity"] == "closepaw-bridge"
     assert isinstance(response.body["uptime_ms"], int)
     assert isinstance(response.body["last_request_ms_ago"], int)
+
+
+def test_exec_endpoint_rejects_missing_or_wrong_token(bridge_server):
+    missing = bridge_server.post_json("/v1/exec", {"command": "echo nope"}, auth_token=None)
+    wrong = bridge_server.post_json("/v1/exec", {"command": "echo nope"}, auth_token="x" * 40)
+
+    assert missing.status == 401
+    assert missing.body == {"error": "unauthorized"}
+    assert wrong.status == 401
+    assert wrong.body == {"error": "unauthorized"}
 
 
 def test_exec_endpoint_runs_simple_command(bridge_server):
@@ -370,6 +380,7 @@ def test_client_disconnect_kills_process_group_and_releases_exec_lock(bridge_ser
         b"POST /v1/exec HTTP/1.1\r\n"
         + f"Host: {HOST}:{bridge_server.port}\r\n".encode()
         + b"Content-Type: application/json\r\n"
+        + f"X-ClosePaw-Token: {AUTH_TOKEN}\r\n".encode()
         + f"Content-Length: {len(payload)}\r\n\r\n".encode()
         + payload
     )

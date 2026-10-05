@@ -2,6 +2,9 @@ package ai.closepaw.session
 
 import android.content.Context
 import android.content.res.AssetManager
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
+import android.content.SharedPreferences
 import com.google.common.truth.Truth.assertThat
 import ai.closepaw.auth.AuthCredential
 import ai.closepaw.auth.AuthStore
@@ -42,7 +45,8 @@ class SessionServicesProviderRoutingTest {
   fun `openrouter model works without openai key`() {
     val context = contextWithCatalog()
     installFixtureCatalogRepo(context)
-    val authStore = AuthStore(context, prefsProvider = { FakeSharedPreferences() })
+    val authPrefs = FakeSharedPreferences()
+    val authStore = AuthStore(context, prefsProvider = { authPrefs })
     runBlocking {
       authStore.set(LLMProvider.OPENROUTER, AuthCredential.ApiKey("sk-or-test"))
     }
@@ -72,7 +76,8 @@ class SessionServicesProviderRoutingTest {
   fun `main model requires its provider credential`() {
     val context = contextWithCatalog()
     installFixtureCatalogRepo(context)
-    val authStore = AuthStore(context, prefsProvider = { FakeSharedPreferences() })
+    val authPrefs = FakeSharedPreferences()
+    val authStore = AuthStore(context, prefsProvider = { authPrefs })
     runBlocking {
       authStore.set(LLMProvider.OPENAI_API, AuthCredential.ApiKey("sk-openai-test"))
     }
@@ -105,7 +110,13 @@ class SessionServicesProviderRoutingTest {
     val assets = mockk<AssetManager>()
     every { context.assets } returns assets
     every { context.applicationContext } returns context
+    val packageManager = mockk<PackageManager>(relaxed = true)
+    val packageInfo = mockk<PackageInfo>(relaxed = true)
+    every { packageManager.getPackageInfo(any<String>(), any<Int>()) } returns packageInfo
+    every { context.packageManager } returns packageManager
     every { context.filesDir } returns tempDir.newFolder("files")
+    val sharedPrefs = FakeSharedPreferences()
+    every { context.getSharedPreferences(any(), any()) } returns sharedPrefs
     every { assets.list(any<String>()) } answers {
       val file = File("src/main/assets", firstArg<String>())
       if (file.isDirectory) file.list().orEmpty() else emptyArray()
@@ -119,6 +130,8 @@ class SessionServicesProviderRoutingTest {
     }
     return context
   }
+
+  private fun fakeSharedPreferences(): SharedPreferences = FakeSharedPreferences()
 
   /**
    * Install a fixture [ModelCatalogRepository] backed by [context]'s mocked assets so

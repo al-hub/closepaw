@@ -8,6 +8,7 @@ import ai.closepaw.agent.definition.ResolvedAgentRole
 import ai.closepaw.agent.definition.DefaultRoleDef
 import ai.closepaw.protocol.ApprovalMode
 import ai.closepaw.termux.TermuxBridgeManager
+import ai.closepaw.termux.TermuxBridgeAuth
 import ai.closepaw.termux.TermuxCapabilitySnapshot
 import ai.closepaw.tool.AppClassifier
 import ai.closepaw.tool.PolicyEngine
@@ -126,6 +127,6 @@ internal object SessionToolingBootstrapper {
             Log.w(TAG, "Registering termux_shell without a Context; bridge manager not touched")
         }
 
-        register(TermuxShellTool(httpClient = OkHttpClient()))
+        register(TermuxShellTool(httpClient = OkHttpClient(), authToken = context?.let { TermuxBridgeAuth.token(it) }.orEmpty()))
     }
 }
