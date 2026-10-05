@@ -13,7 +13,7 @@ import android.util.Base64
 internal object TermuxManualBootstrap {
     fun command(): String =
         """umask 077; mkdir -p ~/.closepaw ~/closepaw/workspace ~/closepaw/logs; """ +
-            """read -r CLOSEPAW_TOKEN; printf '%s' "$CLOSEPAW_TOKEN" > ~/.closepaw/token; """ +
+            """read -r CLOSEPAW_TOKEN; printf '%s' "${'$'}CLOSEPAW_TOKEN" > ~/.closepaw/token; """ +
             """chmod 600 ~/.closepaw/token; unset CLOSEPAW_TOKEN; """ +
             """CLOSEPAW_BRIDGE_TOKEN="$(cat ~/.closepaw/token)" """ +
             """nohup python3 ~/.closepaw/bridge.py >/dev/null 2>~/closepaw/logs/bridge.err </dev/null &"""
