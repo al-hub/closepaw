@@ -47,6 +47,10 @@ class TermuxBridgeManager internal constructor(
                 "trap - EXIT && echo CLOSEPAW_DEPLOY=ok"
         private const val BRIDGE_EXISTS_COMMAND =
             "test -f ~/.closepaw/bridge.py && echo CLOSEPAW_BRIDGE=present"
+        private const val BOOT_SCRIPT_PATH = "~/.termux/boot/10-closepaw-bridge"
+        private const val INSTALL_BOOT_SCRIPT_COMMAND =
+            "mkdir -p ~/.termux/boot && base64 -d > " + BOOT_SCRIPT_PATH +
+                " && chmod 700 " + BOOT_SCRIPT_PATH + " && echo CLOSEPAW_BOOT=installed"
 
         // Probe first so already-installed runtimes do not depend on networked apt.
         // The hardcoded prefix is needed because RUN_COMMAND shells do not populate $PREFIX.
@@ -202,6 +206,23 @@ class TermuxBridgeManager internal constructor(
                 return needsSetup(e.toReason(NeedsSetupReason.UNKNOWN))
             }
         if (deploy.exitCode != 0 || !deploy.stdout.contains("CLOSEPAW_DEPLOY=ok")) {
+            return needsSetup(NeedsSetupReason.UNKNOWN)
+        }
+
+        val bootInstall =
+            try {
+                commandRunner.runShell(
+                    INSTALL_BOOT_SCRIPT_COMMAND,
+                    stdinBase64 = Base64.encodeToString(
+                        TermuxManualBootstrap.bootScript().toByteArray(Charsets.UTF_8),
+                        Base64.NO_WRAP
+                    ),
+                    timeoutMs = DEPLOY_TIMEOUT_MS
+                )
+            } catch (e: RunCommandError) {
+                return needsSetup(e.toReason(NeedsSetupReason.UNKNOWN))
+            }
+        if (bootInstall.exitCode != 0 || !bootInstall.stdout.contains("CLOSEPAW_BOOT=installed")) {
             return needsSetup(NeedsSetupReason.UNKNOWN)
         }
 
