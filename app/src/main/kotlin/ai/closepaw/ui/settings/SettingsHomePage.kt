@@ -93,6 +93,11 @@ internal fun SettingsHomePage(
 
             SectionHeader("About")
             SettingsNavigationRow(
+                title = "Software Update",
+                subtitle = "Check for signed ClosePaw releases",
+                onClick = { onNavigate(SettingsPage.SOFTWARE_UPDATE) }
+            )
+            SettingsNavigationRow(
                 title = "Open Source Licenses",
                 subtitle = "ClosePaw is Apache 2.0 · view third-party notices",
                 onClick = { onNavigate(SettingsPage.OPEN_SOURCE_LICENSES) }

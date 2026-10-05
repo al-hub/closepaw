@@ -177,7 +177,8 @@ class SessionServices internal constructor(
                 delegatableRoleDefs = AgentDefRegistry.delegatableRoles(),
                 termuxSnapshot = termuxSnapshot,
                 excludedTools = effectiveConfig.excludedTools,
-                context = context.applicationContext
+                context = context.applicationContext,
+                platform = platform
             )
             val policyEngine = tooling.policyEngine
             val sessionState = tooling.sessionState

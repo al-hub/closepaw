@@ -44,6 +44,7 @@ enum class SettingsPage {
     MEMORY,
     PERMISSIONS_ADVANCED,
     APP_ACCESS,
+    SOFTWARE_UPDATE,
     OPEN_SOURCE_LICENSES,
 }
 
@@ -215,6 +216,10 @@ fun SettingsSheet(
                         memoryStore = memoryStore,
                         gate = memoryEditGate,
                         approvalMode = approvalMode,
+                        onBack = { settingsPage = SettingsPage.HOME },
+                        onClose = onDismiss,
+                    )
+                    SettingsPage.SOFTWARE_UPDATE -> SoftwareUpdatePage(
                         onBack = { settingsPage = SettingsPage.HOME },
                         onClose = onDismiss,
                     )
