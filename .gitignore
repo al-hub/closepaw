@@ -48,7 +48,7 @@ captures/
 # Android Studio 3 in .gitignore file.
 .idea/caches
 .idea/modules.xml
-# Comment next line if keeping position of elements in Navigation Editor is relevant for you
+# Comment next line if keeping position of elements in Navigation Editor is relevant to you
 .idea/navEditor.xml
 
 # Keystore files — never commit. Keep real signing material outside the repo;
@@ -56,6 +56,8 @@ captures/
 *.jks
 *.keystore
 *.password
+# Local encoded signing-key backup — never commit.
+closepaw-aa-bridge.jks.b64
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild
