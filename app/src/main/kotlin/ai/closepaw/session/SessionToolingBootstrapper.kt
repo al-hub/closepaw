@@ -154,8 +154,10 @@ internal object SessionToolingBootstrapper {
             adapters += AndroidIntentExecutionAdapter(platform)
         }
         if (context != null) {
-            adapters += TermuxRunCommandExecutionAdapter(TermuxRunCommandAdapter(context))
+            // Prefer the authenticated localhost bridge for steady-state execution.
+            // RUN_COMMAND remains the recovery/fallback transport when the bridge is absent.
             adapters += TermuxLocalBridgeExecutionAdapter(TermuxBridgeAuth.token(context))
+            adapters += TermuxRunCommandExecutionAdapter(TermuxRunCommandAdapter(context))
         }
         return CapabilityExecutionGateway(ExecutionAdapterRegistry(adapters))
     }

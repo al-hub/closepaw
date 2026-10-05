@@ -18,6 +18,22 @@ class ExecutionAdapterRegistryTest {
     }
 
     @Test
+    fun localBridgeCanBePreferredWithoutProbingRunCommand() = runTest {
+        val local = FakeAdapter("termux-local-bridge", AdapterAvailability.Available)
+        val runCommand = FakeAdapter(
+            "termux-run-command",
+            AdapterAvailability.NeedsSetup("Termux must be running before RUN_COMMAND can be used")
+        )
+        val registry = ExecutionAdapterRegistry(listOf(local, runCommand))
+
+        val result = registry.execute(ExecutionRequest(ExecutionCapability.LINUX_SHELL, "echo ok"))
+
+        assertEquals("termux-local-bridge", result.adapterId)
+        assertEquals(1, local.probeCount)
+        assertEquals(0, runCommand.probeCount)
+    }
+
+    @Test
     fun ignoresAdaptersForOtherCapabilities() = runTest {
         val android = FakeAdapter("android-shell", AdapterAvailability.Available, setOf(ExecutionCapability.ANDROID_SHELL))
         val registry = ExecutionAdapterRegistry(listOf(android))
@@ -62,7 +78,13 @@ class ExecutionAdapterRegistryTest {
         private val availability: AdapterAvailability,
         override val capabilities: Set<ExecutionCapability> = setOf(ExecutionCapability.LINUX_SHELL),
     ) : ExecutionAdapter {
-        override suspend fun probe(): AdapterAvailability = availability
+        var probeCount: Int = 0
+            private set
+
+        override suspend fun probe(): AdapterAvailability {
+            probeCount++
+            return availability
+        }
         override suspend fun execute(request: ExecutionRequest): ExecutionResult =
             ExecutionResult(id, 0, "ok", "")
     }
