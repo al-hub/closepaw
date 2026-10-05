@@ -41,6 +41,9 @@ class TermuxLocalBridgeExecutionAdapter(
             put("command", request.command)
             request.workingDirectory?.let { put("cwd", it) }
             put("timeout_ms", request.timeoutMs)
+            if (request.environment.isNotEmpty()) {
+                put("env", JSONObject(request.environment))
+            }
         }
         val http = client.newBuilder()
             .callTimeout(request.timeoutMs + HTTP_GRACE_MS, TimeUnit.MILLISECONDS)
