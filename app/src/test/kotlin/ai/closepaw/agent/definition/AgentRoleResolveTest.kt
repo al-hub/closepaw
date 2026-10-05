@@ -17,6 +17,20 @@ class AgentRoleResolveTest {
     }
 
     @Test
+    fun `enabled Termux shell remains exposed while bridge needs setup`() {
+        val snapshot = TermuxCapabilitySnapshot(
+            available = false,
+            enabled = true,
+            status = TermuxBridgeStatus.NeedsSetup(ai.closepaw.termux.NeedsSetupReason.HEALTH_TIMEOUT)
+        )
+
+        val resolved = DefaultRoleDef.resolve(snapshot)
+
+        assertThat(resolved.allowedTools).contains(ToolName.TermuxShell)
+        assertThat(resolved.systemPrompt).contains("Workspace Shell")
+    }
+
+    @Test
     fun `unavailable snapshot hides termux shell and workspace prompt`() {
         val resolved = DefaultRoleDef.resolve(unavailableSnapshot)
 
