@@ -1,6 +1,13 @@
 package ai.closepaw.tool.impl
 
 import com.google.common.truth.Truth.assertThat
+import ai.closepaw.bridge.AdapterAvailability
+import ai.closepaw.bridge.CapabilityExecutionGateway
+import ai.closepaw.bridge.ExecutionAdapter
+import ai.closepaw.bridge.ExecutionAdapterRegistry
+import ai.closepaw.bridge.ExecutionCapability
+import ai.closepaw.bridge.ExecutionRequest
+import ai.closepaw.bridge.ExecutionResult
 import ai.closepaw.tool.ValidationResult
 import org.json.JSONObject
 import org.junit.Test
@@ -9,7 +16,7 @@ class OpenAppToolTest {
 
     @Test
     fun `open_app requires app_name`() {
-        val tool = OpenAppTool()
+        val tool = OpenAppTool(testGateway())
         val params = JSONObject()
 
         val result = tool.validate(params)
@@ -19,7 +26,7 @@ class OpenAppToolTest {
 
     @Test
     fun `open_app with empty app_name is invalid`() {
-        val tool = OpenAppTool()
+        val tool = OpenAppTool(testGateway())
         val params = JSONObject().put("app_name", "")
 
         val result = tool.validate(params)
@@ -29,7 +36,7 @@ class OpenAppToolTest {
 
     @Test
     fun `open_app with app_name is valid`() {
-        val tool = OpenAppTool()
+        val tool = OpenAppTool(testGateway())
         val params = JSONObject().put("app_name", "Gmail")
 
         val result = tool.validate(params)
@@ -39,7 +46,7 @@ class OpenAppToolTest {
 
     @Test
     fun `open_app with app_name and agent_thought is valid`() {
-        val tool = OpenAppTool()
+        val tool = OpenAppTool(testGateway())
         val params = JSONObject()
             .put("app_name", "Settings")
             .put("agent_thought", "Need to change Wi-Fi settings")
@@ -51,14 +58,14 @@ class OpenAppToolTest {
 
     @Test
     fun `tool name is open_app`() {
-        val tool = OpenAppTool()
+        val tool = OpenAppTool(testGateway())
 
         assertThat(tool.name).isEqualTo("open_app")
     }
 
     @Test
     fun `schema has required app_name`() {
-        val tool = OpenAppTool()
+        val tool = OpenAppTool(testGateway())
         val schema = tool.parameterSchema
 
         val required = schema.getJSONArray("required")
@@ -68,7 +75,7 @@ class OpenAppToolTest {
 
     @Test
     fun `schema has only app_name and agent_thought properties`() {
-        val tool = OpenAppTool()
+        val tool = OpenAppTool(testGateway())
         val properties = tool.parameterSchema.getJSONObject("properties")
 
         val keys = properties.keys().asSequence().toSet()
@@ -110,4 +117,15 @@ class OpenAppToolTest {
         assertThat(AppAliases.PACKAGE_MAP["simple draw pro"])
             .isEqualTo("com.simplemobiletools.draw.pro")
     }
+    private fun testGateway() = CapabilityExecutionGateway(
+        ExecutionAdapterRegistry(
+            listOf(object : ExecutionAdapter {
+                override val id = "test-intent"
+                override val capabilities = setOf(ExecutionCapability.ANDROID_INTENT)
+                override suspend fun probe() = AdapterAvailability.Available
+                override suspend fun execute(request: ExecutionRequest) =
+                    ExecutionResult(id, 0, "", "")
+            })
+        )
+    )
 }
