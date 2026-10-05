@@ -3,6 +3,7 @@ package ai.closepaw.bridge
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class ExecutionAdapterRegistryTest {
@@ -21,6 +22,39 @@ class ExecutionAdapterRegistryTest {
         val android = FakeAdapter("android-shell", AdapterAvailability.Available, setOf(ExecutionCapability.ANDROID_SHELL))
         val registry = ExecutionAdapterRegistry(listOf(android))
         assertNull(registry.availableAdapter(ExecutionCapability.LINUX_SHELL))
+    }
+
+    @Test
+    fun `execution failure reports every matching adapter probe result`() = runTest {
+        val runCommand = FakeAdapter(
+            "termux-run-command",
+            AdapterAvailability.NeedsSetup("Termux must be running before RUN_COMMAND can be used")
+        )
+        val localBridge = FakeAdapter(
+            "termux-local-bridge",
+            AdapterAvailability.NeedsSetup("local bridge is not running or paired")
+        )
+        val registry = ExecutionAdapterRegistry(listOf(runCommand, localBridge))
+
+        val error = assertThrows(NoExecutionAdapterException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                registry.execute(ExecutionRequest(ExecutionCapability.LINUX_SHELL, "echo ok"))
+            }
+        }
+
+        assertEquals(2, error.probeResults.size)
+        assertEquals("termux-run-command", error.probeResults[0].adapterId)
+        assertEquals(
+            AdapterAvailability.NeedsSetup("Termux must be running before RUN_COMMAND can be used"),
+            error.probeResults[0].availability
+        )
+        assertEquals("termux-local-bridge", error.probeResults[1].adapterId)
+        assertEquals(
+            AdapterAvailability.NeedsSetup("local bridge is not running or paired"),
+            error.probeResults[1].availability
+        )
+        assert(error.message!!.contains("termux-run-command"))
+        assert(error.message!!.contains("termux-local-bridge"))
     }
 
     private class FakeAdapter(
