@@ -11,6 +11,7 @@ class CapabilityExecutionGateway(
         command: String,
         workingDirectory: String? = null,
         timeoutMs: Long = 120_000L,
+        environment: Map<String, String> = emptyMap(),
     ): ExecutionResult =
         registry.execute(
             ExecutionRequest(
@@ -18,6 +19,7 @@ class CapabilityExecutionGateway(
                 command = command,
                 workingDirectory = workingDirectory,
                 timeoutMs = timeoutMs,
+                environment = environment,
             )
         )
 }
