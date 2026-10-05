@@ -34,8 +34,14 @@ internal data class AgentRoleDef(
             .map { ToolName.from(it) }
             .filter { it.canonical !in excludedToolNames }
 
+        // Tool discovery follows the user's enable/disable choice, not transient bridge
+        // readiness. Transport readiness belongs to CapabilityExecutionGateway/adapters.
+        // Keeping the tool visible lets RUN_COMMAND work even while the optional local
+        // bridge is starting, stale, or needs setup.
         val canExposeTermux =
-            snapshot.available && ToolName.TermuxShell.canonical !in excludedToolNames
+            snapshot.enabled &&
+                snapshot.status !is ai.closepaw.termux.TermuxBridgeStatus.Disabled &&
+                ToolName.TermuxShell.canonical !in excludedToolNames
         val resolvedTools =
             if (canExposeTermux && baseTools.none { it.canonical == ToolName.TermuxShell.canonical }) {
                 baseTools + ToolName.TermuxShell
