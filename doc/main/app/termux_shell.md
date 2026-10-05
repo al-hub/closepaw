@@ -1,7 +1,7 @@
 # Termux Shell
 
 > Full Linux bash runtime for the agent through a Termux bridge daemon.
-> Last updated: 2026-05-05
+> Last updated: 2026-10-05
 
 ## Overview
 
@@ -102,8 +102,11 @@ Primary files:
 
 ## Known Limitations
 
-- F-Droid Termux is required. The Google Play build does not expose the required `RUN_COMMAND`
-  surface and is reported as `TERMUX_RUN_COMMAND_UNAVAILABLE`.
+- F-Droid Termux can bootstrap automatically through `RUN_COMMAND`.
+- Google Play Termux does not expose `RUN_COMMAND`; it uses the one-time manual bootstrap contract in
+  `TermuxManualBootstrap`. The permanent token is supplied separately from the command, stored only
+  in Termux-private `~/.closepaw/token` with mode `0600`, and subsequent runtime execution uses the
+  same authenticated localhost `/v1/exec` bridge.
 - Some OEM ROMs block cross-app foreground-service starts with errors such as "forbidden to start a
   3rd process by service" and may also deny background activity launch attempts. On those devices,
   the user must open Termux manually, return to ClosePaw, and tap setup again.
