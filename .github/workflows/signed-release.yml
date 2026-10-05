@@ -4,6 +4,12 @@ on:
   push:
     tags: [ 'v*' ]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Create version tag and publish GitHub Release'
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -15,7 +21,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          persist-credentials: true
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -38,12 +45,23 @@ jobs:
           test -n "$KEY_PASSWORD"
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/closepaw-release.jks"
 
-      - name: Verify tag matches app version
+      - name: Resolve release version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify pushed tag matches app version
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           set -euo pipefail
-          expected="v$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)"
-          test "$GITHUB_REF_NAME" = "$expected" || { echo "Tag $GITHUB_REF_NAME must equal $expected"; exit 1; }
+          test "$GITHUB_REF_NAME" = "${{ steps.version.outputs.tag }}" || {
+            echo "Tag $GITHUB_REF_NAME must equal ${{ steps.version.outputs.tag }}"
+            exit 1
+          }
 
       - name: Test and build signed release
         env:
@@ -58,12 +76,33 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk closepaw-aa-bridge.apk
           sha256sum closepaw-aa-bridge.apk > closepaw-aa-bridge.apk.sha256
 
+      - name: Create and push version tag
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists; refusing to move it."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "ClosePaw AA-Bridge $TAG"
+          git push origin "$TAG"
+
       - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish)
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; refusing to overwrite it."
+            exit 1
+          fi
+          gh release create "$TAG" \
             closepaw-aa-bridge.apk closepaw-aa-bridge.apk.sha256 \
-            --title "ClosePaw AA-Bridge $GITHUB_REF_NAME" \
+            --title "ClosePaw AA-Bridge $TAG" \
             --generate-notes
