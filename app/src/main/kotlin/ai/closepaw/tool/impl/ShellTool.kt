@@ -20,7 +20,7 @@ class ShellTool(
 
     override val description: String =
         """
-        Android toybox shell. Limited available commands (ls, cat, stat, grep, wc, head, tail, sort, uniq, diff, du, df, file, touch, mkdir, cp, mv, rm, chmod, etc.), no support for pipe (|), redirect (>/<), or command substitution (${'$'}()). Use termux_shell when you need a full toolchain (python/git, etc.).
+        Android app-sandbox toybox shell for device-local file checks only. It supports a limited command set and does not support shell chaining, pipes, redirects, or command substitution. Do not use this tool for commands the user asks to run in Termux or Linux, even simple echo/pwd/whoami/ssh commands; use termux_shell. Never try to reach Termux with run-as, am, pm, UI typing, or broadcasts from this tool.
         """.trimIndent()
 
     override val parameterSchema: JSONObject =

@@ -19,6 +19,15 @@ import org.junit.Test
 class ShellToolExecutionTest {
 
     @Test
+    fun `description keeps Android shell out of explicit Termux execution`() {
+        val tool = ShellTool(gateway(ExecutionResult("test-shell", 0, "", "")))
+
+        assertThat(tool.description).contains("Do not use this tool for commands the user asks to run in Termux")
+        assertThat(tool.description).contains("termux_shell")
+        assertThat(tool.description).contains("run-as")
+    }
+
+    @Test
     fun `command timeout returns timeout-specific failure`() = runTest {
         val tool = ShellTool(gateway(ExecutionResult("test-shell", null, "", "", timedOut = true)), timeoutSeconds = 1L)
         val result = tool.createInvocation(JSONObject().put("command", "sleep 5")).execute(buildContext())

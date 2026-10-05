@@ -43,6 +43,18 @@ class AgentRoleResolveTest {
     }
 
     @Test
+    fun `available snapshot makes explicit Termux requests route to termux shell`() {
+        val resolved = DefaultRoleDef.resolve(availableSnapshot)
+
+        assertThat(resolved.systemPrompt)
+            .contains("If the user explicitly asks to run a command in Termux, always use termux_shell")
+        assertThat(resolved.systemPrompt)
+            .contains("echo, pwd, whoami, or ssh")
+        assertThat(resolved.systemPrompt)
+            .contains("Do not emulate Termux execution through shell")
+    }
+
+    @Test
     fun `default role without termux does not contain the directive`() {
         val resolved = DefaultRoleDef.resolve(unavailableSnapshot)
 
