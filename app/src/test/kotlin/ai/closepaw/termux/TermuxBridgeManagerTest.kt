@@ -173,7 +173,7 @@ class TermuxBridgeManagerTest {
         assertThat(ensureReady.await())
             .isEqualTo(TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.HEALTH_TIMEOUT))
         assertThat(commandRunner.commands)
-            .containsExactly(Command.Probe, Command.Install, Command.Deploy, Command.Start, Command.BridgeExists)
+            .containsExactly(Command.Probe, Command.Install, Command.Deploy, Command.TokenPersist, Command.BootInstall, Command.Start, Command.BridgeExists)
             .inOrder()
         assertThat(commandRunner.deployCalls).isEqualTo(1)
         assertThat(commandRunner.startCalls).isEqualTo(1)
@@ -203,7 +203,7 @@ class TermuxBridgeManagerTest {
             .isEqualTo(TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.HEALTH_TIMEOUT))
         assertThat(setup.await()).isEqualTo(TermuxBridgeStatus.Ready)
         assertThat(commandRunner.commands)
-            .containsExactly(Command.BridgeExists, Command.Probe, Command.Install, Command.Deploy, Command.Start)
+            .containsExactly(Command.BridgeExists, Command.Probe, Command.Install, Command.Deploy, Command.TokenPersist, Command.BootInstall, Command.Start)
             .inOrder()
         assertThat(commandRunner.deployCalls).isEqualTo(1)
         assertThat(commandRunner.startCalls).isEqualTo(1)
@@ -233,7 +233,7 @@ class TermuxBridgeManagerTest {
             .isEqualTo(TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.BRIDGE_OUTDATED))
         assertThat(setup.await()).isEqualTo(TermuxBridgeStatus.Ready)
         assertThat(commandRunner.commands)
-            .containsExactly(Command.Probe, Command.Install, Command.Deploy, Command.Start)
+            .containsExactly(Command.Probe, Command.Install, Command.Deploy, Command.TokenPersist, Command.BootInstall, Command.Start)
             .inOrder()
         assertThat(commandRunner.deployCalls).isEqualTo(1)
     }
@@ -328,6 +328,14 @@ class TermuxBridgeManagerTest {
                     deployCalls += 1
                     RunCommandResult("CLOSEPAW_DEPLOY=ok\n", "", 0)
                 }
+                "CLOSEPAW_TOKEN=stored" in command -> {
+                    commands += Command.TokenPersist
+                    RunCommandResult("CLOSEPAW_TOKEN=stored\n", "", 0)
+                }
+                "CLOSEPAW_BOOT=installed" in command -> {
+                    commands += Command.BootInstall
+                    RunCommandResult("CLOSEPAW_BOOT=installed\n", "", 0)
+                }
                 "test -f ~/.closepaw/bridge.py" in command -> {
                     commands += Command.BridgeExists
                     bridgeExistsGate?.await()
@@ -364,7 +372,7 @@ class TermuxBridgeManagerTest {
         }
     }
 
-    private enum class Command { Probe, Install, Deploy, BridgeExists, Start }
+    private enum class Command { Probe, Install, Deploy, TokenPersist, BootInstall, BridgeExists, Start }
 
     private class SequenceTermuxInstallProbe(private vararg val states: TermuxInstallState) : TermuxInstallProbe {
         private var calls = 0
