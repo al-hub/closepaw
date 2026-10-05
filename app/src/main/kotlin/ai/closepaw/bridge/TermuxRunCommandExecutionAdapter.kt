@@ -41,10 +41,16 @@ class TermuxRunCommandExecutionAdapter(
         require(request.capability == ExecutionCapability.LINUX_SHELL) {
             "Termux RUN_COMMAND only provides LINUX_SHELL"
         }
+        val environmentPrefix =
+            request.environment.entries.joinToString(" ") { (key, value) ->
+                "${key}=${shellQuote(value)}"
+            }
+        val commandWithEnvironment =
+            if (environmentPrefix.isBlank()) request.command else "env $environmentPrefix ${request.command}"
         val command =
             request.workingDirectory?.let { cwd ->
-                "cd -- ${shellQuote(cwd)} && ${request.command}"
-            } ?: request.command
+                "cd -- ${shellQuote(cwd)} && $commandWithEnvironment"
+            } ?: commandWithEnvironment
         return try {
             val result = runCommand.runShell(command, timeoutMs = request.timeoutMs)
             ExecutionResult(
