@@ -48,6 +48,8 @@ class TermuxBridgeManager internal constructor(
         private const val BRIDGE_EXISTS_COMMAND =
             "test -f ~/.closepaw/bridge.py && echo CLOSEPAW_BRIDGE=present"
         private const val BOOT_SCRIPT_PATH = "~/.termux/boot/10-closepaw-bridge"
+        private const val PERSIST_TOKEN_COMMAND =
+            "umask 077; mkdir -p ~/.closepaw && base64 -d > ~/.closepaw/token && chmod 600 ~/.closepaw/token && echo CLOSEPAW_TOKEN=stored"
         private const val INSTALL_BOOT_SCRIPT_COMMAND =
             "mkdir -p ~/.termux/boot && base64 -d > " + BOOT_SCRIPT_PATH +
                 " && chmod 700 " + BOOT_SCRIPT_PATH + " && echo CLOSEPAW_BOOT=installed"
@@ -206,6 +208,20 @@ class TermuxBridgeManager internal constructor(
                 return needsSetup(e.toReason(NeedsSetupReason.UNKNOWN))
             }
         if (deploy.exitCode != 0 || !deploy.stdout.contains("CLOSEPAW_DEPLOY=ok")) {
+            return needsSetup(NeedsSetupReason.UNKNOWN)
+        }
+
+        val tokenPersist =
+            try {
+                commandRunner.runShell(
+                    PERSIST_TOKEN_COMMAND,
+                    stdinBase64 = Base64.encodeToString(authToken.toByteArray(Charsets.UTF_8), Base64.NO_WRAP),
+                    timeoutMs = DEPLOY_TIMEOUT_MS
+                )
+            } catch (e: RunCommandError) {
+                return needsSetup(e.toReason(NeedsSetupReason.UNKNOWN))
+            }
+        if (tokenPersist.exitCode != 0 || !tokenPersist.stdout.contains("CLOSEPAW_TOKEN=stored")) {
             return needsSetup(NeedsSetupReason.UNKNOWN)
         }
 
