@@ -11,11 +11,32 @@ class ExecutionAdapterRegistry(private val adapters: List<ExecutionAdapter>) {
     }
 
     suspend fun execute(request: ExecutionRequest): ExecutionResult {
-        val adapter = availableAdapter(request.capability)
-            ?: throw NoExecutionAdapterException(request.capability)
-        return adapter.execute(request)
+        val probeResults = mutableListOf<AdapterProbeResult>()
+        for (adapter in adapters) {
+            if (request.capability !in adapter.capabilities) continue
+            val availability = adapter.probe()
+            probeResults += AdapterProbeResult(adapter.id, availability)
+            if (availability is AdapterAvailability.Available) return adapter.execute(request)
+        }
+        throw NoExecutionAdapterException(request.capability, probeResults)
     }
 }
 
-class NoExecutionAdapterException(val capability: ExecutionCapability) :
-    IllegalStateException("No available execution adapter for $capability")
+data class AdapterProbeResult(
+    val adapterId: String,
+    val availability: AdapterAvailability,
+)
+
+class NoExecutionAdapterException(
+    val capability: ExecutionCapability,
+    val probeResults: List<AdapterProbeResult> = emptyList(),
+) : IllegalStateException(
+    "No available execution adapter for " + capability +
+        if (probeResults.isEmpty()) "" else ": " + probeResults.joinToString("; ") { result ->
+            result.adapterId + "=" + when (val state = result.availability) {
+                AdapterAvailability.Available -> "available"
+                is AdapterAvailability.NeedsSetup -> "needs_setup(" + state.reason + ")"
+                is AdapterAvailability.Unavailable -> "unavailable(" + state.reason + ")"
+            }
+        }
+)
