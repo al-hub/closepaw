@@ -23,6 +23,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
 
       - name: Verify bridge is loopback-only by default
         run: |
@@ -48,6 +51,11 @@ jobs:
 
       - name: Android unit tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Build bundled cloudflared for Android
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null
+          ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018" bash scripts/build-cloudflared-android.sh
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
