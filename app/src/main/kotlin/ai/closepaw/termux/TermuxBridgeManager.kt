@@ -101,8 +101,10 @@ class TermuxBridgeManager internal constructor(
         awaitInFlight(OperationKind.Setup) { mutex.withLock { setupLocked() } }
 
     suspend fun healthCheck(): TermuxBridgeStatus = mutex.withLock {
+        val health = fetchHealth()
+        if (health == HealthProbe.Ready) return@withLock emit(TermuxBridgeStatus.Ready)
         unavailableInstallStatus()?.let { return@withLock emit(it) }
-        emit(fetchHealth().toPassiveStatus())
+        emit(health.toPassiveStatus())
     }
 
     suspend fun detectInstalled(): TermuxBridgeStatus = mutex.withLock { detectInstalledLocked() }
