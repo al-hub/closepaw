@@ -158,3 +158,6 @@ plan
 
 # Personal IDE config
 .vscode/
+
+# Generated Android cloudflared binary (built from pinned upstream source in CI)
+app/src/main/jniLibs/arm64-v8a/libcloudflared.so
