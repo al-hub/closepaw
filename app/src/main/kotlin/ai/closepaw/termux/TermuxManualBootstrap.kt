@@ -53,10 +53,10 @@ CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" nohup python3 "${'$'}BRID
             "printf '%s' '$bridgePayloadBase64' | base64 -d > ~/.closepaw/bridge.py; " +
             "python3 -m py_compile ~/.closepaw/bridge.py || exit 1; chmod 600 ~/.closepaw/bridge.py; " +
             "printf 'ClosePaw pairing token: '; read -rs CLOSEPAW_TOKEN; printf '\\n'; " +
-            "[ -n \"\\$CLOSEPAW_TOKEN\" ] || { echo 'Token required'; exit 1; }; " +
-            "printf '%s' \"\\$CLOSEPAW_TOKEN\" > ~/.closepaw/token; chmod 600 ~/.closepaw/token; unset CLOSEPAW_TOKEN; " +
+            "[ -n \"$CLOSEPAW_TOKEN\" ] || { echo 'Token required'; exit 1; }; " +
+            "printf '%s' \"$CLOSEPAW_TOKEN\" > ~/.closepaw/token; chmod 600 ~/.closepaw/token; unset CLOSEPAW_TOKEN; " +
             "printf '%s' '$boot' | base64 -d > $BOOT_SCRIPT_PATH; chmod 700 $BOOT_SCRIPT_PATH; " +
-            "CLOSEPAW_BRIDGE_TOKEN=\"\\$(cat ~/.closepaw/token)\" nohup python3 ~/.closepaw/bridge.py " +
+            "CLOSEPAW_BRIDGE_TOKEN=\"$(cat ~/.closepaw/token)\" nohup python3 ~/.closepaw/bridge.py " +
             ">/dev/null 2>~/closepaw/logs/bridge.err </dev/null & " +
             "sleep 1; curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health"
     }
