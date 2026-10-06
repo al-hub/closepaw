@@ -2,6 +2,8 @@ package ai.closepaw.bridge
 
 import ai.closepaw.termux.RunCommandError
 import ai.closepaw.termux.RunCommandResult
+import ai.closepaw.termux.TermuxInstallProbe
+import ai.closepaw.termux.TermuxInstallState
 import ai.closepaw.termux.TermuxRunCommandAdapter
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
@@ -11,7 +13,24 @@ import org.junit.Test
 
 class TermuxRunCommandExecutionAdapterTest {
     private val runCommand = mockk<TermuxRunCommandAdapter>()
-    private val adapter = TermuxRunCommandExecutionAdapter(runCommand)
+    private val installProbe = TermuxInstallProbe { TermuxInstallState.Available }
+    private val adapter = TermuxRunCommandExecutionAdapter(runCommand, installProbe)
+
+
+    @Test
+    fun `probe does not start RUN_COMMAND when installed Termux lacks capability`() = runTest {
+        val unavailable = TermuxRunCommandExecutionAdapter(
+            runCommand,
+            TermuxInstallProbe { TermuxInstallState.RunCommandUnavailable },
+        )
+
+        val availability = unavailable.probe()
+
+        assertThat(availability).isInstanceOf(AdapterAvailability.Unavailable::class.java)
+        assertThat((availability as AdapterAvailability.Unavailable).reason)
+            .contains("installed Termux build does not expose RUN_COMMAND")
+        io.mockk.coVerify(exactly = 0) { runCommand.runShell(any(), any(), any()) }
+    }
 
     @Test
     fun `probe reports available when RUN_COMMAND succeeds`() = runTest {
