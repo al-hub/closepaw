@@ -13,13 +13,25 @@ umask 077
 TOKEN_FILE="${'$'}HOME/.closepaw/token"
 BRIDGE="${'$'}HOME/.closepaw/bridge.py"
 LOG_DIR="${'$'}HOME/closepaw/logs"
+BOOT_LOG="${'$'}LOG_DIR/boot.log"
 [ -s "${'$'}TOKEN_FILE" ] || exit 0
 [ -f "${'$'}BRIDGE" ] || exit 0
 mkdir -p "${'$'}LOG_DIR"
+printf 'attempt %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"
 if command -v curl >/dev/null 2>&1 && curl -fsS --max-time 1 http://127.0.0.1:18422/v1/health 2>/dev/null | grep -q '"identity":"closepaw-bridge"'; then
+  printf 'already_ready %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"
   exit 0
 fi
-CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" nohup python3 "${'$'}BRIDGE" >/dev/null 2>"${'$'}LOG_DIR/bridge.err" </dev/null &
+CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" nohup python3 "${'$'}BRIDGE" ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} >/dev/null 2>"${'$'}LOG_DIR/bridge.err" </dev/null &
+PID="${'$'}!"
+sleep 1
+if kill -0 "${'$'}PID" 2>/dev/null; then
+  printf 'started %s pid=%s\\n' "${'$'}(date +%s)" "${'$'}PID" >> "${'$'}BOOT_LOG"
+else
+  printf 'failed %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"
+  [ -f "${'$'}LOG_DIR/bridge.err" ] && tail -n 20 "${'$'}LOG_DIR/bridge.err" >> "${'$'}BOOT_LOG"
+  exit 1
+fi
 """.trimIndent()
 
     fun command(): String {
@@ -31,7 +43,8 @@ CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" nohup python3 "${'$'}BRID
             "printf '%s' '$bootScriptBase64' | base64 -d > $BOOT_SCRIPT_PATH; " +
             "chmod 700 $BOOT_SCRIPT_PATH; " +
             "CLOSEPAW_BRIDGE_TOKEN=\"\$(cat ~/.closepaw/token)\" " +
-            "nohup python3 ~/.closepaw/bridge.py >/dev/null 2>~/closepaw/logs/bridge.err </dev/null &"
+            "nohup python3 ~/.closepaw/bridge.py ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} " +
+            ">/dev/null 2>~/closepaw/logs/bridge.err </dev/null &"
     }
 
     /**
@@ -50,6 +63,7 @@ CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" nohup python3 "${'$'}BRID
             "printf '%s' \"\$CLOSEPAW_TOKEN\" > ~/.closepaw/token; chmod 600 ~/.closepaw/token; unset CLOSEPAW_TOKEN; " +
             "printf '%s' '$boot' | base64 -d > $BOOT_SCRIPT_PATH; chmod 700 $BOOT_SCRIPT_PATH; " +
             "CLOSEPAW_BRIDGE_TOKEN=\"\$(cat ~/.closepaw/token)\" nohup python3 ~/.closepaw/bridge.py " +
+            "${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} " +
             ">/dev/null 2>~/closepaw/logs/bridge.err </dev/null & " +
             "sleep 1; curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health"
     }

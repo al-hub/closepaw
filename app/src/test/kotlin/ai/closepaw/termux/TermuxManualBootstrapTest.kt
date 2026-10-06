@@ -38,6 +38,26 @@ class TermuxManualBootstrapTest {
         assertThat(command).doesNotContain("test-token")
     }
 
+
+    @Test fun `all Local Bridge launch paths disable idle self shutdown`() {
+        val boot = TermuxManualBootstrap.bootScript()
+        val command = TermuxManualBootstrap.command()
+        val manual = TermuxManualBootstrap.manualSetupCommand("YnJpZGdl")
+
+        listOf(boot, command, manual).forEach {
+            assertThat(it).contains(TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS)
+        }
+    }
+
+    @Test fun `boot script records attempt and outcome diagnostics`() {
+        val script = TermuxManualBootstrap.bootScript()
+        assertThat(script).contains("boot.log")
+        assertThat(script).contains("attempt %s")
+        assertThat(script).contains("already_ready %s")
+        assertThat(script).contains("started %s pid=%s")
+        assertThat(script).contains("failed %s")
+    }
+
     @Test fun `boot script reads token at runtime instead of embedding secret`() {
         val script = TermuxManualBootstrap.bootScript()
         assertThat(script).contains("TOKEN_FILE=\"\$HOME/.closepaw/token\"")

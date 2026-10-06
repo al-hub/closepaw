@@ -84,6 +84,19 @@ class TermuxBridgeManagerTest {
     }
 
     @Test
+    fun `setup starts persistent bridge without idle self shutdown`() = runTest {
+        val commandRunner = FakeCommandRunner()
+        val manager = manager(
+            commandRunner = commandRunner,
+            healthProbe = FakeHealthProbe(HealthProbe.Unavailable, commandRunner),
+        )
+
+        assertThat(manager.setup()).isEqualTo(TermuxBridgeStatus.Ready)
+        assertThat(commandRunner.lastStartCommand)
+            .contains(TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS)
+    }
+
+    @Test
     fun `setup maps probe failures to refined setup reasons`() =
         runTest {
             val cases: List<Triple<RunCommandError, TermuxInstallProbe, NeedsSetupReason>> = listOf(
@@ -326,6 +339,8 @@ class TermuxBridgeManagerTest {
             private set
         var bridgeReady = false
             private set
+        var lastStartCommand: String = ""
+            private set
 
         override suspend fun runShell(
             command: String,
@@ -375,6 +390,7 @@ class TermuxBridgeManagerTest {
                 "nohup python3 ~/.closepaw/bridge.py" in command -> {
                     commands += Command.Start
                     startCalls += 1
+                    lastStartCommand = command
                     bridgeReady = true
                     RunCommandResult("CLOSEPAW_START=ok\n", "", 0)
                 }
