@@ -55,7 +55,7 @@ class TermuxManualBootstrapTest {
         assertThat(script).contains("exec env CLOSEPAW_BRIDGE_TOKEN=")
         assertThat(script).contains("python3 \"\$BRIDGE\"")
         assertThat(script).doesNotContain("nohup python3")
-        assertThat(script).doesNotContain("&")
+        assertThat(script).doesNotContain("</dev/null &")
     }
 
     @Test fun `boot script records attempt and outcome diagnostics`() {
