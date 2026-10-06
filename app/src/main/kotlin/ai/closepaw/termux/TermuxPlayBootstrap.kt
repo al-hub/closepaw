@@ -72,14 +72,16 @@ internal object TermuxPlayBootstrap {
         )
     }
 
-    internal fun installerScript(context: Context): String {
-        val bridge64 = TermuxManualBootstrap.bridgePayload(context)
-        val token64 = Base64.getEncoder().encodeToString(
-            TermuxManualBootstrap.token(context).toByteArray(Charsets.UTF_8)
+    internal fun installerScript(context: Context): String =
+        installerScript(
+            bridge64 = TermuxManualBootstrap.bridgePayload(context),
+            token = TermuxManualBootstrap.token(context),
+            bootScript = TermuxManualBootstrap.bootScript(),
         )
-        val boot64 = Base64.getEncoder().encodeToString(
-            TermuxManualBootstrap.bootScript().toByteArray(Charsets.UTF_8)
-        )
+
+    internal fun installerScript(bridge64: String, token: String, bootScript: String): String {
+        val token64 = Base64.getEncoder().encodeToString(token.toByteArray(Charsets.UTF_8))
+        val boot64 = Base64.getEncoder().encodeToString(bootScript.toByteArray(Charsets.UTF_8))
         return """#!/data/data/com.termux/files/usr/bin/sh
 set -eu
 umask 077
