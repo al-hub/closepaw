@@ -22,6 +22,7 @@ class TermuxPlayBootstrapTest {
         assertThat(script).contains("nohup python3")
         assertThat(script).contains("127.0.0.1:18422/v1/health")
         assertThat(script).contains("CLOSEPAW_BOOTSTRAP=ok")
+        assertThat(script).contains("allow-external-apps=true")
     }
 
     @Test
