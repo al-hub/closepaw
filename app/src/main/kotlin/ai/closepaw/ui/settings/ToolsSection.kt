@@ -6,10 +6,13 @@ import ai.closepaw.browser.setup.ChromeFlagDeepLink
 import ai.closepaw.browser.setup.ShizukuShellRunner
 import ai.closepaw.termux.NeedsSetupReason
 import ai.closepaw.termux.TermuxBridgeManager
+import ai.closepaw.termux.TermuxManualBootstrap
 import ai.closepaw.termux.TermuxBridgeStatus
 import ai.closepaw.ui.theme.closePaw
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -143,7 +146,7 @@ private fun TermuxShellSettingsRow() {
             is TermuxBridgeStatus.NeedsSetup -> {
                 when (displayedStatus.reason) {
                     NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE -> {
-                        { context.openTermuxInstallPage() }
+                        { context.launchTermux() }
                     }
                     NeedsSetupReason.TERMUX_NOT_RUNNING -> {
                         { context.launchTermux() }
@@ -196,7 +199,54 @@ private fun TermuxShellSettingsRow() {
         },
         onRowClick = rowAction,
         onRowClickLabel = rowClickLabel,
+        expanded = if (
+            termuxShellEnabled &&
+            displayedStatus is TermuxBridgeStatus.NeedsSetup &&
+            displayedStatus.reason == NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE
+        ) {
+            {
+                Text(
+                    text = "Google Play Termux can be paired once with the authenticated Local Bridge. After pairing, termux_shell uses localhost and does not need RUN_COMMAND.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedButton(
+                    onClick = {
+                        val payload = TermuxManualBootstrap.bridgePayload(appContext)
+                        context.copyText(
+                            "ClosePaw setup command",
+                            TermuxManualBootstrap.command(payload),
+                        )
+                        Toast.makeText(context, "Setup command copied", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("1. Copy setup command") }
+                OutlinedButton(
+                    onClick = {
+                        context.copyText("ClosePaw pairing token", TermuxManualBootstrap.token(appContext))
+                        Toast.makeText(context, "Pairing token copied", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("2. Copy pairing token") }
+                Button(
+                    onClick = { context.launchTermux() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Open Termux") }
+                OutlinedButton(
+                    onClick = { scope.launch(Dispatchers.IO) { manager.healthCheck() } },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Re-check Local Bridge") }
+                Text(
+                    text = "Paste step 1 in Termux. When it asks for the pairing token, return here, copy step 2, then paste it in Termux. This is required only for the first pairing.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        } else null,
     )
+}
+
+private fun Context.copyText(label: String, value: String) {
+    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
 }
 
 /**
