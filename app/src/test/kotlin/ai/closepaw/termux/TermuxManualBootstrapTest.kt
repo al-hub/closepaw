@@ -49,6 +49,15 @@ class TermuxManualBootstrapTest {
         }
     }
 
+
+    @Test fun `boot script keeps TermuxService task alive by execing bridge in foreground`() {
+        val script = TermuxManualBootstrap.bootScript()
+        assertThat(script).contains("exec env CLOSEPAW_BRIDGE_TOKEN=")
+        assertThat(script).contains("python3 \"\$BRIDGE\"")
+        assertThat(script).doesNotContain("nohup python3")
+        assertThat(script).doesNotContain("&")
+    }
+
     @Test fun `boot script records attempt and outcome diagnostics`() {
         val script = TermuxManualBootstrap.bootScript()
         assertThat(script).contains("boot.log")
