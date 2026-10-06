@@ -1,6 +1,8 @@
 package ai.closepaw.bridge
 
 import ai.closepaw.termux.RunCommandError
+import ai.closepaw.termux.TermuxInstallProbe
+import ai.closepaw.termux.TermuxInstallState
 import ai.closepaw.termux.TermuxRunCommandAdapter
 
 /**
@@ -9,14 +11,22 @@ import ai.closepaw.termux.TermuxRunCommandAdapter
  * Availability is verified with a lightweight shell probe so Play Store builds that
  * do not expose RunCommandService naturally fall through to the next LINUX_SHELL adapter.
  */
-class TermuxRunCommandExecutionAdapter(
+class TermuxRunCommandExecutionAdapter internal constructor(
     private val runCommand: TermuxRunCommandAdapter,
+    private val installProbe: TermuxInstallProbe,
 ) : ExecutionAdapter {
     override val id: String = "termux-run-command"
     override val capabilities: Set<ExecutionCapability> = setOf(ExecutionCapability.LINUX_SHELL)
 
-    override suspend fun probe(): AdapterAvailability =
-        try {
+    override suspend fun probe(): AdapterAvailability {
+        when (installProbe.inspect()) {
+            TermuxInstallState.NotInstalled ->
+                return AdapterAvailability.Unavailable("Termux is not installed")
+            TermuxInstallState.RunCommandUnavailable ->
+                return AdapterAvailability.Unavailable("installed Termux build does not expose RUN_COMMAND")
+            TermuxInstallState.Available -> Unit
+        }
+        return try {
             val result = runCommand.runShell("printf closepaw-probe", timeoutMs = PROBE_TIMEOUT_MS)
             if (result.exitCode == 0 && result.stdout == "closepaw-probe") {
                 AdapterAvailability.Available
@@ -38,6 +48,7 @@ class TermuxRunCommandExecutionAdapter(
         } catch (error: RunCommandError.Other) {
             AdapterAvailability.Unavailable("Termux RUN_COMMAND probe failed")
         }
+    }
 
     override suspend fun execute(request: ExecutionRequest): ExecutionResult {
         require(request.capability == ExecutionCapability.LINUX_SHELL) {
