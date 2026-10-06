@@ -391,7 +391,26 @@ class TermuxBridgeManagerTest {
             }
         every { packageManager.queryIntentServices(any<Intent>(), 0) } returns
             if (resolvesRunCommandService) listOf(runCommandServiceResolveInfo()) else emptyList()
+        every { packageManager.resolveService(any<Intent>(), 0) } returns
+            if (resolvesRunCommandService) runCommandServiceResolveInfo() else null
         return packageManager
+    }
+
+    @Test
+    fun `install probe requires explicit RunCommandService component to resolve`() {
+        val packageManager = packageManager()
+        every {
+            packageManager.resolveService(
+                match<Intent> {
+                    it.component?.packageName == TERMUX_PACKAGE &&
+                        it.component?.className == TERMUX_RUN_COMMAND_SERVICE
+                },
+                0
+            )
+        } returns null
+
+        assertThat(AndroidTermuxInstallProbe(packageManager).inspect())
+            .isEqualTo(TermuxInstallState.RunCommandUnavailable)
     }
 
     private fun runCommandServiceResolveInfo(): ResolveInfo =
