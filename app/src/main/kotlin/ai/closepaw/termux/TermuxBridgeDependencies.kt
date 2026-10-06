@@ -1,5 +1,6 @@
 package ai.closepaw.termux
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -67,11 +68,22 @@ internal class AndroidTermuxInstallProbe(
 
         val declaresRunCommandPermission =
             packageInfo.permissions.orEmpty().any { it.name == RUN_COMMAND_PERMISSION }
-        val resolvesRunCommandService =
+        val resolvesRunCommandAction =
             packageManager.queryIntentServices(Intent(ACTION_RUN_COMMAND), 0)
                 .any { it.isTermuxRunCommandService() }
+        val resolvesExplicitRunCommandService =
+            packageManager.resolveService(
+                Intent()
+                    .setComponent(ComponentName(TERMUX_PACKAGE, TERMUX_RUN_COMMAND_SERVICE))
+                    .setAction(ACTION_RUN_COMMAND),
+                0
+            )?.isTermuxRunCommandService() == true
 
-        return if (declaresRunCommandPermission && resolvesRunCommandService) {
+        return if (
+            declaresRunCommandPermission &&
+            resolvesRunCommandAction &&
+            resolvesExplicitRunCommandService
+        ) {
             TermuxInstallState.Available
         } else {
             TermuxInstallState.RunCommandUnavailable
