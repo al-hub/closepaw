@@ -1,71 +1,76 @@
-# ClosePaw ChatGPT Plugin MCP
+# ClosePaw for ChatGPT Voice — minimal MVP
 
-This is the ChatGPT-facing adapter for ClosePaw.
-
-It is deliberately **not** a separate voice client. ChatGPT's own mobile Voice
-experience remains the user interface.
-
-## Target flow
+## Product contract
 
 ```
-ChatGPT Android/iOS app
-  -> Voice / GPT-Live
-  -> installed ClosePaw plugin
-  -> get_kum_status MCP tool
+ChatGPT Voice <-> ClosePaw
+```
+
+That is the entire user-visible architecture.
+
+ChatGPT sees one tool:
+
+```
+run_task(task, target?)
+```
+
+Everything else belongs inside ClosePaw and is intentionally hidden from ChatGPT.
+
+## What v0.1.16 proves
+
+This MVP proves only that the native ChatGPT app can call ClosePaw and receive a
+real result back in the same conversation.
+
+Supported capability:
+
+- ClosePaw status/connectivity test
+
+Intentionally excluded from this MVP:
+
+- KUM
+- Termux
+- SSH
+- Accessibility
+- Shizuku
+- PC control
+- Android control
+- Bridge Core routing
+- device selection logic beyond preserving an optional target hint
+
+Those are added only after the ChatGPT <-> ClosePaw transport works end to end.
+
+## External transport
+
+ChatGPT requires an MCP connection to reach ClosePaw. For a private laptop
+instance, use OpenAI Secure MCP Tunnel. Treat the tunnel as transport only; it
+is not part of the ClosePaw product model.
+
+Runtime path:
+
+```
+ChatGPT mobile Voice
+  -> installed personal ClosePaw plugin
   -> Secure MCP Tunnel
-  -> local MCP server on laptop
-  -> Bridge Core
-  -> PC/KUM adapter
-  -> structured result
+  -> tools/chatgpt-plugin-mcp/server.py
+  -> run_task(...)
+  -> result
   -> same ChatGPT Voice conversation
 ```
 
-ChatGPT Live can use plugins available to the user's account. The plugin is
-created in ChatGPT from this MCP server; the local server is kept private behind
-OpenAI Secure MCP Tunnel.
+The MCP server is stdio-only. It does not expose an inbound public port.
 
-## Why stdio
-
-Secure MCP Tunnel can launch or reach an MCP server inside the laptop's trust
-boundary. This server uses stdio so ClosePaw does not need to open a local HTTP
-port or expose an inbound public endpoint.
-
-## First tool
-
-### `get_kum_status`
-
-Read-only. It maps to the existing high-level Bridge Core capability:
-
-- target device: `laptop`
-- capability: `kum`
-- action: `run_task`
-- approval policy: `auto_safe`
-
-The model cannot supply arbitrary shell source. The existing KUM adapter maps
-the request to fixed read-only service probes.
-
-## Local test
+## Local setup
 
 ```bash
 python3 -m venv .venv-closepaw-mcp
 source .venv-closepaw-mcp/bin/activate
 python3 -m pip install -r tools/chatgpt-plugin-mcp/requirements.txt
 python3 -m pytest -q tools/chatgpt-plugin-mcp/tests
-python3 tools/chatgpt-plugin-mcp/server.py
 ```
 
-Running `server.py` directly starts an MCP stdio server and waits for an MCP
-client. Use MCP Inspector or Secure MCP Tunnel to exercise it.
+## Tunnel setup
 
-## Secure MCP Tunnel
-
-Prerequisites are supplied by OpenAI Platform:
-
-- a `tunnel_id`
-- a runtime API key with Tunnel Use permission
-- `tunnel-client`
-
-Example profile:
+After creating a tunnel in the OpenAI Platform:
 
 ```bash
 export CONTROL_PLANE_API_KEY="..."
@@ -79,42 +84,47 @@ tunnel-client doctor --profile closepaw --explain
 tunnel-client run --profile closepaw
 ```
 
-Keep `tunnel-client run --profile closepaw` active while using the plugin.
+## ChatGPT setup
 
-## Create the ChatGPT plugin
+On ChatGPT web:
 
-Plugin creation is performed in ChatGPT on the web:
-
-1. Open **Plugins**.
-2. Select **+** -> **Add custom MCP server**.
+1. Open Plugins.
+2. Add a custom MCP server.
 3. Name it **ClosePaw**.
-4. Under Connection choose **Tunnel**.
-5. Select the ClosePaw tunnel (or paste its `tunnel_id`).
-6. Review the risk warning and create it as a plugin.
-7. Install the resulting personal plugin.
+4. Choose **Tunnel**.
+5. Select/paste the ClosePaw tunnel.
+6. Create and install the personal plugin.
 
-After installation, the same plugin can be used by ChatGPT Live on supported
-mobile surfaces, subject to account/plan/workspace availability.
+No separate ClosePaw voice UI is created.
 
-## E2E acceptance test
+## First acceptance test
 
-Open ChatGPT on Android, enter Voice/Live, and say:
+In the ChatGPT mobile app, start Voice and say:
 
-> 내 노트북에서 KUM 상태 확인해줘.
+> ClosePaw 상태 확인해줘.
 
-Pass criteria:
+Expected behavior:
 
-1. Live selects the ClosePaw `get_kum_status` tool.
-2. The request crosses Secure MCP Tunnel to the laptop.
-3. Bridge Core routes it to the PC/KUM adapter.
-4. The adapter returns the actual KUM Fast Access state.
-5. The result returns to the same Voice conversation.
-6. ChatGPT explains the real state aloud.
-7. No separate ClosePaw voice UI, browser voice page, Termux choice, SSH choice,
-   or adapter selection is exposed to the user.
+1. ChatGPT calls `run_task`.
+2. ClosePaw receives the task.
+3. ClosePaw returns `status=succeeded` and
+   `summary="ClosePaw is reachable and responding."`.
+4. ChatGPT reports that result in the same Voice conversation.
 
-## Scope of v0.1.16
+A second useful test is:
 
-v0.1.16 proves the ChatGPT-app-native read-only loop. It does not yet expose
-general write/control tools. Those should be added incrementally behind explicit
-risk annotations and approval policy after the read-only loop is verified.
+> 내 노트북 ClosePaw에 연결 테스트해줘.
+
+The optional `target` is preserved, but no device-routing behavior exists yet.
+
+## Next phase — only after the MVP passes
+
+Keep the ChatGPT surface unchanged. Extend only ClosePaw internals:
+
+```
+run_task
+  -> ClosePaw internal router/executor
+  -> PC / Android / KUM / other capabilities
+```
+
+The external contract remains one tool even as internal capabilities grow.
