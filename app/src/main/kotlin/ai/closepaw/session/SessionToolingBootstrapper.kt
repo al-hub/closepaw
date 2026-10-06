@@ -17,6 +17,7 @@ import ai.closepaw.agent.definition.ResolvedAgentRole
 import ai.closepaw.agent.definition.DefaultRoleDef
 import ai.closepaw.protocol.ApprovalMode
 import ai.closepaw.termux.TermuxBridgeManager
+import ai.closepaw.termux.AndroidTermuxInstallProbe
 import ai.closepaw.termux.TermuxBridgeAuth
 import ai.closepaw.termux.TermuxCapabilitySnapshot
 import ai.closepaw.tool.AppClassifier
@@ -157,7 +158,10 @@ internal object SessionToolingBootstrapper {
             // Prefer the authenticated localhost bridge for steady-state execution.
             // RUN_COMMAND remains the recovery/fallback transport when the bridge is absent.
             adapters += TermuxLocalBridgeExecutionAdapter(TermuxBridgeAuth.token(context))
-            adapters += TermuxRunCommandExecutionAdapter(TermuxRunCommandAdapter(context))
+            adapters += TermuxRunCommandExecutionAdapter(
+                TermuxRunCommandAdapter(context),
+                AndroidTermuxInstallProbe(context.packageManager),
+            )
         }
         return CapabilityExecutionGateway(ExecutionAdapterRegistry(adapters))
     }
