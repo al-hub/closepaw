@@ -81,6 +81,8 @@ private fun NeedsSetupReason.toDisplayText(): String = when (this) {
         "RUN_COMMAND is unavailable. Use the one-time Local Bridge bootstrap below."
     NeedsSetupReason.PACKAGES_MISSING -> "Missing packages — tap to install python/git/ripgrep"
     NeedsSetupReason.BRIDGE_OUTDATED -> "Bridge daemon out of date — tap to update"
+    NeedsSetupReason.AUTH_MISMATCH ->
+        "Local Bridge pairing token does not match. Repeat the pairing steps below."
     NeedsSetupReason.HEALTH_TIMEOUT -> "Bridge unreachable — tap to retry setup"
     NeedsSetupReason.TERMUX_TIMEOUT -> "Termux command timed out — open Termux once and retry"
     NeedsSetupReason.PORT_IN_USE -> "Port 18422 in use by another process"
