@@ -145,7 +145,8 @@ private fun TermuxShellSettingsRow() {
             }
             is TermuxBridgeStatus.NeedsSetup -> {
                 when (displayedStatus.reason) {
-                    NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE -> {
+                    NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE,
+                    NeedsSetupReason.AUTH_MISMATCH -> {
                         { context.launchTermux() }
                     }
                     NeedsSetupReason.TERMUX_NOT_RUNNING -> {
@@ -202,13 +203,22 @@ private fun TermuxShellSettingsRow() {
         expanded = if (
             termuxShellEnabled &&
             bridgeStatus is TermuxBridgeStatus.NeedsSetup &&
-            (bridgeStatus as TermuxBridgeStatus.NeedsSetup).reason ==
-                NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE
+            (bridgeStatus as TermuxBridgeStatus.NeedsSetup).reason in setOf(
+                NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE,
+                NeedsSetupReason.AUTH_MISMATCH,
+            )
         ) {
             {
                 Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.closePaw.spacing.sm)) {
                     Text(
-                        text = "This Termux build does not expose RUN_COMMAND. Bootstrap the authenticated Local Bridge once inside Termux.",
+                        text = if (
+                            (bridgeStatus as TermuxBridgeStatus.NeedsSetup).reason ==
+                            NeedsSetupReason.AUTH_MISMATCH
+                        ) {
+                            "The Local Bridge is running, but its pairing token does not match ClosePaw. Repeat the pairing steps once."
+                        } else {
+                            "This Termux build does not expose RUN_COMMAND. Bootstrap the authenticated Local Bridge once inside Termux."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Button(
