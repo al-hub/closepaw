@@ -5,13 +5,23 @@ import org.junit.Test
 
 class TermuxManualBootstrapTest {
     @Test fun `bootstrap command never contains a permanent token literal`() {
-        val command = TermuxManualBootstrap.command()
+        val command = TermuxManualBootstrap.command("YnJpZGdlLXBheWxvYWQ=")
         assertThat(command).doesNotContain("test-token")
         assertThat(command).contains("read -r CLOSEPAW_TOKEN")
     }
 
+
+    @Test fun `bootstrap deploys validated bridge payload before starting it`() {
+        val payload = "YnJpZGdlLXBheWxvYWQ="
+        val command = TermuxManualBootstrap.command(payload)
+        assertThat(command).contains(payload)
+        assertThat(command).contains("base64 -d > ~/.closepaw/bridge.py")
+        assertThat(command).contains("python3 -m py_compile ~/.closepaw/bridge.py")
+        assertThat(command).contains("command -v python3")
+    }
+
     @Test fun `bootstrap persists token in private file and starts bridge from it`() {
-        val command = TermuxManualBootstrap.command()
+        val command = TermuxManualBootstrap.command("YnJpZGdlLXBheWxvYWQ=")
         assertThat(command).contains("umask 077")
         assertThat(command).contains("~/.closepaw/token")
         assertThat(command).contains("chmod 600")
@@ -20,7 +30,7 @@ class TermuxManualBootstrapTest {
     }
 
     @Test fun `bootstrap installs idempotent Termux Boot startup script`() {
-        val command = TermuxManualBootstrap.command()
+        val command = TermuxManualBootstrap.command("YnJpZGdlLXBheWxvYWQ=")
         assertThat(command).contains("~/.termux/boot")
         assertThat(command).contains("10-closepaw-bridge")
         assertThat(command).contains("~/.closepaw/token")
