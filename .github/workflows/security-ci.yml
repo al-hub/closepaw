@@ -37,6 +37,9 @@ jobs:
       - name: ChatGPT bridge core tests
         run: python3 -m pytest -q tools/chatgpt-bridge/tests
 
+      - name: Realtime voice adapter tests
+        run: python3 -m pytest -q tools/realtime-voice/tests
+
       - name: Reject obvious committed secrets
         shell: bash
         run: |
