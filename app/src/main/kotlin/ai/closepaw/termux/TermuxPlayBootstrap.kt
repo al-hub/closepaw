@@ -43,11 +43,10 @@ internal object TermuxPlayBootstrap {
                         val status = if (ok) "200 OK" else "404 Not Found"
                         val bytes = body.toByteArray(Charsets.UTF_8)
                         client.getOutputStream().apply {
-                            write(
+                            val headers =
                                 "HTTP/1.1 $status\r\nContent-Type: text/x-shellscript; charset=utf-8\r\n" +
                                     "Content-Length: ${bytes.size}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
-                                        .toByteArray(Charsets.US_ASCII)
-                            )
+                            write(headers.toByteArray(Charsets.US_ASCII))
                             write(bytes)
                             flush()
                         }
