@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ClosePaw Realtime Voice</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 3rem auto; padding: 0 1rem; }
+    button { font-size: 1rem; padding: .75rem 1rem; margin-right: .5rem; }
+    #status { margin-top: 1rem; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>ClosePaw Realtime Voice</h1>
+  <p>말해보세요: “내 노트북에서 KUM 상태 확인해줘.”</p>
+  <button id="start">Start</button>
+  <button id="stop" disabled>Stop</button>
+  <div id="status">Idle</div>
+  <audio id="remoteAudio" autoplay></audio>
+
+<script type="module">
+const start = document.querySelector("#start");
+const stop = document.querySelector("#stop");
+const status = document.querySelector("#status");
+const remoteAudio = document.querySelector("#remoteAudio");
+
+let pc;
+let dc;
+let mic;
+let realtimeSessionId;
+let handling = new Set();
+
+function setStatus(text) { status.textContent = text; }
+
+async function handleToolCall(event) {
+  if (event.type !== "response.function_call_arguments.done") return;
+  if (handling.has(event.call_id)) return;
+  handling.add(event.call_id);
+  try {
+    const response = await fetch("/api/tool", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: realtimeSessionId,
+        call_id: event.call_id,
+        name: event.name,
+        arguments: event.arguments,
+      }),
+    });
+    const result = await response.json();
+    dc.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "function_call_output",
+        call_id: event.call_id,
+        output: JSON.stringify(result),
+      },
+    }));
+    dc.send(JSON.stringify({ type: "response.create" }));
+  } finally {
+    handling.delete(event.call_id);
+  }
+}
+
+function cleanup() {
+  if (mic) mic.getTracks().forEach(track => track.stop());
+  if (dc) dc.close();
+  if (pc) pc.close();
+  pc = dc = mic = undefined;
+  realtimeSessionId = undefined;
+  handling.clear();
+  start.disabled = false;
+  stop.disabled = true;
+}
+
+start.addEventListener("click", async () => {
+  start.disabled = true;
+  setStatus("Connecting…");
+  try {
+    pc = new RTCPeerConnection();
+    pc.ontrack = (event) => { remoteAudio.srcObject = event.streams[0]; };
+
+    mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mic.getAudioTracks().forEach(track => pc.addTrack(track, mic));
+
+    dc = pc.createDataChannel("oai-events");
+    dc.addEventListener("message", async ({ data }) => {
+      const event = JSON.parse(data);
+      if (event.type === "session.created" || event.type === "session.updated") {
+        realtimeSessionId = event.session?.id ?? realtimeSessionId;
+      }
+      if (event.type === "error") {
+        console.error(event);
+        setStatus("Realtime error: " + (event.error?.message ?? "unknown"));
+      }
+      await handleToolCall(event);
+      console.log(event);
+    });
+    dc.addEventListener("open", () => {
+      stop.disabled = false;
+      setStatus("Connected. Speak now.");
+    });
+    dc.addEventListener("close", cleanup);
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    const answer = await fetch("/api/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/sdp" },
+      body: offer.sdp,
+    });
+    if (!answer.ok) throw new Error(await answer.text());
+    await pc.setRemoteDescription({
+      type: "answer",
+      sdp: await answer.text(),
+    });
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error));
+    cleanup();
+  }
+});
+
+stop.addEventListener("click", () => {
+  if (dc?.readyState === "open") {
+    dc.send(JSON.stringify({ type: "session.close" }));
+  }
+  cleanup();
+});
+</script>
+</body>
+</html>
