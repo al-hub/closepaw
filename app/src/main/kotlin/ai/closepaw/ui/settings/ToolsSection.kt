@@ -7,8 +7,11 @@ import ai.closepaw.browser.setup.ShizukuShellRunner
 import ai.closepaw.termux.NeedsSetupReason
 import ai.closepaw.termux.TermuxBridgeManager
 import ai.closepaw.termux.TermuxBridgeStatus
+import ai.closepaw.termux.TermuxPlayBootstrap
 import ai.closepaw.ui.theme.closePaw
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.ContextWrapper
@@ -143,7 +146,21 @@ private fun TermuxShellSettingsRow() {
             is TermuxBridgeStatus.NeedsSetup -> {
                 when (displayedStatus.reason) {
                     NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE -> {
-                        { context.openTermuxInstallPage() }
+                        {
+                            try {
+                                val prepared = TermuxPlayBootstrap.prepare(appContext)
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("ClosePaw bootstrap", prepared.command))
+                                Toast.makeText(
+                                    context,
+                                    "Bootstrap command copied. Paste it once in Termux.",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                                context.launchTermux()
+                            } catch (_: Exception) {
+                                Toast.makeText(context, "Unable to prepare local bridge bootstrap", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                     NeedsSetupReason.TERMUX_NOT_RUNNING -> {
                         { context.launchTermux() }
