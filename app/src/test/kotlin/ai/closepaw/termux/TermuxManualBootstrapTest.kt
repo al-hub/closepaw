@@ -63,8 +63,7 @@ class TermuxManualBootstrapTest {
         assertThat(script).contains("boot.log")
         assertThat(script).contains("attempt %s")
         assertThat(script).contains("already_ready %s")
-        assertThat(script).contains("started %s pid=%s")
-        assertThat(script).contains("failed %s")
+        assertThat(script).contains("exec_start %s")
     }
 
     @Test fun `boot script reads token at runtime instead of embedding secret`() {
