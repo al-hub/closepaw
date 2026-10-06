@@ -198,6 +198,18 @@ class TermuxStatusMapperTest {
     }
 
     @Test
+    fun `NeedsSetup AUTH_MISMATCH subtitle`() {
+        val ui = termuxStatusUi(
+            state = TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.AUTH_MISMATCH),
+            permissionDisposition = null,
+            enabledPref = true,
+        )
+        assertThat(ui.subtitle).isEqualTo(
+            "Local Bridge pairing token does not match. Repeat the pairing steps below."
+        )
+    }
+
+    @Test
     fun `NeedsSetup HEALTH_TIMEOUT subtitle`() {
         val ui = termuxStatusUi(
             state = TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.HEALTH_TIMEOUT),

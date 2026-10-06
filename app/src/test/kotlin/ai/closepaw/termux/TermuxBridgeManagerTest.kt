@@ -54,6 +54,20 @@ class TermuxBridgeManagerTest {
     }
 
     @Test
+    fun `health check reports auth mismatch before RUN_COMMAND availability`() = runTest {
+        val manager = manager(
+            commandRunner = FakeCommandRunner(),
+            healthProbe = FakeHealthProbe(HealthProbe.AuthMismatch),
+            installProbe = TermuxInstallProbe { TermuxInstallState.RunCommandUnavailable },
+        )
+
+        assertThat(manager.healthCheck())
+            .isEqualTo(TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.AUTH_MISMATCH))
+        assertThat(manager.state.value)
+            .isEqualTo(TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.AUTH_MISMATCH))
+    }
+
+    @Test
     fun `setup does not report RUN_COMMAND unavailable for F-Droid compatible Termux`() = runTest {
         val commandRunner = FakeCommandRunner()
         val manager = manager(
