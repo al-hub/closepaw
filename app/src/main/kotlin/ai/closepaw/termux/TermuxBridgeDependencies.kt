@@ -9,8 +9,10 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -34,6 +36,7 @@ internal enum class HealthProbe {
     Ready,
     BridgeOutdated,
     InvalidIdentity,
+    AuthMismatch,
     Unavailable
 }
 
@@ -115,7 +118,8 @@ internal class AndroidTermuxInstallProbe(
 internal class HttpTermuxHealthProbe(
     private val healthUrl: String,
     private val expectedIdentity: String,
-    private val expectedVersion: String
+    private val expectedVersion: String,
+    private val authToken: String,
 ) : TermuxHealthProbe {
     private val httpClient =
         OkHttpClient.Builder()
@@ -138,7 +142,7 @@ internal class HttpTermuxHealthProbe(
                     when {
                         identity != expectedIdentity -> HealthProbe.InvalidIdentity
                         version != expectedVersion -> HealthProbe.BridgeOutdated
-                        else -> HealthProbe.Ready
+                        else -> authenticatedProbe()
                     }
                 }
             } catch (_: IOException) {
@@ -149,4 +153,30 @@ internal class HttpTermuxHealthProbe(
                 HealthProbe.Unavailable
             }
         }
+    private fun authenticatedProbe(): HealthProbe {
+        val execUrl = healthUrl.removeSuffix("/v1/health") + "/v1/exec"
+        val body = """{"command":":","timeout_ms":2000}""".toRequestBody(JSON)
+        val request = Request.Builder()
+            .url(execUrl)
+            .header(AUTH_HEADER, authToken)
+            .post(body)
+            .build()
+        return try {
+            httpClient.newCall(request).execute().use { response ->
+                when {
+                    response.code == 401 -> HealthProbe.AuthMismatch
+                    response.isSuccessful -> HealthProbe.Ready
+                    else -> HealthProbe.Unavailable
+                }
+            }
+        } catch (_: IOException) {
+            HealthProbe.Unavailable
+        }
+    }
+
+    private companion object {
+        const val AUTH_HEADER = "X-ClosePaw-Token"
+        val JSON = "application/json; charset=utf-8".toMediaType()
+    }
+
 }
