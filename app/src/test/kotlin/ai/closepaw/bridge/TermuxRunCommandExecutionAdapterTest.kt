@@ -14,11 +14,11 @@ import org.junit.Test
 class TermuxRunCommandExecutionAdapterTest {
     private val runCommand = mockk<TermuxRunCommandAdapter>()
     private val installProbe = TermuxInstallProbe { TermuxInstallState.Available }
-    private val adapter = TermuxRunCommandExecutionAdapter(runCommand, installProbe)
+    private val adapter = TermuxRunCommandExecutionAdapter.capabilityAware(runCommand, installProbe)
 
     @Test
     fun `probe does not start service when installed Termux lacks RUN_COMMAND contract`() = runTest {
-        val unavailable = TermuxRunCommandExecutionAdapter(
+        val unavailable = TermuxRunCommandExecutionAdapter.capabilityAware(
             runCommand,
             TermuxInstallProbe { TermuxInstallState.RunCommandUnavailable },
         )
