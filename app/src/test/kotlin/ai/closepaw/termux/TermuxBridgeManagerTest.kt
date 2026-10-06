@@ -42,6 +42,18 @@ class TermuxBridgeManagerTest {
     }
 
     @Test
+    fun `healthy Local Bridge remains ready when RUN_COMMAND is unavailable`() = runTest {
+        val manager = manager(
+            commandRunner = FakeCommandRunner(),
+            healthProbe = FakeHealthProbe(HealthProbe.Ready),
+            installProbe = TermuxInstallProbe { TermuxInstallState.RunCommandUnavailable },
+        )
+
+        assertThat(manager.healthCheck()).isEqualTo(TermuxBridgeStatus.Ready)
+        assertThat(manager.state.value).isEqualTo(TermuxBridgeStatus.Ready)
+    }
+
+    @Test
     fun `setup does not report RUN_COMMAND unavailable for F-Droid compatible Termux`() = runTest {
         val commandRunner = FakeCommandRunner()
         val manager = manager(

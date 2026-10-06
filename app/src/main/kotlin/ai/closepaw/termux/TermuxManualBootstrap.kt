@@ -35,23 +35,19 @@ CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" nohup python3 "${'$'}BRID
     }
 
     /**
-     * User-approved one-shot bootstrap for Termux variants that intentionally do not expose
-     * RUN_COMMAND (notably the current Google Play build). The command is executed by the user
-     * inside Termux, so ClosePaw never bypasses Termux private-storage isolation.
+     * First half of manual pairing for Termux variants without RUN_COMMAND.
+     * The permanent auth token is intentionally excluded from this clipboard command.
      */
-    fun oneShotCommand(context: Context): String {
-        val bridge = bridgePayload(context)
-        val tokenBase64 = Base64.encodeToString(
-            token(context).toByteArray(Charsets.UTF_8),
-            Base64.NO_WRAP
-        )
-        val boot = JavaBase64.getEncoder().encodeToString(
-            bootScript().toByteArray(Charsets.UTF_8)
-        )
+    fun manualSetupCommand(bridgePayloadBase64: String): String {
+        require(bridgePayloadBase64.matches(Regex("[A-Za-z0-9+/=]+"))) { "bridge payload must be base64" }
+        val boot = JavaBase64.getEncoder().encodeToString(bootScript().toByteArray(Charsets.UTF_8))
         return "umask 077; mkdir -p ~/.closepaw ~/closepaw/workspace ~/closepaw/artifacts ~/closepaw/logs ~/.termux/boot; " +
-            "printf '%s' '$bridge' | base64 -d > ~/.closepaw/bridge.py; " +
-            "python3 -m py_compile ~/.closepaw/bridge.py || exit 1; " +
-            "printf '%s' '$tokenBase64' | base64 -d > ~/.closepaw/token; chmod 600 ~/.closepaw/token; " +
+            "command -v python3 >/dev/null 2>&1 || pkg install -y python; " +
+            "printf '%s' '$bridgePayloadBase64' | base64 -d > ~/.closepaw/bridge.py; " +
+            "python3 -m py_compile ~/.closepaw/bridge.py || exit 1; chmod 600 ~/.closepaw/bridge.py; " +
+            "printf 'ClosePaw pairing token: '; read -rs CLOSEPAW_TOKEN; printf '\\n'; " +
+            "[ -n \"\$CLOSEPAW_TOKEN\" ] || { echo 'Token required'; exit 1; }; " +
+            "printf '%s' \"\$CLOSEPAW_TOKEN\" > ~/.closepaw/token; chmod 600 ~/.closepaw/token; unset CLOSEPAW_TOKEN; " +
             "printf '%s' '$boot' | base64 -d > $BOOT_SCRIPT_PATH; chmod 700 $BOOT_SCRIPT_PATH; " +
             "CLOSEPAW_BRIDGE_TOKEN=\"\$(cat ~/.closepaw/token)\" nohup python3 ~/.closepaw/bridge.py " +
             ">/dev/null 2>~/closepaw/logs/bridge.err </dev/null & " +

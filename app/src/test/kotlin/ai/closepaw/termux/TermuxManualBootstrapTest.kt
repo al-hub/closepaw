@@ -27,6 +27,17 @@ class TermuxManualBootstrapTest {
         assertThat(command).contains("chmod 700")
     }
 
+
+    @Test fun `manual setup command deploys bridge without embedding auth token`() {
+        val command = TermuxManualBootstrap.manualSetupCommand("YnJpZGdl")
+        assertThat(command).contains("YnJpZGdl")
+        assertThat(command).contains("base64 -d > ~/.closepaw/bridge.py")
+        assertThat(command).contains("python3 -m py_compile ~/.closepaw/bridge.py")
+        assertThat(command).contains("command -v python3")
+        assertThat(command).contains("read -rs CLOSEPAW_TOKEN")
+        assertThat(command).doesNotContain("test-token")
+    }
+
     @Test fun `boot script reads token at runtime instead of embedding secret`() {
         val script = TermuxManualBootstrap.bootScript()
         assertThat(script).contains("TOKEN_FILE=\"\$HOME/.closepaw/token\"")
