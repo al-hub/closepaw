@@ -45,7 +45,7 @@ internal object TermuxPlayBootstrap {
                         client.getOutputStream().apply {
                             write(
                                 "HTTP/1.1 $status\r\nContent-Type: text/x-shellscript; charset=utf-8\r\n" +
-                                    "Content-Length: ${bytes.size}\r\nConnection: close\r\n\r\n"
+                                    "Content-Length: ${bytes.size}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
                                         .toByteArray(Charsets.US_ASCII)
                             )
                             write(bytes)
