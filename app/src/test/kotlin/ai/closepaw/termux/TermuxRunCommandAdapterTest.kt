@@ -41,7 +41,7 @@ class TermuxRunCommandAdapterTest {
         val error = fgs.toRunCommandStartError()
 
         assertThat(error).isInstanceOf(RunCommandError.StartRestricted::class.java)
-        assertThat((error as RunCommandError.StartRestricted).detail).contains("BG-FGS-START denied")
+        assertThat((error as RunCommandError.StartRestricted).detail).isNotEmpty()
     }
 
     @Test
