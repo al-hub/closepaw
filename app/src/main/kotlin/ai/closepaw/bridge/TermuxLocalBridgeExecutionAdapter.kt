@@ -19,13 +19,34 @@ class TermuxLocalBridgeExecutionAdapter(
     override val capabilities = setOf(ExecutionCapability.LINUX_SHELL)
 
     override suspend fun probe(): AdapterAvailability = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url("${baseUrl.trimEnd('/')}/v1/health").get().build()
+        val healthRequest = Request.Builder().url("${baseUrl.trimEnd('/')}/v1/health").get().build()
         try {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext AdapterAvailability.Unavailable("health check failed")
+            client.newCall(healthRequest).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext AdapterAvailability.Unavailable("health check failed")
+                }
                 val json = JSONObject(response.body.string())
-                if (json.optString("identity") == BRIDGE_IDENTITY) AdapterAvailability.Available
-                else AdapterAvailability.Unavailable("unexpected localhost service identity")
+                if (json.optString("identity") != BRIDGE_IDENTITY) {
+                    return@withContext AdapterAvailability.Unavailable("unexpected localhost service identity")
+                }
+            }
+
+            val authPayload = JSONObject().apply {
+                put("command", ":")
+                put("timeout_ms", AUTH_PROBE_TIMEOUT_MS)
+            }
+            val authRequest = Request.Builder()
+                .url("${baseUrl.trimEnd('/')}/v1/exec")
+                .header(AUTH_HEADER, authToken)
+                .post(authPayload.toString().toRequestBody(JSON))
+                .build()
+            client.newCall(authRequest).execute().use { response ->
+                when {
+                    response.code == 401 ->
+                        AdapterAvailability.NeedsSetup("local bridge pairing token does not match")
+                    response.isSuccessful -> AdapterAvailability.Available
+                    else -> AdapterAvailability.Unavailable("authenticated bridge probe failed with HTTP ${response.code}")
+                }
             }
         } catch (_: IOException) {
             AdapterAvailability.NeedsSetup("local bridge is not running or paired")
@@ -81,6 +102,7 @@ class TermuxLocalBridgeExecutionAdapter(
         private const val BRIDGE_IDENTITY = "closepaw-bridge"
         private const val AUTH_HEADER = "X-ClosePaw-Token"
         private const val HTTP_GRACE_MS = 5_000L
+        private const val AUTH_PROBE_TIMEOUT_MS = 2_000L
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }
