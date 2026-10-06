@@ -71,7 +71,7 @@ class TermuxBridgeManagerTest {
                 Triple(
                     ForegroundServiceStartNotAllowedException(FGS_REJECTED_MESSAGE).toRunCommandStartError(),
                     TermuxInstallProbe { TermuxInstallState.Available },
-                    NeedsSetupReason.TERMUX_NOT_RUNNING
+                    NeedsSetupReason.UNKNOWN
                 )
             )
 
