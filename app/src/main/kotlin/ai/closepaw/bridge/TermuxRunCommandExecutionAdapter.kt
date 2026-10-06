@@ -11,10 +11,24 @@ import ai.closepaw.termux.TermuxRunCommandAdapter
  * Availability is verified with a lightweight shell probe so Play Store builds that
  * do not expose RunCommandService naturally fall through to the next LINUX_SHELL adapter.
  */
-class TermuxRunCommandExecutionAdapter(
+class TermuxRunCommandExecutionAdapter private constructor(
     private val runCommand: TermuxRunCommandAdapter,
     private val installProbe: TermuxInstallProbe,
 ) : ExecutionAdapter {
+    constructor(runCommand: TermuxRunCommandAdapter) : this(
+        runCommand,
+        TermuxInstallProbe { TermuxInstallState.Available },
+    )
+
+    internal companion object {
+        fun capabilityAware(
+            runCommand: TermuxRunCommandAdapter,
+            installProbe: TermuxInstallProbe,
+        ): TermuxRunCommandExecutionAdapter =
+            TermuxRunCommandExecutionAdapter(runCommand, installProbe)
+
+        private const val PROBE_TIMEOUT_MS = 5_000L
+    }
     override val id: String = "termux-run-command"
     override val capabilities: Set<ExecutionCapability> = setOf(ExecutionCapability.LINUX_SHELL)
 
@@ -87,7 +101,4 @@ class TermuxRunCommandExecutionAdapter(
 
     private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
-    private companion object {
-        const val PROBE_TIMEOUT_MS = 5_000L
-    }
 }
