@@ -22,16 +22,8 @@ if command -v curl >/dev/null 2>&1 && curl -fsS --max-time 1 http://127.0.0.1:18
   printf 'already_ready %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"
   exit 0
 fi
-CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" nohup python3 "${'$'}BRIDGE" ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} >/dev/null 2>"${'$'}LOG_DIR/bridge.err" </dev/null &
-PID="${'$'}!"
-sleep 1
-if kill -0 "${'$'}PID" 2>/dev/null; then
-  printf 'started %s pid=%s\\n' "${'$'}(date +%s)" "${'$'}PID" >> "${'$'}BOOT_LOG"
-else
-  printf 'failed %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"
-  [ -f "${'$'}LOG_DIR/bridge.err" ] && tail -n 20 "${'$'}LOG_DIR/bridge.err" >> "${'$'}BOOT_LOG"
-  exit 1
-fi
+printf 'exec_start %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"
+exec env CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" python3 "${'$'}BRIDGE" ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} >/dev/null 2>"${'$'}LOG_DIR/bridge.err" </dev/null
 """.trimIndent()
 
     fun command(): String {
