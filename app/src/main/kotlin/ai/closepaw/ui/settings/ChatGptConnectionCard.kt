@@ -26,19 +26,19 @@ internal fun ChatGptConnectionCard() {
         Text(
             text = "ChatGPT Voice",
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.closePaw.ink,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = state.phase,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.closePaw.inkMuted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         state.publicMcpUrl?.let { url ->
             SelectionContainer {
                 Text(
                     text = url,
                     style = MaterialTheme.closePaw.monoSmall,
-                    color = MaterialTheme.closePaw.ink,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
