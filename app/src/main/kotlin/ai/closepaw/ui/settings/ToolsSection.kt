@@ -217,15 +217,36 @@ private fun TermuxShellSettingsRow() {
                             clipboard?.setPrimaryClip(
                                 ClipData.newPlainText(
                                     "ClosePaw Termux bootstrap",
-                                    TermuxManualBootstrap.oneShotCommand(appContext),
+                                    TermuxManualBootstrap.manualSetupCommand(
+                                        TermuxManualBootstrap.bridgePayload(appContext)
+                                    ),
                                 )
                             )
                             Toast.makeText(context, "Bootstrap command copied", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Copy one-time bootstrap")
+                        Text("1. Copy setup command")
                     }
+                    OutlinedButton(
+                        onClick = {
+                            val clipboard = context.getSystemService(ClipboardManager::class.java)
+                            clipboard?.setPrimaryClip(
+                                ClipData.newPlainText(
+                                    "ClosePaw pairing token",
+                                    TermuxManualBootstrap.token(appContext),
+                                )
+                            )
+                            Toast.makeText(context, "Pairing token copied", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("2. Copy pairing token")
+                    }
+                    Text(
+                        text = "Paste step 1 in Termux. When it waits for the pairing token, return here, copy step 2, then paste it in Termux. The token is not embedded in the setup command or shell history.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                     OutlinedButton(
                         onClick = { context.launchTermux() },
                         modifier = Modifier.fillMaxWidth(),
