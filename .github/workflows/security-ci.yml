@@ -37,6 +37,11 @@ jobs:
       - name: ChatGPT bridge core tests
         run: python3 -m pytest -q tools/chatgpt-bridge/tests
 
+      - name: ChatGPT plugin MCP tests
+        run: |
+          python3 -m pip install --disable-pip-version-check -r tools/chatgpt-plugin-mcp/requirements.txt
+          python3 -m pytest -q tools/chatgpt-plugin-mcp/tests
+
       - name: Reject obvious committed secrets
         shell: bash
         run: |
