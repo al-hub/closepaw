@@ -173,8 +173,7 @@ class TermuxStatusMapperTest {
             enabledPref = true,
         )
         assertThat(ui.subtitle).isEqualTo(
-            "This Termux build cannot accept external commands. Install Termux from F-Droid " +
-                "(the Google Play build is incompatible)."
+            "RUN_COMMAND unavailable. Use one-time Local Bridge pairing below."
         )
     }
 
