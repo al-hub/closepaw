@@ -78,7 +78,7 @@ private fun NeedsSetupReason.toDisplayText(): String = when (this) {
     NeedsSetupReason.TERMUX_NOT_RUNNING ->
         "Termux is not running. Tap to open Termux, then return here."
     NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE ->
-        "This Termux build cannot accept external commands. Install Termux from F-Droid (the Google Play build is incompatible)."
+        "RUN_COMMAND unavailable. Use one-time Local Bridge pairing below."
     NeedsSetupReason.PACKAGES_MISSING -> "Missing packages — tap to install python/git/ripgrep"
     NeedsSetupReason.BRIDGE_OUTDATED -> "Bridge daemon out of date — tap to update"
     NeedsSetupReason.HEALTH_TIMEOUT -> "Bridge unreachable — tap to retry setup"
