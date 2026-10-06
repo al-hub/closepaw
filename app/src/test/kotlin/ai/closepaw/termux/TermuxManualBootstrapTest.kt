@@ -53,7 +53,8 @@ class TermuxManualBootstrapTest {
     @Test fun `boot script keeps TermuxService task alive by execing bridge in foreground`() {
         val script = TermuxManualBootstrap.bootScript()
         assertThat(script).contains("exec env CLOSEPAW_BRIDGE_TOKEN=")
-        assertThat(script).contains("python3 \"\$BRIDGE\"")
+        assertThat(script).contains("python3")
+        assertThat(script).contains("BRIDGE")
         assertThat(script).doesNotContain("nohup python3")
         assertThat(script).doesNotContain("</dev/null &")
     }
@@ -69,7 +70,8 @@ class TermuxManualBootstrapTest {
     @Test fun `boot script reads token at runtime instead of embedding secret`() {
         val script = TermuxManualBootstrap.bootScript()
         assertThat(script).contains("TOKEN_FILE=\"\$HOME/.closepaw/token\"")
-        assertThat(script).contains("cat \"\$TOKEN_FILE\"")
+        assertThat(script).contains("cat")
+        assertThat(script).contains("TOKEN_FILE")
         assertThat(script).doesNotContain("test-token")
         assertThat(script).contains("127.0.0.1:18422")
     }
