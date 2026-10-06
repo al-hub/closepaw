@@ -30,6 +30,18 @@ class TermuxRunCommandExecutionAdapterTest {
     }
 
     @Test
+    fun `probe reports Android start restriction without claiming Termux is stopped`() = runTest {
+        coEvery { runCommand.runShell("printf closepaw-probe", null, 5_000L) } throws
+            RunCommandError.StartRestricted("BG-FGS-START denied")
+
+        val availability = adapter.probe()
+
+        assertThat(availability).isInstanceOf(AdapterAvailability.NeedsSetup::class.java)
+        assertThat((availability as AdapterAvailability.NeedsSetup).reason)
+            .contains("Android blocked Termux RUN_COMMAND service start: BG-FGS-START denied")
+    }
+
+    @Test
     fun `execute normalizes RUN_COMMAND result`() = runTest {
         coEvery { runCommand.runShell("echo ok", null, 2_000L) } returns
             RunCommandResult("ok\n", "", 0)

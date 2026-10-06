@@ -22,7 +22,7 @@ data class RunCommandResult(val stdout: String, val stderr: String, val exitCode
 sealed class RunCommandError : Exception() {
     object PermissionMissing : RunCommandError()
     object AllowExternalAppsMissing : RunCommandError()
-    object TermuxProcessNotRunning : RunCommandError()
+    data class StartRestricted(val detail: String) : RunCommandError()
     object TermuxNotAvailable : RunCommandError()
     data class Timeout(val ms: Long) : RunCommandError()
     data class Other(override val cause: Throwable?) : RunCommandError()
@@ -31,7 +31,9 @@ sealed class RunCommandError : Exception() {
 internal fun Throwable.toRunCommandStartError(): RunCommandError =
     when {
         this is ForegroundServiceStartNotAllowedException || isThirdProcessStartRejected() ->
-            RunCommandError.TermuxProcessNotRunning
+            RunCommandError.StartRestricted(
+                message?.takeIf { it.isNotBlank() } ?: this::class.java.simpleName
+            )
         this is SecurityException -> RunCommandError.PermissionMissing
         this is ActivityNotFoundException || this is IllegalArgumentException ->
             RunCommandError.TermuxNotAvailable
@@ -163,10 +165,10 @@ class TermuxRunCommandAdapter(private val context: Context) {
                         appContext.startService(runCommandIntent)
                     }
                 if (started == null) {
-                    fail(RunCommandError.TermuxProcessNotRunning)
+                    fail(RunCommandError.StartRestricted("Android returned null while starting Termux RunCommandService"))
                 }
             } catch (e: ForegroundServiceStartNotAllowedException) {
-                fail(RunCommandError.TermuxProcessNotRunning)
+                fail(e.toRunCommandStartError())
             } catch (e: SecurityException) {
                 fail(e.toRunCommandStartError())
             } catch (e: ActivityNotFoundException) {

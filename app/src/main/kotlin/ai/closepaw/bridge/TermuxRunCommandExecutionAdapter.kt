@@ -27,8 +27,10 @@ class TermuxRunCommandExecutionAdapter(
             AdapterAvailability.NeedsSetup("Termux RUN_COMMAND permission is missing")
         } catch (error: RunCommandError.AllowExternalAppsMissing) {
             AdapterAvailability.NeedsSetup("Termux allow-external-apps is disabled")
-        } catch (error: RunCommandError.TermuxProcessNotRunning) {
-            AdapterAvailability.NeedsSetup("Termux must be running before RUN_COMMAND can be used")
+        } catch (error: RunCommandError.StartRestricted) {
+            AdapterAvailability.NeedsSetup(
+                "Android blocked Termux RUN_COMMAND service start: ${error.detail}"
+            )
         } catch (error: RunCommandError.TermuxNotAvailable) {
             AdapterAvailability.Unavailable("Termux RUN_COMMAND service is unavailable")
         } catch (error: RunCommandError.Timeout) {

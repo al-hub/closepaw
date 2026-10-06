@@ -35,15 +35,17 @@ class TermuxRunCommandAdapterTest {
     // --- Throwable.toRunCommandStartError (start-stage error mapping) ---
 
     @Test
-    fun `ForegroundServiceStartNotAllowed maps to TermuxProcessNotRunning`() {
+    fun `ForegroundServiceStartNotAllowed preserves Android background restriction`() {
         val fgs = ForegroundServiceStartNotAllowedException("BG-FGS-START denied")
 
-        assertThat(fgs.toRunCommandStartError())
-            .isEqualTo(RunCommandError.TermuxProcessNotRunning)
+        val error = fgs.toRunCommandStartError()
+
+        assertThat(error).isInstanceOf(RunCommandError.StartRestricted::class.java)
+        assertThat((error as RunCommandError.StartRestricted).detail).isNotEmpty()
     }
 
     @Test
-    fun `forbidden 3rd process SecurityException also maps to TermuxProcessNotRunning`() {
+    fun `forbidden 3rd process SecurityException preserves vendor start restriction`() {
         // Vendor restriction surfaces as a SecurityException whose message names the
         // 3rd-process rule rather than the FGS exception. Must be distinguished from
         // a true permission denial below.
@@ -53,9 +55,9 @@ class TermuxRunCommandAdapterTest {
             SecurityException("App forbidden to start a third process from background")
 
         assertThat(securityNumeric.toRunCommandStartError())
-            .isEqualTo(RunCommandError.TermuxProcessNotRunning)
+            .isInstanceOf(RunCommandError.StartRestricted::class.java)
         assertThat(securityWord.toRunCommandStartError())
-            .isEqualTo(RunCommandError.TermuxProcessNotRunning)
+            .isInstanceOf(RunCommandError.StartRestricted::class.java)
     }
 
     @Test
