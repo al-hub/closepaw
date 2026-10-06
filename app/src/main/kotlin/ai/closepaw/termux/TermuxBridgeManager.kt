@@ -90,7 +90,12 @@ class TermuxBridgeManager internal constructor(
 
     constructor(context: Context) : this(
         commandRunner = AndroidTermuxCommandRunner(context.applicationContext),
-        healthProbe = HttpTermuxHealthProbe(HEALTH_URL, BRIDGE_IDENTITY, BRIDGE_VERSION_EXPECTED),
+        healthProbe = HttpTermuxHealthProbe(
+            HEALTH_URL,
+            BRIDGE_IDENTITY,
+            BRIDGE_VERSION_EXPECTED,
+            TermuxBridgeAuth.token(context.applicationContext),
+        ),
         termuxInstallProbe = AndroidTermuxInstallProbe(context.applicationContext.packageManager),
         bridgePayloadBase64 = suspend { loadBridgePayloadBase64(context.applicationContext) },
         managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
@@ -103,6 +108,9 @@ class TermuxBridgeManager internal constructor(
     suspend fun healthCheck(): TermuxBridgeStatus = mutex.withLock {
         val health = fetchHealth()
         if (health == HealthProbe.Ready) return@withLock emit(TermuxBridgeStatus.Ready)
+        if (health == HealthProbe.AuthMismatch) {
+            return@withLock emit(needsSetup(NeedsSetupReason.AUTH_MISMATCH))
+        }
         unavailableInstallStatus()?.let { return@withLock emit(it) }
         emit(health.toPassiveStatus())
     }
@@ -258,6 +266,7 @@ class TermuxBridgeManager internal constructor(
                 when (waitForReadyHealth()) {
                     HealthProbe.Ready -> TermuxBridgeStatus.Ready
                     HealthProbe.BridgeOutdated -> doBootstrap()
+                    HealthProbe.AuthMismatch -> needsSetup(NeedsSetupReason.AUTH_MISMATCH)
                     HealthProbe.InvalidIdentity,
                     HealthProbe.Unavailable -> needsSetup(NeedsSetupReason.HEALTH_TIMEOUT)
                 }
@@ -273,6 +282,9 @@ class TermuxBridgeManager internal constructor(
     private suspend fun ensureReadyForSessionLocked(): TermuxBridgeStatus {
         val health = fetchHealth()
         if (health == HealthProbe.Ready) return emit(TermuxBridgeStatus.Ready)
+        if (health == HealthProbe.AuthMismatch) {
+            return emit(needsSetup(NeedsSetupReason.AUTH_MISMATCH))
+        }
         unavailableInstallStatus()?.let { return emit(it) }
         if (health == HealthProbe.BridgeOutdated) {
             return emit(needsSetup(NeedsSetupReason.BRIDGE_OUTDATED))
@@ -348,6 +360,7 @@ class TermuxBridgeManager internal constructor(
                 when (val health = fetchHealth()) {
                     HealthProbe.Ready,
                     HealthProbe.BridgeOutdated -> return@withTimeoutOrNull health
+                    HealthProbe.AuthMismatch -> return@withTimeoutOrNull health
                     HealthProbe.InvalidIdentity,
                     HealthProbe.Unavailable -> delay(250)
                 }
@@ -388,6 +401,8 @@ class TermuxBridgeManager internal constructor(
         when (this) {
             HealthProbe.Ready -> TermuxBridgeStatus.Ready
             HealthProbe.BridgeOutdated -> needsSetup(NeedsSetupReason.BRIDGE_OUTDATED)
+            HealthProbe.AuthMismatch -> needsSetup(NeedsSetupReason.AUTH_MISMATCH)
+            HealthProbe.AuthMismatch -> needsSetup(NeedsSetupReason.AUTH_MISMATCH)
             HealthProbe.InvalidIdentity,
             HealthProbe.Unavailable -> needsSetup(NeedsSetupReason.HEALTH_TIMEOUT)
         }
