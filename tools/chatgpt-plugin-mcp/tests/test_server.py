@@ -1,59 +1,46 @@
+import asyncio
+
 import server
 
 
-class FakeCore:
-    def __init__(self):
-        self.commands = []
-
-    def dispatch(self, command):
-        self.commands.append(command)
-
-        class Result:
-            def to_dict(self):
-                return {
-                    "protocol_version": "1.0",
-                    "session_id": command.session_id,
-                    "command_id": command.command_id,
-                    "status": "succeeded",
-                    "summary": "KUM fast access is enabled and active.",
-                    "data": {
-                        "service": "kum-fast-access.service",
-                        "enabled": True,
-                        "active": True,
-                    },
-                    "observations": [],
-                    "error": None,
-                    "next_actions": [],
-                }
-
-        return Result()
-
-
-def test_execute_kum_status_maps_to_read_only_kum_capability(monkeypatch):
-    fake = FakeCore()
-    monkeypatch.setattr(server, "_core", fake)
-
-    result = server.execute_kum_status()
+def test_status_task_proves_closepaw_round_trip():
+    result = server.execute_task("ClosePaw 상태 확인해줘")
 
     assert result["status"] == "succeeded"
-    command = fake.commands[0]
-    assert command.target.device == "laptop"
-    assert command.target.capability == "kum"
-    assert command.action == "run_task"
-    assert command.input == {"task": "Check KUM status"}
-    assert command.policy == {"approval": "auto_safe"}
+    assert result["handled"] is True
+    assert result["capability"] == "status"
+    assert result["target"] == "closepaw"
+    assert result["task_received"] == "ClosePaw 상태 확인해줘"
 
 
-def test_each_plugin_call_has_unique_correlation_ids(monkeypatch):
-    fake = FakeCore()
-    monkeypatch.setattr(server, "_core", fake)
+def test_optional_target_is_preserved_without_creating_routing_logic():
+    result = server.execute_task("연결 테스트", target="laptop")
 
-    first = server.execute_kum_status()
-    second = server.execute_kum_status()
-
-    assert first["session_id"] != second["session_id"]
-    assert first["command_id"] != second["command_id"]
+    assert result["status"] == "succeeded"
+    assert result["target"] == "laptop"
 
 
-def test_mcp_server_registers_get_kum_status_tool():
-    assert callable(server.get_kum_status)
+def test_unknown_task_is_not_faked_as_executed():
+    result = server.execute_task("브라우저 열어줘", target="laptop")
+
+    assert result["status"] == "unsupported"
+    assert result["handled"] is False
+    assert result["supported_capabilities"] == ["status"]
+
+
+def test_empty_task_fails_cleanly():
+    result = server.execute_task("   ")
+
+    assert result["status"] == "failed"
+    assert result["handled"] is False
+
+
+def test_chatgpt_surface_exposes_only_run_task():
+    tools = asyncio.run(server.mcp.list_tools())
+
+    assert [tool.name for tool in tools] == ["run_task"]
+    tool = tools[0]
+    assert tool.annotations.read_only_hint is True
+    assert tool.annotations.open_world_hint is False
+    assert tool.annotations.destructive_hint is False
+    assert tool.annotations.idempotent_hint is True
