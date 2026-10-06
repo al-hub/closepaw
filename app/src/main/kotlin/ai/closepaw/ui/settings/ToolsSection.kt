@@ -7,8 +7,11 @@ import ai.closepaw.browser.setup.ShizukuShellRunner
 import ai.closepaw.termux.NeedsSetupReason
 import ai.closepaw.termux.TermuxBridgeManager
 import ai.closepaw.termux.TermuxBridgeStatus
+import ai.closepaw.termux.TermuxManualBootstrap
 import ai.closepaw.ui.theme.closePaw
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.ContextWrapper
@@ -143,7 +146,7 @@ private fun TermuxShellSettingsRow() {
             is TermuxBridgeStatus.NeedsSetup -> {
                 when (displayedStatus.reason) {
                     NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE -> {
-                        { context.openTermuxInstallPage() }
+                        { context.launchTermux() }
                     }
                     NeedsSetupReason.TERMUX_NOT_RUNNING -> {
                         { context.launchTermux() }
@@ -196,6 +199,42 @@ private fun TermuxShellSettingsRow() {
         },
         onRowClick = rowAction,
         onRowClickLabel = rowClickLabel,
+        expanded = if (
+            termuxShellEnabled &&
+            bridgeStatus is TermuxBridgeStatus.NeedsSetup &&
+            (bridgeStatus as TermuxBridgeStatus.NeedsSetup).reason ==
+                NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE
+        ) {
+            {
+                Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.closePaw.spacing.sm)) {
+                    Text(
+                        text = "This Termux build does not expose RUN_COMMAND. Bootstrap the authenticated Local Bridge once inside Termux.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Button(
+                        onClick = {
+                            val clipboard = context.getSystemService(ClipboardManager::class.java)
+                            clipboard?.setPrimaryClip(
+                                ClipData.newPlainText(
+                                    "ClosePaw Termux bootstrap",
+                                    TermuxManualBootstrap.oneShotCommand(appContext),
+                                )
+                            )
+                            Toast.makeText(context, "Bootstrap command copied", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Copy one-time bootstrap")
+                    }
+                    OutlinedButton(
+                        onClick = { context.launchTermux() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Open Termux")
+                    }
+                }
+            }
+        } else null,
     )
 }
 
