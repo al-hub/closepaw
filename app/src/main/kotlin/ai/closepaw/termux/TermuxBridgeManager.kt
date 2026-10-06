@@ -402,7 +402,6 @@ class TermuxBridgeManager internal constructor(
             HealthProbe.Ready -> TermuxBridgeStatus.Ready
             HealthProbe.BridgeOutdated -> needsSetup(NeedsSetupReason.BRIDGE_OUTDATED)
             HealthProbe.AuthMismatch -> needsSetup(NeedsSetupReason.AUTH_MISMATCH)
-            HealthProbe.AuthMismatch -> needsSetup(NeedsSetupReason.AUTH_MISMATCH)
             HealthProbe.InvalidIdentity,
             HealthProbe.Unavailable -> needsSetup(NeedsSetupReason.HEALTH_TIMEOUT)
         }
@@ -411,6 +410,7 @@ class TermuxBridgeManager internal constructor(
         when (this) {
             HealthProbe.Ready -> TermuxBridgeStatus.Ready
             HealthProbe.BridgeOutdated -> needsSetup(NeedsSetupReason.BRIDGE_OUTDATED)
+            HealthProbe.AuthMismatch -> needsSetup(NeedsSetupReason.AUTH_MISMATCH)
             HealthProbe.InvalidIdentity,
             HealthProbe.Unavailable -> needsSetup(NeedsSetupReason.HEALTH_TIMEOUT)
         }
