@@ -90,6 +90,7 @@ internal fun SettingsHomePage(
                 subtitle = permissionsSubtitle(isAccessibilityEnabled, isOverlayEnabled, debugMode),
                 onClick = { onNavigate(SettingsPage.PERMISSIONS_ADVANCED) }
             )
+            ChatGptConnectionCard()
 
             SectionHeader("About")
             SettingsNavigationRow(
