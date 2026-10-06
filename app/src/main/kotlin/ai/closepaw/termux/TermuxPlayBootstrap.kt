@@ -85,7 +85,31 @@ internal object TermuxPlayBootstrap {
         return """#!/data/data/com.termux/files/usr/bin/sh
 set -eu
 umask 077
-mkdir -p "$HOME/.closepaw" "$HOME/closepaw/workspace" "$HOME/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+mkdir -p "${'/.closepaw" "$HOME/closepaw/workspace" "$HOME/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw" "${'/closepaw/workspace" "$HOME/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
 if ! command -v python3 >/dev/null 2>&1; then
   pkg install -y python
 fi
@@ -103,6 +127,7531 @@ else
   printf '\nallow-external-apps=true\n' >> "$PROP"
 fi
 CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/workspace" "${'/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw" "${'/closepaw/workspace" "$HOME/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/workspace" "${'/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw" "${'/closepaw/workspace" "$HOME/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/workspace" "${'/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw" "${'/closepaw/workspace" "$HOME/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/workspace" "${'/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw" "${'/closepaw/workspace" "$HOME/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/workspace" "${'/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/workspace" "${'/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/workspace" "${'/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/workspace" "${'/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/workspace" "${'/closepaw/artifacts" "$HOME/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/artifacts" "${'/closepaw/logs" "$HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs" "${'/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "$HOME/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot"
+if ! command -v python3 >/dev/null 2>&1; then
+  pkg install -y python
+fi
+printf '%s' '$bridge64' | base64 -d > "${'/.closepaw/bridge.py"
+python3 -m py_compile "$HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+python3 -m py_compile "${'/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "$HOME/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py"
+printf '%s' '$token64' | base64 -d > "${'/.closepaw/token"
+chmod 600 "$HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+chmod 600 "${'/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "$HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token"
+printf '%s' '$boot64' | base64 -d > "${'/.termux/boot/10-closepaw-bridge"
+chmod 700 "$HOME/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+chmod 700 "${'/.termux/boot/10-closepaw-bridge"
+PROP="$HOME/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/boot/10-closepaw-bridge"
+PROP="${'/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "$PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "$HOME/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.termux/termux.properties"
+touch "${'"
+if grep -q '^[[:space:]]*allow-external-apps=' "$PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+if grep -q '^[[:space:]]*allow-external-apps=' "${'"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "$PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"; then
+  sed -i 's/^[[:space:]]*allow-external-apps=.*/allow-external-apps=true/' "${'"
+else
+  printf '\nallow-external-apps=true\n' >> "$PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+else
+  printf '\nallow-external-apps=true\n' >> "${'"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}PROP"
+fi
+CLOSEPAW_BRIDGE_TOKEN="$(cat "${'/.closepaw/token")" nohup python3 "$HOME/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/token")" nohup python3 "${'/.closepaw/bridge.py" >/dev/null 2>"$HOME/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/.closepaw/bridge.py" >/dev/null 2>"${'/closepaw/logs/bridge.err" </dev/null &
+sleep 1
+curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
+printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
+""".trimIndent()
+    }
+}
+}HOME/closepaw/logs/bridge.err" </dev/null &
 sleep 1
 curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health
 printf '\nCLOSEPAW_BOOTSTRAP=ok\n'
