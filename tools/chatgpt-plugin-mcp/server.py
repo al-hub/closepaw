@@ -1,61 +1,101 @@
 #!/usr/bin/env python3
-"""ClosePaw MCP server for ChatGPT plugins.
+"""Minimal ChatGPT-facing ClosePaw MCP server.
 
-Designed to run locally on the user's laptop and be reached from ChatGPT
-through Secure MCP Tunnel. The server itself stays private and uses stdio.
+Product boundary:
+    ChatGPT Voice -> ClosePaw.run_task(...) -> result -> ChatGPT Voice
+
+This MVP intentionally contains no KUM-, Android-, Termux-, SSH-, or
+Bridge-Core-specific routing. It proves the ChatGPT <-> ClosePaw round trip
+first. Device execution is an internal ClosePaw concern added after this path
+is verified.
 """
 
 from __future__ import annotations
 
-import sys
-import uuid
-from pathlib import Path
 from typing import Any
 
 from mcp.server import MCPServer
-
-CHATGPT_BRIDGE_ROOT = Path(__file__).resolve().parents[1] / "chatgpt-bridge"
-if str(CHATGPT_BRIDGE_ROOT) not in sys.path:
-    sys.path.insert(0, str(CHATGPT_BRIDGE_ROOT))
-
-from closepaw_bridge_core import BridgeCommand, BridgeCore, DeviceRouter, InMemorySessionStore
-from closepaw_bridge_core.kum_adapter import KumStatusAdapter
+from mcp.types import ToolAnnotations
 
 
-mcp = MCPServer("ClosePaw")
-_core = BridgeCore(
-    router=DeviceRouter([KumStatusAdapter()]),
-    sessions=InMemorySessionStore(),
+mcp = MCPServer(
+    "ClosePaw",
+    instructions=(
+        "ClosePaw is the user's device-control agent. Use run_task for requests "
+        "the user wants ClosePaw to handle. The current MVP supports ClosePaw "
+        "status/connectivity tests only; return unsupported results honestly "
+        "for other tasks."
+    ),
 )
 
 
-def execute_kum_status() -> dict[str, Any]:
-    """Execute the first safe, read-only ClosePaw capability."""
-    session_id = f"mcp-{uuid.uuid4().hex}"
-    command_id = f"cmd-{uuid.uuid4().hex}"
-    command = BridgeCommand.from_dict(
-        {
-            "protocol_version": "1.0",
-            "session_id": session_id,
-            "command_id": command_id,
-            "parent_command_id": None,
-            "target": {"device": "laptop", "capability": "kum"},
-            "action": "run_task",
-            "input": {"task": "Check KUM status"},
-            "policy": {"approval": "auto_safe"},
+_STATUS_TERMS = (
+    "status",
+    "health",
+    "ping",
+    "test",
+    "reachable",
+    "connection",
+    "상태",
+    "연결",
+    "테스트",
+    "응답",
+)
+
+
+def execute_task(task: str, target: str | None = None) -> dict[str, Any]:
+    """Minimal ClosePaw executor used to prove the native ChatGPT round trip."""
+    cleaned = task.strip()
+    if not cleaned:
+        return {
+            "status": "failed",
+            "summary": "ClosePaw received an empty task.",
+            "handled": False,
+            "target": target,
         }
-    )
-    return _core.dispatch(command).to_dict()
+
+    lowered = cleaned.casefold()
+    if any(term in lowered for term in _STATUS_TERMS):
+        return {
+            "status": "succeeded",
+            "summary": "ClosePaw is reachable and responding.",
+            "handled": True,
+            "target": target or "closepaw",
+            "task_received": cleaned,
+            "capability": "status",
+        }
+
+    return {
+        "status": "unsupported",
+        "summary": (
+            "ClosePaw received the task, but this MVP only supports "
+            "status/connectivity tests."
+        ),
+        "handled": False,
+        "target": target,
+        "task_received": cleaned,
+        "supported_capabilities": ["status"],
+    }
 
 
-@mcp.tool()
-def get_kum_status() -> dict[str, Any]:
-    """Check KUM status on the user's laptop.
-
-    Use this when the user asks whether KUM or KUM Fast Access is running,
-    healthy, enabled, or active on their laptop. This tool is read-only.
-    """
-    return execute_kum_status()
+@mcp.tool(
+    title="Run a ClosePaw task",
+    description=(
+        "Send one high-level task to ClosePaw. Use this whenever the user asks "
+        "ClosePaw to check or control something. The current MVP can only verify "
+        "that ClosePaw is reachable and responding; it does not yet execute KUM "
+        "or device-control actions."
+    ),
+    annotations=ToolAnnotations(
+        read_only_hint=True,
+        open_world_hint=False,
+        destructive_hint=False,
+        idempotent_hint=True,
+    ),
+)
+def run_task(task: str, target: str | None = None) -> dict[str, Any]:
+    """Run a high-level task through ClosePaw."""
+    return execute_task(task, target)
 
 
 if __name__ == "__main__":
