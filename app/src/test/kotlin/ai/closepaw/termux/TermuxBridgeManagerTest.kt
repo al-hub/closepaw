@@ -1,6 +1,7 @@
 package ai.closepaw.termux
 
 import android.app.ForegroundServiceStartNotAllowedException
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
@@ -391,11 +392,36 @@ class TermuxBridgeManagerTest {
             }
         every { packageManager.queryIntentServices(any<Intent>(), 0) } returns
             if (resolvesRunCommandService) listOf(runCommandServiceResolveInfo()) else emptyList()
+        every { packageManager.getServiceInfo(any<ComponentName>(), 0) } answers {
+            if (resolvesRunCommandService) {
+                runCommandServiceInfo()
+            } else {
+                throw PackageManager.NameNotFoundException()
+            }
+        }
         return packageManager
     }
 
+    @Test
+    fun `install probe requires explicit RunCommandService component to resolve`() {
+        val packageManager = packageManager()
+        every { packageManager.getServiceInfo(any<ComponentName>(), 0) } throws
+            PackageManager.NameNotFoundException()
+
+        assertThat(AndroidTermuxInstallProbe(packageManager).inspect())
+            .isEqualTo(TermuxInstallState.RunCommandUnavailable)
+    }
+
+    private fun runCommandServiceInfo(): ServiceInfo =
+        ServiceInfo().apply {
+            packageName = TERMUX_PACKAGE
+            name = TERMUX_RUN_COMMAND_SERVICE
+            exported = true
+            permission = RUN_COMMAND_PERMISSION
+        }
+
     private fun runCommandServiceResolveInfo(): ResolveInfo =
-        ResolveInfo().apply { serviceInfo = ServiceInfo().apply { packageName = TERMUX_PACKAGE; name = TERMUX_RUN_COMMAND_SERVICE } }
+        ResolveInfo().apply { serviceInfo = runCommandServiceInfo() }
 
     private companion object {
         const val TERMUX_PACKAGE = "com.termux"
