@@ -66,7 +66,8 @@ class TermuxBridgeManager internal constructor(
                 "command -v python3 && command -v git && command -v rg)"
         private const val START_BRIDGE_COMMAND =
             "mkdir -p ~/closepaw/logs || exit 1; " +
-                "nohup python3 ~/.closepaw/bridge.py >/dev/null 2>~/closepaw/logs/bridge.err </dev/null & " +
+                "nohup python3 ~/.closepaw/bridge.py " + TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS +
+                " >/dev/null 2>~/closepaw/logs/bridge.err </dev/null & " +
                 "pid=${'$'}!; sleep 1; " +
                 "if ! kill -0 ${'$'}pid 2>/dev/null; then " +
                 "echo CLOSEPAW_START=failed; cat ~/closepaw/logs/bridge.err; exit 1; fi; " +
@@ -126,8 +127,8 @@ class TermuxBridgeManager internal constructor(
     suspend fun restart(): TermuxBridgeStatus =
         awaitInFlight(OperationKind.Restart) { mutex.withLock { restartLocked() } }
 
-    // No background health polling here: /v1/health refreshes the bridge idle timer.
-    // Session creation recovers with ensureReadyForSession(); Settings observes with one-shot probes.
+    // No background health polling here. The authenticated Local Bridge is intentionally
+    // persistent after pairing; session creation and Settings use one-shot health probes.
 
     /** Captures the current bridge capability for a new session. */
     fun snapshot(enabled: Boolean): TermuxCapabilitySnapshot {
