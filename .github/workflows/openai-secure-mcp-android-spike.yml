@@ -1,0 +1,60 @@
+name: OpenAI Secure MCP Android Spike
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/openai-secure-mcp-android-spike.yml"
+      - "scripts/spike-build-openai-tunnel-android.sh"
+      - "doc/main/bridge/openai-secure-mcp-android-spike.md"
+      - "PROGRESS.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-android-runtime:
+    name: Build tunnel-client-runtime for android/arm64
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout ClosePaw
+        uses: actions/checkout@v4
+        with:
+          path: closepaw
+          persist-credentials: false
+
+      - name: Checkout OpenAI tunnel-client v0.0.15 source
+        uses: actions/checkout@v4
+        with:
+          repository: openai/tunnel-client
+          # v0.0.15 annotated tag resolves to this commit.
+          ref: a390c168ff1b2d14e73a95991c186c6aba3ff5a0
+          path: tunnel-client
+          persist-credentials: false
+
+      - name: Set up Go 1.27
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.0"
+          cache: true
+          cache-dependency-path: tunnel-client/go.sum
+
+      - name: Confirm Go supports android/arm64
+        run: |
+          set -euo pipefail
+          go version
+          go tool dist list | grep -Fx 'android/arm64'
+
+      - name: Build Android runtime spike
+        run: |
+          set -euo pipefail
+          bash closepaw/scripts/spike-build-openai-tunnel-android.sh             "$GITHUB_WORKSPACE/tunnel-client"             "$GITHUB_WORKSPACE/out"
+
+      - name: Upload Android runtime spike artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openai-tunnel-client-runtime-v0.0.15-android-arm64
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
