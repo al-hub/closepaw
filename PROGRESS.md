@@ -68,7 +68,8 @@ ChatGPT Voice/Text → ClosePaw → Samsung Internet → visible page content �
 - [x] ClosePaw v0.1.18 Voice bridge showed Connected with a protected endpoint
 - [x] Private ChatGPT plugin was updated to closepaw-bridge v0.1.1 with that endpoint
 - [x] Fresh-chat retry also failed, proving this was not only an active-conversation cache issue
-- [ ] v0.1.19 standard-/mcp compatibility release CI/release
+- [x] v0.1.19 standard-/mcp compatibility release CI/release
+- [x] v0.1.19 signed APK published
 - [ ] v0.1.19 installed on the target Galaxy
 - [ ] Private ChatGPT plugin endpoint refreshed to the v0.1.19 Quick Tunnel /mcp URL
 - [ ] ChatGPT Text E2E browser-read validation
@@ -81,7 +82,7 @@ The v0.1.18 protected-path experiment failed in both the already-open conversati
 
 For P1, this protection was more complexity than the milestone needs. v0.1.19 therefore restores the standard `/mcp` endpoint shape that already passed Android Text/Voice `get_status()` in P0. Sensitive-app work remains out of scope until authentication is added later.
 
-**Immediate next action:** build and install v0.1.19, refresh the private plugin to the newly displayed Quick Tunnel `/mcp` URL, then retry `get_status()`.
+**Immediate next action:** install the published v0.1.19 APK, start ChatGPT Voice connection, refresh the private plugin to the newly displayed Quick Tunnel `/mcp` URL, then retry `get_status()`.
 
 ### P1 completion criterion
 
