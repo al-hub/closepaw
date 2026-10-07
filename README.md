@@ -16,6 +16,16 @@
 
 **A phone-use agent in your pocket — always close.**
 
+
+## 🚦 Current Progress
+
+- ✅ **P0 · MCP Connection** — ChatGPT Android Text/Voice → ClosePaw MCP baseline verified
+- 🟡 **P1 · Browser Read MVP** — Samsung Internet visible-content READ
+- ⏭ **P2 · General Read** — Chrome + Gemini
+- ⬜ **P3 · Kakao Read** · **P4 · Termux Execute** · **P5 · PC Continuity** · **P6 · Toss Read**
+
+See [PROGRESS.md](PROGRESS.md) for the live milestone board and completion criteria.
+
 ClosePaw is an open-source **agent harness for Android**. Give it a natural-language task ("book a table for two at the ramen place near me", "summarize the new Slack threads, then mute the noisy channel") and it operates your phone like you would — via Android's accessibility service, or in the background on a virtual display (with Shizuku).
 
 ## ✨ Features

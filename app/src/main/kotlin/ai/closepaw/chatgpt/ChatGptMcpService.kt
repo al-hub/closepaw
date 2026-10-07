@@ -37,9 +37,14 @@ class ChatGptMcpService : Service() {
             versionName = BuildConfig.VERSION_NAME,
             versionCode = BuildConfig.VERSION_CODE,
         )
+        val mcpPath = McpAccessPath.generate()
         server = McpHttpServer(
             port = McpHttpServer.DEFAULT_PORT,
-            handler = McpJsonRpcHandler(statusTool),
+            handler = McpJsonRpcHandler(
+                statusTool = statusTool,
+                readAppTool = AndroidReadAppTool(),
+            ),
+            mcpPath = mcpPath,
         )
         tunnel = CloudflareQuickTunnelProvider(AndroidCloudflaredBinaryResolver(this))
 
@@ -56,7 +61,7 @@ class ChatGptMcpService : Service() {
                         ChatGptConnectionState(running = true, phase = "Opening tunnel…")
                     )
                     is TunnelStatus.Connected -> {
-                        val endpoint = "${status.publicUrl}/mcp"
+                        val endpoint = "${status.publicUrl}${server.mcpPath}"
                         updateState(
                             ChatGptConnectionState(
                                 running = true,
