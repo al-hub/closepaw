@@ -70,12 +70,21 @@ CI artifact ID: `11484462600`.
 
 This clears the compile gate; it does **not** yet prove Android execution.
 
-### B. Galaxy runtime — ACTIVE
+### B. Galaxy runtime — APK READY
 
 Bundle the built runtime as extracted native executable `libopenaitunnel.so`
 in a **signed test APK**, reusing the already proven extracted-native-library
 pattern used by bundled cloudflared. The Settings screen exposes a
 `Secure Tunnel Probe` button that runs only `--version`.
+
+Signed probe APK build: PASS.
+
+- workflow run: `37627629246`
+- artifact: `11485117725`
+- test version: `0.1.20-secure-tunnel-spike1` / version code `21`
+- APK SHA256: `d829760d157dc8ad9e8448a1054ad237903e6cf01a742d8ac903dd2b717c2fdd`
+- packaged runtime size: `28,970,086` bytes
+- APK contains `lib/arm64-v8a/libopenaitunnel.so`
 
 Run only local diagnostics first:
 
