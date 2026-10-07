@@ -71,8 +71,9 @@ ChatGPT Voice/Text → ClosePaw → Samsung Internet → visible page content �
 - [x] v0.1.19 standard-/mcp compatibility release CI/release
 - [x] v0.1.19 signed APK published
 - [x] v0.1.19 installed on the target Galaxy — user screenshot confirmed Connected
-- [x] Private ChatGPT plugin endpoint refreshed to the v0.1.19 Quick Tunnel `/mcp` URL
+- [x] Private `closepaw-bridge` plugin package refreshed to the v0.1.19 Quick Tunnel `/mcp` URL
   - closepaw-bridge plugin bumped to v0.1.2
+- [ ] Direct custom MCP registration `closepaw mcp` still needs its Server URL refreshed to the current Quick Tunnel `/mcp` endpoint
 - [ ] ChatGPT Text E2E browser-read validation
 - [ ] ChatGPT Voice E2E browser-read validation
 - [ ] Decide from real use whether scroll/full-page collection is needed
@@ -83,7 +84,7 @@ The v0.1.18 protected-path experiment failed in both the already-open conversati
 
 For P1, this protection was more complexity than the milestone needs. v0.1.19 therefore restores the standard `/mcp` endpoint shape that already passed Android Text/Voice `get_status()` in P0. Sensitive-app work remains out of scope until authentication is added later.
 
-**Immediate next action:** open a fresh ChatGPT conversation with the updated ClosePaw plugin and retry `get_status()`. If it succeeds, continue directly to Samsung Internet Text READ and Voice READ.
+**Immediate next action:** update the direct ChatGPT custom MCP registration (`closepaw mcp`) itself to the current ClosePaw Quick Tunnel `/mcp` URL, refresh its tools, then retry `get_status()`. The private `closepaw-bridge` plugin package is a separate layer and does not automatically rewrite the custom MCP registration.
 
 ### P1 completion criterion
 
