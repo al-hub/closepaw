@@ -76,6 +76,12 @@ android {
     }
 
     packaging {
+        jniLibs {
+            // cloudflared is bundled as libcloudflared.so but executed as a child process.
+            // Force extraction at install time so applicationInfo.nativeLibraryDir contains
+            // a real executable file, matching the proven Android MCP tunnel pattern.
+            useLegacyPackaging = true
+        }
         resources {
             excludes += "META-INF/DEPENDENCIES"
             excludes += "META-INF/LICENSE"
