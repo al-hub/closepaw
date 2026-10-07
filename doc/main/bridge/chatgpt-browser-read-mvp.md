@@ -78,7 +78,7 @@ For P1, the random-path protection is therefore rolled back as unnecessary compa
 - Security CI for v0.1.18 implementation: PASS
 - v0.1.18 protected-path experiment: FAILED to connect in both existing and fresh ChatGPT conversations
 - Conversation-cache hypothesis: rejected
-- v0.1.19 standard-`/mcp` compatibility fix: in progress
+- v0.1.19 standard-`/mcp` compatibility fix: CI PASS and signed release published
 - Real-device Text/Voice browser-read E2E: pending
 
 ## Post-install findings
@@ -91,11 +91,12 @@ P1 now follows the practical rule: restore the known-good standard `/mcp` shape 
 
 ## Validation order
 
-1. v0.1.19 standard-`/mcp` fix CI — next
-2. Publish/install signed v0.1.19
-3. Refresh the private plugin to the new Quick Tunnel `/mcp` URL
-4. Retry `get_status()`
-5. Text: ask ClosePaw to read Samsung Internet
-6. Voice: ask “삼성 인터넷 현재 페이지 읽어줘”
-7. Judge accuracy, latency, and whether Voice survives foreground app launch
-8. Add scroll/full-page collection only if those real tests need it
+1. v0.1.19 standard-`/mcp` fix CI — done
+2. Publish signed v0.1.19 — done
+3. Install signed v0.1.19
+4. Refresh the private plugin to the new Quick Tunnel `/mcp` URL
+5. Retry `get_status()`
+6. Text: ask ClosePaw to read Samsung Internet
+7. Voice: ask “삼성 인터넷 현재 페이지 읽어줘”
+8. Judge accuracy, latency, and whether Voice survives foreground app launch
+9. Add scroll/full-page collection only if those real tests need it
