@@ -61,6 +61,7 @@ ChatGPT Voice/Text → ClosePaw → Samsung Internet → visible page content �
 - [x] CI passes
   - Security CI passed after the compile-fix rerun
 - [x] Signed v0.1.18 P1 APK published
+- [ ] Target Galaxy currently still runs v0.1.17; install v0.1.18 next
 - [ ] Debug/release APK installed on the target Galaxy
 - [ ] ChatGPT Text E2E browser-read validation
 - [ ] ChatGPT Voice E2E browser-read validation
