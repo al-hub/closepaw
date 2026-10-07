@@ -1,0 +1,9 @@
+Cloudflared notice
+
+ClosePaw v0.1.16-A bundles an Android build of Cloudflare cloudflared 2026.10.0,
+compiled from the upstream source during CI.
+
+Upstream: https://github.com/cloudflare/cloudflared
+License: Apache License 2.0
+
+The binary is generated during CI and is not committed to this repository.
