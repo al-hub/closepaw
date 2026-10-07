@@ -76,13 +76,23 @@ This is intentionally minimal MVP protection. It does not replace the longer-ter
 
 - Security CI: PASS
 - Signed P1 release: v0.1.18 published
+- Target Galaxy: v0.1.18 installed — user-confirmed 2026-10-07
+- ChatGPT custom MCP endpoint refresh: pending
 - Real-device Text/Voice E2E: pending
+
+## Post-install finding
+
+After v0.1.18 installation, the existing private ChatGPT ClosePaw plugin still referenced the legacy Quick Tunnel `/mcp` URL. A `get_status()` call through that plugin failed.
+
+This is consistent with the intended P1 endpoint-protection change: v0.1.18 uses the newly displayed protected MCP path instead of the old public `/mcp` path.
+
+The next step is therefore not another APK build. It is to update the private ChatGPT plugin to the full MCP endpoint currently displayed by ClosePaw v0.1.18, then resume Text and Voice E2E.
 
 ## Validation order
 
 1. CI/unit tests — done
-2. Install build on the target Galaxy
-3. Update the ChatGPT custom MCP endpoint to the newly displayed URL
+2. Install build on the target Galaxy — done
+3. Update the ChatGPT custom MCP endpoint to the newly displayed URL — next
 4. Text: ask ClosePaw to read Samsung Internet
 5. Voice: ask “삼성 인터넷 현재 페이지 읽어줘”
 6. Judge accuracy, latency, and whether Voice survives foreground app launch
