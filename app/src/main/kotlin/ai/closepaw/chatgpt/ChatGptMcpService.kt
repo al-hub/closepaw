@@ -44,7 +44,16 @@ class ChatGptMcpService : Service() {
                 readAppTool = AndroidReadAppTool(),
             ),
         )
-        tunnel = CloudflareQuickTunnelProvider(AndroidCloudflaredBinaryResolver(this))
+        val secureConfigStore = SecureMcpTunnelConfigStore(this)
+        val secureConfig = runCatching { secureConfigStore.load() }.getOrNull()
+        tunnel = if (secureConfig != null) {
+            OpenAiSecureTunnelProvider(
+                binaryResolver = AndroidOpenAiTunnelBinaryResolver(this),
+                configProvider = { secureConfig },
+            )
+        } else {
+            CloudflareQuickTunnelProvider(AndroidCloudflaredBinaryResolver(this))
+        }
 
         scope.launch {
             tunnel.status.collect { status ->
@@ -59,15 +68,20 @@ class ChatGptMcpService : Service() {
                         ChatGptConnectionState(running = true, phase = "Opening tunnel…")
                     )
                     is TunnelStatus.Connected -> {
-                        val endpoint = "${status.publicUrl}${server.mcpPath}"
+                        val endpoint = status.publicUrl?.let { "$it${server.mcpPath}" }
+                        val secure = status.tunnelId != null
                         updateState(
                             ChatGptConnectionState(
                                 running = true,
-                                phase = "Connected",
+                                phase = if (secure) "Secure tunnel connected" else "Connected",
                                 publicMcpUrl = endpoint,
+                                tunnelId = status.tunnelId,
+                                transport = if (secure) "OpenAI Secure MCP Tunnel" else "Cloudflare Quick Tunnel",
                             )
                         )
-                        notifyState("ChatGPT connection ready")
+                        notifyState(
+                            if (secure) "Secure ChatGPT connection ready" else "ChatGPT connection ready"
+                        )
                     }
                     is TunnelStatus.Failed -> updateState(
                         ChatGptConnectionState(
