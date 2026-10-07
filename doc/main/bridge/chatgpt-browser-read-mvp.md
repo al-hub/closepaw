@@ -75,6 +75,7 @@ This is intentionally minimal MVP protection. It does not replace the longer-ter
 ## Validation status
 
 - Security CI: PASS
+- Signed P1 release: v0.1.18 published
 - Real-device Text/Voice E2E: pending
 
 ## Validation order
