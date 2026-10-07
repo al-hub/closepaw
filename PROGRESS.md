@@ -60,6 +60,7 @@ ChatGPT Voice/Text → ClosePaw → Samsung Internet → visible page content �
 - [x] Fail closed if Samsung Internet is not actually foreground
 - [x] CI passes
   - Security CI passed after the compile-fix rerun
+- [ ] Signed v0.1.18 P1 APK published
 - [ ] Debug/release APK installed on the target Galaxy
 - [ ] ChatGPT Text E2E browser-read validation
 - [ ] ChatGPT Voice E2E browser-read validation
