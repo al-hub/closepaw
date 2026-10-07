@@ -53,9 +53,9 @@ ChatGPT Voice/Text → ClosePaw → Samsung Internet → visible page content �
 ### Implementation
 
 - [x] Progress naming and live board established
-- [x] v0.1.18 protected-path experiment completed and diagnosed
-  - existing chat and fresh chat both failed to connect through `/mcp/<random>`
-  - conversation-cache hypothesis rejected
+- [x] v0.1.18 protected-path experiment recorded
+  - existing chat and fresh chat failed while the direct Custom MCP registration still pointed at an older endpoint
+  - therefore random-path incompatibility was **not** proven
 - [x] v0.1.19 restores the previously proven standard `/mcp` endpoint for P1
 - [x] `read_app(app="samsung_internet")` MCP contract
 - [x] Samsung Internet launch via existing Android platform
@@ -74,6 +74,15 @@ ChatGPT Voice/Text → ClosePaw → Samsung Internet → visible page content �
 - [x] Private `closepaw-bridge` plugin package refreshed to the v0.1.19 Quick Tunnel `/mcp` URL
   - closepaw-bridge plugin bumped to v0.1.2
 - [ ] Direct custom MCP registration `closepaw mcp` still needs its Server URL refreshed to the current Quick Tunnel `/mcp` endpoint
+- [ ] **Stable MCP Tunnel Spike — ACTIVE**
+  - [x] Build OpenAI `tunnel-client-runtime` v0.0.15 for `android/arm64` in CI
+    - ELF64 AArch64 PIE, interpreter `/system/bin/linker64`
+    - SHA256 `d25d4f8977ec93089dfed41667acd91ab6174042e8c6943428a150dca8895288`
+  - [x] Package it into a signed ClosePaw Galaxy probe build
+  - [ ] Run the signed probe APK on the Galaxy and execute `Secure Tunnel Probe` — ACTIVE
+  - [ ] Then run it against `http://127.0.0.1:18424/mcp`
+  - [ ] If device runtime succeeds, create/use a ClosePaw-specific stable `tunnel_id` and validate `get_status()`
+  - [ ] Keep Quick Tunnel as fallback until Secure MCP Tunnel E2E passes
 - [ ] ChatGPT Text E2E browser-read validation
 - [ ] ChatGPT Voice E2E browser-read validation
 - [ ] Decide from real use whether scroll/full-page collection is needed
@@ -84,7 +93,7 @@ The v0.1.18 protected-path experiment failed in both the already-open conversati
 
 For P1, this protection was more complexity than the milestone needs. v0.1.19 therefore restores the standard `/mcp` endpoint shape that already passed Android Text/Voice `get_status()` in P0. Sensitive-app work remains out of scope until authentication is added later.
 
-**Immediate next action:** update the direct ChatGPT custom MCP registration (`closepaw mcp`) itself to the current ClosePaw Quick Tunnel `/mcp` URL, refresh its tools, then retry `get_status()`. The private `closepaw-bridge` plugin package is a separate layer and does not automatically rewrite the custom MCP registration.
+**Immediate next action:** install the signed `0.1.20-secure-tunnel-spike1` APK on the target Galaxy and press `Secure Tunnel Probe`. PASS means the OpenAI Android/arm64 runtime actually executes on-device; only then proceed to local MCP targeting and real tunnel credentials.
 
 ### P1 completion criterion
 
