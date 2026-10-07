@@ -58,8 +58,8 @@ ChatGPT Voice/Text → ClosePaw → Samsung Internet → visible page content �
 - [x] Samsung Internet launch via existing Android platform
 - [x] Visible Accessibility-tree text capture
 - [x] Fail closed if Samsung Internet is not actually foreground
-- [ ] CI passes
-  - first run reached Android compile; JSON schema builder type mismatch found and fixed, rerun pending
+- [x] CI passes
+  - Security CI passed after the compile-fix rerun
 - [ ] Debug/release APK installed on the target Galaxy
 - [ ] ChatGPT Text E2E browser-read validation
 - [ ] ChatGPT Voice E2E browser-read validation

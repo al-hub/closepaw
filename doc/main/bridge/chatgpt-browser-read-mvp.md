@@ -72,9 +72,14 @@ P1 adds screen content, so the service now generates an unguessable per-service 
 
 This is intentionally minimal MVP protection. It does not replace the longer-term authenticated stable endpoint if the feature proves worth daily use.
 
+## Validation status
+
+- Security CI: PASS
+- Real-device Text/Voice E2E: pending
+
 ## Validation order
 
-1. CI/unit tests
+1. CI/unit tests — done
 2. Install build on the target Galaxy
 3. Update the ChatGPT custom MCP endpoint to the newly displayed URL
 4. Text: ask ClosePaw to read Samsung Internet
