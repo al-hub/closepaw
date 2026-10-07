@@ -1,6 +1,8 @@
 package ai.closepaw.ui.settings
 
+import ai.closepaw.chatgpt.AndroidOpenAiTunnelBinaryResolver
 import ai.closepaw.chatgpt.ChatGptMcpService
+import ai.closepaw.chatgpt.SecureMcpTunnelProbe
 import ai.closepaw.ui.theme.closePaw
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -13,14 +15,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun ChatGptConnectionCard() {
     val context = LocalContext.current
     val state by ChatGptMcpService.connectionState.collectAsState()
+    val scope = rememberCoroutineScope()
+    var secureTunnelProbe by remember { mutableStateOf<String?>(null) }
 
     SettingsCard {
         Text(
@@ -48,6 +57,31 @@ internal fun ChatGptConnectionCard() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
+        }
+        secureTunnelProbe?.let { result ->
+            Text(
+                text = result,
+                style = MaterialTheme.closePaw.monoSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            OutlinedButton(
+                onClick = {
+                    secureTunnelProbe = "Probing Android secure tunnel runtime…"
+                    scope.launch {
+                        val result = SecureMcpTunnelProbe(
+                            AndroidOpenAiTunnelBinaryResolver(context)
+                        ).run()
+                        secureTunnelProbe = result.summary
+                    }
+                }
+            ) {
+                Text("Secure Tunnel Probe")
+            }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),

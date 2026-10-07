@@ -37,7 +37,7 @@ No tunnel credentials are used in the build spike.
 
 ## Spike stages
 
-### A. Compile — current
+### A. Compile — PASS
 
 GitHub Actions builds the upstream runtime with:
 
@@ -51,16 +51,36 @@ make tunnel-client-runtime
 The workflow records `file`, `go version -m`, ELF headers, and SHA-256, then
 uploads the binary as a short-lived CI artifact.
 
-**Pass condition:** CI produces a valid arm64 ELF binary without patching
-OpenAI source.
+**Result:** PASS on 2026-10-07.
 
-### B. Galaxy runtime — only after A passes
+The unmodified upstream runtime built as:
 
-Bundle the built runtime in a ClosePaw test APK and run only local diagnostics
-first:
+```text
+ELF 64-bit LSB PIE
+Machine: AArch64
+interpreter: /system/bin/linker64
+Go: 1.27.0
+GOOS=android
+GOARCH=arm64
+CGO_ENABLED=0
+SHA256=d25d4f8977ec93089dfed41667acd91ab6174042e8c6943428a150dca8895288
+```
+
+CI artifact ID: `11484462600`.
+
+This clears the compile gate; it does **not** yet prove Android execution.
+
+### B. Galaxy runtime — ACTIVE
+
+Bundle the built runtime as extracted native executable `libopenaitunnel.so`
+in a **signed test APK**, reusing the already proven extracted-native-library
+pattern used by bundled cloudflared. The Settings screen exposes a
+`Secure Tunnel Probe` button that runs only `--version`.
+
+Run only local diagnostics first:
 
 1. process starts on Android
-2. `--version` / `--help` works
+2. `--version` works — current probe
 3. health endpoint can bind to loopback
 4. runtime can target `http://127.0.0.1:18424/mcp`
 

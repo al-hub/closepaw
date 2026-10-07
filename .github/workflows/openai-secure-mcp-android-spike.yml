@@ -51,6 +51,52 @@ jobs:
           set -euo pipefail
           bash closepaw/scripts/spike-build-openai-tunnel-android.sh             "$GITHUB_WORKSPACE/tunnel-client"             "$GITHUB_WORKSPACE/out"
 
+      - name: Install Android NDK for ClosePaw release build
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null
+
+      - name: Bundle tunnel runtime and existing cloudflared
+        run: |
+          set -euo pipefail
+          mkdir -p closepaw/app/src/main/jniLibs/arm64-v8a
+          cp out/tunnel-client-runtime closepaw/app/src/main/jniLibs/arm64-v8a/libopenaitunnel.so
+          chmod +x closepaw/app/src/main/jniLibs/arm64-v8a/libopenaitunnel.so
+          ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"             bash closepaw/scripts/build-cloudflared-android.sh
+          test -s closepaw/app/src/main/jniLibs/arm64-v8a/libopenaitunnel.so
+          test -s closepaw/app/src/main/jniLibs/arm64-v8a/libcloudflared.so
+
+      - name: Require release signing secrets
+        env:
+          KEYSTORE_B64: ${{ secrets.CLOSEPAW_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.CLOSEPAW_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CLOSEPAW_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.CLOSEPAW_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_B64"
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/closepaw-release.jks"
+
+      - name: Build signed Galaxy probe APK
+        working-directory: closepaw
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/closepaw-release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.CLOSEPAW_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CLOSEPAW_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.CLOSEPAW_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Test-only version code so it can update the installed signed v0.1.19.
+          sed -i 's/^VERSION_NAME=.*/VERSION_NAME=0.1.20-secure-tunnel-spike1/' gradle.properties
+          sed -i 's/^VERSION_CODE=.*/VERSION_CODE=21/' gradle.properties
+          ./gradlew :app:testDebugUnitTest :app:assembleRelease --stacktrace
+          test -f app/build/outputs/apk/release/app-release.apk
+          unzip -l app/build/outputs/apk/release/app-release.apk | grep 'lib/arm64-v8a/libopenaitunnel.so'
+          cp app/build/outputs/apk/release/app-release.apk ../out/closepaw-secure-tunnel-spike.apk
+          sha256sum ../out/closepaw-secure-tunnel-spike.apk > ../out/closepaw-secure-tunnel-spike.apk.sha256
+
       - name: Upload Android runtime spike artifact
         uses: actions/upload-artifact@v4
         with:

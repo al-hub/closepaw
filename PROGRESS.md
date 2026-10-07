@@ -75,8 +75,10 @@ ChatGPT Voice/Text → ClosePaw → Samsung Internet → visible page content �
   - closepaw-bridge plugin bumped to v0.1.2
 - [ ] Direct custom MCP registration `closepaw mcp` still needs its Server URL refreshed to the current Quick Tunnel `/mcp` endpoint
 - [ ] **Stable MCP Tunnel Spike — ACTIVE**
-  - [ ] Build OpenAI `tunnel-client-runtime` v0.0.15 for `android/arm64` in CI
-  - [ ] If build succeeds, package it into a ClosePaw test build
+  - [x] Build OpenAI `tunnel-client-runtime` v0.0.15 for `android/arm64` in CI
+    - ELF64 AArch64 PIE, interpreter `/system/bin/linker64`
+    - SHA256 `d25d4f8977ec93089dfed41667acd91ab6174042e8c6943428a150dca8895288`
+  - [ ] Package it into a signed ClosePaw Galaxy probe build — ACTIVE
   - [ ] Run it on the Galaxy against `http://127.0.0.1:18424/mcp`
   - [ ] If device runtime succeeds, create/use a ClosePaw-specific stable `tunnel_id` and validate `get_status()`
   - [ ] Keep Quick Tunnel as fallback until Secure MCP Tunnel E2E passes
