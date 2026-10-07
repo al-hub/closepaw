@@ -64,40 +64,37 @@ Output includes:
 
 The returned text is capped to keep the first MVP bounded.
 
-## P1 endpoint protection
+## P1 connection compatibility
 
-The previous status-only PoC safely exposed `/mcp` through a temporary Quick Tunnel.
+P0 proved that ChatGPT Android Text/Voice can reach ClosePaw through a temporary Quick Tunnel using the standard `/mcp` endpoint.
 
-P1 adds screen content, so the service now generates an unguessable per-service MCP path and displays the full endpoint in Settings. The public default `/mcp` path no longer reaches the read-capable server in this build.
+v0.1.18 experimented with an unguessable `/mcp/<random>` path before exposing browser READ. The plugin was updated to the exact displayed endpoint, but both the existing conversation and a fresh ChatGPT conversation failed to connect.
 
-This is intentionally minimal MVP protection. It does not replace the longer-term authenticated stable endpoint if the feature proves worth daily use.
+For P1, the random-path protection is therefore rolled back as unnecessary compatibility risk. v0.1.19 restores the previously proven standard `/mcp` endpoint. This is acceptable only for the narrow P1 browser-read MVP while the ephemeral Quick Tunnel is explicitly running. Sensitive targets such as KakaoTalk and Toss remain deferred until a real authentication boundary is implemented.
 
 ## Validation status
 
 - Security CI: PASS
-- Signed P1 release: v0.1.18 published
-- Target Galaxy: v0.1.18 installed — user-confirmed 2026-10-07
-- ClosePaw Voice bridge: Connected on the target Galaxy
-- Private ChatGPT plugin: updated to closepaw-bridge v0.1.1 with the protected endpoint
-- Active-conversation plugin reload: pending
-- Real-device Text/Voice E2E: pending
+- Security CI for v0.1.18 implementation: PASS
+- v0.1.18 protected-path experiment: FAILED to connect in both existing and fresh ChatGPT conversations
+- Conversation-cache hypothesis: rejected
+- v0.1.19 standard-`/mcp` compatibility fix: in progress
+- Real-device Text/Voice browser-read E2E: pending
 
 ## Post-install findings
 
-The original private ChatGPT ClosePaw plugin referenced the legacy Quick Tunnel `/mcp` URL, so a post-install `get_status()` call failed as expected after v0.1.18 moved the read-capable server behind a protected path.
+The private plugin was updated to the exact protected endpoint displayed by ClosePaw v0.1.18. `get_status()` still failed in the current conversation, and the user then reproduced the same failure in a new ChatGPT conversation.
 
-The private plugin has now been updated to v0.1.1 and points to the protected endpoint displayed by ClosePaw v0.1.18.
+That fresh-chat reproduction rules out the earlier cache/binding theory as the primary explanation. The simplest meaningful difference from the proven P0 path is the randomized MCP path introduced in v0.1.18.
 
-A `get_status()` retry from the already-open conversation still failed immediately after that plugin update. The most likely next checkpoint is the active ChatGPT plugin binding itself: the conversation may still be using the release loaded before the plugin was updated. This has not yet been proven either way.
-
-Do not rebuild the APK at this point. First reload the ChatGPT plugin context and retry `get_status()`. If it succeeds, continue immediately to Text and Voice browser-read E2E.
+P1 now follows the practical rule: restore the known-good standard `/mcp` shape first, verify browser READ, and defer stronger authentication until before sensitive-app milestones.
 
 ## Validation order
 
-1. CI/unit tests — done
-2. Install build on the target Galaxy — done
-3. Update the ChatGPT custom MCP endpoint to the newly displayed URL — done
-4. Reload the ChatGPT plugin binding and retry `get_status()` — next
+1. v0.1.19 standard-`/mcp` fix CI — next
+2. Publish/install signed v0.1.19
+3. Refresh the private plugin to the new Quick Tunnel `/mcp` URL
+4. Retry `get_status()`
 5. Text: ask ClosePaw to read Samsung Internet
 6. Voice: ask “삼성 인터넷 현재 페이지 읽어줘”
 7. Judge accuracy, latency, and whether Voice survives foreground app launch
