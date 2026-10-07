@@ -95,11 +95,11 @@ internal class McpJsonRpcHandler(
             put("properties", buildJsonObject {
                 put("app", buildJsonObject {
                     put("type", "string")
-                    put("enum", buildJsonArray { add("samsung_internet") })
+                    put("enum", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive("samsung_internet")) })
                     put("description", "Target app. P1 supports samsung_internet.")
                 })
             })
-            put("required", buildJsonArray { add("app") })
+            put("required", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive("app")) })
             put("additionalProperties", false)
         })
         put("annotations", readOnlyAnnotations())

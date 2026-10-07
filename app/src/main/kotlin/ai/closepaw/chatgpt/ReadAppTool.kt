@@ -77,7 +77,7 @@ internal class AndroidReadAppTool(
         val rawContent = snapshot.elements
             .asSequence()
             .flatMap { element -> sequenceOf(element.text, element.description) }
-            .map(String::trim)
+            .map { text -> text.trim() }
             .filter { text -> text.isNotBlank() && text != "[password]" }
             .distinct()
             .joinToString("\n")
