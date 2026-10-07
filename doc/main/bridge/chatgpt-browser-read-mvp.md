@@ -77,23 +77,28 @@ This is intentionally minimal MVP protection. It does not replace the longer-ter
 - Security CI: PASS
 - Signed P1 release: v0.1.18 published
 - Target Galaxy: v0.1.18 installed — user-confirmed 2026-10-07
-- ChatGPT custom MCP endpoint refresh: pending
+- ClosePaw Voice bridge: Connected on the target Galaxy
+- Private ChatGPT plugin: updated to closepaw-bridge v0.1.1 with the protected endpoint
+- Active-conversation plugin reload: pending
 - Real-device Text/Voice E2E: pending
 
-## Post-install finding
+## Post-install findings
 
-After v0.1.18 installation, the existing private ChatGPT ClosePaw plugin still referenced the legacy Quick Tunnel `/mcp` URL. A `get_status()` call through that plugin failed.
+The original private ChatGPT ClosePaw plugin referenced the legacy Quick Tunnel `/mcp` URL, so a post-install `get_status()` call failed as expected after v0.1.18 moved the read-capable server behind a protected path.
 
-This is consistent with the intended P1 endpoint-protection change: v0.1.18 uses the newly displayed protected MCP path instead of the old public `/mcp` path.
+The private plugin has now been updated to v0.1.1 and points to the protected endpoint displayed by ClosePaw v0.1.18.
 
-The next step is therefore not another APK build. It is to update the private ChatGPT plugin to the full MCP endpoint currently displayed by ClosePaw v0.1.18, then resume Text and Voice E2E.
+A `get_status()` retry from the already-open conversation still failed immediately after that plugin update. The most likely next checkpoint is the active ChatGPT plugin binding itself: the conversation may still be using the release loaded before the plugin was updated. This has not yet been proven either way.
+
+Do not rebuild the APK at this point. First reload the ChatGPT plugin context and retry `get_status()`. If it succeeds, continue immediately to Text and Voice browser-read E2E.
 
 ## Validation order
 
 1. CI/unit tests — done
 2. Install build on the target Galaxy — done
-3. Update the ChatGPT custom MCP endpoint to the newly displayed URL — next
-4. Text: ask ClosePaw to read Samsung Internet
-5. Voice: ask “삼성 인터넷 현재 페이지 읽어줘”
-6. Judge accuracy, latency, and whether Voice survives foreground app launch
-7. Add scroll/full-page collection only if those real tests need it
+3. Update the ChatGPT custom MCP endpoint to the newly displayed URL — done
+4. Reload the ChatGPT plugin binding and retry `get_status()` — next
+5. Text: ask ClosePaw to read Samsung Internet
+6. Voice: ask “삼성 인터넷 현재 페이지 읽어줘”
+7. Judge accuracy, latency, and whether Voice survives foreground app launch
+8. Add scroll/full-page collection only if those real tests need it
