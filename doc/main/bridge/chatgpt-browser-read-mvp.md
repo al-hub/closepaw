@@ -78,7 +78,10 @@ For P1, the random-path protection is therefore rolled back as unnecessary compa
 - Security CI for v0.1.18 implementation: PASS
 - v0.1.18 protected-path experiment: FAILED to connect in both existing and fresh ChatGPT conversations
 - Conversation-cache hypothesis: rejected
-- v0.1.19 standard-`/mcp` compatibility fix: CI PASS and signed release published
+- v0.1.19 standard-`/mcp` compatibility fix: CI PASS, signed release published, and installed on target Galaxy
+- Private ChatGPT plugin: v0.1.2, refreshed to the v0.1.19 Quick Tunnel `/mcp` endpoint
+- Existing-conversation `get_status()` after plugin refresh: still failed
+- Fresh-chat `get_status()` with v0.1.19 + plugin v0.1.2: pending
 - Real-device Text/Voice browser-read E2E: pending
 
 ## Post-install findings
@@ -93,9 +96,9 @@ P1 now follows the practical rule: restore the known-good standard `/mcp` shape 
 
 1. v0.1.19 standard-`/mcp` fix CI — done
 2. Publish signed v0.1.19 — done
-3. Install signed v0.1.19
-4. Refresh the private plugin to the new Quick Tunnel `/mcp` URL
-5. Retry `get_status()`
+3. Install signed v0.1.19 — done
+4. Refresh the private plugin to the new Quick Tunnel `/mcp` URL — done
+5. Fresh chat: retry `get_status()` — next
 6. Text: ask ClosePaw to read Samsung Internet
 7. Voice: ask “삼성 인터넷 현재 페이지 읽어줘”
 8. Judge accuracy, latency, and whether Voice survives foreground app launch
