@@ -18,6 +18,7 @@ internal data class McpHttpResponse(
 
 internal class McpJsonRpcHandler(
     private val statusTool: ClosePawStatusTool,
+    private val readAppTool: ReadAppTool? = null,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -65,44 +66,89 @@ internal class McpJsonRpcHandler(
         id,
         buildJsonObject {
             put("tools", buildJsonArray {
-                add(buildJsonObject {
-                    put("name", STATUS_TOOL_NAME)
-                    put("description", "Check whether the ClosePaw Android app is reachable and responding. Read-only.")
-                    put("inputSchema", buildJsonObject {
-                        put("type", "object")
-                        put("properties", buildJsonObject {})
-                        put("additionalProperties", false)
-                    })
-                    put("annotations", buildJsonObject {
-                        put("readOnlyHint", true)
-                        put("destructiveHint", false)
-                        put("idempotentHint", true)
-                        put("openWorldHint", false)
-                    })
-                })
+                add(statusToolDefinition())
+                if (readAppTool != null) add(readAppToolDefinition())
             })
         }
     )
 
-    private fun callTool(id: JsonElement, request: JsonObject): McpHttpResponse {
-        val name = request["params"]?.jsonObject?.get("name")?.jsonPrimitive?.content
-            ?: return jsonError(id, -32602, "Missing tool name")
-        if (name != STATUS_TOOL_NAME) {
-            return jsonError(id, -32602, "Unknown tool: $name")
-        }
+    private fun statusToolDefinition(): JsonObject = buildJsonObject {
+        put("name", STATUS_TOOL_NAME)
+        put("description", "Check whether the ClosePaw Android app is reachable and responding. Read-only.")
+        put("inputSchema", buildJsonObject {
+            put("type", "object")
+            put("properties", buildJsonObject {})
+            put("additionalProperties", false)
+        })
+        put("annotations", readOnlyAnnotations())
+    }
 
-        val snapshot = statusTool.snapshot()
+    private fun readAppToolDefinition(): JsonObject = buildJsonObject {
+        put("name", READ_APP_TOOL_NAME)
+        put(
+            "description",
+            "Read visible content from a supported Android app. P1 supports Samsung Internet only. " +
+                "The tool may launch the app but never types, submits, deletes, purchases, or sends."
+        )
+        put("inputSchema", buildJsonObject {
+            put("type", "object")
+            put("properties", buildJsonObject {
+                put("app", buildJsonObject {
+                    put("type", "string")
+                    put("enum", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive("samsung_internet")) })
+                    put("description", "Target app. P1 supports samsung_internet.")
+                })
+            })
+            put("required", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive("app")) })
+            put("additionalProperties", false)
+        })
+        put("annotations", readOnlyAnnotations())
+    }
+
+    private fun readOnlyAnnotations(): JsonObject = buildJsonObject {
+        put("readOnlyHint", true)
+        put("destructiveHint", false)
+        put("idempotentHint", true)
+        put("openWorldHint", false)
+    }
+
+    private fun callTool(id: JsonElement, request: JsonObject): McpHttpResponse {
+        val params = request["params"]?.jsonObject
+            ?: return jsonError(id, -32602, "Missing params")
+        val name = params["name"]?.jsonPrimitive?.content
+            ?: return jsonError(id, -32602, "Missing tool name")
+
+        return when (name) {
+            STATUS_TOOL_NAME -> toolResult(id, statusTool.snapshot())
+            READ_APP_TOOL_NAME -> {
+                val tool = readAppTool
+                    ?: return jsonError(id, -32602, "Unknown tool: $name")
+                val arguments = params["arguments"]?.jsonObject ?: JsonObject(emptyMap())
+                val app = arguments["app"]?.jsonPrimitive?.content
+                    ?: return jsonError(id, -32602, "Missing app")
+                toolResult(id, tool.read(app))
+            }
+            else -> jsonError(id, -32602, "Unknown tool: $name")
+        }
+    }
+
+    private fun toolResult(id: JsonElement, structured: JsonObject): McpHttpResponse {
+        val summary = structured["summary"]?.jsonPrimitive?.content ?: "ClosePaw responded."
+        val content = structured["content"]?.jsonPrimitive?.content
+            ?.takeIf { it.isNotBlank() }
+            ?: summary
+        val isError = structured["status"]?.jsonPrimitive?.content == "failed"
         return jsonResult(
             id,
             buildJsonObject {
                 put("content", buildJsonArray {
                     add(buildJsonObject {
                         put("type", "text")
-                        put("text", snapshot["summary"]?.jsonPrimitive?.content ?: "ClosePaw is responding.")
+                        put("text", content)
                     })
                 })
-                put("structuredContent", snapshot)
-                put("isError", false)
+                put("structuredContent", structured)
+                put("isError", isError)
             }
         )
     }
@@ -132,6 +178,7 @@ internal class McpJsonRpcHandler(
 
     companion object {
         const val STATUS_TOOL_NAME = "get_status"
+        const val READ_APP_TOOL_NAME = "read_app"
         const val DEFAULT_PROTOCOL_VERSION = "2025-06-18"
     }
 }

@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class McpHttpServer(
     private val port: Int,
     private val handler: McpJsonRpcHandler,
+    val mcpPath: String = DEFAULT_MCP_PATH,
 ) {
     private val running = AtomicBoolean(false)
     private val acceptExecutor = Executors.newSingleThreadExecutor()
@@ -67,9 +68,9 @@ internal class McpHttpServer(
             val response = when {
                 method == "GET" && path == "/health" ->
                     McpHttpResponse(200, "{\"status\":\"ok\"}")
-                method == "OPTIONS" && path == "/mcp" ->
+                method == "OPTIONS" && path == mcpPath ->
                     McpHttpResponse(204)
-                method != "POST" || path != "/mcp" ->
+                method != "POST" || path != mcpPath ->
                     McpHttpResponse(404, "{\"error\":\"not_found\"}")
                 else -> {
                     val length = headers["content-length"]?.toIntOrNull() ?: 0
@@ -133,6 +134,7 @@ internal class McpHttpServer(
     companion object {
         const val LOOPBACK_HOST = "127.0.0.1"
         const val DEFAULT_PORT = 18424
+        const val DEFAULT_MCP_PATH = "/mcp"
         private const val MAX_HEADER_BYTES = 16 * 1024
         private const val MAX_BODY_BYTES = 64 * 1024
         private const val SOCKET_TIMEOUT_MS = 15_000
