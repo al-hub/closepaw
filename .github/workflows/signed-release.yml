@@ -27,6 +27,14 @@ jobs:
           persist-credentials: true
           fetch-depth: 0
 
+      - name: Checkout OpenAI tunnel-client v0.0.15 source
+        uses: actions/checkout@v4
+        with:
+          repository: openai/tunnel-client
+          ref: a390c168ff1b2d14e73a95991c186c6aba3ff5a0
+          path: tunnel-client
+          persist-credentials: false
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -35,7 +43,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.0'
 
       - name: Require signing secrets
         env:
@@ -69,6 +77,15 @@ jobs:
             exit 1
           }
 
+      - name: Build bundled OpenAI Secure MCP tunnel runtime for Android
+        run: |
+          set -euo pipefail
+          bash scripts/spike-build-openai-tunnel-android.sh             "$GITHUB_WORKSPACE/tunnel-client"             "$RUNNER_TEMP/openai-tunnel"
+          mkdir -p app/src/main/jniLibs/arm64-v8a
+          cp "$RUNNER_TEMP/openai-tunnel/tunnel-client-runtime"             app/src/main/jniLibs/arm64-v8a/libopenaitunnel.so
+          chmod +x app/src/main/jniLibs/arm64-v8a/libopenaitunnel.so
+          test -s app/src/main/jniLibs/arm64-v8a/libopenaitunnel.so
+
       - name: Build bundled cloudflared for Android
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null
@@ -84,6 +101,8 @@ jobs:
           set -euo pipefail
           ./gradlew :app:testDebugUnitTest :app:assembleRelease --stacktrace
           test -f app/build/outputs/apk/release/app-release.apk
+          unzip -l app/build/outputs/apk/release/app-release.apk | grep 'lib/arm64-v8a/libopenaitunnel.so'
+          unzip -l app/build/outputs/apk/release/app-release.apk | grep 'lib/arm64-v8a/libcloudflared.so'
           cp app/build/outputs/apk/release/app-release.apk closepaw-aa-bridge.apk
           sha256sum closepaw-aa-bridge.apk > closepaw-aa-bridge.apk.sha256
 
