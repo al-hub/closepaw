@@ -87,7 +87,7 @@ internal class McpJsonRpcHandler(
         put("name", READ_APP_TOOL_NAME)
         put(
             "description",
-            "Read visible content from a supported Android app. P1 supports Samsung Internet only. " +
+            "Read content from a supported Android browser. Samsung Internet uses Accessibility and Chrome uses CDP. " +
                 "The tool may launch the app but never types, submits, deletes, purchases, or sends."
         )
         put("inputSchema", buildJsonObject {
@@ -95,8 +95,11 @@ internal class McpJsonRpcHandler(
             put("properties", buildJsonObject {
                 put("app", buildJsonObject {
                     put("type", "string")
-                    put("enum", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive("samsung_internet")) })
-                    put("description", "Target app. P1 supports samsung_internet.")
+                    put("enum", buildJsonArray {
+                        add(kotlinx.serialization.json.JsonPrimitive("samsung_internet"))
+                        add(kotlinx.serialization.json.JsonPrimitive("chrome"))
+                    })
+                    put("description", "Target browser: samsung_internet or chrome.")
                 })
             })
             put("required", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive("app")) })

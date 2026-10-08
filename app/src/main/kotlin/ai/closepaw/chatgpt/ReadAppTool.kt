@@ -35,7 +35,7 @@ internal class AndroidReadAppTool(
         val target = BrowserReadTarget.from(app)
             ?: return@runBlocking failure(
                 code = "unsupported_app",
-                summary = "P1 read_app currently supports Samsung Internet only.",
+                summary = "read_app currently supports Samsung Internet and Chrome.",
             )
 
         val service = serviceProvider()
@@ -75,6 +75,10 @@ internal class AndroidReadAppTool(
                 summary = "Samsung Internet did not become the foreground app.",
                 packageName = foregroundPackage,
             )
+        }
+
+        if (target.id == "chrome") {
+            return@runBlocking ChromeCdpReadAdapter().read(service)
         }
 
         val targetTree = withContext(Dispatchers.Main) {
@@ -273,6 +277,11 @@ internal class AndroidReadAppTool(
                         BrowserReadTarget(
                             id = "samsung_internet",
                             packageName = SAMSUNG_INTERNET_PACKAGE,
+                        )
+                    "chrome", "google_chrome" ->
+                        BrowserReadTarget(
+                            id = "chrome",
+                            packageName = ChromeCdpReadAdapter.CHROME_PACKAGE,
                         )
                     else -> null
                 }
