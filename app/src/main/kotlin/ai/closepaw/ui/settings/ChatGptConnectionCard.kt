@@ -26,7 +26,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun ChatGptConnectionCard() {
@@ -209,7 +211,7 @@ internal fun ChatGptConnectionCard() {
                 onClick = {
                     secureTunnelDiagnostics = "Running secure tunnel diagnostics…"
                     scope.launch {
-                        secureTunnelDiagnostics = SecureMcpTunnelDiagnostics().run().summary
+                        secureTunnelDiagnostics = withContext(Dispatchers.IO) { SecureMcpTunnelDiagnostics().run().summary }
                     }
                 }
             ) {
