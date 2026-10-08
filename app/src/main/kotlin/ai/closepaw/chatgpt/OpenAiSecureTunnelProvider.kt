@@ -39,6 +39,7 @@ internal class OpenAiSecureTunnelProvider(
             return
         }
 
+        SecureTunnelRuntimeLogBuffer.clear()
         _status.value = TunnelStatus.Starting
         val process = try {
             ProcessBuilder(
@@ -64,7 +65,9 @@ internal class OpenAiSecureTunnelProvider(
         logJob = scope.launch {
             try {
                 process.inputStream.bufferedReader().useLines { lines ->
-                    lines.forEach { /* Drain output so the child cannot block on a full pipe. */ }
+                    lines.forEach { line ->
+                        SecureTunnelRuntimeLogBuffer.append(line)
+                    }
                 }
                 if (processRef.compareAndSet(process, null) && _status.value !is TunnelStatus.Stopped) {
                     _status.value = TunnelStatus.Failed("secure_tunnel_exited:${process.exitValue()}")

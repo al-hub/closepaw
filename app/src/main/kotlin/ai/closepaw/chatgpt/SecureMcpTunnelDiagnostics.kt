@@ -16,8 +16,8 @@ internal class SecureMcpTunnelDiagnostics(
         val ready = getText("$healthBaseUrl/readyz")
         val controlPlane = getText("$healthBaseUrl/health/control-plane")
         val mcpHealth = getText("$healthBaseUrl/health/mcp")
-        val status = getText("$healthBaseUrl/api/status", maxChars = 900)
-        val logs = getText("$healthBaseUrl/api/logs?limit=80", maxChars = 1800)
+        val healthDetails = getText("$healthBaseUrl/health?details=true", maxChars = 1000)
+        val runtimeLogs = SecureTunnelRuntimeLogBuffer.recent(80).take(4000)
         val initialize = postJson(
             mcpUrl,
             """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ClosePawSelfTest","version":"1"}}}""",
@@ -28,8 +28,9 @@ internal class SecureMcpTunnelDiagnostics(
                 appendLine("readyz: ${ready.label}")
                 appendLine("control-plane: ${controlPlane.label}")
                 appendLine("mcp-health: ${mcpHealth.label}")
-                appendLine("admin-status: ${status.label}")
-                appendLine("recent-logs: ${logs.label}")
+                appendLine("health-details: ${healthDetails.label}")
+                appendLine("runtime-logs:")
+                appendLine(runtimeLogs)
                 append("local-mcp-initialize: ${initialize.label}")
             }
         )
