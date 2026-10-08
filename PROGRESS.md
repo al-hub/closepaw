@@ -100,6 +100,26 @@ For P1, this protection was more complexity than the milestone needs. v0.1.19 th
 
 **Immediate next action:** validate `read_app(app="samsung_internet")` through `closepaw-tunnel`, then run resilience checks in this order: ClosePaw app restart → Wi-Fi↔5G change → Galaxy reboot. Keep the old Quick Tunnel connector only as a fallback until these pass.
 
+### Cross-cutting acceleration · ClosePaw self-management over MCP
+
+Add a small, safe management surface so future app-by-app validation does not require repeated manual ClosePaw handling on the Galaxy.
+
+Planned capabilities:
+
+- [ ] `get_update_status()` — report installed version and latest available signed release
+- [ ] `install_update()` — invoke the existing ClosePaw updater and advance as far as Android security rules allow
+- [ ] `restart_bridge()` — restart/reconnect the MCP + tunnel runtime without opening the app manually
+- [ ] `get_diagnostics()` — return tunnel, local MCP, Accessibility and updater health in one read-only response
+- [ ] Determine the exact Android boundary for unattended APK install; keep any required system confirmation explicit
+- [ ] After validation, use this path for P2+ regression loops: code → CI/release → device update → reconnect → E2E test
+
+Design rules:
+
+- Reuse the existing updater/bridge implementation; do not build a second update engine.
+- Keep status/diagnostics read-only.
+- Treat update/restart as explicit state-changing operations with appropriate confirmation/policy.
+- Do not let self-management block the current P1 browser-read fix, but complete it before broad multi-app expansion where practical.
+
 ### P1 completion criterion
 
 P1 is `DONE` only when a real Galaxy can complete:
