@@ -73,14 +73,14 @@ class ChatGptMcpService : Service() {
                         updateState(
                             ChatGptConnectionState(
                                 running = true,
-                                phase = if (secure) "Secure tunnel connected" else "Connected",
+                                phase = if (secure) "Secure tunnel runtime ready" else "Connected",
                                 publicMcpUrl = endpoint,
                                 tunnelId = status.tunnelId,
                                 transport = if (secure) "OpenAI Secure MCP Tunnel" else "Cloudflare Quick Tunnel",
                             )
                         )
                         notifyState(
-                            if (secure) "Secure ChatGPT connection ready" else "ChatGPT connection ready"
+                            if (secure) "Secure tunnel runtime ready" else "ChatGPT connection ready"
                         )
                     }
                     is TunnelStatus.Failed -> updateState(
