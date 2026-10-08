@@ -69,17 +69,19 @@ internal class AndroidReadAppTool(
             )
         }
 
-        when (val launch = platform.launchApp(target.packageName)) {
-            is ActionResult.Failure -> {
-                return@runBlocking failure(
-                    code = "launch_failed",
-                    summary = launch.reason,
-                )
+        val alreadyForeground = platform.getCurrentPackageName() == target.packageName
+        if (!alreadyForeground) {
+            when (val launch = platform.launchApp(target.packageName)) {
+                is ActionResult.Failure -> {
+                    return@runBlocking failure(
+                        code = "launch_failed",
+                        summary = launch.reason,
+                    )
+                }
+                else -> Unit
             }
-            else -> Unit
+            delay(settleDelayMs)
         }
-
-        delay(settleDelayMs)
 
         val foregroundPackage = platform.getCurrentPackageName()
         if (foregroundPackage != target.packageName) {
@@ -113,14 +115,27 @@ internal class AndroidReadAppTool(
                 jpegQuality = SCREENSHOT_JPEG_QUALITY,
             )
         )
-        val screenshot = AccessibilityScreenshotCapturer(
+        val screenshotCapturer = AccessibilityScreenshotCapturer(
             service = service,
             config = screenshotConfig,
             traceRecorder = NoopTraceRecorder,
-        ).captureIfEnabled(
+        )
+        var screenshot = screenshotCapturer.captureIfEnabled(
             windowId = null,
             enabled = true,
         )
+        var screenshotAttempts = 1
+
+        // Samsung Internet can briefly expose browser chrome before the WebView surface settles.
+        // Keep the retry bounded and cheap: one additional capture only.
+        if (target.id == "samsung_internet") {
+            delay(SAMSUNG_SCREENSHOT_RETRY_DELAY_MS)
+            screenshot = screenshotCapturer.captureIfEnabled(
+                windowId = null,
+                enabled = true,
+            ) ?: screenshot
+            screenshotAttempts = 2
+        }
 
         val image = screenshot?.image
         val structured = buildJsonObject {
@@ -152,6 +167,8 @@ internal class AndroidReadAppTool(
                 }
             )
             put("screenshot_attached", image != null)
+            put("app_was_already_foreground", alreadyForeground)
+            put("screenshot_attempts", screenshotAttempts)
             image?.let {
                 put("screenshot_width", it.width)
                 put("screenshot_height", it.height)
@@ -277,5 +294,6 @@ internal class AndroidReadAppTool(
         private const val MAX_CONTENT_CHARS = 12_000
         private const val SCREENSHOT_MAX_DIMENSION = 1024
         private const val SCREENSHOT_JPEG_QUALITY = 70
+        private const val SAMSUNG_SCREENSHOT_RETRY_DELAY_MS = 800L
     }
 }
