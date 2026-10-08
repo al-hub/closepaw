@@ -76,6 +76,17 @@ internal fun PermissionsAdvancedSettingsPage(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = MaterialTheme.closePaw.spacing.lg)
         ) {
+            SettingsSection(title = "Application") {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("ClosePaw ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})")
+                    Text(
+                        text = "Build type: ${BuildConfig.BUILD_TYPE}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
             SettingsSection(title = "Permissions") {
                 Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.closePaw.spacing.md)) {
                     SettingsRow(
