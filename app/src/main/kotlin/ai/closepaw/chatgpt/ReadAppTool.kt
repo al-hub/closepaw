@@ -2,9 +2,13 @@ package ai.closepaw.chatgpt
 
 import ai.closepaw.app.AgentService
 import ai.closepaw.platform.AccessibilityPlatform
+import ai.closepaw.platform.AccessibilityScreenshotCapturer
 import ai.closepaw.platform.ActionResult
 import ai.closepaw.protocol.SessionConfig
+import ai.closepaw.perception.PerceptionConfig
+import ai.closepaw.trace.NoopTraceRecorder
 import ai.closepaw.util.recycleCompat
+import android.util.Base64
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import kotlinx.coroutines.Dispatchers
@@ -15,8 +19,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
+internal data class ReadAppToolResult(
+    val structured: JsonObject,
+    val imageMimeType: String? = null,
+    val imageBase64: String? = null,
+)
+
 internal fun interface ReadAppTool {
-    fun read(app: String): JsonObject
+    fun read(app: String): ReadAppToolResult
 }
 
 /**
@@ -31,7 +41,7 @@ internal class AndroidReadAppTool(
     private val settleDelayMs: Long = DEFAULT_SETTLE_DELAY_MS,
 ) : ReadAppTool {
 
-    override fun read(app: String): JsonObject = runBlocking(Dispatchers.Default) {
+    override fun read(app: String): ReadAppToolResult = runBlocking(Dispatchers.Default) {
         val target = BrowserReadTarget.from(app)
             ?: return@runBlocking failure(
                 code = "unsupported_app",
@@ -94,6 +104,20 @@ internal class AndroidReadAppTool(
             SamsungInternetDevtoolsProbe().probe()
         }
 
+        val screenshotCapture = AccessibilityScreenshotCapturer(
+            service = service,
+            config = SessionConfig(
+                perceptionConfig = PerceptionConfig.ScreenshotOnly(
+                    maxDimension = SCREENSHOT_MAX_DIMENSION,
+                    jpegQuality = SCREENSHOT_JPEG_QUALITY,
+                )
+            ),
+            traceRecorder = NoopTraceRecorder,
+        ).captureIfEnabled(
+            windowId = targetTree.targetWindowId,
+            enabled = true,
+        )
+
         val rawContent = targetTree.content.ifBlank { fallbackContent }
         val truncated = rawContent.length > MAX_CONTENT_CHARS
         val content = rawContent.take(MAX_CONTENT_CHARS)
@@ -104,7 +128,7 @@ internal class AndroidReadAppTool(
             "Read visible content from Samsung Internet."
         }
 
-        buildJsonObject {
+        val structured = buildJsonObject {
             put("status", status)
             put("summary", summary)
             put("app", target.id)
@@ -125,8 +149,23 @@ internal class AndroidReadAppTool(
             put("devtools_probe_readable", devtoolsProbe.readable)
             put("devtools_socket_count", devtoolsProbe.sockets.size)
             put("devtools_sockets", devtoolsProbe.sockets.joinToString("\n"))
+            put("screenshot_attached", screenshotCapture != null)
+            screenshotCapture?.image?.let { image ->
+                put("screenshot_width", image.width)
+                put("screenshot_height", image.height)
+                put("screenshot_mime_type", image.mimeType)
+            }
             put("truncated", truncated)
         }
+
+        val image = screenshotCapture?.image
+        ReadAppToolResult(
+            structured = structured,
+            imageMimeType = image?.mimeType,
+            imageBase64 = image?.bytes?.let { bytes ->
+                Base64.encodeToString(bytes, Base64.NO_WRAP)
+            },
+        )
     }
 
     private data class TargetTreeRead(
@@ -140,6 +179,7 @@ internal class AndroidReadAppTool(
         val textNodeCount: Int,
         val nonVisibleTextNodeCount: Int,
         val applicationWindowCount: Int,
+        val targetWindowId: Int?,
     )
 
     private fun readTargetApplicationTree(
@@ -187,6 +227,7 @@ internal class AndroidReadAppTool(
                 textNodeCount = 0,
                 nonVisibleTextNodeCount = 0,
                 applicationWindowCount = applicationWindowCount,
+                targetWindowId = null,
             )
             val values = LinkedHashSet<String>()
             var count = 0
@@ -242,6 +283,7 @@ internal class AndroidReadAppTool(
                 textNodeCount = textNodeCount,
                 nonVisibleTextNodeCount = nonVisibleTextNodeCount,
                 applicationWindowCount = applicationWindowCount,
+                targetWindowId = targetRoot.windowId,
             )
         } finally {
             root?.recycleCompat()
@@ -255,12 +297,14 @@ internal class AndroidReadAppTool(
         code: String,
         summary: String,
         packageName: String? = null,
-    ): JsonObject = buildJsonObject {
-        put("status", "failed")
-        put("error", code)
-        put("summary", summary)
-        packageName?.let { put("package_name", it) }
-    }
+    ): ReadAppToolResult = ReadAppToolResult(
+        structured = buildJsonObject {
+            put("status", "failed")
+            put("error", code)
+            put("summary", summary)
+            packageName?.let { put("package_name", it) }
+        }
+    )
 
     private data class BrowserReadTarget(
         val id: String,
@@ -283,5 +327,7 @@ internal class AndroidReadAppTool(
         internal const val SAMSUNG_INTERNET_PACKAGE = "com.sec.android.app.sbrowser"
         private const val DEFAULT_SETTLE_DELAY_MS = 1_000L
         private const val MAX_CONTENT_CHARS = 12_000
+        private const val SCREENSHOT_MAX_DIMENSION = 1024
+        private const val SCREENSHOT_JPEG_QUALITY = 70
     }
 }
