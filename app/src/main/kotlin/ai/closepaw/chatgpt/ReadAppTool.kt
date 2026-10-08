@@ -138,6 +138,8 @@ internal class AndroidReadAppTool(
         }
 
         val image = screenshot?.image
+        val readQuality = BrowserReadQuality.classify(content, image != null)
+        val requestId = BrowserReadDiagnostics.record(target.id, readQuality, content.length, image != null)
         val structured = buildJsonObject {
             put("status", if (content.isBlank() && image == null) "empty" else "succeeded")
             put(
@@ -153,6 +155,9 @@ internal class AndroidReadAppTool(
                         "Browser is open, but no readable text or screenshot was available."
                 }
             )
+            put("request_id", requestId)
+            put("text_read_status", readQuality)
+            put("reason_code", readQuality)
             put("app", target.id)
             put("package_name", target.packageName)
             put("scope", "visible_screen")
