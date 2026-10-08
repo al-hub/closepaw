@@ -121,12 +121,14 @@ class McpJsonRpcHandlerTest {
         McpJsonRpcHandler(
             statusTool = ClosePawStatusTool("0.1.17", 18),
             readAppTool = ReadAppTool { app ->
-                buildJsonObject {
-                    put("status", "succeeded")
-                    put("summary", "Read visible content from Samsung Internet.")
-                    put("app", app)
-                    put("content", "Visible browser text")
-                }
+                ReadAppToolResult(
+                    structured = buildJsonObject {
+                        put("status", "succeeded")
+                        put("summary", "Read visible browser content.")
+                        put("app", app)
+                        put("content", "Visible browser text")
+                    },
+                )
             },
         )
 }
