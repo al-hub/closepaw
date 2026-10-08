@@ -81,8 +81,13 @@ ChatGPT Voice/Text → ClosePaw → Samsung Internet → visible page content �
   - [x] Package it into a signed ClosePaw Galaxy probe build
   - [x] Run the signed probe APK on the Galaxy and execute `Secure Tunnel Probe` — PASS on v0.1.21 (2026-10-08)
   - [x] Wire the bundled runtime to `http://127.0.0.1:18424/mcp` in-app (PR #53)
-  - [ ] Create/use a ClosePaw-specific stable `tunnel_id`, configure its runtime key on Galaxy, and validate `get_status()` — NEXT
-  - [ ] Keep Quick Tunnel as fallback until Secure MCP Tunnel E2E passes
+  - [x] Create/use a ClosePaw-specific stable `tunnel_id` and configure a restricted runtime key on Galaxy
+  - [x] Resolve Android DNS failure for `api.openai.com` with loopback CONNECT proxy on `127.0.0.1:18426`
+  - [x] Validate OpenAI control-plane polling with zero consecutive failures and successful tunnel metadata fetch
+  - [x] Register ChatGPT custom MCP `closepaw-tunnel` using Connection: Tunnel
+  - [x] Validate ChatGPT → Secure MCP Tunnel → Galaxy → ClosePaw `get_status()` end-to-end on v0.1.27
+  - [ ] Validate secure-tunnel recovery across app restart, Wi-Fi↔5G change, and Galaxy reboot
+  - [ ] Retire the old Quick Tunnel / `trycloudflare.com` connector only after recovery validation passes
 - [ ] ChatGPT Text E2E browser-read validation
 - [ ] ChatGPT Voice E2E browser-read validation
 - [ ] Decide from real use whether scroll/full-page collection is needed
@@ -93,7 +98,7 @@ The v0.1.18 protected-path experiment failed in both the already-open conversati
 
 For P1, this protection was more complexity than the milestone needs. v0.1.19 therefore restores the standard `/mcp` endpoint shape that already passed Android Text/Voice `get_status()` in P0. Sensitive-app work remains out of scope until authentication is added later.
 
-**Immediate next action:** install v0.1.22 on the target Galaxy, configure a ClosePaw-specific tunnel ID + restricted runtime API key, reconnect, confirm `Secure tunnel connected`, then attach the ChatGPT connector to that tunnel and validate `get_status()`.
+**Immediate next action:** validate `read_app(app="samsung_internet")` through `closepaw-tunnel`, then run resilience checks in this order: ClosePaw app restart → Wi-Fi↔5G change → Galaxy reboot. Keep the old Quick Tunnel connector only as a fallback until these pass.
 
 ### P1 completion criterion
 
@@ -165,3 +170,5 @@ During Progress work, report in chat using the compact form:
 - 2026-10-08: v0.1.26 runtime log capture: runtime flavor omits /api/status and /api/logs, so ClosePaw now captures redacted tunnel-client stdout/stderr and health details for control-plane diagnosis.
 
 - 2026-10-08: v0.1.27 Android DNS proxy: root cause confirmed as tunnel-client resolving api.openai.com via [::1]:53 on Galaxy. Added loopback-only CONNECT proxy (127.0.0.1:18426) restricted to api.openai.com:443 and wired CONTROL_PLANE_HTTP_PROXY so Android/Java performs DNS while MCP remains direct.
+
+- 2026-10-08: **Stable MCP Tunnel E2E PASS on v0.1.27.** Galaxy tunnel-client control-plane changed from `degraded/backoff/network_error` to active polling with `consecutive_failures=0`; runtime logs confirmed `uses_proxy=true`, `mcp session initialized`, and `tunnel metadata fetched`. ChatGPT custom MCP `closepaw-tunnel` was created with Connection: Tunnel, and ChatGPT successfully called `get_status()` through OpenAI Secure MCP Tunnel; ClosePaw returned version 0.1.27 (28).
