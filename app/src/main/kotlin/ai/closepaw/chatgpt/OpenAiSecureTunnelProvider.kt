@@ -41,7 +41,6 @@ internal class OpenAiSecureTunnelProvider(
         }
 
         SecureTunnelRuntimeLogBuffer.clear()
-        SecureTunnelRuntimeLogBuffer.clear()
         _status.value = TunnelStatus.Starting
         val controlPlaneProxyUrl = try {
             controlPlaneProxy.start()
