@@ -17,6 +17,7 @@ internal class OpenAiSecureTunnelProvider(
     private val binaryResolver: OpenAiTunnelBinaryResolver,
     private val configProvider: () -> SecureMcpTunnelConfig?,
     private val readyProbe: (String) -> Boolean = ::probeReady,
+    private val controlPlaneProxy: AndroidControlPlaneConnectProxy = AndroidControlPlaneConnectProxy(),
 ) : TunnelProvider {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val processRef = AtomicReference<Process?>(null)
@@ -41,6 +42,12 @@ internal class OpenAiSecureTunnelProvider(
 
         SecureTunnelRuntimeLogBuffer.clear()
         _status.value = TunnelStatus.Starting
+        val controlPlaneProxyUrl = try {
+            controlPlaneProxy.start()
+        } catch (error: Exception) {
+            _status.value = TunnelStatus.Failed("control_plane_proxy_start_failed:${error.javaClass.simpleName}")
+            return
+        }
         val process = try {
             ProcessBuilder(
                 binary.absolutePath,
@@ -52,9 +59,11 @@ internal class OpenAiSecureTunnelProvider(
                 redirectErrorStream(true)
                 environment()["CONTROL_PLANE_API_KEY"] = config.runtimeApiKey
                 environment()["CONTROL_PLANE_TUNNEL_ID"] = config.tunnelId
+                environment()["CONTROL_PLANE_HTTP_PROXY"] = controlPlaneProxyUrl
                 environment()["MCP_SERVER_URL"] = "http://127.0.0.1:$localPort/mcp"
             }.start()
         } catch (error: Exception) {
+            controlPlaneProxy.stop()
             _status.value = TunnelStatus.Failed(
                 "secure_tunnel_start_failed:${error.javaClass.simpleName}"
             )
@@ -102,6 +111,7 @@ internal class OpenAiSecureTunnelProvider(
         readyJob = null
         logJob?.cancel()
         logJob = null
+        controlPlaneProxy.stop()
         processRef.getAndSet(null)?.let { process ->
             runCatching { process.destroy() }
             if (process.isAlive) runCatching { process.destroyForcibly() }
