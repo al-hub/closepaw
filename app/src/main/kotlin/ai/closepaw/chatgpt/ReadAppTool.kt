@@ -109,6 +109,14 @@ internal class AndroidReadAppTool(
             put("content", content)
             put("element_count", if (targetTree.content.isNotBlank()) targetTree.elementCount else snapshot?.elements?.size ?: 0)
             put("capture_source", if (targetTree.content.isNotBlank()) "target_application_tree" else "generic_snapshot_fallback")
+            put("target_window_found", targetTree.targetWindowFound)
+            targetTree.rootClass?.let { put("target_root_class", it) }
+            put("target_root_child_count", targetTree.rootChildCount)
+            put("target_visited_node_count", targetTree.visitedNodeCount)
+            put("target_visible_node_count", targetTree.visibleNodeCount)
+            put("target_text_node_count", targetTree.textNodeCount)
+            put("target_non_visible_text_node_count", targetTree.nonVisibleTextNodeCount)
+            put("application_window_count", targetTree.applicationWindowCount)
             put("truncated", truncated)
         }
     }
@@ -116,6 +124,14 @@ internal class AndroidReadAppTool(
     private data class TargetTreeRead(
         val content: String,
         val elementCount: Int,
+        val targetWindowFound: Boolean,
+        val rootClass: String?,
+        val rootChildCount: Int,
+        val visitedNodeCount: Int,
+        val visibleNodeCount: Int,
+        val textNodeCount: Int,
+        val nonVisibleTextNodeCount: Int,
+        val applicationWindowCount: Int,
     )
 
     private fun readTargetApplicationTree(
@@ -149,26 +165,52 @@ internal class AndroidReadAppTool(
                 }
             }
 
-            val targetRoot = root ?: return TargetTreeRead("", 0)
+            val applicationWindowCount = windows
+                ?.count { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+                ?: 0
+            val targetRoot = root ?: return TargetTreeRead(
+                content = "",
+                elementCount = 0,
+                targetWindowFound = false,
+                rootClass = null,
+                rootChildCount = 0,
+                visitedNodeCount = 0,
+                visibleNodeCount = 0,
+                textNodeCount = 0,
+                nonVisibleTextNodeCount = 0,
+                applicationWindowCount = applicationWindowCount,
+            )
             val values = LinkedHashSet<String>()
             var count = 0
+            var visitedNodeCount = 0
+            var visibleNodeCount = 0
+            var textNodeCount = 0
+            var nonVisibleTextNodeCount = 0
 
             fun visit(node: AccessibilityNodeInfo, recycle: Boolean) {
                 try {
+                    visitedNodeCount += 1
+                    val rawValues = sequenceOf(
+                        node.text?.toString(),
+                        node.contentDescription?.toString(),
+                        node.hintText?.toString(),
+                    )
+                        .filterNotNull()
+                        .map { it.trim() }
+                        .filter { it.isNotBlank() && it != "[password]" }
+                        .toList()
+
                     if (node.isVisibleToUser) {
-                        sequenceOf(
-                            node.text?.toString(),
-                            node.contentDescription?.toString(),
-                            node.hintText?.toString(),
-                        )
-                            .filterNotNull()
-                            .map { it.trim() }
-                            .filter { it.isNotBlank() && it != "[password]" }
-                            .forEach {
-                                values.add(it)
-                                count += 1
-                            }
+                        visibleNodeCount += 1
+                        if (rawValues.isNotEmpty()) textNodeCount += 1
+                        rawValues.forEach {
+                            values.add(it)
+                            count += 1
+                        }
+                    } else if (rawValues.isNotEmpty()) {
+                        nonVisibleTextNodeCount += 1
                     }
+
                     for (index in 0 until node.childCount) {
                         val child = node.getChild(index) ?: continue
                         visit(child, recycle = true)
@@ -178,8 +220,21 @@ internal class AndroidReadAppTool(
                 }
             }
 
+            val rootClass = targetRoot.className?.toString()
+            val rootChildCount = targetRoot.childCount
             visit(targetRoot, recycle = false)
-            return TargetTreeRead(values.joinToString("\n"), count)
+            return TargetTreeRead(
+                content = values.joinToString("\n"),
+                elementCount = count,
+                targetWindowFound = true,
+                rootClass = rootClass,
+                rootChildCount = rootChildCount,
+                visitedNodeCount = visitedNodeCount,
+                visibleNodeCount = visibleNodeCount,
+                textNodeCount = textNodeCount,
+                nonVisibleTextNodeCount = nonVisibleTextNodeCount,
+                applicationWindowCount = applicationWindowCount,
+            )
         } finally {
             root?.recycleCompat()
             windows?.forEach { window ->
