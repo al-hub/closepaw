@@ -162,8 +162,9 @@ class AgentService : AccessibilityService() {
         if (info != null) {
             info.flags =
                     info.flags or
-                            android.accessibilityservice.AccessibilityServiceInfo
-                                    .FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                            android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                            android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
+                            android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
             serviceInfo = info
             Log.i(TAG, "Updated service info flags: ${info.flags}")
         } else {
