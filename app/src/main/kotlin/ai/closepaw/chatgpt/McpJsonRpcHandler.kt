@@ -87,8 +87,8 @@ internal class McpJsonRpcHandler(
         put("name", READ_APP_TOOL_NAME)
         put(
             "description",
-            "Read content from a supported Android browser. Samsung Internet uses Accessibility and Chrome uses CDP. " +
-                "The tool may launch the app but never types, submits, deletes, purchases, or sends."
+            "Read a supported Android browser using Accessibility text plus a bounded screenshot for visual fallback. " +
+                "No Shizuku, ADB, or CDP is required. The tool may launch the app but never types, submits, deletes, purchases, or sends."
         )
         put("inputSchema", buildJsonObject {
             put("type", "object")
@@ -133,6 +133,37 @@ internal class McpJsonRpcHandler(
             }
             else -> jsonError(id, -32602, "Unknown tool: $name")
         }
+    }
+
+    private fun toolResult(id: JsonElement, result: ReadAppToolResult): McpHttpResponse {
+        val structured = result.structured
+        val summary = structured["summary"]?.jsonPrimitive?.content ?: "ClosePaw responded."
+        val content = structured["content"]?.jsonPrimitive?.content
+            ?.takeIf { it.isNotBlank() }
+            ?: summary
+        val isError = structured["status"]?.jsonPrimitive?.content == "failed"
+        return jsonResult(
+            id,
+            buildJsonObject {
+                put("content", buildJsonArray {
+                    add(buildJsonObject {
+                        put("type", "text")
+                        put("text", content)
+                    })
+                    val imageData = result.imageBase64
+                    val imageMimeType = result.imageMimeType
+                    if (!imageData.isNullOrBlank() && !imageMimeType.isNullOrBlank()) {
+                        add(buildJsonObject {
+                            put("type", "image")
+                            put("data", imageData)
+                            put("mimeType", imageMimeType)
+                        })
+                    }
+                })
+                put("structuredContent", structured)
+                put("isError", isError)
+            }
+        )
     }
 
     private fun toolResult(id: JsonElement, structured: JsonObject): McpHttpResponse {
