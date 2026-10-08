@@ -67,7 +67,10 @@ internal class McpJsonRpcHandler(
         buildJsonObject {
             put("tools", buildJsonArray {
                 add(statusToolDefinition())
-                if (readAppTool != null) add(readAppToolDefinition())
+                if (readAppTool != null) {
+                    add(readAppToolDefinition())
+                    add(diagnosticsToolDefinition())
+                }
             })
         }
     )
@@ -108,6 +111,17 @@ internal class McpJsonRpcHandler(
         put("annotations", readOnlyAnnotations())
     }
 
+    private fun diagnosticsToolDefinition(): JsonObject = buildJsonObject {
+        put("name", DIAGNOSTICS_TOOL_NAME)
+        put("description", "Read bounded redacted browser-read diagnostics. No page text or screenshots. Read-only.")
+        put("inputSchema", buildJsonObject {
+            put("type", "object")
+            put("properties", buildJsonObject {})
+            put("additionalProperties", false)
+        })
+        put("annotations", readOnlyAnnotations())
+    }
+
     private fun readOnlyAnnotations(): JsonObject = buildJsonObject {
         put("readOnlyHint", true)
         put("destructiveHint", false)
@@ -123,6 +137,9 @@ internal class McpJsonRpcHandler(
 
         return when (name) {
             STATUS_TOOL_NAME -> toolResult(id, statusTool.snapshot())
+            DIAGNOSTICS_TOOL_NAME -> if (readAppTool != null) {
+                toolResult(id, BrowserReadDiagnostics.snapshot())
+            } else jsonError(id, -32602, "Unknown tool: $name")
             READ_APP_TOOL_NAME -> {
                 val tool = readAppTool
                     ?: return jsonError(id, -32602, "Unknown tool: $name")
@@ -213,6 +230,7 @@ internal class McpJsonRpcHandler(
     companion object {
         const val STATUS_TOOL_NAME = "get_status"
         const val READ_APP_TOOL_NAME = "read_app"
+        const val DIAGNOSTICS_TOOL_NAME = "get_diagnostics"
         const val DEFAULT_PROTOCOL_VERSION = "2025-06-18"
     }
 }
