@@ -3,6 +3,7 @@ package ai.closepaw.ui.settings
 import ai.closepaw.chatgpt.AndroidOpenAiTunnelBinaryResolver
 import ai.closepaw.chatgpt.ChatGptMcpService
 import ai.closepaw.chatgpt.SecureMcpTunnelConfigStore
+import ai.closepaw.chatgpt.SecureMcpTunnelDiagnostics
 import ai.closepaw.chatgpt.SecureMcpTunnelProbe
 import ai.closepaw.ui.theme.closePaw
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +42,7 @@ internal fun ChatGptConnectionCard() {
     var runtimeKeyInput by remember { mutableStateOf("") }
     var configMessage by remember { mutableStateOf<String?>(null) }
     var secureTunnelProbe by remember { mutableStateOf<String?>(null) }
+    var secureTunnelDiagnostics by remember { mutableStateOf<String?>(null) }
 
     SettingsCard {
         Text(
@@ -177,6 +179,15 @@ internal fun ChatGptConnectionCard() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        secureTunnelDiagnostics?.let { result ->
+            SelectionContainer {
+                Text(
+                    text = result,
+                    style = MaterialTheme.closePaw.monoSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
@@ -193,6 +204,16 @@ internal fun ChatGptConnectionCard() {
                 }
             ) {
                 Text("Secure Tunnel Probe")
+            }
+            OutlinedButton(
+                onClick = {
+                    secureTunnelDiagnostics = "Running secure tunnel diagnostics…"
+                    scope.launch {
+                        secureTunnelDiagnostics = SecureMcpTunnelDiagnostics().run().summary
+                    }
+                }
+            ) {
+                Text("Tunnel Diagnostics")
             }
         }
         Row(
