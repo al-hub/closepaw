@@ -4,9 +4,13 @@ import ai.closepaw.app.AgentService
 import ai.closepaw.platform.AccessibilityPlatform
 import ai.closepaw.platform.ActionResult
 import ai.closepaw.protocol.SessionConfig
+import ai.closepaw.util.recycleCompat
+import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -73,15 +77,20 @@ internal class AndroidReadAppTool(
             )
         }
 
-        val snapshot = platform.captureScreen()
-        val rawContent = snapshot.elements
-            .asSequence()
-            .flatMap { element -> sequenceOf(element.text, element.description) }
-            .map { text -> text.trim() }
-            .filter { text -> text.isNotBlank() && text != "[password]" }
-            .distinct()
-            .joinToString("\n")
+        val targetTree = withContext(Dispatchers.Main) {
+            readTargetApplicationTree(service, target.packageName)
+        }
+        val snapshot = if (targetTree.content.isBlank()) platform.captureScreen() else null
+        val fallbackContent = snapshot?.elements
+            ?.asSequence()
+            ?.flatMap { element -> sequenceOf(element.text, element.description) }
+            ?.map { text -> text.trim() }
+            ?.filter { text -> text.isNotBlank() && text != "[password]" }
+            ?.distinct()
+            ?.joinToString("\n")
+            .orEmpty()
 
+        val rawContent = targetTree.content.ifBlank { fallbackContent }
         val truncated = rawContent.length > MAX_CONTENT_CHARS
         val content = rawContent.take(MAX_CONTENT_CHARS)
         val status = if (content.isBlank()) "empty" else "succeeded"
@@ -98,8 +107,84 @@ internal class AndroidReadAppTool(
             put("package_name", target.packageName)
             put("scope", "visible_screen")
             put("content", content)
-            put("element_count", snapshot.elements.size)
+            put("element_count", if (targetTree.content.isNotBlank()) targetTree.elementCount else snapshot?.elements?.size ?: 0)
+            put("capture_source", if (targetTree.content.isNotBlank()) "target_application_tree" else "generic_snapshot_fallback")
             put("truncated", truncated)
+        }
+    }
+
+    private data class TargetTreeRead(
+        val content: String,
+        val elementCount: Int,
+    )
+
+    private fun readTargetApplicationTree(
+        service: AgentService,
+        packageName: String,
+    ): TargetTreeRead {
+        val windows = runCatching { service.windows }.getOrNull()
+        var root: AccessibilityNodeInfo? = null
+        try {
+            if (!windows.isNullOrEmpty()) {
+                val candidates = windows
+                    .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+                    .sortedByDescending { it.layer }
+                for (window in candidates) {
+                    val candidate = window.root ?: continue
+                    val candidatePackage = candidate.packageName?.toString()
+                    if (candidatePackage == packageName) {
+                        root = candidate
+                        break
+                    }
+                    candidate.recycleCompat()
+                }
+            }
+
+            if (root == null) {
+                val activeRoot = service.rootInActiveWindow
+                if (activeRoot?.packageName?.toString() == packageName) {
+                    root = activeRoot
+                } else {
+                    activeRoot?.recycleCompat()
+                }
+            }
+
+            val targetRoot = root ?: return TargetTreeRead("", 0)
+            val values = LinkedHashSet<String>()
+            var count = 0
+
+            fun visit(node: AccessibilityNodeInfo, recycle: Boolean) {
+                try {
+                    if (node.isVisibleToUser) {
+                        sequenceOf(
+                            node.text?.toString(),
+                            node.contentDescription?.toString(),
+                            node.hintText?.toString(),
+                        )
+                            .filterNotNull()
+                            .map { it.trim() }
+                            .filter { it.isNotBlank() && it != "[password]" }
+                            .forEach {
+                                values.add(it)
+                                count += 1
+                            }
+                    }
+                    for (index in 0 until node.childCount) {
+                        val child = node.getChild(index) ?: continue
+                        visit(child, recycle = true)
+                    }
+                } finally {
+                    if (recycle) node.recycleCompat()
+                }
+            }
+
+            visit(targetRoot, recycle = false)
+            return TargetTreeRead(values.joinToString("\n"), count)
+        } finally {
+            root?.recycleCompat()
+            windows?.forEach { window ->
+                runCatching { window.recycle() }
+            }
         }
     }
 
