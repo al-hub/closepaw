@@ -106,7 +106,7 @@ ChatGPT Voice/Text → Secure MCP Tunnel → ClosePaw → Accessibility text + v
   - [x] Validate ChatGPT → Secure MCP Tunnel → Galaxy → ClosePaw `get_status()` end-to-end on v0.1.27
   - [ ] Validate secure-tunnel recovery across app restart, Wi-Fi↔5G change, and Galaxy reboot
   - [ ] Retire the old Quick Tunnel / `trycloudflare.com` connector only after recovery validation passes
-- [ ] ChatGPT Text E2E browser-read validation
+- [x] ChatGPT Text E2E browser-read validation
 - [ ] ChatGPT Voice E2E browser-read validation
 - [ ] Decide from real use whether scroll/full-page collection is needed
 
@@ -218,3 +218,6 @@ During Progress work, report in chat using the compact form:
 
 
 - 2026-10-09: Browser capture stabilization: read_app no longer relaunches a browser that is already foreground. Samsung Internet gets one bounded 800 ms screenshot retry after the initial capture to allow the WebView surface to settle. No Shizuku, ADB, wireless debugging, or CDP added.
+
+
+- 2026-10-09: **Samsung Internet screenshot stabilization PASS on v0.1.33.** read_app(app="samsung_internet") returned status=succeeded, capture_source=accessibility_plus_screenshot, screenshot_attached=true, screenshot_attempts=2, and the returned JPEG visibly contained the actual mobile web page content instead of a blank/black WebView region. This validates the minimal no-Shizuku/no-ADB/no-CDP browser READ path for both Chrome and Samsung Internet in ChatGPT text mode.
