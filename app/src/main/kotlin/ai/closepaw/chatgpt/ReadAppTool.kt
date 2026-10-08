@@ -1,10 +1,14 @@
 package ai.closepaw.chatgpt
 
 import ai.closepaw.app.AgentService
+import ai.closepaw.perception.PerceptionConfig
 import ai.closepaw.platform.AccessibilityPlatform
+import ai.closepaw.platform.AccessibilityScreenshotCapturer
 import ai.closepaw.platform.ActionResult
 import ai.closepaw.protocol.SessionConfig
+import ai.closepaw.trace.NoopTraceRecorder
 import ai.closepaw.util.recycleCompat
+import android.util.Base64
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import kotlinx.coroutines.Dispatchers
@@ -15,27 +19,36 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
+internal data class ReadAppToolResult(
+    val structured: JsonObject,
+    val imageBase64: String? = null,
+    val imageMimeType: String? = null,
+)
+
 internal fun interface ReadAppTool {
-    fun read(app: String): JsonObject
+    fun read(app: String): ReadAppToolResult
 }
 
 /**
- * P1 browser-read MVP.
+ * Minimal browser-read path.
  *
- * Intentionally supports Samsung Internet only. It launches the target through the existing
- * Android platform, waits for the foreground transition, then returns visible Accessibility text.
- * It never types, submits, deletes, purchases, or captures a screenshot.
+ * One implementation for supported browsers:
+ * 1) launch + verify foreground,
+ * 2) collect Accessibility text,
+ * 3) capture one bounded screenshot for visual fallback.
+ *
+ * No Shizuku, ADB or CDP is required by this path.
  */
 internal class AndroidReadAppTool(
     private val serviceProvider: () -> AgentService? = { AgentService.instance },
     private val settleDelayMs: Long = DEFAULT_SETTLE_DELAY_MS,
 ) : ReadAppTool {
 
-    override fun read(app: String): JsonObject = runBlocking(Dispatchers.Default) {
+    override fun read(app: String): ReadAppToolResult = runBlocking(Dispatchers.Default) {
         val target = BrowserReadTarget.from(app)
             ?: return@runBlocking failure(
                 code = "unsupported_app",
-                summary = "read_app currently supports Samsung Internet and Chrome.",
+                summary = "read_app supports Samsung Internet and Chrome.",
             )
 
         val service = serviceProvider()
@@ -72,84 +85,94 @@ internal class AndroidReadAppTool(
         if (foregroundPackage != target.packageName) {
             return@runBlocking failure(
                 code = "target_not_foreground",
-                summary = "Samsung Internet did not become the foreground app.",
+                summary = "${target.displayName} did not become the foreground app.",
                 packageName = foregroundPackage,
             )
         }
 
-        if (target.id == "chrome") {
-            return@runBlocking ChromeCdpReadAdapter().read(service)
+        val targetText = withContext(Dispatchers.Main) {
+            readTargetApplicationText(service, target.packageName)
         }
-
-        val targetTree = withContext(Dispatchers.Main) {
-            readTargetApplicationTree(service, target.packageName)
-        }
-        val snapshot = if (targetTree.content.isBlank()) platform.captureScreen() else null
-        val fallbackContent = snapshot?.elements
+        val snapshot = if (targetText.isBlank()) platform.captureScreen() else null
+        val fallbackText = snapshot?.elements
             ?.asSequence()
             ?.flatMap { element -> sequenceOf(element.text, element.description) }
-            ?.map { text -> text.trim() }
-            ?.filter { text -> text.isNotBlank() && text != "[password]" }
+            ?.map { value -> value.trim() }
+            ?.filter { value -> value.isNotBlank() && value != "[password]" }
             ?.distinct()
             ?.joinToString("\n")
             .orEmpty()
 
-        val devtoolsProbe = withContext(Dispatchers.IO) {
-            SamsungInternetDevtoolsProbe().probe()
-        }
-
-        val rawContent = targetTree.content.ifBlank { fallbackContent }
-        val truncated = rawContent.length > MAX_CONTENT_CHARS
+        val rawContent = targetText.ifBlank { fallbackText }
         val content = rawContent.take(MAX_CONTENT_CHARS)
-        val status = if (content.isBlank()) "empty" else "succeeded"
-        val summary = if (content.isBlank()) {
-            "Samsung Internet is open, but no readable visible text was found."
-        } else {
-            "Read visible content from Samsung Internet."
-        }
+        val truncated = rawContent.length > MAX_CONTENT_CHARS
 
-        buildJsonObject {
-            put("status", status)
-            put("summary", summary)
+        val screenshotConfig = SessionConfig(
+            perceptionConfig = PerceptionConfig.ScreenshotOnly(
+                maxDimension = SCREENSHOT_MAX_DIMENSION,
+                jpegQuality = SCREENSHOT_JPEG_QUALITY,
+            )
+        )
+        val screenshot = AccessibilityScreenshotCapturer(
+            service = service,
+            config = screenshotConfig,
+            traceRecorder = NoopTraceRecorder,
+        ).captureIfEnabled(
+            windowId = null,
+            enabled = true,
+        )
+
+        val image = screenshot?.image
+        val structured = buildJsonObject {
+            put("status", if (content.isBlank() && image == null) "empty" else "succeeded")
+            put(
+                "summary",
+                when {
+                    content.isNotBlank() && image != null ->
+                        "Read browser Accessibility text and captured the visible screen."
+                    image != null ->
+                        "Captured the visible browser screen for visual reading."
+                    content.isNotBlank() ->
+                        "Read visible browser Accessibility text."
+                    else ->
+                        "Browser is open, but no readable text or screenshot was available."
+                }
+            )
             put("app", target.id)
             put("package_name", target.packageName)
             put("scope", "visible_screen")
             put("content", content)
-            put("element_count", if (targetTree.content.isNotBlank()) targetTree.elementCount else snapshot?.elements?.size ?: 0)
-            put("capture_source", if (targetTree.content.isNotBlank()) "target_application_tree" else "generic_snapshot_fallback")
-            put("target_window_found", targetTree.targetWindowFound)
-            targetTree.rootClass?.let { put("target_root_class", it) }
-            put("target_root_child_count", targetTree.rootChildCount)
-            put("target_visited_node_count", targetTree.visitedNodeCount)
-            put("target_visible_node_count", targetTree.visibleNodeCount)
-            put("target_text_node_count", targetTree.textNodeCount)
-            put("target_non_visible_text_node_count", targetTree.nonVisibleTextNodeCount)
-            put("application_window_count", targetTree.applicationWindowCount)
-            put("devtools_probe_source", devtoolsProbe.source)
-            put("devtools_probe_readable", devtoolsProbe.readable)
-            put("devtools_socket_count", devtoolsProbe.sockets.size)
-            put("devtools_sockets", devtoolsProbe.sockets.joinToString("\n"))
+            put(
+                "capture_source",
+                when {
+                    content.isNotBlank() && image != null -> "accessibility_plus_screenshot"
+                    image != null -> "screenshot"
+                    content.isNotBlank() -> "accessibility"
+                    else -> "none"
+                }
+            )
+            put("screenshot_attached", image != null)
+            image?.let {
+                put("screenshot_width", it.width)
+                put("screenshot_height", it.height)
+                put("screenshot_mime_type", it.mimeType)
+            }
             put("truncated", truncated)
         }
+
+        ReadAppToolResult(
+            structured = structured,
+            imageBase64 = image?.bytes?.let { bytes ->
+                Base64.encodeToString(bytes, Base64.NO_WRAP)
+            },
+            imageMimeType = image?.mimeType,
+        )
     }
 
-    private data class TargetTreeRead(
-        val content: String,
-        val elementCount: Int,
-        val targetWindowFound: Boolean,
-        val rootClass: String?,
-        val rootChildCount: Int,
-        val visitedNodeCount: Int,
-        val visibleNodeCount: Int,
-        val textNodeCount: Int,
-        val nonVisibleTextNodeCount: Int,
-        val applicationWindowCount: Int,
-    )
-
-    private fun readTargetApplicationTree(
+    private fun readTargetApplicationText(
         service: AgentService,
         packageName: String,
-    ): TargetTreeRead {
+    ): String {
         val windows = runCatching { service.windows }.getOrNull()
         var root: AccessibilityNodeInfo? = null
         try {
@@ -159,8 +182,7 @@ internal class AndroidReadAppTool(
                     .sortedByDescending { it.layer }
                 for (window in candidates) {
                     val candidate = window.root ?: continue
-                    val candidatePackage = candidate.packageName?.toString()
-                    if (candidatePackage == packageName) {
+                    if (candidate.packageName?.toString() == packageName) {
                         root = candidate
                         break
                     }
@@ -177,52 +199,22 @@ internal class AndroidReadAppTool(
                 }
             }
 
-            val applicationWindowCount = windows
-                ?.count { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
-                ?: 0
-            val targetRoot = root ?: return TargetTreeRead(
-                content = "",
-                elementCount = 0,
-                targetWindowFound = false,
-                rootClass = null,
-                rootChildCount = 0,
-                visitedNodeCount = 0,
-                visibleNodeCount = 0,
-                textNodeCount = 0,
-                nonVisibleTextNodeCount = 0,
-                applicationWindowCount = applicationWindowCount,
-            )
+            val targetRoot = root ?: return ""
             val values = LinkedHashSet<String>()
-            var count = 0
-            var visitedNodeCount = 0
-            var visibleNodeCount = 0
-            var textNodeCount = 0
-            var nonVisibleTextNodeCount = 0
 
             fun visit(node: AccessibilityNodeInfo, recycle: Boolean) {
                 try {
-                    visitedNodeCount += 1
-                    val rawValues = sequenceOf(
-                        node.text?.toString(),
-                        node.contentDescription?.toString(),
-                        node.hintText?.toString(),
-                    )
-                        .filterNotNull()
-                        .map { it.trim() }
-                        .filter { it.isNotBlank() && it != "[password]" }
-                        .toList()
-
                     if (node.isVisibleToUser) {
-                        visibleNodeCount += 1
-                        if (rawValues.isNotEmpty()) textNodeCount += 1
-                        rawValues.forEach {
-                            values.add(it)
-                            count += 1
-                        }
-                    } else if (rawValues.isNotEmpty()) {
-                        nonVisibleTextNodeCount += 1
+                        sequenceOf(
+                            node.text?.toString(),
+                            node.contentDescription?.toString(),
+                            node.hintText?.toString(),
+                        )
+                            .filterNotNull()
+                            .map { it.trim() }
+                            .filter { it.isNotBlank() && it != "[password]" }
+                            .forEach(values::add)
                     }
-
                     for (index in 0 until node.childCount) {
                         val child = node.getChild(index) ?: continue
                         visit(child, recycle = true)
@@ -232,26 +224,11 @@ internal class AndroidReadAppTool(
                 }
             }
 
-            val rootClass = targetRoot.className?.toString()
-            val rootChildCount = targetRoot.childCount
             visit(targetRoot, recycle = false)
-            return TargetTreeRead(
-                content = values.joinToString("\n"),
-                elementCount = count,
-                targetWindowFound = true,
-                rootClass = rootClass,
-                rootChildCount = rootChildCount,
-                visitedNodeCount = visitedNodeCount,
-                visibleNodeCount = visibleNodeCount,
-                textNodeCount = textNodeCount,
-                nonVisibleTextNodeCount = nonVisibleTextNodeCount,
-                applicationWindowCount = applicationWindowCount,
-            )
+            return values.joinToString("\n")
         } finally {
             root?.recycleCompat()
-            windows?.forEach { window ->
-                runCatching { window.recycle() }
-            }
+            windows?.forEach { window -> runCatching { window.recycle() } }
         }
     }
 
@@ -259,16 +236,19 @@ internal class AndroidReadAppTool(
         code: String,
         summary: String,
         packageName: String? = null,
-    ): JsonObject = buildJsonObject {
-        put("status", "failed")
-        put("error", code)
-        put("summary", summary)
-        packageName?.let { put("package_name", it) }
-    }
+    ): ReadAppToolResult = ReadAppToolResult(
+        structured = buildJsonObject {
+            put("status", "failed")
+            put("error", code)
+            put("summary", summary)
+            packageName?.let { put("package_name", it) }
+        }
+    )
 
     private data class BrowserReadTarget(
         val id: String,
         val packageName: String,
+        val displayName: String,
     ) {
         companion object {
             fun from(raw: String): BrowserReadTarget? =
@@ -277,11 +257,13 @@ internal class AndroidReadAppTool(
                         BrowserReadTarget(
                             id = "samsung_internet",
                             packageName = SAMSUNG_INTERNET_PACKAGE,
+                            displayName = "Samsung Internet",
                         )
                     "chrome", "google_chrome" ->
                         BrowserReadTarget(
                             id = "chrome",
-                            packageName = ChromeCdpReadAdapter.CHROME_PACKAGE,
+                            packageName = CHROME_PACKAGE,
+                            displayName = "Chrome",
                         )
                     else -> null
                 }
@@ -290,7 +272,10 @@ internal class AndroidReadAppTool(
 
     companion object {
         internal const val SAMSUNG_INTERNET_PACKAGE = "com.sec.android.app.sbrowser"
+        internal const val CHROME_PACKAGE = "com.android.chrome"
         private const val DEFAULT_SETTLE_DELAY_MS = 1_000L
         private const val MAX_CONTENT_CHARS = 12_000
+        private const val SCREENSHOT_MAX_DIMENSION = 1024
+        private const val SCREENSHOT_JPEG_QUALITY = 70
     }
 }
