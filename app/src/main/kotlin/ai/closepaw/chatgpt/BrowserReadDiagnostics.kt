@@ -1,5 +1,6 @@
 package ai.closepaw.chatgpt
 
+import android.util.Log
 import java.util.UUID
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -28,6 +29,7 @@ internal object BrowserReadDiagnostics {
         }
         if (events.size >= CAPACITY) events.removeFirst()
         events.addLast(entry)
+        Log.i("ClosePawBrowserRead", "request_id=$id app=${app.take(40)} reason=$reason text_chars=$textChars screenshot=$screenshot")
         return id
     }
 
