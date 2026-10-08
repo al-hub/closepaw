@@ -90,6 +90,10 @@ internal class AndroidReadAppTool(
             ?.joinToString("\n")
             .orEmpty()
 
+        val devtoolsProbe = withContext(Dispatchers.IO) {
+            SamsungInternetDevtoolsProbe().probe()
+        }
+
         val rawContent = targetTree.content.ifBlank { fallbackContent }
         val truncated = rawContent.length > MAX_CONTENT_CHARS
         val content = rawContent.take(MAX_CONTENT_CHARS)
@@ -117,6 +121,10 @@ internal class AndroidReadAppTool(
             put("target_text_node_count", targetTree.textNodeCount)
             put("target_non_visible_text_node_count", targetTree.nonVisibleTextNodeCount)
             put("application_window_count", targetTree.applicationWindowCount)
+            put("devtools_probe_source", devtoolsProbe.source)
+            put("devtools_probe_readable", devtoolsProbe.readable)
+            put("devtools_socket_count", devtoolsProbe.sockets.size)
+            put("devtools_sockets", devtoolsProbe.sockets.joinToString("\n"))
             put("truncated", truncated)
         }
     }
