@@ -157,3 +157,5 @@ During Progress work, report in chat using the compact form:
 완료: <what just became verified>
 다음: <one immediate next action>
 ```
+
+- 2026-10-08: v0.1.23 diagnostics: distinguish runtime readiness from E2E MCP discovery; expose readyz, control-plane health, MCP health, and local initialize self-test on Galaxy.
