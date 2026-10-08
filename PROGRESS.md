@@ -21,6 +21,24 @@ Completed: 1 / 10
 ⬜ P9 · Portability
 ```
 
+## Minimal runtime baseline
+
+The default phone path is intentionally limited to:
+
+```text
+ChatGPT
+→ OpenAI Secure MCP Tunnel
+→ ClosePaw
+→ Android Accessibility + one bounded screenshot
+→ ChatGPT text/vision
+```
+
+Required on the Galaxy: **ClosePaw + Android Accessibility permission only.**
+
+Shizuku, ADB, wireless debugging and Chrome CDP are **not required by the default ChatGPT control/read path**. Existing CDP infrastructure may remain as an isolated experimental capability, but P1/P2 must not depend on it.
+
+Design rule: prefer one generic Android perception path over app-specific privileged transports unless a real user requirement cannot be met otherwise.
+
 ## Status vocabulary
 
 - `DONE` ✅ — verified end-to-end
@@ -46,7 +64,7 @@ Verified baseline:
 
 > “삼성 인터넷 현재 페이지 읽어줘.”
 
-ChatGPT Voice/Text → ClosePaw → Samsung Internet → visible page content → same ChatGPT conversation.
+ChatGPT Voice/Text → Secure MCP Tunnel → ClosePaw → Accessibility text + visible-screen screenshot → ChatGPT → same conversation.
 
 **Keep P1 deliberately small.** Read the currently visible page first. Add scrolling/full-page collection only if real-device use proves it is necessary.
 
@@ -98,7 +116,7 @@ The v0.1.18 protected-path experiment failed in both the already-open conversati
 
 For P1, this protection was more complexity than the milestone needs. v0.1.19 therefore restores the standard `/mcp` endpoint shape that already passed Android Text/Voice `get_status()` in P0. Sensitive-app work remains out of scope until authentication is added later.
 
-**Immediate next action:** validate `read_app(app="samsung_internet")` through `closepaw-tunnel`, then run resilience checks in this order: ClosePaw app restart → Wi-Fi↔5G change → Galaxy reboot. Keep the old Quick Tunnel connector only as a fallback until these pass.
+**Immediate next action:** ship and validate the minimal Accessibility + screenshot `read_app` path on the Galaxy. The same implementation must serve Samsung Internet and Chrome without Shizuku, ADB, wireless debugging, or CDP. After browser-read E2E passes, run secure-tunnel resilience checks: app restart → Wi-Fi↔5G → Galaxy reboot.
 
 ### Cross-cutting acceleration · ClosePaw self-management over MCP
 
@@ -194,3 +212,6 @@ During Progress work, report in chat using the compact form:
 - 2026-10-08: **Stable MCP Tunnel E2E PASS on v0.1.27.** Galaxy tunnel-client control-plane changed from `degraded/backoff/network_error` to active polling with `consecutive_failures=0`; runtime logs confirmed `uses_proxy=true`, `mcp session initialized`, and `tunnel metadata fetched`. ChatGPT custom MCP `closepaw-tunnel` was created with Connection: Tunnel, and ChatGPT successfully called `get_status()` through OpenAI Secure MCP Tunnel; ClosePaw returned version 0.1.27 (28).
 
 - 2026-10-08: Reusable architecture note added at `doc/main/bridge/reusable-chatgpt-android-secure-mcp.md` so the verified ChatGPT ↔ Android Secure MCP transport pattern can be reused outside ClosePaw.
+
+
+- 2026-10-08: **Architecture simplification decision.** Browser READ no longer depends on Shizuku, ADB, wireless debugging, or Chrome CDP. The default path is Secure MCP Tunnel → ClosePaw → Accessibility text + one bounded screenshot → ChatGPT text/vision. MCP-specific Chrome CDP adapter and Samsung Internet DevTools probe are removed from the default path.
