@@ -24,7 +24,7 @@ android {
         versionCode = (project.findProperty("VERSION_CODE") as String).toInt()
         versionName = project.findProperty("VERSION_NAME") as String
         val commitSha = providers.environmentVariable("GITHUB_SHA").orNull?.take(12) ?: "unavailable"
-        buildConfigField("String", "GIT_SHA", "\\"$commitSha\\"")
+        buildConfigField("String", "GIT_SHA", "\"$commitSha\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
