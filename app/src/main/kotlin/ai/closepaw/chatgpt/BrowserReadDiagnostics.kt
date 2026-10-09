@@ -17,7 +17,11 @@ internal object BrowserReadDiagnostics {
     private val events = ArrayDeque<JsonObject>()
 
     @Synchronized
-    fun record(app: String, reason: String, textChars: Int, screenshot: Boolean): String {
+    fun record(
+        app: String, reason: String, textChars: Int, screenshot: Boolean,
+        nodeCount: Int = 0, textNodeCount: Int = 0, webViewCount: Int = 0,
+        rootAvailable: Boolean = false, screenshotAttempts: Int = 0,
+    ): String {
         val id = UUID.randomUUID().toString()
         val entry = buildJsonObject {
             put("request_id", id)
@@ -26,10 +30,15 @@ internal object BrowserReadDiagnostics {
             put("reason_code", reason)
             put("text_chars", textChars)
             put("screenshot_attached", screenshot)
+            put("root_available", rootAvailable)
+            put("node_count", nodeCount)
+            put("text_node_count", textNodeCount)
+            put("webview_node_count", webViewCount)
+            put("screenshot_attempts", screenshotAttempts)
         }
         if (events.size >= CAPACITY) events.removeFirst()
         events.addLast(entry)
-        Log.i("ClosePawBrowserRead", "request_id=$id app=${app.take(40)} reason=$reason text_chars=$textChars screenshot=$screenshot")
+        Log.i("ClosePawBrowserRead", "request_id=$id app=${app.take(40)} reason=$reason text_chars=$textChars screenshot=$screenshot root=$rootAvailable nodes=$nodeCount text_nodes=$textNodeCount webview=$webViewCount")
         return id
     }
 
