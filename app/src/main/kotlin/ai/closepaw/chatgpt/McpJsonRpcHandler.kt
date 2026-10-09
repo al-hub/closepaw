@@ -138,7 +138,9 @@ internal class McpJsonRpcHandler(
         return when (name) {
             STATUS_TOOL_NAME -> toolResult(id, statusTool.snapshot())
             DIAGNOSTICS_TOOL_NAME -> if (readAppTool != null) {
-                toolResult(id, BrowserReadDiagnostics.snapshot())
+                val status = statusTool.snapshot()
+                val diagnostics = BrowserReadDiagnostics.snapshot()
+                toolResult(id, JsonObject(diagnostics + status.filterKeys { it == "version_name" || it == "version_code" }))
             } else jsonError(id, -32602, "Unknown tool: $name")
             READ_APP_TOOL_NAME -> {
                 val tool = readAppTool
