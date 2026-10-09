@@ -73,12 +73,17 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release already exists: validating both published assets"
             mkdir -p "$RUNNER_TEMP/release-check"
-            gh release download "$TAG" -D "$RUNNER_TEMP/release-check" \
-              -p 'closepaw-aa-bridge.apk' -p 'closepaw-aa-bridge.apk.sha256'
-            ( cd "$RUNNER_TEMP/release-check" && sha256sum -c closepaw-aa-bridge.apk.sha256 )
-            test -s "$RUNNER_TEMP/release-check/closepaw-aa-bridge.apk"
+            if gh release download "$TAG" -D "$RUNNER_TEMP/release-check" \
+              -p 'closepaw-aa-bridge.apk' -p 'closepaw-aa-bridge.apk.sha256' 2>/dev/null &&
+              test -s "$RUNNER_TEMP/release-check/closepaw-aa-bridge.apk" &&
+              test -s "$RUNNER_TEMP/release-check/closepaw-aa-bridge.apk.sha256"; then
+              ( cd "$RUNNER_TEMP/release-check" && sha256sum -c closepaw-aa-bridge.apk.sha256 )
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "Release assets incomplete; rebuild and upload only missing assets."
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+            fi
             echo "release_exists=true" >> "$GITHUB_OUTPUT"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "release_exists=false" >> "$GITHUB_OUTPUT"
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -189,7 +194,14 @@ jobs:
           set -euo pipefail
           (sha256sum -c closepaw-aa-bridge.apk.sha256)
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Concurrent Release already published; checking instead of overwriting"
+            echo "Existing Release: restore only missing assets without overwriting"
+            existing="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+            if ! grep -Fxq closepaw-aa-bridge.apk <<< "$existing"; then
+              gh release upload "$TAG" closepaw-aa-bridge.apk
+            fi
+            if ! grep -Fxq closepaw-aa-bridge.apk.sha256 <<< "$existing"; then
+              gh release upload "$TAG" closepaw-aa-bridge.apk.sha256
+            fi
             mkdir -p "$RUNNER_TEMP/published-check"
             gh release download "$TAG" -D "$RUNNER_TEMP/published-check" \
               -p closepaw-aa-bridge.apk -p closepaw-aa-bridge.apk.sha256
