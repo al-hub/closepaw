@@ -1,6 +1,11 @@
 name: Signed Release
 
 on:
+  # Fallback for main commits made by integrations that do not emit push workflows.
+  # The scheduled job is lightweight and dispatches Security CI only while
+  # the current version is unpublished. Security CI then triggers Signed Release.
+  schedule:
+    - cron: '11,41 * * * *'
   workflow_run:
     workflows: [ "Security CI" ]
     types: [ completed ]
@@ -15,13 +20,66 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
   group: signed-release-main
   cancel-in-progress: false
 
 jobs:
+  ensure-main-security-ci:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Dispatch Security CI for unpublished main version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)"
+          test -n "$version"
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            existing="$(gh release view "$tag" --json assets --jq '.assets[].name')"
+            if grep -Fxq closepaw-aa-bridge.apk <<< "$existing" &&
+               grep -Fxq closepaw-aa-bridge.apk.sha256 <<< "$existing"; then
+              echo "Release $tag already contains both assets; no dispatch needed."
+              exit 0
+            fi
+          fi
+          git fetch origin --tags --quiet
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            target="$(git rev-list -n 1 "$tag")"
+            if [[ "$target" != "$GITHUB_SHA" ]]; then
+              echo "Existing immutable $tag points at $target, not main $GITHUB_SHA."
+              echo "Manual assessment required; refusing to move an existing tag." >&2
+              exit 1
+            fi
+          fi
+          ci="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/security-ci.yml/runs?head_sha=$GITHUB_SHA&per_page=100")"
+          if jq -e '.workflow_runs | any(.status != "completed")' <<< "$ci" >/dev/null; then
+            echo "Security CI is already running or queued for this main commit."
+            exit 0
+          fi
+          release_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/signed-release.yml/runs?head_sha=$GITHUB_SHA&per_page=100")"
+          if jq -e '.workflow_runs | any(.event == "workflow_run" and .status != "completed")' <<< "$release_runs" >/dev/null; then
+            echo "Signed Release is already running or queued."
+            exit 0
+          fi
+          attempts="$(jq '[.workflow_runs[] | select(.event == "workflow_dispatch")] | length' <<< "$ci")"
+          if (( attempts >= 3 )); then
+            echo "Security CI has already been dispatched $attempts times for this main commit."
+            echo "Stopping automatic retries; investigate workflow failure." >&2
+            exit 1
+          fi
+          echo "Unpublished $tag: dispatching Security CI for main $GITHUB_SHA."
+          gh workflow run security-ci.yml --ref main
+
   signed-release:
     if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && inputs.publish)
     runs-on: ubuntu-latest
