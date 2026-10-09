@@ -43,6 +43,9 @@ internal object BrowserReadDiagnostics {
     }
 
     @Synchronized
+    fun hasEvents(): Boolean = events.isNotEmpty()
+
+    @Synchronized
     fun snapshot(): JsonObject = buildJsonObject {
         put("status", "succeeded")
         put("summary", "Recent privacy-safe browser read diagnostics.")
