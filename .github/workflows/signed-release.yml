@@ -1,11 +1,10 @@
 name: Signed Release
 
 on:
-  push:
+  workflow_run:
+    workflows: [ "Security CI" ]
+    types: [ completed ]
     branches: [ main ]
-    paths:
-      - gradle.properties
-    tags: [ 'v*' ]
   workflow_dispatch:
     inputs:
       publish:
@@ -16,9 +15,15 @@ on:
 
 permissions:
   contents: write
+  actions: read
+
+concurrency:
+  group: signed-release-main
+  cancel-in-progress: false
 
 jobs:
   signed-release:
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && inputs.publish)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -26,8 +31,61 @@ jobs:
         with:
           persist-credentials: true
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve release version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)"
+          code="$(grep '^VERSION_CODE=' gradle.properties | cut -d= -f2)"
+          test -n "$version" && test -n "$code"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Validate main and CI; classify release state
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch origin main --quiet
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || {
+            echo "CI run is not for current main; refusing stale release" >&2; exit 1;
+          }
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&event=push&per_page=50" \
+              --jq '.workflow_runs | any(.name == "Security CI" and .conclusion == "success")' | grep -qx true || {
+              echo "Successful main Security CI is required before manual publishing" >&2; exit 1;
+            }
+          fi
+          git fetch origin --tags --quiet
+          if git show-ref --verify --quiet "refs/tags/$TAG"; then
+            target="$(git rev-list -n 1 "$TAG")"
+            test "$target" = "$(git rev-parse HEAD)" || {
+              echo "Immutable tag exists at another commit; manual review required" >&2; exit 1;
+            }
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release already exists: validating both published assets"
+            mkdir -p "$RUNNER_TEMP/release-check"
+            gh release download "$TAG" -D "$RUNNER_TEMP/release-check" \
+              -p 'closepaw-aa-bridge.apk' -p 'closepaw-aa-bridge.apk.sha256'
+            ( cd "$RUNNER_TEMP/release-check" && sha256sum -c closepaw-aa-bridge.apk.sha256 )
+            test -s "$RUNNER_TEMP/release-check/closepaw-aa-bridge.apk"
+            echo "release_exists=true" >> "$GITHUB_OUTPUT"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_exists=false" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Checkout OpenAI tunnel-client v0.0.15 source
+        if: steps.state.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
           repository: openai/tunnel-client
@@ -35,17 +93,21 @@ jobs:
           path: tunnel-client
           persist-credentials: false
 
-      - uses: actions/setup-java@v4
+      - if: steps.state.outputs.skip != 'true'
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v4
-      - uses: actions/setup-go@v5
+      - if: steps.state.outputs.skip != 'true'
+        uses: gradle/actions/setup-gradle@v4
+      - if: steps.state.outputs.skip != 'true'
+        uses: actions/setup-go@v5
         with:
           go-version: '1.27.0'
 
       - name: Require signing secrets
+        if: steps.state.outputs.skip != 'true'
         env:
           KEYSTORE_B64: ${{ secrets.CLOSEPAW_KEYSTORE_B64 }}
           KEYSTORE_PASSWORD: ${{ secrets.CLOSEPAW_KEYSTORE_PASSWORD }}
@@ -59,25 +121,8 @@ jobs:
           test -n "$KEY_PASSWORD"
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/closepaw-release.jks"
 
-      - name: Resolve release version
-        id: version
-        run: |
-          set -euo pipefail
-          version="$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)"
-          test -n "$version"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
-
-      - name: Verify pushed tag matches app version
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REF_NAME" = "${{ steps.version.outputs.tag }}" || {
-            echo "Tag $GITHUB_REF_NAME must equal ${{ steps.version.outputs.tag }}"
-            exit 1
-          }
-
       - name: Build bundled OpenAI Secure MCP tunnel runtime for Android
+        if: steps.state.outputs.skip != 'true'
         run: |
           set -euo pipefail
           bash scripts/spike-build-openai-tunnel-android.sh             "$GITHUB_WORKSPACE/tunnel-client"             "$RUNNER_TEMP/openai-tunnel"
@@ -87,11 +132,13 @@ jobs:
           test -s app/src/main/jniLibs/arm64-v8a/libopenaitunnel.so
 
       - name: Build bundled cloudflared for Android
+        if: steps.state.outputs.skip != 'true'
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null
           ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018" bash scripts/build-cloudflared-android.sh
 
       - name: Test and build signed release
+        if: steps.state.outputs.skip != 'true'
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/closepaw-release.jks
           KEYSTORE_PASSWORD: ${{ secrets.CLOSEPAW_KEYSTORE_PASSWORD }}
@@ -106,33 +153,48 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk closepaw-aa-bridge.apk
           sha256sum closepaw-aa-bridge.apk > closepaw-aa-bridge.apk.sha256
 
-      - name: Create and push version tag
-        if: (github.event_name == 'workflow_dispatch' && inputs.publish) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      - name: Validate signer against previous signed Release
+        if: steps.state.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          signer="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          test -x "$signer"
+          mkdir -p "$RUNNER_TEMP/previous-release"
+          gh release download v0.1.33 -D "$RUNNER_TEMP/previous-release" -p closepaw-aa-bridge.apk
+          current="$("$signer" verify --print-certs closepaw-aa-bridge.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          previous="$("$signer" verify --print-certs "$RUNNER_TEMP/previous-release/closepaw-aa-bridge.apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          test -n "$previous" && test "$current" = "$previous" || {
+            echo "Android signing certificate differs from v0.1.33" >&2; exit 1;
+          }
+
+      - name: Create version tag only if absent
+        if: steps.state.outputs.skip != 'true' && steps.state.outputs.tag_exists == 'false'
         env:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists; refusing to move it."
-            exit 1
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "ClosePaw AA-Bridge $TAG"
           git push origin "$TAG"
 
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      - name: Publish missing Release
+        if: steps.state.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
+          (sha256sum -c closepaw-aa-bridge.apk.sha256)
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; refusing to overwrite it."
-            exit 1
+            echo "Concurrent Release already published; checking instead of overwriting"
+            mkdir -p "$RUNNER_TEMP/published-check"
+            gh release download "$TAG" -D "$RUNNER_TEMP/published-check" \
+              -p closepaw-aa-bridge.apk -p closepaw-aa-bridge.apk.sha256
+            (cd "$RUNNER_TEMP/published-check" && sha256sum -c closepaw-aa-bridge.apk.sha256)
+          else
+            gh release create "$TAG" closepaw-aa-bridge.apk closepaw-aa-bridge.apk.sha256 \
+              --title "ClosePaw AA-Bridge $TAG" --generate-notes
           fi
-          gh release create "$TAG" \
-            closepaw-aa-bridge.apk closepaw-aa-bridge.apk.sha256 \
-            --title "ClosePaw AA-Bridge $TAG" \
-            --generate-notes
