@@ -38,7 +38,9 @@ internal object BrowserReadDiagnostics {
         }
         if (events.size >= CAPACITY) events.removeFirst()
         events.addLast(entry)
-        Log.i("ClosePawBrowserRead", "request_id=$id app=${app.take(40)} reason=$reason text_chars=$textChars screenshot=$screenshot root=$rootAvailable nodes=$nodeCount text_nodes=$textNodeCount webview=$webViewCount")
+        runCatching {
+            Log.i("ClosePawBrowserRead", "request_id=$id app=${app.take(40)} reason=$reason text_chars=$textChars screenshot=$screenshot root=$rootAvailable nodes=$nodeCount text_nodes=$textNodeCount webview=$webViewCount")
+        }
         return id
     }
 
