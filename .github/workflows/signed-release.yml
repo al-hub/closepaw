@@ -113,8 +113,8 @@ jobs:
             echo "CI run is not for current main; refusing stale release" >&2; exit 1;
           }
           if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
-            gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&event=push&per_page=50" \
-              --jq '.workflow_runs | any(.name == "Security CI" and .conclusion == "success")' | grep -qx true || {
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&per_page=50" \
+              --jq '.workflow_runs | any(.name == "Security CI" and .conclusion == "success" and .head_branch == "main" and (.event == "push" or .event == "workflow_dispatch" or .event == "schedule"))' | grep -qx true || {
               echo "Successful main Security CI is required before manual publishing" >&2; exit 1;
             }
           fi
