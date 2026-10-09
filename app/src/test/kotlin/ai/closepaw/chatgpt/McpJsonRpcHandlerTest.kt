@@ -49,8 +49,8 @@ class McpJsonRpcHandlerTest {
         val tools = json.parseToJsonElement(response.body!!).jsonObject["result"]!!
             .jsonObject["tools"]!!.jsonArray
         assertThat(tools.map { it.jsonObject["name"]!!.jsonPrimitive.content })
-            .containsExactly("get_status", "read_app")
-        val readApp = tools.last().jsonObject
+            .containsExactly("get_status", "read_app", "get_diagnostics")
+        val readApp = tools.first { it.jsonObject["name"]!!.jsonPrimitive.content == "read_app" }.jsonObject
         val annotations = readApp["annotations"]!!.jsonObject
         assertThat(annotations["readOnlyHint"]!!.jsonPrimitive.content).isEqualTo("true")
         assertThat(annotations["destructiveHint"]!!.jsonPrimitive.content).isEqualTo("false")
