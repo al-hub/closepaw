@@ -43,6 +43,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ai.closepaw.BuildConfig
+import ai.closepaw.chatgpt.BrowserReadDiagnostics
 import ai.closepaw.update.AppUpdater
 import ai.closepaw.ui.theme.Fleuron
 import ai.closepaw.ui.theme.PageMastheadDrillDown
@@ -76,6 +77,17 @@ internal fun PermissionsAdvancedSettingsPage(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = MaterialTheme.closePaw.spacing.lg)
         ) {
+            SettingsSection(title = "Application") {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("ClosePaw ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})")
+                    Text(
+                        text = "Build type: ${BuildConfig.BUILD_TYPE} · Git: ${BuildConfig.GIT_SHA}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
             SettingsSection(title = "Permissions") {
                 Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.closePaw.spacing.md)) {
                     SettingsRow(
@@ -491,9 +503,10 @@ private fun ClearDataButton(
 
 private fun exportTracesToDownloads(context: android.content.Context): String {
     val source = context.getExternalFilesDir(TRACE_DIR)
-        ?: return "Could not access trace storage."
-    if (!source.exists() || source.walkTopDown().none { it.isFile }) {
-        return "No diagnostic logs yet. Enable Session Traces and run a test first."
+    val hasTraces = source?.exists() == true && source.walkTopDown().any { it.isFile }
+    val hasBrowserDiagnostics = BrowserReadDiagnostics.hasEvents()
+    if (!hasTraces && !hasBrowserDiagnostics) {
+        return "No diagnostic logs yet. Run a browser read or enable Session Traces first."
     }
     val name = "closepaw-diagnostics-" + System.currentTimeMillis() + ".zip"
     return try {
@@ -508,12 +521,17 @@ private fun exportTracesToDownloads(context: android.content.Context): String {
             ?: return "Could not create the diagnostic ZIP in Downloads."
         resolver.openOutputStream(uri)?.use { output ->
             ZipOutputStream(output).use { zip ->
-                source.walkTopDown().filter { it.isFile }.forEach { file ->
-                    val relative = file.relativeTo(source).invariantSeparatorsPath
-                    zip.putNextEntry(ZipEntry(relative))
-                    FileInputStream(file).use { it.copyTo(zip) }
-                    zip.closeEntry()
+                if (hasTraces && source != null) {
+                    source.walkTopDown().filter { it.isFile }.forEach { file ->
+                        val relative = file.relativeTo(source).invariantSeparatorsPath
+                        zip.putNextEntry(ZipEntry(relative))
+                        FileInputStream(file).use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
                 }
+                zip.putNextEntry(ZipEntry("browser-read-diagnostics.json"))
+                zip.write(BrowserReadDiagnostics.snapshot().toString().toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
             }
         } ?: return "Could not open the diagnostic ZIP for writing."
         values.clear()

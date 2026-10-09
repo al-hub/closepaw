@@ -1,5 +1,6 @@
 package ai.closepaw.ui.settings
 
+import ai.closepaw.BuildConfig
 import ai.closepaw.chatgpt.AndroidOpenAiTunnelBinaryResolver
 import ai.closepaw.chatgpt.ChatGptMcpService
 import ai.closepaw.chatgpt.SecureMcpTunnelConfigStore
@@ -47,6 +48,11 @@ internal fun ChatGptConnectionCard() {
     var secureTunnelDiagnostics by remember { mutableStateOf<String?>(null) }
 
     SettingsCard {
+        Text(
+            text = "App version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text(
             text = "ChatGPT Voice",
             style = MaterialTheme.typography.titleMedium,

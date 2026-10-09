@@ -92,9 +92,10 @@ internal class AndroidReadAppTool(
             )
         }
 
-        val targetText = withContext(Dispatchers.Main) {
+        val accessibility = withContext(Dispatchers.Main) {
             readTargetApplicationText(service, target.packageName)
         }
+        val targetText = accessibility.text
         val snapshot = if (targetText.isBlank()) platform.captureScreen() else null
         val fallbackText = snapshot?.elements
             ?.asSequence()
@@ -138,11 +139,22 @@ internal class AndroidReadAppTool(
         }
 
         val image = screenshot?.image
+        val readQuality = BrowserReadQuality.classify(content, image != null)
+        val requestId = BrowserReadDiagnostics.record(
+            target.id, readQuality, content.length, image != null,
+            nodeCount = accessibility.nodeCount,
+            textNodeCount = accessibility.textNodeCount,
+            webViewCount = accessibility.webViewCount,
+            rootAvailable = accessibility.rootAvailable,
+            screenshotAttempts = screenshotAttempts,
+        )
         val structured = buildJsonObject {
             put("status", if (content.isBlank() && image == null) "empty" else "succeeded")
             put(
                 "summary",
                 when {
+                    readQuality == "content_missing" && image != null ->
+                        "Captured browser screenshot, but Accessibility returned no meaningful page text."
                     content.isNotBlank() && image != null ->
                         "Read browser Accessibility text and captured the visible screen."
                     image != null ->
@@ -153,6 +165,13 @@ internal class AndroidReadAppTool(
                         "Browser is open, but no readable text or screenshot was available."
                 }
             )
+            put("request_id", requestId)
+            put("text_read_status", readQuality)
+            put("reason_code", readQuality)
+            put("accessibility_root_available", accessibility.rootAvailable)
+            put("accessibility_node_count", accessibility.nodeCount)
+            put("accessibility_text_node_count", accessibility.textNodeCount)
+            put("accessibility_webview_count", accessibility.webViewCount)
             put("app", target.id)
             put("package_name", target.packageName)
             put("scope", "visible_screen")
@@ -186,10 +205,18 @@ internal class AndroidReadAppTool(
         )
     }
 
+    private data class AccessibilityRead(
+        val text: String,
+        val rootAvailable: Boolean,
+        val nodeCount: Int,
+        val textNodeCount: Int,
+        val webViewCount: Int,
+    )
+
     private fun readTargetApplicationText(
         service: AgentService,
         packageName: String,
-    ): String {
+    ): AccessibilityRead {
         val windows = runCatching { service.windows }.getOrNull()
         var root: AccessibilityNodeInfo? = null
         try {
@@ -216,11 +243,16 @@ internal class AndroidReadAppTool(
                 }
             }
 
-            val targetRoot = root ?: return ""
+            val targetRoot = root ?: return AccessibilityRead("", false, 0, 0, 0)
             val values = LinkedHashSet<String>()
+            var nodeCount = 0
+            var textNodeCount = 0
+            var webViewCount = 0
 
             fun visit(node: AccessibilityNodeInfo, recycle: Boolean) {
                 try {
+                    nodeCount++
+                    if (node.className?.toString()?.contains("WebView", ignoreCase = true) == true) webViewCount++
                     if (node.isVisibleToUser) {
                         sequenceOf(
                             node.text?.toString(),
@@ -230,7 +262,10 @@ internal class AndroidReadAppTool(
                             .filterNotNull()
                             .map { it.trim() }
                             .filter { it.isNotBlank() && it != "[password]" }
-                            .forEach(values::add)
+                            .forEach { value ->
+                                textNodeCount++
+                                values.add(value)
+                            }
                     }
                     for (index in 0 until node.childCount) {
                         val child = node.getChild(index) ?: continue
@@ -242,7 +277,7 @@ internal class AndroidReadAppTool(
             }
 
             visit(targetRoot, recycle = false)
-            return values.joinToString("\n")
+            return AccessibilityRead(values.joinToString("\n"), true, nodeCount, textNodeCount, webViewCount)
         } finally {
             root?.recycleCompat()
             windows?.forEach { window -> runCatching { window.recycle() } }
@@ -255,6 +290,8 @@ internal class AndroidReadAppTool(
         packageName: String? = null,
     ): ReadAppToolResult = ReadAppToolResult(
         structured = buildJsonObject {
+            put("request_id", BrowserReadDiagnostics.record("unknown", code, 0, false))
+            put("reason_code", code)
             put("status", "failed")
             put("error", code)
             put("summary", summary)
