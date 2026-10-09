@@ -153,6 +153,8 @@ internal class AndroidReadAppTool(
             put(
                 "summary",
                 when {
+                    readQuality == "content_missing" && image != null ->
+                        "Captured browser screenshot, but Accessibility returned no meaningful page text."
                     content.isNotBlank() && image != null ->
                         "Read browser Accessibility text and captured the visible screen."
                     image != null ->
@@ -288,6 +290,8 @@ internal class AndroidReadAppTool(
         packageName: String? = null,
     ): ReadAppToolResult = ReadAppToolResult(
         structured = buildJsonObject {
+            put("request_id", BrowserReadDiagnostics.record("unknown", code, 0, false))
+            put("reason_code", code)
             put("status", "failed")
             put("error", code)
             put("summary", summary)
