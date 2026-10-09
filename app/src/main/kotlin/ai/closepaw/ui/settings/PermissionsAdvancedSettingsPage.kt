@@ -81,7 +81,7 @@ internal fun PermissionsAdvancedSettingsPage(
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("ClosePaw ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})")
                     Text(
-                        text = "Build type: ${BuildConfig.BUILD_TYPE}",
+                        text = "Build type: ${BuildConfig.BUILD_TYPE} · Git: ${BuildConfig.GIT_SHA}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
