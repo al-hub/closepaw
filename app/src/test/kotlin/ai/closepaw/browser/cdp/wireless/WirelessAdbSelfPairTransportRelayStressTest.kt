@@ -8,7 +8,6 @@ import io.mockk.mockk
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.OutputStream
-import java.net.ConnectException
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
@@ -165,8 +164,9 @@ class WirelessAdbSelfPairTransportRelayStressTest {
         try {
             Socket("127.0.0.1", port).close()
             println("note: post-close port $port still accepted a connection (OS port reuse likely)")
-        } catch (_: ConnectException) {
-            // Expected.
+        } catch (_: IOException) {
+            // Expected: JVM/OS may report a closed/refused/reset local socket differently.
+            // This post-close probe is informational, not an assertion about the socket error type.
         }
     }
 
