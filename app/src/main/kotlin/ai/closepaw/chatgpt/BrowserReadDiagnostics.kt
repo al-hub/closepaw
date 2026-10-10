@@ -69,6 +69,10 @@ internal object BrowserReadQuality {
         """^(?:https?://)?(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?::\d+)?(?:[/?#].*)?$"""
     )
 
+    /** Only verified page-like text is exposed as MCP page content; UI-only text uses screenshot fallback. */
+    fun pageContent(content: String, readQuality: String): String =
+        if (readQuality == "ok") content else ""
+
     fun classify(content: String, hasScreenshot: Boolean): String {
         // Browser address bars can include invisible direction markers before the hostname.
         val lines = content.lines()
