@@ -201,7 +201,7 @@ jobs:
           # Capture public signer metadata once so parsing errors can be diagnosed.
           signer_info="$("$verifier" verify --print-certs "$RUNNER_TEMP/previous-release/closepaw-aa-bridge.apk")"
           expected="$(printf '%s\n' "$signer_info" |
-            sed -nE 's/^[[:space:]]*Signer #1 certificate SHA-256 digest:[[:space:]]*([[:xdigit:]:]+).*$/\1/p' |
+            sed -nE 's/^.*certificate SHA-256 digest:[[:space:]]*([[:xdigit:]:]+).*$/\1/p' |
             head -1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
           actual="$(keytool -exportcert -rfc \
             -keystore "$RUNNER_TEMP/closepaw-release.jks" \
@@ -272,8 +272,8 @@ jobs:
           signer="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
           test -x "$signer"
           test -s "$RUNNER_TEMP/previous-release/closepaw-aa-bridge.apk"
-          current="$("$signer" verify --print-certs closepaw-aa-bridge.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
-          previous="$("$signer" verify --print-certs "$RUNNER_TEMP/previous-release/closepaw-aa-bridge.apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          current="$("$signer" verify --print-certs closepaw-aa-bridge.apk | sed -nE 's/^.*certificate SHA-256 digest:[[:space:]]*([[:xdigit:]:]+).*$/\1/p' | head -1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          previous="$("$signer" verify --print-certs "$RUNNER_TEMP/previous-release/closepaw-aa-bridge.apk" | sed -nE 's/^.*certificate SHA-256 digest:[[:space:]]*([[:xdigit:]:]+).*$/\1/p' | head -1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
           if [[ -z "$current" || -z "$previous" ]]; then
             echo "::error::Unable to read built or previous APK signing certificate SHA-256." >&2
             exit 1
