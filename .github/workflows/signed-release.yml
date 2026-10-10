@@ -184,6 +184,40 @@ jobs:
           test -n "$KEY_PASSWORD"
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/closepaw-release.jks"
 
+      - name: Preflight signing identity against v0.1.33
+        if: steps.state.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEY_ALIAS: ${{ secrets.CLOSEPAW_KEY_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.CLOSEPAW_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Read the certificate from the existing public APK and the signing
+          # keystore. Do not export private keys or weaken the update check.
+          verifier="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          test -x "$verifier"
+          mkdir -p "$RUNNER_TEMP/previous-release"
+          gh release download v0.1.33 -D "$RUNNER_TEMP/previous-release" -p closepaw-aa-bridge.apk
+          expected="$("$verifier" verify --print-certs "$RUNNER_TEMP/previous-release/closepaw-aa-bridge.apk" |
+            sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          actual="$(keytool -exportcert -rfc \
+            -keystore "$RUNNER_TEMP/closepaw-release.jks" \
+            -alias "$KEY_ALIAS" -storepass "$KEYSTORE_PASSWORD" |
+            openssl x509 -noout -fingerprint -sha256 |
+            sed -n 's/^[^=]*=//p' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          if [[ -z "$expected" || -z "$actual" ]]; then
+            echo "::error::Could not read release certificate SHA-256 fingerprints." >&2
+            exit 1
+          fi
+          if [[ "$expected" != "$actual" ]]; then
+            echo "::error::Signing keystore certificate differs from published v0.1.33; refusing incompatible update." >&2
+            echo "v0.1.33 APK signing certificate SHA-256: $expected"
+            echo "Configured keystore certificate SHA-256: $actual"
+            echo "Restore the ORIGINAL signing keystore in GitHub Actions secrets; never regenerate or bypass this check."
+            exit 1
+          fi
+          echo "Signing keystore matches the existing v0.1.33 app."
+
       - name: Build bundled OpenAI Secure MCP tunnel runtime for Android
         if: steps.state.outputs.skip != 'true'
         run: |
@@ -224,13 +258,19 @@ jobs:
           set -euo pipefail
           signer="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
           test -x "$signer"
-          mkdir -p "$RUNNER_TEMP/previous-release"
-          gh release download v0.1.33 -D "$RUNNER_TEMP/previous-release" -p closepaw-aa-bridge.apk
+          test -s "$RUNNER_TEMP/previous-release/closepaw-aa-bridge.apk"
           current="$("$signer" verify --print-certs closepaw-aa-bridge.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
           previous="$("$signer" verify --print-certs "$RUNNER_TEMP/previous-release/closepaw-aa-bridge.apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
-          test -n "$previous" && test "$current" = "$previous" || {
-            echo "Android signing certificate differs from v0.1.33" >&2; exit 1;
-          }
+          if [[ -z "$current" || -z "$previous" ]]; then
+            echo "::error::Unable to read built or previous APK signing certificate SHA-256." >&2
+            exit 1
+          fi
+          if [[ "$current" != "$previous" ]]; then
+            echo "::error::Built APK signer differs from v0.1.33; refusing incompatible update." >&2
+            echo "v0.1.33 certificate SHA-256: $previous"
+            echo "New APK certificate SHA-256: $current"
+            exit 1
+          fi
 
       - name: Create version tag only if absent
         if: steps.state.outputs.skip != 'true' && steps.state.outputs.tag_exists == 'false'
