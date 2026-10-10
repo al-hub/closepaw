@@ -66,13 +66,13 @@ internal object BrowserReadQuality {
         "Refresh", "Stop", "Forward", "Bookmarks", "Tools",
     )
     private val hostOrUrl = Regex(
-        """^(?:https?://)?(?:[A-Za-z0-9-]+\\.)+[A-Za-z]{2,}(?::\\d+)?(?:[/?#].*)?$"""
+        """^(?:https?://)?(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?::\d+)?(?:[/?#].*)?$"""
     )
 
     fun classify(content: String, hasScreenshot: Boolean): String {
         // Browser address bars can include invisible direction markers before the hostname.
         val lines = content.lines()
-            .map { it.replace("\\u200e", "").replace("\\u200f", "").trim() }
+            .map { it.replace("\u200e", "").replace("\u200f", "").trim() }
             .filter(String::isNotBlank)
         val hasPageText = lines.any { line ->
             line !in chromeLabels && line.toIntOrNull() == null &&
