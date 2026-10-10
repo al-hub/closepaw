@@ -140,6 +140,7 @@ internal class AndroidReadAppTool(
 
         val image = screenshot?.image
         val readQuality = BrowserReadQuality.classify(content, image != null)
+        val pageContent = BrowserReadQuality.pageContent(content, readQuality)
         val requestId = BrowserReadDiagnostics.record(
             target.id, readQuality, content.length, image != null,
             nodeCount = accessibility.nodeCount,
@@ -149,17 +150,17 @@ internal class AndroidReadAppTool(
             screenshotAttempts = screenshotAttempts,
         )
         val structured = buildJsonObject {
-            put("status", if (content.isBlank() && image == null) "empty" else "succeeded")
+            put("status", if (readQuality == "empty") "empty" else "succeeded")
             put(
                 "summary",
                 when {
                     readQuality == "content_missing" && image != null ->
                         "Captured browser screenshot, but Accessibility returned no meaningful page text."
-                    content.isNotBlank() && image != null ->
+                    readQuality == "ok" && image != null ->
                         "Read browser Accessibility text and captured the visible screen."
                     image != null ->
                         "Captured the visible browser screen for visual reading."
-                    content.isNotBlank() ->
+                    readQuality == "ok" ->
                         "Read visible browser Accessibility text."
                     else ->
                         "Browser is open, but no readable text or screenshot was available."
@@ -175,13 +176,13 @@ internal class AndroidReadAppTool(
             put("app", target.id)
             put("package_name", target.packageName)
             put("scope", "visible_screen")
-            put("content", content)
+            put("content", pageContent)
             put(
                 "capture_source",
                 when {
-                    content.isNotBlank() && image != null -> "accessibility_plus_screenshot"
+                    readQuality == "ok" && image != null -> "accessibility_plus_screenshot"
                     image != null -> "screenshot"
-                    content.isNotBlank() -> "accessibility"
+                    readQuality == "ok" -> "accessibility"
                     else -> "none"
                 }
             )
