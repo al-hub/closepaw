@@ -56,16 +56,30 @@ internal object BrowserReadDiagnostics {
     }
 }
 
-/** Navigation controls alone are not meaningful browser page content. */
+/** Browser chrome alone is not proof that Accessibility captured page content. */
 internal object BrowserReadQuality {
-    private val navigationOnly = setOf(
+    private val chromeLabels = setOf(
         "최근 앱", "홈", "뒤로가기", "Recent apps", "Home", "Back",
-        "Navigate up", "Close", "Tabs"
+        "Navigate up", "Close", "Tabs", "북마크에 추가", "안전한 연결",
+        "새로고침", "중지", "뒤로", "앞으로", "브라우징 어시스트",
+        "북마크", "탭", "도구", "Add bookmark", "Secure connection",
+        "Refresh", "Stop", "Forward", "Bookmarks", "Tools",
     )
+    private val hostOrUrl = Regex(
+        """^(?:https?://)?(?:[A-Za-z0-9-]+\\.)+[A-Za-z]{2,}(?::\\d+)?(?:[/?#].*)?$"""
+    )
+
     fun classify(content: String, hasScreenshot: Boolean): String {
-        val lines = content.lines().map(String::trim).filter(String::isNotBlank)
+        // Browser address bars can include invisible direction markers before the hostname.
+        val lines = content.lines()
+            .map { it.replace("\\u200e", "").replace("\\u200f", "").trim() }
+            .filter(String::isNotBlank)
+        val hasPageText = lines.any { line ->
+            line !in chromeLabels && line.toIntOrNull() == null &&
+                !hostOrUrl.matches(line)
+        }
         return when {
-            lines.isNotEmpty() && lines.any { it !in navigationOnly } -> "ok"
+            hasPageText -> "ok"
             hasScreenshot -> "content_missing"
             else -> "empty"
         }
