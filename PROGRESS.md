@@ -116,7 +116,7 @@ The v0.1.18 protected-path experiment failed in both the already-open conversati
 
 For P1, this protection was more complexity than the milestone needs. v0.1.19 therefore restores the standard `/mcp` endpoint shape that already passed Android Text/Voice `get_status()` in P0. Sensitive-app work remains out of scope until authentication is added later.
 
-**Immediate next action:** ship and validate the minimal Accessibility + screenshot `read_app` path on the Galaxy. The same implementation must serve Samsung Internet and Chrome without Shizuku, ADB, wireless debugging, or CDP. After browser-read E2E passes, run secure-tunnel resilience checks: app restart → Wi-Fi↔5G → Galaxy reboot.
+**Immediate next action:** run ChatGPT **Voice** → `read_app(app="samsung_internet")` → useful spoken response on the real Galaxy. Text-mode browser READ already passed on v0.1.33. Then validate secure-tunnel resilience in order: app restart → Wi-Fi↔5G → Galaxy reboot. Keep P1 ACTIVE until those real-device results are recorded. No Shizuku, ADB, wireless debugging, or CDP is required.
 
 ### Cross-cutting acceleration · ClosePaw self-management over MCP
 
@@ -221,3 +221,5 @@ During Progress work, report in chat using the compact form:
 
 
 - 2026-10-09: **Samsung Internet screenshot stabilization PASS on v0.1.33.** read_app(app="samsung_internet") returned status=succeeded, capture_source=accessibility_plus_screenshot, screenshot_attached=true, screenshot_attempts=2, and the returned JPEG visibly contained the actual mobile web page content instead of a blank/black WebView region. This validates the minimal no-Shizuku/no-ADB/no-CDP browser READ path for both Chrome and Samsung Internet in ChatGPT text mode.
+
+- 2026-10-10: **P1 pre-device regression hardening — verification pending.** Latest main `46ab625` has passing Security CI ([run 38022073569](https://github.com/al-hub/closepaw/actions/runs/38022073569)) and a successful signed-release workflow ([run 38022362654](https://github.com/al-hub/closepaw/actions/runs/38022362654)); signed [v0.1.34](https://github.com/al-hub/closepaw/releases/tag/v0.1.34) APK and checksum are published. This does **not** prove that v0.1.34 is installed or that Voice READ works. Added focused tests for MCP image-block forwarding/failure responses and a password-aware Accessibility-text filter on the P1 branch; its own CI and Galaxy E2E must be checked independently. An attempted direct Galaxy `get_status` probe returned `MCP SSE probe 429`, so no new device result was obtained. Existing v0.1.33 Text E2E PASS remains the last documented browser-read evidence; Voice E2E and tunnel recovery are **NOT VERIFIED**. P1 remains ACTIVE.
