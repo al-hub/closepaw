@@ -33,8 +33,14 @@ class BrowserReadDiagnosticsTest {
     @Test fun browserControlsAndArticleHeadlineAreMeaningfulText() {
         assertEquals(
             "ok",
-            BrowserReadQuality.classify("m.naver.com\\n홈\\n창원한마음병원 척추 진료 시작", true),
+            BrowserReadQuality.classify("m.naver.com\n홈\n창원한마음병원 척추 진료 시작", true),
         )
+    }
+
+    @Test fun browserChromeOnlyNeverBecomesUserFacingPageText() {
+        val chromeOnly = "북마크에 추가\\n홈\\n‎m.naver.com\\n탭"
+        assertEquals("", BrowserReadQuality.pageContent(chromeOnly, "content_missing"))
+        assertEquals(chromeOnly, BrowserReadQuality.pageContent(chromeOnly, "ok"))
     }
 
     @Test fun realArticleTextIsSuccessful() {
