@@ -253,19 +253,15 @@ internal class AndroidReadAppTool(
                 try {
                     nodeCount++
                     if (node.className?.toString()?.contains("WebView", ignoreCase = true) == true) webViewCount++
-                    if (node.isVisibleToUser) {
-                        sequenceOf(
-                            node.text?.toString(),
-                            node.contentDescription?.toString(),
-                            node.hintText?.toString(),
-                        )
-                            .filterNotNull()
-                            .map { it.trim() }
-                            .filter { it.isNotBlank() && it != "[password]" }
-                            .forEach { value ->
-                                textNodeCount++
-                                values.add(value)
-                            }
+                    BrowserReadTextPolicy.visibleText(
+                        visible = node.isVisibleToUser,
+                        password = node.isPassword,
+                        text = node.text?.toString(),
+                        description = node.contentDescription?.toString(),
+                        hint = node.hintText?.toString(),
+                    ).forEach { value ->
+                        textNodeCount++
+                        values.add(value)
                     }
                     for (index in 0 until node.childCount) {
                         val child = node.getChild(index) ?: continue
