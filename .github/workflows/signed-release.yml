@@ -198,17 +198,30 @@ jobs:
           test -x "$verifier"
           mkdir -p "$RUNNER_TEMP/previous-release"
           gh release download v0.1.33 -D "$RUNNER_TEMP/previous-release" -p closepaw-aa-bridge.apk
-          expected="$("$verifier" verify --print-certs "$RUNNER_TEMP/previous-release/closepaw-aa-bridge.apk" |
-            sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          # Capture public signer metadata once so parsing errors can be diagnosed.
+          signer_info="$("$verifier" verify --print-certs "$RUNNER_TEMP/previous-release/closepaw-aa-bridge.apk")"
+          expected="$(printf '%s\n' "$signer_info" |
+            sed -nE 's/^[[:space:]]*Signer #1 certificate SHA-256 digest:[[:space:]]*([[:xdigit:]:]+).*$/\1/p' |
+            head -1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
           actual="$(keytool -exportcert -rfc \
             -keystore "$RUNNER_TEMP/closepaw-release.jks" \
             -alias "$KEY_ALIAS" -storepass "$KEYSTORE_PASSWORD" |
             openssl x509 -noout -fingerprint -sha256 |
             sed -n 's/^[^=]*=//p' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
-          if [[ -z "$expected" || -z "$actual" ]]; then
-            echo "::error::Could not read release certificate SHA-256 fingerprints." >&2
+          if [[ -z "$expected" ]]; then
+            echo "::error::Unable to parse SHA-256 certificate fingerprint from v0.1.33 APK." >&2
+            echo "apksigner public signer metadata:"
+            printf '%s\n' "$signer_info" | grep -E 'Signer|SHA-256|SHA256' | head -20 || true
+            "$verifier" version || true
             exit 1
           fi
+          if [[ -z "$actual" ]]; then
+            echo "::error::Unable to parse signing keystore certificate fingerprint." >&2
+            echo "No private key or keystore contents were exposed."
+            exit 1
+          fi
+          echo "v0.1.33 APK signer SHA-256: $expected"
+          echo "Configured keystore signer SHA-256: $actual"
           if [[ "$expected" != "$actual" ]]; then
             echo "::error::Signing keystore certificate differs from published v0.1.33; refusing incompatible update." >&2
             echo "v0.1.33 APK signing certificate SHA-256: $expected"
