@@ -10,6 +10,33 @@ class BrowserReadDiagnosticsTest {
         assertEquals("content_missing", BrowserReadQuality.classify("최근 앱\n홈\n뒤로가기", true))
     }
 
+    @Test fun samsungInternetBrowserControlsAreNotMistakenForPageText() {
+        val browserControls = """
+            북마크에 추가
+            안전한 연결
+            ‎m.search.naver.com
+            새로고침
+            뒤로
+            앞으로
+            홈
+            브라우징 어시스트
+            북마크
+            탭
+            98
+            도구
+        """.trimIndent()
+
+        assertEquals("content_missing", BrowserReadQuality.classify(browserControls, true))
+        assertEquals("empty", BrowserReadQuality.classify(browserControls, false))
+    }
+
+    @Test fun browserControlsAndArticleHeadlineAreMeaningfulText() {
+        assertEquals(
+            "ok",
+            BrowserReadQuality.classify("m.naver.com\\n홈\\n창원한마음병원 척추 진료 시작", true),
+        )
+    }
+
     @Test fun realArticleTextIsSuccessful() {
         assertEquals("ok", BrowserReadQuality.classify("뉴스 본문입니다", true))
     }
