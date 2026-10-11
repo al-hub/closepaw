@@ -215,6 +215,10 @@ dependencies {
     // Version 0.9.2 includes manifest.LeapDownloader with loadModel(modelSlug, quantizationSlug) API
     implementation("ai.liquid.leap:leap-sdk:0.9.2")
     
+    // Local Korean OCR fallback for Samsung Internet WebViews lacking Accessibility body text.
+    // Bundled: no runtime model download or network OCR service.
+    implementation("com.google.mlkit:text-recognition-korean:16.0.1")
+
     // Kotlin Serialization for session persistence
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 

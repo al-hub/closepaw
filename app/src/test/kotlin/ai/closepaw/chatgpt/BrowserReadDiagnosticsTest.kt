@@ -43,6 +43,17 @@ class BrowserReadDiagnosticsTest {
         assertEquals(chromeOnly, BrowserReadQuality.pageContent(chromeOnly, "ok"))
     }
 
+    @Test fun samsungReadingModeToolbarIsNotPageContent() {
+        val browserUi = listOf(
+            "북마크에 추가", "안전한 연결", "‎m.blog.naver.com",
+            "사용 중, 읽기 모드", "새로고침", "뒤로", "앞으로",
+            "홈", "브라우징 어시스트", "북마크", "탭", "98", "도구"
+        ).joinToString("\n")
+        assertEquals("content_missing", BrowserReadQuality.classify(browserUi, true))
+        assertEquals("", BrowserReadQuality.pageContent(browserUi, "content_missing"))
+        assertEquals("empty", BrowserReadQuality.classify(browserUi, false))
+    }
+
     @Test fun realArticleTextIsSuccessful() {
         assertEquals("ok", BrowserReadQuality.classify("뉴스 본문입니다", true))
     }
