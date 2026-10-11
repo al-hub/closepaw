@@ -11,8 +11,8 @@ Completed: 2 / 10
 
 ✅ P0 · MCP Connection
 ✅ P1 · Browser Read MVP
-⏭ P2 · General Read
-⬜ P3 · Kakao Read
+🟡 P2 · General Read            ← ACTIVE
+⏭ P3 · Kakao Read
 ⬜ P4 · Termux Execute
 ⬜ P5 · PC Continuity
 ⬜ P6 · Toss Read
@@ -155,14 +155,26 @@ ChatGPT Voice
 
 **Met on Galaxy 2026-10-11, 17:39 KST:** 19s visible Voice run; 3 sentences correctly reflect the independently supplied visible article paragraphs; the Voice UI shows a Samsung Internet content-read tool and no 12-site web search. Separate connected v0.1.37 probe established one JPEG (`screenshot_attempts=1`) + Korean OCR/MCP. A per-Voice-tool request ID was not visible in the screenshot; this was accepted under the deliberately simplified **user-visible** single-snapshot P1 gate, not a forensic tool trace requirement. No full-page or off-screen content guarantees. App restart / Wi-Fi↔5G / reboot resilience remains untested and is deferred to P7.
 
-## P2 · General Read — NEXT ⏭
+## P2 · General Read — ACTIVE 🟡
 
-Reuse the proven P1 path for:
+**Goal:** reuse P1's one visible-screen snapshot / Accessibility / offline Korean OCR MCP path for Chrome and Google Gemini, preserving Samsung Internet regression. No Shizuku, ADB, CDP, background extraction, URL tracking, or full-page scrolling.
 
-1. Chrome
-2. Gemini
+**Implementation/release gates (v0.1.38 / code 39 candidate):**
+- [x] Independently verify existing v0.1.37 Galaxy Chrome new-tab Accessibility + screenshot READ works (UI text only, not Chrome article Voice E2E).
+- [x] TDD coverage for explicit package allowlist, aliases, and MCP Gemini discovery.
+- [x] Add read_app(app="gemini") for Google's standalone Android package `com.google.android.apps.bard` and keep foreground-package verification (fail closed on unexpected UI ownership).
+- [x] Share exactly one bounded JPEG across Chrome, Gemini, and Samsung Internet; local OCR fallback when Accessibility lacks meaningful content.
+- [ ] Branch Security CI and OpenAI Secure MCP Android build PASS.
+- [ ] Main Security CI + signed v0.1.38 Release/signer/assets PASS.
+- [ ] v0.1.38 installed on real Galaxy; get_status 0.1.38 (39).
+- [ ] Galaxy Chrome visible article text + same-conversation ChatGPT Voice grounded response PASS.
+- [ ] Galaxy Gemini visible reply/screen text + same-conversation ChatGPT Voice grounded response PASS.
+- [ ] Galaxy Samsung Internet screenshot+OCR regression PASS.
+- [ ] Document timing/request evidence; mark P2 DONE and close Issue #69 only after device Voice acceptance.
 
-Completion means the same minimal READ approach works across all three targets without building a second agent inside ClosePaw.
+**Current checkpoint:** P2 implementation branch, CI/release and device proof pending. An existing `v0.1.37` immutable tag can reject document-only main Signed Release workflows; that is a guard against overwriting an existing release, not a failed P1 APK. v0.1.38 introduces a new version/tag. P7 retains app/network/reboot recovery and long-term Voice continuity.
+
+**Next action:** CI → reviewed PR → main CI → signed v0.1.38 → Galaxy install and Chrome/Gemini Voice E2E.
 
 ## P3 · Kakao Read — LATER ⬜
 
@@ -244,3 +256,5 @@ During Progress work, report in chat using the compact form:
 - 2026-10-11: **P1 scope simplification approved; v0.1.37 candidate (not yet released or device-verified).** Treat each Samsung Internet READ as one settled, bounded visible-screen snapshot; use the same JPEG for MCP image and local Korean OCR. Keep screen text in the MCP response so ChatGPT Voice can summarize it. No URL/tab-change tracking, scrolling, external search substitution, app/network/reboot recovery gate in P1. Recovery and old Quick Tunnel retirement moved to P7 #74. Previous v0.1.36 real-device proof: `get_status`, JPEG, on-device Korean OCR and MCP text transport pass; accurate same-page Voice response remains **unverified** (a prior Voice attempt used search across 12 external sites after missing the article body). v0.1.37 PR CI/release/installed build and the final Voice result must be verified before marking P1 DONE.
 
 - 2026-10-11 17:39 KST: **P1 DONE — first meaningful Samsung Internet → ChatGPT Voice current-screen READ E2E verified on Galaxy v0.1.37 (38).** User screenshots show Samsung Internet's opened Maeil Business Newspaper article with readable paragraphs about US/China AI competition, survival strategies for Korea, and eight pillars of Lee Kwan-ho's THRIVING framework. Corresponding ChatGPT Voice screenshot shows the request “삼성 인터넷 현재 화면을 세 문장으로 요약해줘”, the tool action **“Read Samsung Internet current page content”**, and a three-sentence grounded summary after **19 seconds**; no external multi-site web search step is displayed. Earlier v0.1.37 direct MCP probe on the same Galaxy independently returned `screenshot_attempts=1`, on-device Korean OCR (`text_source=on_device_ocr`) and matching screenshot text, although it captured a different scroll position and has no correlated request ID from the Voice turn. Under the explicitly simplified P1 single-visible-screen acceptance, this constitutes useful same-conversation Voice success. **P1 CLOSED, P2 NEXT.** Preserve limitations: one screen only, no cross-page / full-article guarantee, and network/restart/reboot resilience is P7 #74, not P1. Evidence: user-supplied two screenshots in 2026-10-11 ChatGPT conversation, PR #80, release v0.1.37, Issue #68.
+
+- 2026-10-11: **P2 General Read implementation started (v0.1.38 candidate).** Existing v0.1.37 Galaxy Chrome new-tab READ returned Accessibility text + a screenshot, but not a Chrome article Voice demonstration. Candidate adds explicit Google Gemini read_app target using package `com.google.android.apps.bard` and generalizes the single screenshot/Accessibility/OCR path across all three apps. Preserve the P1 DONE baseline. The release must pass CI and Galaxy install, and P2 remains ACTIVE until grounded Chrome and Gemini same-conversation Voice reads plus Samsung Internet regression are documented. The v0.1.37 repeated Signed Release failure on doc-only newer commits is due to immutable tag mismatch and does not indicate a broken published APK. P7 owns connection resilience.
