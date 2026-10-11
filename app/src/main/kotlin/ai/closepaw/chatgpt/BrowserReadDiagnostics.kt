@@ -64,6 +64,8 @@ internal object BrowserReadQuality {
         "새로고침", "중지", "뒤로", "앞으로", "브라우징 어시스트",
         "북마크", "탭", "도구", "Add bookmark", "Secure connection",
         "Refresh", "Stop", "Forward", "Bookmarks", "Tools",
+        "사용 중, 읽기 모드", "읽기 모드", "읽기 모드 사용 중",
+        "Reading mode", "Reader mode", "Reader mode enabled",
     )
     private val hostOrUrl = Regex(
         """^(?:https?://)?(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?::\d+)?(?:[/?#].*)?$"""
@@ -73,15 +75,18 @@ internal object BrowserReadQuality {
     fun pageContent(content: String, readQuality: String): String =
         if (readQuality == "ok") content else ""
 
+    fun isBrowserChrome(raw: String): Boolean {
+        val line = raw.replace("\u200e", "").replace("\u200f", "").trim()
+        return line.isBlank() || line in chromeLabels || line.toIntOrNull() != null ||
+            hostOrUrl.matches(line)
+    }
+
     fun classify(content: String, hasScreenshot: Boolean): String {
         // Browser address bars can include invisible direction markers before the hostname.
         val lines = content.lines()
             .map { it.replace("\u200e", "").replace("\u200f", "").trim() }
             .filter(String::isNotBlank)
-        val hasPageText = lines.any { line ->
-            line !in chromeLabels && line.toIntOrNull() == null &&
-                !hostOrUrl.matches(line)
-        }
+        val hasPageText = lines.any { line -> !isBrowserChrome(line) }
         return when {
             hasPageText -> "ok"
             hasScreenshot -> "content_missing"
