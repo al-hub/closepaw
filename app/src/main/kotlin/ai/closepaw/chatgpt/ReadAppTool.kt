@@ -107,9 +107,13 @@ internal class AndroidReadAppTool(
             ?.joinToString("\n")
             .orEmpty()
 
+        val needsReadableScreenshot = target.id == "samsung_internet" &&
+            BrowserReadQuality.classify(targetText.ifBlank { fallbackText }, false) != "ok"
         val screenshotConfig = SessionConfig(
             perceptionConfig = PerceptionConfig.ScreenshotOnly(
-                maxDimension = SCREENSHOT_MAX_DIMENSION,
+                // Screenshot OCR needs legible Korean body text; keep regular reads small.
+                maxDimension = if (needsReadableScreenshot) OCR_SCREENSHOT_MAX_DIMENSION
+                    else SCREENSHOT_MAX_DIMENSION,
                 jpegQuality = SCREENSHOT_JPEG_QUALITY,
             )
         )
@@ -346,6 +350,7 @@ internal class AndroidReadAppTool(
         private const val DEFAULT_SETTLE_DELAY_MS = 1_000L
         private const val MAX_CONTENT_CHARS = 12_000
         private const val SCREENSHOT_MAX_DIMENSION = 1024
+        private const val OCR_SCREENSHOT_MAX_DIMENSION = 1536
         private const val SCREENSHOT_JPEG_QUALITY = 70
         private const val SAMSUNG_SCREENSHOT_RETRY_DELAY_MS = 800L
     }
