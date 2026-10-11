@@ -7,10 +7,10 @@ Progress work follows one rule: **implementation and this document move together
 ## Current position
 
 ```text
-Completed: 1 / 10
+Completed: 2 / 10
 
 ✅ P0 · MCP Connection
-🟡 P1 · Browser Read MVP      ← ACTIVE
+✅ P1 · Browser Read MVP
 ⏭ P2 · General Read
 ⬜ P3 · Kakao Read
 ⬜ P4 · Termux Execute
@@ -58,7 +58,7 @@ Verified baseline:
 - [x] Same-phone ClosePaw returns actual app/version status
 - [x] No laptop, KUM, Termux, custom Voice UI, or external controller required
 
-## P1 · Browser Read MVP — ACTIVE 🟡
+## P1 · Browser Read MVP — DONE ✅
 
 **User-visible goal**
 
@@ -110,7 +110,7 @@ A user may navigate before, during, or after the request: the chosen snapshot is
   - [x] Transfer app-restart, Wi-Fi↔5G, and reboot recovery validation to P7 Reliability (#74)
   - [x] Transfer retirement of the old Quick Tunnel connector after recovery validation to P7 (#74)
 - [x] ChatGPT Text E2E browser-read validation
-- [ ] ChatGPT Voice E2E browser-read validation
+- [x] ChatGPT Voice E2E browser-read validation — 2026-10-11 17:39 KST, user-provided source/Voice screenshots, 19s
 - [x] Defer scrolling/full-page collection outside P1 unless a separate user need is established
 
 ### Current real-device checkpoint
@@ -119,7 +119,7 @@ The v0.1.18 protected-path experiment failed in both the already-open conversati
 
 For P1, this protection was more complexity than the milestone needs. v0.1.19 therefore restores the standard `/mcp` endpoint shape that already passed Android Text/Voice `get_status()` in P0. Sensitive-app work remains out of scope until authentication is added later.
 
-**Immediate next action:** on the real Galaxy, open a page with visible paragraph text and ask ChatGPT Voice to summarize that single captured screen. Confirm the same request returned a JPEG plus OCR/Accessibility text, and the spoken reply is grounded in those words (not 12-site outside-search content). Keep P1 ACTIVE until this Galaxy Voice check passes. Tunnel resilience and Quick Tunnel retirement are P7 work, not P1 gates. No Shizuku, ADB, wireless debugging, or CDP is required.
+**Final Galaxy checkpoint (2026-10-11): P1 DONE.** User provided a Samsung Internet screenshot of a Maeil Business Newspaper article with several visible Korean paragraphs about US/China AI competition, Korea's survival strategy, and Lee Kwan-ho's eight-pillar THRIVING framework; a corresponding ChatGPT Voice screenshot showed the request “삼성 인터넷 현재 화면을 세 문장으로 요약해줘”, the tool step “Read Samsung Internet current page content”, and a three-sentence answer matching those exact subjects after **19 seconds**, with no external website search step shown. v0.1.37 (38) was independently verified installed earlier and returned one screenshot (`screenshot_attempts=1`) with Korean OCR/MCP image and text. The screenshots do not expose a correlated internal Voice request ID, but the visible tool step and semantic match satisfy the agreed user-visible single-screen MVP. Do not infer full-article or off-screen coverage. Tunnel resilience and Quick Tunnel retirement remain P7 tasks. No Shizuku, ADB, wireless debugging, or CDP is required.
 
 ### Cross-cutting acceleration · ClosePaw self-management over MCP
 
@@ -153,7 +153,7 @@ ChatGPT Voice
 → ChatGPT response grounded in the captured visible text
 ```
 
-with useful accuracy and acceptable latency. Body text must be visibly present and correctly used; external web-search substitutes do not count. No separate page-change tracking or tunnel restart / network switch / reboot tests required for P1.
+**Met on Galaxy 2026-10-11, 17:39 KST:** 19s visible Voice run; 3 sentences correctly reflect the independently supplied visible article paragraphs; the Voice UI shows a Samsung Internet content-read tool and no 12-site web search. Separate connected v0.1.37 probe established one JPEG (`screenshot_attempts=1`) + Korean OCR/MCP. A per-Voice-tool request ID was not visible in the screenshot; this was accepted under the deliberately simplified **user-visible** single-snapshot P1 gate, not a forensic tool trace requirement. No full-page or off-screen content guarantees. App restart / Wi-Fi↔5G / reboot resilience remains untested and is deferred to P7.
 
 ## P2 · General Read — NEXT ⏭
 
@@ -242,3 +242,5 @@ During Progress work, report in chat using the compact form:
 - 2026-10-11: **P1 Samsung Internet blog root-cause isolation and v0.1.36 release candidate — NOT DEVICE VERIFIED.** Galaxy v0.1.35 `read_app(samsung_internet)` returned Accessibility text containing only browser chrome (including `사용 중, 읽기 모드`), `accessibility_webview_count=0` and an incorrect `reason_code=ok`. An independently retrieved 472×1024 MCP JPEG **visibly showed the real Naver blog article title and Korean paragraph body**, so display screenshot capture and MCP image-block transport worked in the text inspection, but the user's Voice output still reported an unreadable article (8s and 6s attempts). Exact Voice-tool-call correlation and Voice image-consumption ability are **not proven**. New focused branch adds chrome-label regression and bounded **on-device, bundled Korean screenshot OCR** only when Samsung Accessibility has no page text, with a legible 1536px capture in that case and a normal MCP text result for Voice clients that may not process MCP image blocks. This adds an offline model, not an external OCR server, ADB, Shizuku, CDP, full-page scrolling, or background extraction. Tests/CI/Release and actual Korean OCR accuracy **require independent verification**. Candidate version v0.1.36 (37), P1 remains ACTIVE. Next: branch Security CI + tunnel build → review/merge → main CI → signed release/signer checks → Galaxy update → user Voice article content check; then app restart, Wi-Fi↔5G and reboot recovery checks. Do **not** close Issue #68 or mark P1 DONE until the Galaxy confirms useful content and recovery.
 
 - 2026-10-11: **P1 scope simplification approved; v0.1.37 candidate (not yet released or device-verified).** Treat each Samsung Internet READ as one settled, bounded visible-screen snapshot; use the same JPEG for MCP image and local Korean OCR. Keep screen text in the MCP response so ChatGPT Voice can summarize it. No URL/tab-change tracking, scrolling, external search substitution, app/network/reboot recovery gate in P1. Recovery and old Quick Tunnel retirement moved to P7 #74. Previous v0.1.36 real-device proof: `get_status`, JPEG, on-device Korean OCR and MCP text transport pass; accurate same-page Voice response remains **unverified** (a prior Voice attempt used search across 12 external sites after missing the article body). v0.1.37 PR CI/release/installed build and the final Voice result must be verified before marking P1 DONE.
+
+- 2026-10-11 17:39 KST: **P1 DONE — first meaningful Samsung Internet → ChatGPT Voice current-screen READ E2E verified on Galaxy v0.1.37 (38).** User screenshots show Samsung Internet's opened Maeil Business Newspaper article with readable paragraphs about US/China AI competition, survival strategies for Korea, and eight pillars of Lee Kwan-ho's THRIVING framework. Corresponding ChatGPT Voice screenshot shows the request “삼성 인터넷 현재 화면을 세 문장으로 요약해줘”, the tool action **“Read Samsung Internet current page content”**, and a three-sentence grounded summary after **19 seconds**; no external multi-site web search step is displayed. Earlier v0.1.37 direct MCP probe on the same Galaxy independently returned `screenshot_attempts=1`, on-device Korean OCR (`text_source=on_device_ocr`) and matching screenshot text, although it captured a different scroll position and has no correlated request ID from the Voice turn. Under the explicitly simplified P1 single-visible-screen acceptance, this constitutes useful same-conversation Voice success. **P1 CLOSED, P2 NEXT.** Preserve limitations: one screen only, no cross-page / full-article guarantee, and network/restart/reboot resilience is P7 #74, not P1. Evidence: user-supplied two screenshots in 2026-10-11 ChatGPT conversation, PR #80, release v0.1.37, Issue #68.
