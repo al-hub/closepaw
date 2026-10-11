@@ -15,6 +15,31 @@ class McpBrowserReadTransportTest {
     private val json = Json
 
     @Test
+    fun screenshotOcrTextIsModelReadableWithoutInterpretingImageBlock() {
+        val recognized = "(대전) 천주교 대전교구 주교좌 대흥동 성당"
+        val response = call(ReadAppTool { app ->
+            ReadAppToolResult(
+                structured = buildJsonObject {
+                    put("status", "succeeded")
+                    put("summary", "Read visible page text from on-device screenshot OCR.")
+                    put("app", app)
+                    put("content", recognized)
+                    put("text_source", "on_device_ocr")
+                    put("capture_source", "screenshot_ocr")
+                },
+                imageBase64 = "AQID",
+                imageMimeType = "image/jpeg",
+            )
+        })
+        val items = response["content"]!!.jsonArray
+        assertThat(items).hasSize(2)
+        assertThat(items[0].jsonObject["text"]!!.jsonPrimitive.content).isEqualTo(recognized)
+        assertThat(items[1].jsonObject["type"]!!.jsonPrimitive.content).isEqualTo("image")
+        assertThat(response["structuredContent"]!!.jsonObject["text_source"]!!
+            .jsonPrimitive.content).isEqualTo("on_device_ocr")
+    }
+
+    @Test
     fun screenshotOnlyReadIncludesMcpImageContentForVision() {
         val result = call(ReadAppTool { app ->
             ReadAppToolResult(
