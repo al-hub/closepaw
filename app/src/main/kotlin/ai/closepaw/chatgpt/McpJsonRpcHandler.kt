@@ -90,10 +90,11 @@ internal class McpJsonRpcHandler(
         put("name", READ_APP_TOOL_NAME)
         put(
             "description",
-            "Read a single visible-screen snapshot from a supported Android browser: Accessibility text, " +
-                "local Korean screenshot OCR fallback, and one bounded JPEG image. This is not a full-page read. " +
-                "If the visible article body is missing, say so; never present outside web search as captured screen content. " +
-                "No Shizuku, ADB, or CDP is required. The tool may launch the app but never types, submits, deletes, purchases, or sends."
+            "Read a single visible-screen snapshot from Samsung Internet, Chrome, or Google Gemini: " +
+                "Accessibility text, local Korean screenshot OCR fallback, and one bounded JPEG. " +
+                "Not a full-page read. Summarize only captured visible content; if the body is missing, say so. " +
+                "Never present outside web search as captured screen content. " +
+                "No Shizuku, ADB, or CDP is required. The tool may launch the selected app but never types, submits, deletes, purchases, or sends."
         )
         put("inputSchema", buildJsonObject {
             put("type", "object")
@@ -103,8 +104,9 @@ internal class McpJsonRpcHandler(
                     put("enum", buildJsonArray {
                         add(kotlinx.serialization.json.JsonPrimitive("samsung_internet"))
                         add(kotlinx.serialization.json.JsonPrimitive("chrome"))
+                        add(kotlinx.serialization.json.JsonPrimitive("gemini"))
                     })
-                    put("description", "Target browser: samsung_internet or chrome.")
+                    put("description", "Target app: samsung_internet, chrome, or gemini.")
                 })
             })
             put("required", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive("app")) })

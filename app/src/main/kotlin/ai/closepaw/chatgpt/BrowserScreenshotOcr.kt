@@ -40,8 +40,8 @@ internal fun interface BrowserScreenshotOcr {
 }
 
 /**
- * Local, bounded OCR fallback for Samsung Internet WebViews that expose only
- * browser chrome via Accessibility. This never uploads images to a third party.
+ * Local, bounded OCR fallback shared by Samsung Internet, Chrome, and Gemini
+ * when Accessibility omits on-screen content. No remote image/OCR upload.
  */
 internal class BundledKoreanScreenshotOcr : BrowserScreenshotOcr {
     override suspend fun read(jpeg: ByteArray): String = withContext(Dispatchers.Default) {

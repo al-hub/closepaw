@@ -21,8 +21,8 @@
 
 - ✅ **P0 · MCP Connection** — ChatGPT Android Text/Voice → ClosePaw MCP baseline verified
 - ✅ **P1 · Browser Read MVP** — Galaxy ChatGPT Voice → Samsung Internet one-screen READ verified (19s, 2026-10-11)
-- ⏭ **P2 · General Read** — Chrome + Gemini (next)
-- ⬜ **P3 · Kakao Read** · **P4 · Termux Execute** · **P5 · PC Continuity** · **P6 · Toss Read**
+- 🟡 **P2 · General Read** — Chrome + Gemini shared one-screen READ; CI, release and Galaxy Voice acceptance in progress
+- ⏭ **P3 · Kakao Read** (next after P2) · **P4 · Termux Execute** · **P5 · PC Continuity** · **P6 · Toss Read**
 
 See [PROGRESS.md](PROGRESS.md) for the live milestone board and completion criteria.
 

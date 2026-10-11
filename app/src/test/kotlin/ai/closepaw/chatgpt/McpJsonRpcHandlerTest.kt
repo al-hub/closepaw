@@ -54,6 +54,10 @@ class McpJsonRpcHandlerTest {
         val description = readApp["description"]!!.jsonPrimitive.content
         assertThat(description).contains("single visible-screen snapshot")
         assertThat(description).contains("outside web search")
+        assertThat(description).contains("Gemini")
+        val values = readApp["inputSchema"]!!.jsonObject["properties"]!!.jsonObject["app"]!!
+            .jsonObject["enum"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertThat(values).containsExactly("samsung_internet", "chrome", "gemini")
         val annotations = readApp["annotations"]!!.jsonObject
         assertThat(annotations["readOnlyHint"]!!.jsonPrimitive.content).isEqualTo("true")
         assertThat(annotations["destructiveHint"]!!.jsonPrimitive.content).isEqualTo("false")
@@ -86,6 +90,18 @@ class McpJsonRpcHandlerTest {
         assertThat(structured["content"]!!.jsonPrimitive.content).isEqualTo("Visible browser text")
         assertThat(result["content"]!!.jsonArray.single().jsonObject["text"]!!.jsonPrimitive.content)
             .isEqualTo("Visible browser text")
+        assertThat(result["isError"]!!.jsonPrimitive.content).isEqualTo("false")
+    }
+
+    @Test
+    fun readAppAcceptsGeminiToolRequest() {
+        val handler = handlerWithReadApp()
+        val response = handler.handle(
+            """{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"read_app","arguments":{"app":"gemini"}}}"""
+        )
+        val result = json.parseToJsonElement(response.body!!).jsonObject["result"]!!.jsonObject
+        val structured = result["structuredContent"]!!.jsonObject
+        assertThat(structured["app"]!!.jsonPrimitive.content).isEqualTo("gemini")
         assertThat(result["isError"]!!.jsonPrimitive.content).isEqualTo("false")
     }
 

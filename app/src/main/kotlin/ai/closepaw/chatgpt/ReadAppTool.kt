@@ -30,14 +30,11 @@ internal fun interface ReadAppTool {
 }
 
 /**
- * Minimal browser-read path.
- *
- * One implementation for supported browsers:
- * 1) launch + verify foreground,
- * 2) collect Accessibility text,
- * 3) capture exactly one settled visible-screen screenshot for visual fallback.
- *
- * No Shizuku, ADB or CDP is required by this path.
+ * Minimal P1/P2 read path for Samsung Internet, Chrome and Gemini.
+ * 1) launch and verify the exact allowlisted foreground package,
+ * 2) collect visible Accessibility text, then
+ * 3) capture one bounded screenshot for shared MCP image + local Korean OCR fallback.
+ * No Shizuku, ADB, or Chrome CDP required.
  */
 internal class AndroidReadAppTool(
     private val serviceProvider: () -> AgentService? = { AgentService.instance },
@@ -49,7 +46,7 @@ internal class AndroidReadAppTool(
         val target = BrowserReadTarget.from(app)
             ?: return@runBlocking failure(
                 code = "unsupported_app",
-                summary = "read_app supports Samsung Internet and Chrome.",
+                summary = "read_app supports Samsung Internet, Chrome, and Gemini.",
             )
 
         val service = serviceProvider()
@@ -97,24 +94,12 @@ internal class AndroidReadAppTool(
             readTargetApplicationText(service, target.packageName)
         }
         val targetText = accessibility.text
-        // P1 Samsung Internet uses exactly one authoritative screen image for OCR and MCP.
-        // Keep the older Chrome perception fallback isolated from Samsung's snapshot path.
-        val snapshot = if (target.id != "samsung_internet" && targetText.isBlank())
-            platform.captureScreen() else null
-        val fallbackText = snapshot?.elements
-            ?.asSequence()
-            ?.flatMap { element -> sequenceOf(element.text, element.description) }
-            ?.map { value -> value.trim() }
-            ?.filter { value -> value.isNotBlank() && value != "[password]" }
-            ?.distinct()
-            ?.joinToString("\n")
-            .orEmpty()
 
-        val needsReadableScreenshot = target.id == "samsung_internet" &&
-            BrowserReadQuality.classify(targetText.ifBlank { fallbackText }, false) != "ok"
-        // One capture defines the request's visible-screen snapshot. Allow Samsung's
-        // WebView surface to settle first rather than taking two different screenshots.
-        if (target.id == "samsung_internet") delay(SAMSUNG_SCREEN_SETTLE_DELAY_MS)
+        // P2 shares P1's single-snapshot semantics across all allowlisted apps.
+        // Do not use platform.captureScreen(): that would capture a second, different image.
+        val needsReadableScreenshot = BrowserReadQuality.classify(targetText, false) != "ok"
+        // Allow composited UI content to settle before the single JPEG capture.
+        delay(SCREEN_SETTLE_DELAY_MS)
         val screenshotConfig = SessionConfig(
             perceptionConfig = PerceptionConfig.ScreenshotOnly(
                 // Screenshot OCR needs legible Korean body text; keep regular reads small.
@@ -134,10 +119,9 @@ internal class AndroidReadAppTool(
         )
 
         val image = screenshot?.image
-        val accessibilityContent = targetText.ifBlank { fallbackText }
+        val accessibilityContent = targetText
         val accessibilityQuality = BrowserReadQuality.classify(accessibilityContent, image != null)
-        val shouldOcr = target.id == "samsung_internet" &&
-            accessibilityQuality != "ok" && image != null
+        val shouldOcr = accessibilityQuality != "ok" && image != null
         val ocrContent = if (shouldOcr) {
             // Text first, image second: Voice MCP clients may not consume image blocks.
             // OCR is local, bounded, and only used when Accessibility misses page text.
@@ -313,7 +297,7 @@ internal class AndroidReadAppTool(
         }
     )
 
-    private data class BrowserReadTarget(
+    internal data class BrowserReadTarget(
         val id: String,
         val packageName: String,
         val displayName: String,
@@ -333,6 +317,12 @@ internal class AndroidReadAppTool(
                             packageName = CHROME_PACKAGE,
                             displayName = "Chrome",
                         )
+                    "gemini", "google_gemini" ->
+                        BrowserReadTarget(
+                            id = "gemini",
+                            packageName = GEMINI_PACKAGE,
+                            displayName = "Gemini",
+                        )
                     else -> null
                 }
         }
@@ -341,11 +331,12 @@ internal class AndroidReadAppTool(
     companion object {
         internal const val SAMSUNG_INTERNET_PACKAGE = "com.sec.android.app.sbrowser"
         internal const val CHROME_PACKAGE = "com.android.chrome"
+        internal const val GEMINI_PACKAGE = "com.google.android.apps.bard"
         private const val DEFAULT_SETTLE_DELAY_MS = 1_000L
         private const val MAX_CONTENT_CHARS = 12_000
         private const val SCREENSHOT_MAX_DIMENSION = 1024
         private const val OCR_SCREENSHOT_MAX_DIMENSION = 1536
         private const val SCREENSHOT_JPEG_QUALITY = 70
-        private const val SAMSUNG_SCREEN_SETTLE_DELAY_MS = 800L
+        private const val SCREEN_SETTLE_DELAY_MS = 800L
     }
 }
