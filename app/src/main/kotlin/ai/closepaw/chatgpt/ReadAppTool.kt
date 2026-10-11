@@ -42,6 +42,7 @@ internal fun interface ReadAppTool {
 internal class AndroidReadAppTool(
     private val serviceProvider: () -> AgentService? = { AgentService.instance },
     private val settleDelayMs: Long = DEFAULT_SETTLE_DELAY_MS,
+    private val screenshotOcr: BrowserScreenshotOcr = BundledKoreanScreenshotOcr(),
 ) : ReadAppTool {
 
     override fun read(app: String): ReadAppToolResult = runBlocking(Dispatchers.Default) {
@@ -106,10 +107,6 @@ internal class AndroidReadAppTool(
             ?.joinToString("\n")
             .orEmpty()
 
-        val rawContent = targetText.ifBlank { fallbackText }
-        val content = rawContent.take(MAX_CONTENT_CHARS)
-        val truncated = rawContent.length > MAX_CONTENT_CHARS
-
         val screenshotConfig = SessionConfig(
             perceptionConfig = PerceptionConfig.ScreenshotOnly(
                 maxDimension = SCREENSHOT_MAX_DIMENSION,
@@ -139,8 +136,21 @@ internal class AndroidReadAppTool(
         }
 
         val image = screenshot?.image
+        val accessibilityContent = targetText.ifBlank { fallbackText }
+        val accessibilityQuality = BrowserReadQuality.classify(accessibilityContent, image != null)
+        val shouldOcr = target.id == "samsung_internet" &&
+            accessibilityQuality != "ok" && image != null
+        val ocrContent = if (shouldOcr) {
+            // Text first, image second: Voice MCP clients may not consume image blocks.
+            // OCR is local, bounded, and only used when Accessibility misses page text.
+            screenshotOcr.read(image!!.bytes)
+        } else ""
+        val rawContent = ocrContent.ifBlank { accessibilityContent }
+        val content = rawContent.take(MAX_CONTENT_CHARS)
+        val truncated = rawContent.length > MAX_CONTENT_CHARS
         val readQuality = BrowserReadQuality.classify(content, image != null)
         val pageContent = BrowserReadQuality.pageContent(content, readQuality)
+        val fromOcr = ocrContent.isNotBlank() && readQuality == "ok"
         val requestId = BrowserReadDiagnostics.record(
             target.id, readQuality, content.length, image != null,
             nodeCount = accessibility.nodeCount,
@@ -154,6 +164,8 @@ internal class AndroidReadAppTool(
             put(
                 "summary",
                 when {
+                    fromOcr ->
+                        "Read visible page text from on-device screenshot OCR, with screenshot attached."
                     readQuality == "content_missing" && image != null ->
                         "Captured browser screenshot, but Accessibility returned no meaningful page text."
                     readQuality == "ok" && image != null ->
@@ -177,9 +189,16 @@ internal class AndroidReadAppTool(
             put("package_name", target.packageName)
             put("scope", "visible_screen")
             put("content", pageContent)
+            put("text_source", when {
+                fromOcr -> "on_device_ocr"
+                readQuality == "ok" -> "accessibility"
+                else -> "none"
+            })
+            put("ocr_attempted", shouldOcr)
             put(
                 "capture_source",
                 when {
+                    fromOcr -> "screenshot_ocr"
                     readQuality == "ok" && image != null -> "accessibility_plus_screenshot"
                     image != null -> "screenshot"
                     readQuality == "ok" -> "accessibility"
