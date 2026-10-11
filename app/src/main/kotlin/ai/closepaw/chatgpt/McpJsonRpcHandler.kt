@@ -90,7 +90,9 @@ internal class McpJsonRpcHandler(
         put("name", READ_APP_TOOL_NAME)
         put(
             "description",
-            "Read a supported Android browser using Accessibility text plus a bounded screenshot for visual fallback. " +
+            "Read a single visible-screen snapshot from a supported Android browser: Accessibility text, " +
+                "local Korean screenshot OCR fallback, and one bounded JPEG image. This is not a full-page read. " +
+                "If the visible article body is missing, say so; never present outside web search as captured screen content. " +
                 "No Shizuku, ADB, or CDP is required. The tool may launch the app but never types, submits, deletes, purchases, or sends."
         )
         put("inputSchema", buildJsonObject {
