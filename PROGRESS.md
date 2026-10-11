@@ -66,7 +66,10 @@ Verified baseline:
 
 ChatGPT Voice/Text → Secure MCP Tunnel → ClosePaw → Accessibility text + visible-screen screenshot → ChatGPT → same conversation.
 
-**Keep P1 deliberately small.** Read the currently visible page first. Add scrolling/full-page collection only if real-device use proves it is necessary.
+**P1 simplified scope (2026-10-11): one visible-screen snapshot per request.**
+After bringing Samsung Internet to the foreground, settle the WebView briefly, capture **one JPEG**, and use Accessibility or bounded on-device Korean OCR from **that same JPEG**. Return visible text and image to ChatGPT Voice; describe only what was actually captured. If the article body is absent, report the gap rather than substitute a web-search summary as if it came from the current page.
+
+A user may navigate before, during, or after the request: the chosen snapshot is authoritative for that READ. No URL/tab-tracking state machine, change detection, full-page crawling, or automatic scrolling in P1. Any later navigation is handled by a new READ. Recovering from app restart, Wi-Fi↔5G switching, and device reboot belongs to **P7 Reliability, Issue #74**, not the P1 completion gate.
 
 ### Implementation
 
@@ -92,7 +95,7 @@ ChatGPT Voice/Text → Secure MCP Tunnel → ClosePaw → Accessibility text + v
 - [x] Private `closepaw-bridge` plugin package refreshed to the v0.1.19 Quick Tunnel `/mcp` URL
   - closepaw-bridge plugin bumped to v0.1.2
 - [ ] Direct custom MCP registration `closepaw mcp` still needs its Server URL refreshed to the current Quick Tunnel `/mcp` endpoint
-- [ ] **Stable MCP Tunnel Spike — ACTIVE**
+- [x] **Stable MCP Tunnel integration — connected; recovery deferred to P7**
   - [x] Build OpenAI `tunnel-client-runtime` v0.0.15 for `android/arm64` in CI
     - ELF64 AArch64 PIE, interpreter `/system/bin/linker64`
     - SHA256 `d25d4f8977ec93089dfed41667acd91ab6174042e8c6943428a150dca8895288`
@@ -104,11 +107,11 @@ ChatGPT Voice/Text → Secure MCP Tunnel → ClosePaw → Accessibility text + v
   - [x] Validate OpenAI control-plane polling with zero consecutive failures and successful tunnel metadata fetch
   - [x] Register ChatGPT custom MCP `closepaw-tunnel` using Connection: Tunnel
   - [x] Validate ChatGPT → Secure MCP Tunnel → Galaxy → ClosePaw `get_status()` end-to-end on v0.1.27
-  - [ ] Validate secure-tunnel recovery across app restart, Wi-Fi↔5G change, and Galaxy reboot
-  - [ ] Retire the old Quick Tunnel / `trycloudflare.com` connector only after recovery validation passes
+  - [x] Transfer app-restart, Wi-Fi↔5G, and reboot recovery validation to P7 Reliability (#74)
+  - [x] Transfer retirement of the old Quick Tunnel connector after recovery validation to P7 (#74)
 - [x] ChatGPT Text E2E browser-read validation
 - [ ] ChatGPT Voice E2E browser-read validation
-- [ ] Decide from real use whether scroll/full-page collection is needed
+- [x] Defer scrolling/full-page collection outside P1 unless a separate user need is established
 
 ### Current real-device checkpoint
 
@@ -116,7 +119,7 @@ The v0.1.18 protected-path experiment failed in both the already-open conversati
 
 For P1, this protection was more complexity than the milestone needs. v0.1.19 therefore restores the standard `/mcp` endpoint shape that already passed Android Text/Voice `get_status()` in P0. Sensitive-app work remains out of scope until authentication is added later.
 
-**Immediate next action:** run ChatGPT **Voice** → `read_app(app="samsung_internet")` → useful spoken response on the real Galaxy. Text-mode browser READ already passed on v0.1.33. Then validate secure-tunnel resilience in order: app restart → Wi-Fi↔5G → Galaxy reboot. Keep P1 ACTIVE until those real-device results are recorded. No Shizuku, ADB, wireless debugging, or CDP is required.
+**Immediate next action:** on the real Galaxy, open a page with visible paragraph text and ask ChatGPT Voice to summarize that single captured screen. Confirm the same request returned a JPEG plus OCR/Accessibility text, and the spoken reply is grounded in those words (not 12-site outside-search content). Keep P1 ACTIVE until this Galaxy Voice check passes. Tunnel resilience and Quick Tunnel retirement are P7 work, not P1 gates. No Shizuku, ADB, wireless debugging, or CDP is required.
 
 ### Cross-cutting acceleration · ClosePaw self-management over MCP
 
@@ -144,13 +147,13 @@ P1 is `DONE` only when a real Galaxy can complete:
 
 ```text
 ChatGPT Voice
-→ “삼성 인터넷 현재 페이지 읽어줘”
+→ “삼성 인터넷 현재 화면을 세 문장으로 요약해줘”
 → ClosePaw read_app
-→ Samsung Internet content
-→ ChatGPT response
+→ one Samsung Internet screenshot and its Accessibility / local OCR text
+→ ChatGPT response grounded in the captured visible text
 ```
 
-with useful accuracy and acceptable latency.
+with useful accuracy and acceptable latency. Body text must be visibly present and correctly used; external web-search substitutes do not count. No separate page-change tracking or tunnel restart / network switch / reboot tests required for P1.
 
 ## P2 · General Read — NEXT ⏭
 
@@ -179,7 +182,15 @@ Limited financial READ only. Return the requested value or summary, not broad ra
 
 ## P7 · Reliability — LATER ⬜
 
-Fix the failures that appear in daily use: latency, recovery, UI changes, Voice continuity.
+Own long-running reliability separately from P1 single-snapshot READ:
+
+- [ ] Secure MCP tunnel reconnect after ClosePaw app restart
+- [ ] Secure MCP tunnel reconnect after Wi-Fi↔5G switching
+- [ ] Secure MCP tunnel reconnect after Galaxy reboot
+- [ ] Voice continuity and performance under daily-use app/UI changes
+- [ ] Retire old Quick Tunnel connector only after the recovery path is verified
+
+Track implementation and real-device evidence in [Issue #74](https://github.com/al-hub/closepaw/issues/74).
 
 ## P8 · App Extensibility — LATER ⬜
 
@@ -187,7 +198,7 @@ Generalize AppProfile/registry only after repeated app integrations reveal a rea
 
 ## P9 · Portability — LATER ⬜
 
-Stable endpoint, reboot recovery, onboarding, and another Android-device validation.
+Stable endpoint portability, onboarding, and another Android-device validation; routine reboot-recovery testing is tracked in P7.
 
 ## Working rule
 
@@ -229,3 +240,5 @@ During Progress work, report in chat using the compact form:
 - 2026-10-10: **v0.1.35 release candidate prepared, P1 remains ACTIVE.** Draft PR #77 now includes the smallest browser-only quality/privacy fix, MCP image contract tests, and `VERSION_NAME=0.1.35` / `VERSION_CODE=36` to avoid a collision with the immutable v0.1.34 tag. Both prior-head PR checks passed ([Security CI](https://github.com/al-hub/closepaw/actions/runs/38036034240), [Android tunnel build](https://github.com/al-hub/closepaw/actions/runs/38036034232)); verify the new version-bump head's CI before merge. After passing main Security CI, the existing Signed Release workflow must create a verified-signer v0.1.35 APK/checksum. **Release publication and installation are not milestone completion.** Galaxy installation, useful same-conversation Voice READ, and app-restart / Wi-Fi↔5G / reboot recovery remain open acceptance gates. Do not mark P1 DONE or close Issue #68 until actual device evidence is recorded.
 
 - 2026-10-11: **P1 Samsung Internet blog root-cause isolation and v0.1.36 release candidate — NOT DEVICE VERIFIED.** Galaxy v0.1.35 `read_app(samsung_internet)` returned Accessibility text containing only browser chrome (including `사용 중, 읽기 모드`), `accessibility_webview_count=0` and an incorrect `reason_code=ok`. An independently retrieved 472×1024 MCP JPEG **visibly showed the real Naver blog article title and Korean paragraph body**, so display screenshot capture and MCP image-block transport worked in the text inspection, but the user's Voice output still reported an unreadable article (8s and 6s attempts). Exact Voice-tool-call correlation and Voice image-consumption ability are **not proven**. New focused branch adds chrome-label regression and bounded **on-device, bundled Korean screenshot OCR** only when Samsung Accessibility has no page text, with a legible 1536px capture in that case and a normal MCP text result for Voice clients that may not process MCP image blocks. This adds an offline model, not an external OCR server, ADB, Shizuku, CDP, full-page scrolling, or background extraction. Tests/CI/Release and actual Korean OCR accuracy **require independent verification**. Candidate version v0.1.36 (37), P1 remains ACTIVE. Next: branch Security CI + tunnel build → review/merge → main CI → signed release/signer checks → Galaxy update → user Voice article content check; then app restart, Wi-Fi↔5G and reboot recovery checks. Do **not** close Issue #68 or mark P1 DONE until the Galaxy confirms useful content and recovery.
+
+- 2026-10-11: **P1 scope simplification approved; v0.1.37 candidate (not yet released or device-verified).** Treat each Samsung Internet READ as one settled, bounded visible-screen snapshot; use the same JPEG for MCP image and local Korean OCR. Keep screen text in the MCP response so ChatGPT Voice can summarize it. No URL/tab-change tracking, scrolling, external search substitution, app/network/reboot recovery gate in P1. Recovery and old Quick Tunnel retirement moved to P7 #74. Previous v0.1.36 real-device proof: `get_status`, JPEG, on-device Korean OCR and MCP text transport pass; accurate same-page Voice response remains **unverified** (a prior Voice attempt used search across 12 external sites after missing the article body). v0.1.37 PR CI/release/installed build and the final Voice result must be verified before marking P1 DONE.

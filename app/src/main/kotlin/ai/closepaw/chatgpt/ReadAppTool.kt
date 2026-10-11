@@ -35,7 +35,7 @@ internal fun interface ReadAppTool {
  * One implementation for supported browsers:
  * 1) launch + verify foreground,
  * 2) collect Accessibility text,
- * 3) capture one bounded screenshot for visual fallback.
+ * 3) capture exactly one settled visible-screen screenshot for visual fallback.
  *
  * No Shizuku, ADB or CDP is required by this path.
  */
@@ -97,7 +97,10 @@ internal class AndroidReadAppTool(
             readTargetApplicationText(service, target.packageName)
         }
         val targetText = accessibility.text
-        val snapshot = if (targetText.isBlank()) platform.captureScreen() else null
+        // P1 Samsung Internet uses exactly one authoritative screen image for OCR and MCP.
+        // Keep the older Chrome perception fallback isolated from Samsung's snapshot path.
+        val snapshot = if (target.id != "samsung_internet" && targetText.isBlank())
+            platform.captureScreen() else null
         val fallbackText = snapshot?.elements
             ?.asSequence()
             ?.flatMap { element -> sequenceOf(element.text, element.description) }
@@ -109,6 +112,9 @@ internal class AndroidReadAppTool(
 
         val needsReadableScreenshot = target.id == "samsung_internet" &&
             BrowserReadQuality.classify(targetText.ifBlank { fallbackText }, false) != "ok"
+        // One capture defines the request's visible-screen snapshot. Allow Samsung's
+        // WebView surface to settle first rather than taking two different screenshots.
+        if (target.id == "samsung_internet") delay(SAMSUNG_SCREEN_SETTLE_DELAY_MS)
         val screenshotConfig = SessionConfig(
             perceptionConfig = PerceptionConfig.ScreenshotOnly(
                 // Screenshot OCR needs legible Korean body text; keep regular reads small.
@@ -122,22 +128,10 @@ internal class AndroidReadAppTool(
             config = screenshotConfig,
             traceRecorder = NoopTraceRecorder,
         )
-        var screenshot = screenshotCapturer.captureIfEnabled(
+        val screenshot = screenshotCapturer.captureIfEnabled(
             windowId = null,
             enabled = true,
         )
-        var screenshotAttempts = 1
-
-        // Samsung Internet can briefly expose browser chrome before the WebView surface settles.
-        // Keep the retry bounded and cheap: one additional capture only.
-        if (target.id == "samsung_internet") {
-            delay(SAMSUNG_SCREENSHOT_RETRY_DELAY_MS)
-            screenshot = screenshotCapturer.captureIfEnabled(
-                windowId = null,
-                enabled = true,
-            ) ?: screenshot
-            screenshotAttempts = 2
-        }
 
         val image = screenshot?.image
         val accessibilityContent = targetText.ifBlank { fallbackText }
@@ -161,7 +155,7 @@ internal class AndroidReadAppTool(
             textNodeCount = accessibility.textNodeCount,
             webViewCount = accessibility.webViewCount,
             rootAvailable = accessibility.rootAvailable,
-            screenshotAttempts = screenshotAttempts,
+            screenshotAttempts = 1,
         )
         val structured = buildJsonObject {
             put("status", if (readQuality == "empty") "empty" else "succeeded")
@@ -211,7 +205,7 @@ internal class AndroidReadAppTool(
             )
             put("screenshot_attached", image != null)
             put("app_was_already_foreground", alreadyForeground)
-            put("screenshot_attempts", screenshotAttempts)
+            put("screenshot_attempts", 1)
             image?.let {
                 put("screenshot_width", it.width)
                 put("screenshot_height", it.height)
@@ -352,6 +346,6 @@ internal class AndroidReadAppTool(
         private const val SCREENSHOT_MAX_DIMENSION = 1024
         private const val OCR_SCREENSHOT_MAX_DIMENSION = 1536
         private const val SCREENSHOT_JPEG_QUALITY = 70
-        private const val SAMSUNG_SCREENSHOT_RETRY_DELAY_MS = 800L
+        private const val SAMSUNG_SCREEN_SETTLE_DELAY_MS = 800L
     }
 }
