@@ -90,9 +90,9 @@ internal class McpJsonRpcHandler(
         put("name", READ_APP_TOOL_NAME)
         put(
             "description",
-            "Read a single visible-screen snapshot from Samsung Internet, Chrome, or Google Gemini: " +
+            "Read a single visible-screen snapshot from an app supported by ClosePaw: " +
                 "Accessibility text, local Korean screenshot OCR fallback, and one bounded JPEG. " +
-                "Not a full-page read. Summarize only captured visible content; if the body is missing, say so. " +
+                "Use get_status to discover supported app identifiers. ClosePaw decides support and execution at runtime. Not a full-page read. Summarize only captured visible content; if the body is missing, say so. " +
                 "Never present outside web search as captured screen content. " +
                 "No Shizuku, ADB, or CDP is required. The tool may launch the selected app but never types, submits, deletes, purchases, or sends."
         )
@@ -101,12 +101,7 @@ internal class McpJsonRpcHandler(
             put("properties", buildJsonObject {
                 put("app", buildJsonObject {
                     put("type", "string")
-                    put("enum", buildJsonArray {
-                        add(kotlinx.serialization.json.JsonPrimitive("samsung_internet"))
-                        add(kotlinx.serialization.json.JsonPrimitive("chrome"))
-                        add(kotlinx.serialization.json.JsonPrimitive("gemini"))
-                    })
-                    put("description", "Target app: samsung_internet, chrome, or gemini.")
+                    put("description", "Target app identifier. Discover supported apps with get_status; ClosePaw validates support at runtime.")
                 })
             })
             put("required", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive("app")) })

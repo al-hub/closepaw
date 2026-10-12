@@ -40,7 +40,7 @@ class McpJsonRpcHandlerTest {
     }
 
     @Test
-    fun listToolsWithReadExecutorExposesSamsungInternetReadApp() {
+    fun listToolsWithReadExecutorExposesStableAppIndependentContract() {
         val handler = handlerWithReadApp()
         val response = handler.handle(
             """{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"""
@@ -54,10 +54,16 @@ class McpJsonRpcHandlerTest {
         val description = readApp["description"]!!.jsonPrimitive.content
         assertThat(description).contains("single visible-screen snapshot")
         assertThat(description).contains("outside web search")
-        assertThat(description).contains("Gemini")
-        val values = readApp["inputSchema"]!!.jsonObject["properties"]!!.jsonObject["app"]!!
-            .jsonObject["enum"]!!.jsonArray.map { it.jsonPrimitive.content }
-        assertThat(values).containsExactly("samsung_internet", "chrome", "gemini")
+        assertThat(description).contains("get_status")
+        assertThat(description).doesNotContain("Samsung")
+        assertThat(description).doesNotContain("Chrome")
+        assertThat(description).doesNotContain("Gemini")
+        val schema = readApp["inputSchema"]!!.jsonObject
+        val appSchema = schema["properties"]!!.jsonObject["app"]!!.jsonObject
+        assertThat(appSchema["type"]!!.jsonPrimitive.content).isEqualTo("string")
+        assertThat(appSchema.keys).containsExactly("type", "description")
+        assertThat(schema["required"]!!.jsonArray.map { it.jsonPrimitive.content }).containsExactly("app")
+        assertThat(schema["additionalProperties"]!!.jsonPrimitive.content).isEqualTo("false")
         val annotations = readApp["annotations"]!!.jsonObject
         assertThat(annotations["readOnlyHint"]!!.jsonPrimitive.content).isEqualTo("true")
         assertThat(annotations["destructiveHint"]!!.jsonPrimitive.content).isEqualTo("false")
@@ -103,6 +109,36 @@ class McpJsonRpcHandlerTest {
         val structured = result["structuredContent"]!!.jsonObject
         assertThat(structured["app"]!!.jsonPrimitive.content).isEqualTo("gemini")
         assertThat(result["isError"]!!.jsonPrimitive.content).isEqualTo("false")
+    }
+
+    @Test
+    fun readAppDelegatesFutureAppIdentifiersWithoutChangingMcpContract() {
+        val response = handlerWithReadApp().handle(
+            """{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"read_app","arguments":{"app":"future_app"}}}"""
+        )
+        val result = json.parseToJsonElement(response.body!!).jsonObject["result"]!!.jsonObject
+        assertThat(result["structuredContent"]!!.jsonObject["app"]!!.jsonPrimitive.content)
+            .isEqualTo("future_app")
+    }
+
+    @Test
+    fun readAppPreservesUnsupportedResultFromRuntime() {
+        val handler = McpJsonRpcHandler(
+            ClosePawStatusTool("0.1.17", 18),
+            ReadAppTool { app -> ReadAppToolResult(buildJsonObject {
+                put("status", "failed")
+                put("error_code", "unsupported_app")
+                put("app", app)
+                put("summary", "App is not supported.")
+            }) },
+        )
+        val response = handler.handle(
+            """{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"read_app","arguments":{"app":"unsupported_app"}}}"""
+        )
+        val result = json.parseToJsonElement(response.body!!).jsonObject["result"]!!.jsonObject
+        assertThat(result["isError"]!!.jsonPrimitive.content).isEqualTo("true")
+        assertThat(result["structuredContent"]!!.jsonObject["error_code"]!!.jsonPrimitive.content)
+            .isEqualTo("unsupported_app")
     }
 
     @Test
