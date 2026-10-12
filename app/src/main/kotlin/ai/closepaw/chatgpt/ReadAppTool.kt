@@ -46,7 +46,7 @@ internal class AndroidReadAppTool(
         val target = BrowserReadTarget.from(app)
             ?: return@runBlocking failure(
                 code = "unsupported_app",
-                summary = "read_app supports Samsung Internet, Chrome, and Gemini.",
+                summary = "Unsupported app. Use get_status supported_read_apps to discover configured targets.",
             )
 
         val service = serviceProvider()
@@ -331,41 +331,7 @@ internal class AndroidReadAppTool(
         }
     )
 
-    internal data class BrowserReadTarget(
-        val id: String,
-        val packageName: String,
-        val displayName: String,
-    ) {
-        companion object {
-            fun from(raw: String): BrowserReadTarget? =
-                when (raw.trim().lowercase().replace(' ', '_').replace('-', '_')) {
-                    "samsung_internet", "samsung_browser", "samsunginternet" ->
-                        BrowserReadTarget(
-                            id = "samsung_internet",
-                            packageName = SAMSUNG_INTERNET_PACKAGE,
-                            displayName = "Samsung Internet",
-                        )
-                    "chrome", "google_chrome" ->
-                        BrowserReadTarget(
-                            id = "chrome",
-                            packageName = CHROME_PACKAGE,
-                            displayName = "Chrome",
-                        )
-                    "gemini", "google_gemini" ->
-                        BrowserReadTarget(
-                            id = "gemini",
-                            packageName = GEMINI_PACKAGE,
-                            displayName = "Gemini",
-                        )
-                    else -> null
-                }
-        }
-    }
-
     companion object {
-        internal const val SAMSUNG_INTERNET_PACKAGE = "com.sec.android.app.sbrowser"
-        internal const val CHROME_PACKAGE = "com.android.chrome"
-        internal const val GEMINI_PACKAGE = "com.google.android.apps.bard"
         private const val DEFAULT_SETTLE_DELAY_MS = 1_000L
         private const val MAX_CONTENT_CHARS = 12_000
         private const val SCREENSHOT_MAX_DIMENSION = 1024

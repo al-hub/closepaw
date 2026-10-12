@@ -12,22 +12,22 @@ class GeneralReadTargetTest {
             "gemini" to "com.google.android.apps.bard",
         )
         examples.forEach { (app, expectedPackage) ->
-            val target = AndroidReadAppTool.BrowserReadTarget.from(app)
+            val target = BrowserReadTarget.from(app)
             assertThat(target).isNotNull()
             assertThat(target!!.packageName).isEqualTo(expectedPackage)
         }
     }
 
     @Test fun onlySafeAliasesAreAccepted() {
-        assertThat(AndroidReadAppTool.BrowserReadTarget.from("Google Gemini")?.id)
+        assertThat(BrowserReadTarget.from("Google Gemini")?.id)
             .isEqualTo("gemini")
-        assertThat(AndroidReadAppTool.BrowserReadTarget.from("google_gemini")?.id)
+        assertThat(BrowserReadTarget.from("google_gemini")?.id)
             .isEqualTo("gemini")
-        assertThat(AndroidReadAppTool.BrowserReadTarget.from("google_chrome")?.id)
+        assertThat(BrowserReadTarget.from("google_chrome")?.id)
             .isEqualTo("chrome")
-        assertThat(AndroidReadAppTool.BrowserReadTarget.from("toss")).isNull()
-        assertThat(AndroidReadAppTool.BrowserReadTarget.from("com.google.android.googlequicksearchbox"))
+        assertThat(BrowserReadTarget.from("toss")).isNull()
+        assertThat(BrowserReadTarget.from("com.google.android.googlequicksearchbox"))
             .isNull()
-        assertThat(AndroidReadAppTool.BrowserReadTarget.from("")).isNull()
+        assertThat(BrowserReadTarget.from("")).isNull()
     }
 }
