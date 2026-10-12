@@ -182,6 +182,20 @@ ChatGPT Voice
 - Separate connected `read_app(chrome)` probes succeeded with `accessibility_webview_count=1`, `screenshot_attempts=1` and attached JPEGs. Request IDs: `f70e16df-3538-4ffe-b1b4-38e29ccdad67` and `250710b1-0b8a-430d-8ec1-a6813fee3f40`. The screenshot does not expose a correlated internal Voice request ID, so no forensic trace linkage is asserted.
 - **Chrome Voice user-visible gate CLOSED; P2 remains ACTIVE.** Gemini still needs successful direct READ and matching Voice output. Issue #69 remains open.
 
+### Gemini Android native-app reader · v0.1.39 follow-up (pending CI and device acceptance)
+
+The target is the **installed Google Play Android Gemini app** (`com.google.android.apps.bard`), not a browser tab or Gemini API. The user's 2026-10-12 Galaxy screenshot shows a native model picker, not a generated answer.
+
+- [x] Test-first native Gemini screen-state policy: model selection popup, empty composer, response generating, visible conversation with unknown speaker roles, and toolbar-only fallback.
+- [x] Keep shared Accessibility + single JPEG + local Korean OCR; route only Gemini through an explicit native-app assessment instead of `BrowserReadQuality`.
+- [x] Return `screen_kind` and `reply_status` for Gemini, with a model-facing notice that a selector/composer is not an AI response and that unlabelled conversation text cannot prove speaker roles.
+- [x] Stage unique signed release version 0.1.39 (40).
+- [ ] Branch CI, review/merge, main Security CI, signed v0.1.39 APK/sha256/signature checks.
+- [ ] Real Galaxy install, `get_status` 0.1.39 (40), and native Gemini direct READ/Voice grounded in a visible reply.
+- [ ] Confirm the ChatGPT custom MCP connection exposes `read_app(app="gemini")`; the active `closepaw_galaxy` tool manifest may still have a stale `app` enum. Do not claim on-device failure from a stale client schema.
+
+Do not mark P2 DONE until a real Gemini conversation response and Voice answer are matched. This is not Gmail, web search, Google Search, or Gemini Live. Avoid remote OCR, background extraction, and guessed reply attribution.
+
 ## P3 · Kakao Read — LATER ⬜
 
 Read a bounded KakaoTalk conversation range and let ChatGPT summarize it. Add scrolling/dedup only as real use requires it.

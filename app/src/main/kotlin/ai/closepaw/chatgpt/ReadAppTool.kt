@@ -97,7 +97,12 @@ internal class AndroidReadAppTool(
 
         // P2 shares P1's single-snapshot semantics across all allowlisted apps.
         // Do not use platform.captureScreen(): that would capture a second, different image.
-        val needsReadableScreenshot = BrowserReadQuality.classify(targetText, false) != "ok"
+        val isGemini = target.id == "gemini"
+        val needsReadableScreenshot = if (isGemini) {
+            GeminiScreenReadPolicy.assess(targetText, hasScreenshot = false).shouldOcr
+        } else {
+            BrowserReadQuality.classify(targetText, false) != "ok"
+        }
         // Allow composited UI content to settle before the single JPEG capture.
         delay(SCREEN_SETTLE_DELAY_MS)
         val screenshotConfig = SessionConfig(
@@ -120,7 +125,11 @@ internal class AndroidReadAppTool(
 
         val image = screenshot?.image
         val accessibilityContent = targetText
-        val accessibilityQuality = BrowserReadQuality.classify(accessibilityContent, image != null)
+        val accessibilityQuality = if (isGemini) {
+            GeminiScreenReadPolicy.assess(accessibilityContent, hasScreenshot = image != null).readQuality
+        } else {
+            BrowserReadQuality.classify(accessibilityContent, image != null)
+        }
         val shouldOcr = accessibilityQuality != "ok" && image != null
         val ocrContent = if (shouldOcr) {
             // Text first, image second: Voice MCP clients may not consume image blocks.
@@ -130,8 +139,19 @@ internal class AndroidReadAppTool(
         val rawContent = ocrContent.ifBlank { accessibilityContent }
         val content = rawContent.take(MAX_CONTENT_CHARS)
         val truncated = rawContent.length > MAX_CONTENT_CHARS
-        val readQuality = BrowserReadQuality.classify(content, image != null)
-        val pageContent = BrowserReadQuality.pageContent(content, readQuality)
+        val geminiAssessment = if (isGemini) {
+            GeminiScreenReadPolicy.assess(content, hasScreenshot = image != null)
+        } else null
+        val readQuality = geminiAssessment?.readQuality
+            ?: BrowserReadQuality.classify(content, image != null)
+        val pageContent = if (geminiAssessment != null) {
+            GeminiScreenReadPolicy.forModel(
+                geminiAssessment,
+                if (readQuality == "ok") content else "",
+            )
+        } else {
+            BrowserReadQuality.pageContent(content, readQuality)
+        }
         val fromOcr = ocrContent.isNotBlank() && readQuality == "ok"
         val requestId = BrowserReadDiagnostics.record(
             target.id, readQuality, content.length, image != null,
@@ -146,6 +166,16 @@ internal class AndroidReadAppTool(
             put(
                 "summary",
                 when {
+                    geminiAssessment?.screenKind == "model_selector" ->
+                        "Gemini Android model selection menu visible; this is not an AI answer."
+                    geminiAssessment?.screenKind == "empty_composer" ->
+                        "Gemini Android composer visible; no conversation reply on screen."
+                    geminiAssessment?.screenKind == "generating" ->
+                        "Gemini Android response appears to be generating; do not claim completion."
+                    geminiAssessment?.screenKind == "conversation" ->
+                        "Read native Gemini Android screen; speaker/answer attribution unverified."
+                    isGemini ->
+                        "No confirmed Gemini answer in the visible native app screen."
                     fromOcr ->
                         "Read visible page text from on-device screenshot OCR, with screenshot attached."
                     readQuality == "content_missing" && image != null ->
@@ -168,6 +198,10 @@ internal class AndroidReadAppTool(
             put("accessibility_text_node_count", accessibility.textNodeCount)
             put("accessibility_webview_count", accessibility.webViewCount)
             put("app", target.id)
+            geminiAssessment?.let {
+                put("screen_kind", it.screenKind)
+                put("reply_status", it.replyStatus)
+            }
             put("package_name", target.packageName)
             put("scope", "visible_screen")
             put("content", pageContent)
