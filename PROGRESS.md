@@ -159,22 +159,28 @@ ChatGPT Voice
 
 **Goal:** reuse P1's one visible-screen snapshot / Accessibility / offline Korean OCR MCP path for Chrome and Google Gemini, preserving Samsung Internet regression. No Shizuku, ADB, CDP, background extraction, URL tracking, or full-page scrolling.
 
-**Implementation/release gates (v0.1.38 / code 39 candidate):**
+**Implementation/release gates (v0.1.38 / code 39):**
 - [x] Independently verify existing v0.1.37 Galaxy Chrome new-tab Accessibility + screenshot READ works (UI text only, not Chrome article Voice E2E).
 - [x] TDD coverage for explicit package allowlist, aliases, and MCP Gemini discovery.
 - [x] Add read_app(app="gemini") for Google's standalone Android package `com.google.android.apps.bard` and keep foreground-package verification (fail closed on unexpected UI ownership).
 - [x] Share exactly one bounded JPEG across Chrome, Gemini, and Samsung Internet; local OCR fallback when Accessibility lacks meaningful content.
-- [ ] Branch Security CI and OpenAI Secure MCP Android build PASS.
-- [ ] Main Security CI + signed v0.1.38 Release/signer/assets PASS.
-- [ ] v0.1.38 installed on real Galaxy; get_status 0.1.38 (39).
-- [ ] Galaxy Chrome visible article text + same-conversation ChatGPT Voice grounded response PASS.
+- [x] Branch Security CI and OpenAI Secure MCP Android build PASS (PR #82).
+- [x] Main Security CI + signed v0.1.38 Release/signer/assets PASS ([release](https://github.com/al-hub/closepaw/releases/tag/v0.1.38)).
+- [x] v0.1.38 installed on real Galaxy; connected `get_status` confirmed 0.1.38 (39) (2026-10-12).
+- [x] Galaxy Chrome visible article text + same-conversation ChatGPT Voice grounded response PASS (2026-10-12, 16s screenshot of Chrome tool step and accurate 3-sentence summary).
 - [ ] Galaxy Gemini visible reply/screen text + same-conversation ChatGPT Voice grounded response PASS.
-- [ ] Galaxy Samsung Internet screenshot+OCR regression PASS.
+- [x] Galaxy Samsung Internet screenshot+OCR regression PASS (2026-10-12, direct `read_app`, one screenshot, local Korean OCR).
 - [ ] Document timing/request evidence; mark P2 DONE and close Issue #69 only after device Voice acceptance.
 
-**Current checkpoint:** P2 implementation branch, CI/release and device proof pending. An existing `v0.1.37` immutable tag can reject document-only main Signed Release workflows; that is a guard against overwriting an existing release, not a failed P1 APK. v0.1.38 introduces a new version/tag. P7 retains app/network/reboot recovery and long-term Voice continuity.
+**Current checkpoint (2026-10-12):** Signed v0.1.38 release published and installed (Galaxy version code 39), Samsung Internet direct OCR regression PASS, Chrome article direct MCP READ PASS (two one-screenshot captures), and ChatGPT Voice Chrome three-sentence summary user-visible PASS (16s). The direct Chrome capture contained a Dong-A Ilbo article on Unification Minister Jeong Dong-yeong; the user-provided Voice screenshot displayed the Chrome READ tool step and three accurate sentences matching the same article. No internal request ID correlation is claimed. An unrelated headline appeared in Chrome Accessibility UI text but not in the Voice summary. **Gemini app READ + Voice summary remain pending**. The connected `closepaw_galaxy.read_app` tool schema still exposes only Chrome and Samsung Internet, despite v0.1.38 app code supporting Gemini. P2 remains ACTIVE; P7 retains tunnel recovery.
 
-**Next action:** CI → reviewed PR → main CI → signed v0.1.38 → Galaxy install and Chrome/Gemini Voice E2E.
+**Next action:** Confirm/refresh ChatGPT MCP `read_app(gemini)` tool visibility → Galaxy Gemini direct one-screen READ → ChatGPT Voice three-sentence summary matching visible content. Close P2 only after this succeeds.
+
+### Chrome Voice evidence · 2026-10-12 18:13 KST
+
+- User-provided ChatGPT Android screenshot shows “ClosePaw로 크롬 현재 화면을 읽고 세 문장으로 요약해줘”, the “Chrome 브라우저 내용을 읽음” tool step, **16초 동안 처리함**, and three grounded sentences on Jeong Dong-yeong, US-Korea security/trade disagreements, the alliance and North Korea uranium information sharing. These match the previously captured Chrome article text.
+- Separate connected `read_app(chrome)` probes succeeded with `accessibility_webview_count=1`, `screenshot_attempts=1` and attached JPEGs. Request IDs: `f70e16df-3538-4ffe-b1b4-38e29ccdad67` and `250710b1-0b8a-430d-8ec1-a6813fee3f40`. The screenshot does not expose a correlated internal Voice request ID, so no forensic trace linkage is asserted.
+- **Chrome Voice user-visible gate CLOSED; P2 remains ACTIVE.** Gemini still needs successful direct READ and matching Voice output. Issue #69 remains open.
 
 ## P3 · Kakao Read — LATER ⬜
 
