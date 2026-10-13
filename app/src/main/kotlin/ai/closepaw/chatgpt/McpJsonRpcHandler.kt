@@ -137,6 +137,7 @@ internal class McpJsonRpcHandler(
             ?: return jsonError(id, -32602, "Missing tool name")
 
         if (operationTools != null && name in McpOperationContract.names) {
+            if (params["arguments"] != null && params["arguments"] !is JsonObject) return jsonError(id, -32602, "Arguments must be object")
             val arguments = params["arguments"] as? JsonObject ?: JsonObject(emptyMap())
             val normalized = try { McpOperationContract.arguments(name, arguments) }
                 catch (_: Exception) { return jsonError(id, -32602, "Invalid operation tool arguments") }

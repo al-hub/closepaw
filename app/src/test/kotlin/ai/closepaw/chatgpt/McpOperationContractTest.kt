@@ -1,5 +1,8 @@
 package ai.closepaw.chatgpt
 
+import ai.closepaw.chatgpt.operations.*
+import kotlinx.coroutines.*
+import java.io.File
 import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.json.*
 import org.junit.Test
@@ -31,6 +34,37 @@ class McpOperationContractTest {
         received = null
         assertThat(call(JsonObject(args + ("approval" to JsonPrimitive(true))))["error"]).isNotNull()
         assertThat(received).isNull()
+    }
+
+    @Test fun futureOperationIsDiscoverableAndCallableWithoutChangingToolSchemas() {
+        val registry = OperationRegistry()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val ledger = File.createTempFile("mcp-task", ".json").apply { delete() }
+        try {
+            val dispatcher = OperationDispatcher(registry, OperationTaskStore(ledger), scope)
+            val handler = handler { name, args -> when(name) {
+                "discover_operations" -> dispatcher.discover(args)
+                "query" -> dispatcher.query(args)
+                else -> error("unexpected tool")
+            } }
+            fun rpc(method: String, params: JsonObject=buildJsonObject {}): JsonObject =
+                Json.parseToJsonElement(handler.handle(buildJsonObject {
+                    put("jsonrpc", "2.0"); put("id", 1); put("method", method); put("params", params)
+                }.toString()).body!!).jsonObject.getValue("result").jsonObject
+            val original = rpc("tools/list")
+            val descriptor = OperationDescriptor("future.numeric.read", "Future structured query", inputSchema = Json.parseToJsonElement(
+                """{"type":"object","properties":{"value":{"type":"integer"}},"required":["value"],"additionalProperties":false}""").jsonObject)
+            registry.register(descriptor, object: OperationHandler {
+                override suspend fun invoke(invocation: OperationInvocation) = OperationResult(data=invocation.input)
+            })
+            assertThat(rpc("tools/list")).isEqualTo(original)
+            val detail = rpc("tools/call", buildJsonObject { put("name", "discover_operations"); put("arguments", buildJsonObject { put("operation_id", descriptor.id) }) })
+            assertThat(detail["structuredContent"]!!.jsonObject["operations"]!!.jsonArray[0].jsonObject["input_schema"]).isEqualTo(descriptor.inputSchema)
+            val called = rpc("tools/call", buildJsonObject { put("name", "query"); put("arguments", buildJsonObject {
+                put("operation_id", descriptor.id); put("operation_version", descriptor.version); put("schema_hash", descriptor.schemaHash); put("input_json", "{\"value\":42}")
+            }) })
+            assertThat(called["structuredContent"]!!.jsonObject["data"]!!.jsonObject["value"]!!.jsonPrimitive.int).isEqualTo(42)
+        } finally { scope.cancel(); ledger.delete() }
     }
 
     @Test fun malformedArgumentsAndUnsupportedProtocolDoNotCrashOrReflectUnknownVersion() {

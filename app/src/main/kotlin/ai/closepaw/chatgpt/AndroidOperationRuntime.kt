@@ -75,7 +75,7 @@ internal class AndroidOperationRuntime(
                 val snapshot = runBlocking { shell.snapshot(taskId) }
                 if(snapshot != null) {
                     val result = shell.result(snapshot)
-                    store.update(taskId, mapOf(
+                    store.updateActive(taskId, mapOf(
                         "state" to JsonPrimitive(if(snapshot.outcomeUnknown) "outcome_unknown" else snapshot.state),
                         "summary" to JsonPrimitive(result.summary),
                         "result" to buildJsonObject {

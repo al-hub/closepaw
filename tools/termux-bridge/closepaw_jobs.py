@@ -44,8 +44,19 @@ class JobManager:
                 if (not required <= job.keys() or job['job_id'] != path.stem or
                         not re.fullmatch(r'[a-f0-9]{32}', job['job_id']) or
                         job['state'] not in TERMINAL | {'queued', 'running'} or
-                        not isinstance(job['request_id'], str) or not isinstance(job['fingerprint'], str)):
+                        not isinstance(job['request_id'], str) or not isinstance(job['fingerprint'], str) or
+                        not re.fullmatch(r'[a-f0-9]{64}', job['fingerprint']) or
+                        any(not isinstance(job[stream], str) for stream in ('stdout', 'stderr')) or
+                        any(type(job[key]) is not bool for key in
+                            ('stdout_truncated', 'stderr_truncated', 'outcome_unknown')) or
+                        type(job['duration_ms']) is not int or job['duration_ms'] < 0 or
+                        (job['exit_code'] is not None and type(job['exit_code']) is not int)):
                     raise ValueError('invalid record')
+                for stream in ('stdout', 'stderr'):
+                    if stream + '_b64' in job:
+                        if not isinstance(job[stream + '_b64'], str):
+                            raise ValueError('invalid output')
+                        base64.b64decode(job[stream + '_b64'], validate=True)
                 if job['state'] not in TERMINAL:
                     job.update(state='interrupted', outcome_unknown=True, exit_code=None)
                     self._persist(job)
@@ -128,7 +139,11 @@ class JobManager:
                 try:
                     page.decode('utf-8')
                 except UnicodeDecodeError as error:
-                    if error.reason == 'unexpected end of data' and next_offset < len(raw):
+                    if (error.reason == 'unexpected end of data' and next_offset == len(raw) and
+                            job['state'] in ('queued', 'running') and not job[stream + '_truncated']):
+                        next_offset = offset + error.start
+                        page = raw[offset:next_offset]
+                    elif error.reason == 'unexpected end of data' and next_offset < len(raw):
                         # Do not divide one UTF-8 character across pages. A tiny
                         # limit may return one complete character (up to 4 bytes).
                         if error.start > 0:

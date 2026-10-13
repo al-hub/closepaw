@@ -171,3 +171,19 @@ def test_korean_pages_preserve_characters_with_byte_offsets(bridge_server):
             assert result['stdout_next_offset'] > offset
             offset = result['stdout_next_offset']
         assert ''.join(pages) == '가나다라마바사'
+
+
+def test_running_job_holds_incomplete_character_until_complete(bridge_server):
+    response = submit(bridge_server, r"printf '\352'; sleep .5; printf '\260\200'")
+    job_id = response.body['job_id']
+    time.sleep(.15)
+    for _ in range(30):
+        result = bridge_server.get_json('/v1/jobs/' + job_id).body
+        if result['state'] == 'running':
+            assert result['stdout'] == ''
+            assert result['stdout_next_offset'] == 0
+            break
+        time.sleep(.01)
+    result = finished(bridge_server, job_id)
+    assert result['stdout'] == '가'
+    assert result['stdout_next_offset'] == 3
