@@ -3,6 +3,8 @@
 Status: Proposed architecture baseline  
 Date: 2026-10-06
 
+Implementation update (2026-10-13): Android MCP v0.1.41 adds fixed `discover_operations`, `query`, `execute`, `get_task`, and `cancel_task` tools, reusing existing screen reads and pairing authenticated persistent Termux jobs. This original broader PC/Realtime architecture remains a proposal. See [operation acceptance](../../dev/extensible-mcp-operations-acceptance.md) for current implementation, initial connection refresh and post-install device gates.
+
 ## Goal
 
 Build a closed loop:

@@ -37,7 +37,10 @@ internal class OperationDispatcher(
         validate(operation, arguments)?.let { return it }
         return try {
             val result = runBlocking { withTimeout(60_000) { operation.handler.invoke(OperationInvocation(UUID.randomUUID().toString(), arguments.getValue("input").jsonObject)) } }
-            resultJson(result)
+            val bounded = resultJson(result)
+            if (OperationSchemaValidator.validate(operation.descriptor.outputSchema, bounded) != null)
+                error("invalid_output", "Operation returned output that does not match its registered schema.")
+            else bounded
         } catch (_: Exception) { error("operation_failed", "Read operation failed; inspect local diagnostics.") }
     }
     @Synchronized fun execute(arguments: JsonObject): JsonObject {
@@ -75,7 +78,16 @@ internal class OperationDispatcher(
                     return@launch
                 }
                 val result = operation.handler.invoke(OperationInvocation(taskId, arguments.getValue("input").jsonObject))
-                store.updateActive(taskId, mapOf("state" to JsonPrimitive(terminalState(result)), "result" to resultJson(result), "summary" to JsonPrimitive(result.summary.take(2000))))
+                val bounded = resultJson(result)
+                if (OperationSchemaValidator.validate(operation.descriptor.outputSchema, bounded) != null) {
+                    val invalid = error("invalid_output", "Operation may have executed, but its returned output does not match the registered schema. Do not automatically retry.")
+                    store.updateActive(taskId, mapOf(
+                        "state" to JsonPrimitive("outcome_unknown"), "output_validation_failed" to JsonPrimitive(true),
+                        "result" to invalid, "summary" to invalid.getValue("summary"),
+                    ))
+                } else {
+                    store.updateActive(taskId, mapOf("state" to JsonPrimitive(terminalState(result)), "result" to bounded, "summary" to bounded.getValue("summary")))
+                }
             } catch (_: CancellationException) {
                 store.updateActive(taskId, mapOf("state" to JsonPrimitive("outcome_unknown"), "summary" to JsonPrimitive("Execution observer stopped; command termination is not confirmed.")))
             } catch (_: Exception) {
@@ -125,12 +137,12 @@ internal class OperationDispatcher(
         else -> "failed"
     }
     private fun resultJson(result: OperationResult): JsonObject = buildJsonObject {
-        put("status", if(result.success) "succeeded" else "failed"); put("summary", result.summary.take(2000))
+        put("status", if(result.success) "succeeded" else "failed"); put("summary", codePointSlice(result.summary, 0, 2000))
         // Keep non-output structured data bounded as well. Screen imagery is returned through existing read_app.
         if(result.data.toString().length <= MAX_DATA) put("data", result.data)
         else { put("data", JsonObject(emptyMap())); put("data_truncated", true) }
-        put("stdout", result.stdout.take(MAX_OUTPUT)); put("stderr", result.stderr.take(MAX_OUTPUT))
-        put("output_truncated", result.stdout.length > MAX_OUTPUT || result.stderr.length > MAX_OUTPUT || result.data["output_truncated"]?.jsonPrimitive?.booleanOrNull == true)
+        put("stdout", codePointSlice(result.stdout, 0, MAX_OUTPUT)); put("stderr", codePointSlice(result.stderr, 0, MAX_OUTPUT))
+        put("output_truncated", codePointLength(result.stdout) > MAX_OUTPUT || codePointLength(result.stderr) > MAX_OUTPUT || result.data["output_truncated"]?.jsonPrimitive?.booleanOrNull == true)
         result.exitCode?.let { put("exit_code", it) }
     }
     private fun page(task: JsonObject, offset: Int, limit: Int): JsonObject {
@@ -146,12 +158,20 @@ internal class OperationDispatcher(
             if(result != null) {
                 val stdout = result["stdout"]?.jsonPrimitive?.content.orEmpty()
                 val stderr = result["stderr"]?.jsonPrimitive?.content.orEmpty()
-                put("result", JsonObject(result + mapOf("stdout" to JsonPrimitive(stdout.drop(offset).take(limit)), "stderr" to JsonPrimitive(stderr.drop(offset).take(limit)))))
-                put("output_offset", offset); put("output_limit", limit)
-                val more = offset.toLong() + limit < maxOf(stdout.length,stderr.length)
+                put("result", JsonObject(result + mapOf("stdout" to JsonPrimitive(codePointSlice(stdout, offset, limit)), "stderr" to JsonPrimitive(codePointSlice(stderr, offset, limit)))))
+                put("output_offset", offset); put("output_limit", limit); put("offset_unit", "unicode_code_points")
+                val more = offset.toLong() + limit < maxOf(codePointLength(stdout),codePointLength(stderr))
                 put("has_more", more); if(more) put("next_offset", offset.toLong()+limit)
             }
         }
+    }
+    private fun codePointLength(value: String): Int = value.codePointCount(0, value.length)
+    private fun codePointSlice(value: String, offset: Int, limit: Int): String {
+        val count = codePointLength(value)
+        if (offset >= count) return ""
+        val start = value.offsetByCodePoints(0, offset)
+        val end = value.offsetByCodePoints(start, minOf(limit, count - offset))
+        return value.substring(start, end)
     }
     private fun error(code: String, summary: String) = buildJsonObject { put("status", "failed"); put("error_code", code); put("summary", summary) }
     companion object { const val DEFAULT_PAGE = 8000; const val MAX_PAGE = 16000; const val MAX_OUTPUT = 128_000; const val MAX_DATA = 32_000 }

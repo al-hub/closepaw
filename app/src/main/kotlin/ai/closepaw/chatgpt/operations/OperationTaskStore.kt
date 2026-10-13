@@ -37,6 +37,8 @@ internal class OperationTaskStore(private val file: File) {
     @Synchronized fun updateActive(id: String, values: Map<String, JsonElement>): Boolean {
         val previous = tasks[id] ?: return false
         if (previous["state"]?.jsonPrimitive?.content in setOf("succeeded", "failed", "cancelled", "timed_out", "interrupted")) return false
+        // Raw transport polling must not bypass a rejected registered output contract.
+        if ((previous["output_validation_failed"] as? JsonPrimitive)?.booleanOrNull == true) return false
         put(JsonObject(previous + values))
         return true
     }

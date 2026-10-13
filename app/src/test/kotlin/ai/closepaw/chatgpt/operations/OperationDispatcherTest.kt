@@ -119,6 +119,75 @@ class OperationDispatcherTest {
             scope.cancel()
         }
     }
+    @Test fun restrictiveOutputSchemaRejectsMissingExitAndPreservesZero() {
+        val output = Json.parseToJsonElement("""{"type":"object","properties":{"exit_code":{"type":"integer"}},"required":["exit_code"]}""").jsonObject
+        val registry = OperationRegistry()
+        for ((id, code) in listOf("missing" to null, "zero" to 0)) {
+            registry.register(OperationDescriptor(id, id, inputSchema = schema, outputSchema = output), object: OperationHandler {
+                override suspend fun invoke(invocation: OperationInvocation) = OperationResult(exitCode = code)
+            })
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val dispatcher = OperationDispatcher(registry, OperationTaskStore(File.createTempFile("tasks", ".json").apply { delete() }), scope)
+        assertEquals("invalid_output", dispatcher.query(args("missing"))["error_code"]!!.jsonPrimitive.content)
+        assertEquals(0, dispatcher.query(args("zero"))["exit_code"]!!.jsonPrimitive.int)
+        scope.cancel()
+    }
+    @Test fun invalidExecutionOutputIsUnknownAndNotReplayed() = runBlocking {
+        val output = Json.parseToJsonElement("""{"type":"object","required":["exit_code"]}""").jsonObject
+        var calls = 0
+        val registry = OperationRegistry()
+        registry.register(OperationDescriptor("shell", "Shell", inputSchema = schema, readOnly = false, outputSchema = output), object: OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult { calls++; return OperationResult() }
+        })
+        val store = OperationTaskStore(File.createTempFile("tasks", ".json").apply { delete() })
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val dispatcher = OperationDispatcher(registry, store, scope)
+        val first = dispatcher.execute(args("shell"))
+        val id = first["task_id"]!!.jsonPrimitive.content
+        withTimeout(5000) { while(store.get(id)?.get("state")?.jsonPrimitive?.content in setOf("queued", "running")) delay(5) }
+        assertEquals("outcome_unknown", store.get(id)!!["state"]!!.jsonPrimitive.content)
+        assertEquals(first["task_id"], dispatcher.execute(args("shell"))["task_id"])
+        assertEquals(1, calls)
+        assertEquals("invalid_output", store.get(id)!!["result"]!!.jsonObject["error_code"]!!.jsonPrimitive.content)
+        assertFalse(store.updateActive(id, mapOf("state" to JsonPrimitive("succeeded"))))
+        assertEquals("outcome_unknown", store.get(id)!!["state"]!!.jsonPrimitive.content)
+        scope.cancel()
+    }
+    @Test fun unicodePagingNeverSplitsEmoji() {
+        val store = OperationTaskStore(File.createTempFile("tasks", ".json").apply { delete() })
+        store.put(buildJsonObject {
+            put("task_id", "emoji"); put("state", "succeeded")
+            put("result", buildJsonObject { put("stdout", "A😀B"); put("stderr", "😀") })
+        })
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val dispatcher = OperationDispatcher(OperationRegistry(), store, scope)
+        fun page(offset: Int) = dispatcher.getTask(buildJsonObject { put("task_id", "emoji"); put("offset", offset); put("limit", 1) })
+        assertEquals("😀", page(1)["result"]!!.jsonObject["stdout"]!!.jsonPrimitive.content)
+        assertEquals("", page(1)["result"]!!.jsonObject["stderr"]!!.jsonPrimitive.content)
+        assertEquals(2, page(1)["next_offset"]!!.jsonPrimitive.int)
+        assertEquals("B", page(2)["result"]!!.jsonObject["stdout"]!!.jsonPrimitive.content)
+        assertEquals("", page(100)["result"]!!.jsonObject["stdout"]!!.jsonPrimitive.content)
+        assertEquals("unicode_code_points", page(1)["offset_unit"]!!.jsonPrimitive.content)
+        scope.cancel()
+    }
+    @Test fun outputBoundPreservesUnicodeAndDaemonTruncation() {
+        val registry = OperationRegistry()
+        registry.register(OperationDescriptor("large", "Large", inputSchema = schema), object: OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation) = OperationResult(stdout = "😀".repeat(OperationDispatcher.MAX_OUTPUT + 1))
+        })
+        registry.register(OperationDescriptor("daemon", "Daemon", inputSchema = schema), object: OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation) = OperationResult(stdout = "x", data = buildJsonObject { put("output_truncated", true) })
+        })
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val dispatcher = OperationDispatcher(registry, OperationTaskStore(File.createTempFile("tasks", ".json").apply { delete() }), scope)
+        val bounded = dispatcher.query(args("large"))
+        val text = bounded["stdout"]!!.jsonPrimitive.content
+        assertEquals(OperationDispatcher.MAX_OUTPUT, text.codePointCount(0, text.length))
+        assertTrue(bounded["output_truncated"]!!.jsonPrimitive.boolean)
+        assertTrue(dispatcher.query(args("daemon"))["output_truncated"]!!.jsonPrimitive.boolean)
+        scope.cancel()
+    }
     @Test fun registryRejectsDuplicateIds() {
         val registry = OperationRegistry()
         val handler = object: OperationHandler { override suspend fun invoke(invocation: OperationInvocation) = OperationResult() }

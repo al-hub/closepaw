@@ -7,7 +7,7 @@ Implementation: fixed MCP discovery/query/execute/get_task/cancel_task tools; dy
 1. Install the signed v0.1.41 APK after Release assets and checksum are verified.
 2. ClosePaw Settings → Termux → Setup/reinstall bridge. This version contains daemon v2 and jobs API v1. Existing F-Droid/RUN_COMMAND setup can deploy it; a Play variant may require the existing manual setup/pairing command. Keep the same pairing token.
 3. ClosePaw Settings → ChatGPT Voice: enable **Allow ChatGPT Termux execution** if execution is wanted, then Stop/Connect. Read operations do not require this switch.
-4. Update the existing MCP connection to the new private endpoint shown by ClosePaw. The endpoint has a persistent per-install 256-bit bearer path; do not post it in issues/screenshots. The previously public `/mcp` path is not accepted. The Secure Tunnel runtime uses the same private local path automatically.
+4. For Quick Tunnel, update the existing MCP connection to the new private endpoint shown by ClosePaw. The endpoint has a persistent per-install 256-bit bearer path; do not post it in issues/screenshots. The previously public `/mcp` path is not accepted. The Secure Tunnel runtime uses the same private local path automatically while retaining its configured tunnel ID; no new public URL is claimed for that transport.
 5. Refresh/reconnect the existing plugin once to acquire the five fixed tools. Verify the actual host tool list; APK installation alone does not prove that the host has refreshed its tool schemas. Do not recreate a second plugin merely to avoid updating the original connection.
 
 Subsequent operation additions under this contract do not alter the MCP tool schemas. Cloudflare Quick Tunnel hostname changes remain independent of schema stability; Secure Tunnel hosting/connection configuration has its own lifecycle.
@@ -18,7 +18,7 @@ Subsequent operation additions under this contract do not alter the MCP tool sch
 - `discover_operations`: list app.screen.read, app.targets.list, linux.shell.exec. Then detail lookup with operation_id returns input_schema, operation_version and schema_hash.
 - `query(app.targets.list)`: installed/readiness states for Chrome, Samsung Internet and Gemini.
 - `query(app.screen.read)` with app gemini: visible captured text only, do not supplement with external search. Legacy read_app retains the screenshot response.
-- `execute(linux.shell.exec)` with command `printf 'kv-preflight\n'; command -v kv`, unique request_id, current version/hash and JSON-encoded input: returns task_id. get_task returns confirmed stdout/stderr/exit_code.
+- `execute(linux.shell.exec)` with command `printf 'kv-preflight\n'; command -v kv`, unique request_id, current version/hash and JSON-encoded input: returns task_id. get_task returns confirmed stdout/stderr/exit_code. Its offset and limit count Unicode code points, so Korean text and emoji are not split.
 - Once KV's actual command, working directory and noninteractive behavior are confirmed, request “ClosePaw로 터목스에서 KV 실행하고 결과 확인해줘”. Reuse the established task ID for retries/status, not a new request ID. Do not guess a KV subcommand.
 - Failure check: `printf 'out\n'; printf 'err\n' >&2; exit 7`; stdout, stderr and exit_code7 remain distinct from HTTP errors.
 - Long job: `sleep 10; printf 'finished\n'`; disconnect the MCP request, then get_task retrieves the same job output. Restarting just the Android MCP service should reobserve the persisted daemon job without another submission. Restarting/killing Termux can cause an interrupted/unknown result; no automatic replay.
