@@ -11,6 +11,7 @@ internal data class OperationDescriptor(
     val inputSchema: JsonObject,
     val readOnly: Boolean = true,
     val permissions: List<String> = emptyList(),
+    val outputSchema: JsonObject = buildJsonObject { put("type", "object") },
     val effects: List<String> = emptyList(),
     val cancellationSupported: Boolean = false,
     val readiness: () -> OperationReadiness = { OperationReadiness() },
@@ -23,7 +24,7 @@ internal data class OperationDescriptor(
         val state = safeReadiness()
         return buildJsonObject {
             put("operation_id", id); put("description", description); put("operation_version", version)
-            put("schema_hash", schemaHash); if (includeSchema) put("input_schema", inputSchema); put("read_only", readOnly)
+            put("schema_hash", schemaHash); put("output_schema_hash", operationHash(canonicalJson(outputSchema))); if (includeSchema) { put("input_schema", inputSchema); put("output_schema", outputSchema) }; put("read_only", readOnly)
             put("effects", JsonArray(effects.map { JsonPrimitive(it) })); put("cancellation_supported", cancellationSupported)
             put("permissions", JsonArray(permissions.map { JsonPrimitive(it) })); put("ready", state.ready)
             state.reason?.let { put("readiness_reason", it) }
@@ -52,6 +53,7 @@ internal class OperationRegistry {
         require(descriptor.version > 0)
         require(!entries.containsKey(descriptor.id)) { "Duplicate operation id: ${descriptor.id}" }
         OperationSchemaValidator.checkSchema(descriptor.inputSchema)
+        OperationSchemaValidator.checkSchema(descriptor.outputSchema)
         entries[descriptor.id] = RegisteredOperation(descriptor, handler)
     }
     @Synchronized fun get(id: String): RegisteredOperation? = entries[id]

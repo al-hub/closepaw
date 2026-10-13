@@ -38,7 +38,9 @@ class ChatGptMcpService : Service() {
             versionCode = BuildConfig.VERSION_CODE,
         )
         val executionSettings = McpExecutionSettings(this)
-        val readApp = AndroidReadAppTool()
+        val reader = AndroidReadAppTool()
+        val readLock = Any()
+        val readApp = ReadAppTool { app -> synchronized(readLock) { reader.read(app) } }
         val operations = AndroidOperationRuntime(this, scope, readApp, executionSettings)
         server = McpHttpServer(
             port = McpHttpServer.DEFAULT_PORT,

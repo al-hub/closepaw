@@ -96,6 +96,29 @@ class OperationDispatcherTest {
         assertEquals("not_ready", dispatcher.query(args("broken"))["error_code"]!!.jsonPrimitive.content)
         scope.cancel()
     }
+    @Test fun asynchronousTerminalOutcomeIsPreserved() = runBlocking {
+        val cases = listOf("outcome_unknown" to "outcome_unknown", "cancel_confirmed" to "cancelled", "timed_out" to "timed_out")
+        for ((flag, expected) in cases) {
+            val registry = OperationRegistry()
+            registry.register(OperationDescriptor("shell", "Shell", inputSchema = schema, readOnly = false), object: OperationHandler {
+                override suspend fun invoke(invocation: OperationInvocation) = OperationResult(success = false, data = buildJsonObject { put(flag, true) })
+            })
+            val store = OperationTaskStore(File.createTempFile("tasks", ".json").apply { delete() })
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val dispatcher = OperationDispatcher(registry, store, scope)
+            val accepted = dispatcher.execute(args("shell"))
+            val id = accepted["task_id"]!!.jsonPrimitive.content
+            withTimeout(5000) {
+                while(store.get(id)?.get("state")?.jsonPrimitive?.content in setOf("queued", "running")) delay(5)
+            }
+            assertEquals(expected, store.get(id)!!["state"]!!.jsonPrimitive.content)
+            if(expected != "outcome_unknown") {
+                assertFalse(store.updateActive(id, mapOf("state" to JsonPrimitive("outcome_unknown"))))
+                assertEquals(expected, store.get(id)!!["state"]!!.jsonPrimitive.content)
+            }
+            scope.cancel()
+        }
+    }
     @Test fun registryRejectsDuplicateIds() {
         val registry = OperationRegistry()
         val handler = object: OperationHandler { override suspend fun invoke(invocation: OperationInvocation) = OperationResult() }

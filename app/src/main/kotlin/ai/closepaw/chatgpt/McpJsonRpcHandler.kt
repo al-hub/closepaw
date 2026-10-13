@@ -31,7 +31,7 @@ internal class McpJsonRpcHandler(
         }
 
         val id = request["id"] ?: JsonNull
-        val method = request["method"]?.jsonPrimitive?.content
+        val method = (request["method"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
             ?: return jsonError(id, -32600, "Invalid Request")
 
         return try { when (method) {

@@ -14,7 +14,9 @@ class TermuxJobLinkStoreTest {
     }
 
     @Test fun `unknown task has no job`() = withLedger { file ->
-        assertThat(TermuxJobLinkStore(file).get(TASK)).isNull()
+        val store = TermuxJobLinkStore(file)
+        assertThat(store.get(TASK)).isNull()
+        assertThat(store.canAccept(TASK)).isTrue()
     }
 
     @Test fun `invalid identifiers and conflicting relinks are rejected`() = withLedger { file ->
@@ -30,6 +32,8 @@ class TermuxJobLinkStoreTest {
             "${UUID(0, it.toLong())}\t${UUID(1, it.toLong())}"
         })
         val store = TermuxJobLinkStore(file)
+        assertThat(store.canAccept(TASK)).isFalse()
+        assertThat(store.canAccept(UUID(0, 0).toString())).isTrue()
         assertThrows(IllegalArgumentException::class.java) { store.put(TASK, JOB) }
         assertThat(store.get(UUID(0, 0).toString())).isEqualTo(UUID(1, 0).toString())
     }

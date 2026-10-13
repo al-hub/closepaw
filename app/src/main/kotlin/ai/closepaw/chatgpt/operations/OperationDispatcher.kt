@@ -75,7 +75,7 @@ internal class OperationDispatcher(
                     return@launch
                 }
                 val result = operation.handler.invoke(OperationInvocation(taskId, arguments.getValue("input").jsonObject))
-                store.updateActive(taskId, mapOf("state" to JsonPrimitive(if(result.success) "succeeded" else "failed"), "result" to resultJson(result), "summary" to JsonPrimitive(result.summary.take(2000))))
+                store.updateActive(taskId, mapOf("state" to JsonPrimitive(terminalState(result)), "result" to resultJson(result), "summary" to JsonPrimitive(result.summary.take(2000))))
             } catch (_: CancellationException) {
                 store.updateActive(taskId, mapOf("state" to JsonPrimitive("outcome_unknown"), "summary" to JsonPrimitive("Execution observer stopped; command termination is not confirmed.")))
             } catch (_: Exception) {
@@ -96,7 +96,7 @@ internal class OperationDispatcher(
         if (!executeAllowed()) return error("permission_denied", "Remote execution is disabled.")
         val id = (arguments["task_id"] as? JsonPrimitive)?.content ?: return error("invalid_task_id", "task_id required")
         val task = store.get(id) ?: return error("unknown_task", "Task is not recorded.")
-        if(task["state"]?.jsonPrimitive?.content in setOf("succeeded", "failed", "cancelled")) return page(task, 0, DEFAULT_PAGE)
+        if(task["state"]?.jsonPrimitive?.content in setOf("succeeded", "failed", "cancelled", "timed_out", "interrupted")) return page(task, 0, DEFAULT_PAGE)
         val operation = registry.get(task.getValue("operation_id").jsonPrimitive.content) ?: return error("unknown_operation", "Handler is unavailable.")
         val confirmed = try { runBlocking { withTimeout(10_000) { operation.handler.cancel(id) } } } catch (_: Exception) { false }
         if (confirmed) {
@@ -116,13 +116,21 @@ internal class OperationDispatcher(
         if(input.toString().length > 65_536) return error("invalid_input", "Input exceeds 65536 characters.")
         return OperationSchemaValidator.validate(descriptor.inputSchema, input)?.let { error("invalid_input", it) }
     }
+    private fun terminalState(result: OperationResult): String = when {
+        (result.data["outcome_unknown"] as? JsonPrimitive)?.booleanOrNull == true -> "outcome_unknown"
+        (result.data["cancel_confirmed"] as? JsonPrimitive)?.booleanOrNull == true -> "cancelled"
+        (result.data["timed_out"] as? JsonPrimitive)?.booleanOrNull == true -> "timed_out"
+        (result.data["state"] as? JsonPrimitive)?.content == "interrupted" -> "interrupted"
+        result.success -> "succeeded"
+        else -> "failed"
+    }
     private fun resultJson(result: OperationResult): JsonObject = buildJsonObject {
         put("status", if(result.success) "succeeded" else "failed"); put("summary", result.summary.take(2000))
         // Keep non-output structured data bounded as well. Screen imagery is returned through existing read_app.
         if(result.data.toString().length <= MAX_DATA) put("data", result.data)
         else { put("data", JsonObject(emptyMap())); put("data_truncated", true) }
         put("stdout", result.stdout.take(MAX_OUTPUT)); put("stderr", result.stderr.take(MAX_OUTPUT))
-        put("output_truncated", result.stdout.length > MAX_OUTPUT || result.stderr.length > MAX_OUTPUT)
+        put("output_truncated", result.stdout.length > MAX_OUTPUT || result.stderr.length > MAX_OUTPUT || result.data["output_truncated"]?.jsonPrimitive?.booleanOrNull == true)
         result.exitCode?.let { put("exit_code", it) }
     }
     private fun page(task: JsonObject, offset: Int, limit: Int): JsonObject {
@@ -131,7 +139,7 @@ internal class OperationDispatcher(
         return buildJsonObject {
             public.forEach { (key, value) -> if(key != "result") put(key,value) }
             put("status", when(task["state"]?.jsonPrimitive?.content) {
-                "failed", "outcome_unknown" -> "failed"
+                "failed", "outcome_unknown", "timed_out", "interrupted" -> "failed"
                 "queued", "running", "cancel_requested" -> "accepted"
                 else -> "succeeded"
             })

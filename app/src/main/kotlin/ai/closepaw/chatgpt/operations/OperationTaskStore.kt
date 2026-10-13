@@ -36,7 +36,7 @@ internal class OperationTaskStore(private val file: File) {
     /** Atomic terminal guard shared by execution completion and cancellation. */
     @Synchronized fun updateActive(id: String, values: Map<String, JsonElement>): Boolean {
         val previous = tasks[id] ?: return false
-        if (previous["state"]?.jsonPrimitive?.content in setOf("succeeded", "failed", "cancelled")) return false
+        if (previous["state"]?.jsonPrimitive?.content in setOf("succeeded", "failed", "cancelled", "timed_out", "interrupted")) return false
         put(JsonObject(previous + values))
         return true
     }

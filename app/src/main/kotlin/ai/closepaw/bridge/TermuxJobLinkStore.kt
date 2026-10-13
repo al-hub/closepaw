@@ -26,6 +26,12 @@ class TermuxJobLinkStore(private val file: File) {
         return links[taskId]
     }
 
+    /** Capacity preflight before submission; persistence can still fail and must be handled as uncertain. */
+    @Synchronized fun canAccept(taskId: String): Boolean {
+        validateId(taskId)
+        return links.containsKey(taskId) || links.size < MAX_LINKS
+    }
+
     @Synchronized fun put(taskId: String, jobId: String) {
         validateId(taskId); validateId(jobId)
         val existing = links[taskId]

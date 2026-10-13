@@ -11,6 +11,7 @@ internal class TermuxShellOperation(
     private val links: TermuxJobLinkStore,
 ) : OperationHandler {
     override suspend fun invoke(invocation: OperationInvocation): OperationResult {
+        if (!links.canAccept(invocation.taskId)) return OperationResult(success=false, summary="Job link store full; command was not submitted.")
         val input = invocation.input
         val request = ExecutionRequest(
             ExecutionCapability.LINUX_SHELL,
@@ -30,14 +31,14 @@ internal class TermuxShellOperation(
     }
     suspend fun snapshot(taskId: String): TermuxJobSnapshot? {
         val jobId = links.get(taskId) ?: return null
-        val first = (client.poll(jobId, limit = 65536) as? TermuxJobReply.Success)?.snapshot ?: return null
+        val first = (client.poll(jobId, limit = 32768) as? TermuxJobReply.Success)?.snapshot ?: return null
         if (!first.terminal) return first
         val stdout = StringBuilder(first.stdout)
         val stderr = StringBuilder(first.stderr)
         var current = first
-        // Both streams retain at most 128 KiB each. Keep byte offsets separate from decoded text lengths.
+        // The daemon defaults to 64 KiB per stream. Keep byte offsets separate from decoded text lengths.
         repeat(3) {
-            val next = (client.poll(jobId, current.stdoutNextOffset, current.stderrNextOffset, 65536) as? TermuxJobReply.Success)?.snapshot ?: return current.copy(stdout=stdout.toString(), stderr=stderr.toString())
+            val next = (client.poll(jobId, current.stdoutNextOffset, current.stderrNextOffset, 32768) as? TermuxJobReply.Success)?.snapshot ?: return null
             if(next.stdoutNextOffset == current.stdoutNextOffset && next.stderrNextOffset == current.stderrNextOffset) return current.copy(stdout=stdout.toString(), stderr=stderr.toString())
             stdout.append(next.stdout); stderr.append(next.stderr); current = next
         }
