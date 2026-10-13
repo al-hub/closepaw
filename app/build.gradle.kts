@@ -108,6 +108,13 @@ android {
                 // Default test JVM heap (512m) OOMs once the suite includes Robolectric +
                 // bundled Conscrypt/BouncyCastle + the OpenAI SDK + MockWebServer harnesses.
                 it.maxHeapSize = "2g"
+                it.testLogging {
+                    events("failed")
+                    exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                    showExceptions = true
+                    showCauses = true
+                    showStackTraces = true
+                }
             }
         }
     }

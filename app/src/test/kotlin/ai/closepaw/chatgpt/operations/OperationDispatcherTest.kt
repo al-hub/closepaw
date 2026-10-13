@@ -188,6 +188,29 @@ class OperationDispatcherTest {
         assertTrue(dispatcher.query(args("daemon"))["output_truncated"]!!.jsonPrimitive.boolean)
         scope.cancel()
     }
+    @Test fun independentDispatchersExecuteSameRequestOnlyOnce() = runBlocking {
+        val file = File.createTempFile("task-ledger", ".json").apply { delete() }
+        val registry = OperationRegistry()
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val gate = CompletableDeferred<Unit>()
+        registry.register(OperationDescriptor("shell", "Shell", inputSchema = schema, readOnly = false), object: OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult {
+                calls.incrementAndGet(); gate.await(); return OperationResult(exitCode = 0)
+            }
+        })
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val dispatchers = listOf(OperationDispatcher(registry, OperationTaskStore(file), scope), OperationDispatcher(registry, OperationTaskStore(file), scope))
+        try {
+            val replies = coroutineScope { (0 until 24).map { index -> async(Dispatchers.Default) { dispatchers[index % 2].execute(args("shell")) } }.awaitAll() }
+            assertEquals(1, replies.map { it["task_id"] }.distinct().size)
+            assertFalse(replies.any { it["error_code"] != null })
+            withTimeout(5000) { while(calls.get() == 0) delay(5) }
+            assertEquals(1, calls.get())
+            gate.complete(Unit)
+            val id = replies.first()["task_id"]!!.jsonPrimitive.content
+            withTimeout(5000) { while(dispatchers[0].getTask(buildJsonObject { put("task_id", id) })["state"]!!.jsonPrimitive.content != "succeeded") delay(5) }
+        } finally { scope.cancel() }
+    }
     @Test fun registryRejectsDuplicateIds() {
         val registry = OperationRegistry()
         val handler = object: OperationHandler { override suspend fun invoke(invocation: OperationInvocation) = OperationResult() }

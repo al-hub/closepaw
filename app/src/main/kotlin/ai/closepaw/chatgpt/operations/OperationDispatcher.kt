@@ -64,7 +64,8 @@ internal class OperationDispatcher(
             put("schema_hash", operation.descriptor.schemaHash); put("state", "queued")
             put("created_at_ms", System.currentTimeMillis()); put("summary", "Operation accepted; use get_task to confirm its outcome.")
         }
-        try { store.put(task) } catch (_: Exception) { return error("task_storage_failed", "Unable to durably record request; operation was not started.") }
+        val claimed = try { store.claim(task) } catch (_: Exception) { return error("task_storage_failed", "Unable to durably record request; operation was not started.") }
+        if (!claimed.created) return if (claimed.conflict) error("request_id_conflict", "request_id was already used with different input or operation schema.") else page(claimed.task, 0, DEFAULT_PAGE)
         scope.launch {
             try {
                 val shouldStart = synchronized(this@OperationDispatcher) {

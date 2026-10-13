@@ -263,6 +263,17 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk closepaw-aa-bridge.apk
           sha256sum closepaw-aa-bridge.apk > closepaw-aa-bridge.apk.sha256
 
+      - name: Upload Android test reports
+        if: always() && steps.state.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-release-test-reports-${{ github.run_id }}
+          path: |
+            app/build/test-results/testDebugUnitTest
+            app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Validate signer against previous signed Release
         if: steps.state.outputs.skip != 'true'
         env:
