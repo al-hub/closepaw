@@ -37,11 +37,16 @@ class ChatGptMcpService : Service() {
             versionName = BuildConfig.VERSION_NAME,
             versionCode = BuildConfig.VERSION_CODE,
         )
+        val executionSettings = McpExecutionSettings(this)
+        val readApp = AndroidReadAppTool()
+        val operations = AndroidOperationRuntime(this, scope, readApp, executionSettings)
         server = McpHttpServer(
             port = McpHttpServer.DEFAULT_PORT,
+            mcpPath = executionSettings.endpointPath(),
             handler = McpJsonRpcHandler(
                 statusTool = statusTool,
-                readAppTool = AndroidReadAppTool(),
+                readAppTool = readApp,
+                operationTools = operations,
             ),
         )
         val secureConfigStore = SecureMcpTunnelConfigStore(this)
@@ -50,6 +55,7 @@ class ChatGptMcpService : Service() {
             OpenAiSecureTunnelProvider(
                 binaryResolver = AndroidOpenAiTunnelBinaryResolver(this),
                 configProvider = { secureConfig },
+                mcpPath = server.mcpPath,
             )
         } else {
             CloudflareQuickTunnelProvider(AndroidCloudflaredBinaryResolver(this))

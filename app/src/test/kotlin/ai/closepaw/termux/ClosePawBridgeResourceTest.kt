@@ -19,9 +19,12 @@ class ClosePawBridgeResourceTest {
             .that(sourceFile.isFile)
             .isTrue()
 
-        val sourceBytes = sourceFile.readBytes()
+        val sourceBytes = (
+            File(workspaceRoot(), "tools/termux-bridge/closepaw_jobs.py").readText() + "\n" +
+                sourceFile.readText().replace("from closepaw_jobs import JobManager, JobError\n", "")
+            ).toByteArray(Charsets.UTF_8)
         val packagedBytes = readPackagedRawResource()
-        assertWithMessage("packaged bridge resource must match canonical source bytes")
+        assertWithMessage("packaged bridge resource must match standalone canonical bundle bytes")
             .that(packagedBytes.asList())
             .containsExactlyElementsIn(sourceBytes.asList())
             .inOrder()
@@ -69,7 +72,7 @@ class ClosePawBridgeResourceTest {
 
     private companion object {
         const val BRIDGE_SOURCE_PATH = "tools/termux-bridge/closepaw_bridge.py"
-        const val EXPECTED_BRIDGE_VERSION_LINE = "BRIDGE_VERSION = \"1\""
+        const val EXPECTED_BRIDGE_VERSION_LINE = "BRIDGE_VERSION = \"2\""
         const val TEST_CONFIG_PATH = "com/android/tools/test_config.properties"
         const val RAW_RESOURCE_PATH = "res/raw/closepaw_bridge_py"
     }

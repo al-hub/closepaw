@@ -16,6 +16,8 @@ internal class ClosePawStatusTool(
         put("version_name", versionName)
         put("version_code", versionCode)
         put("capability", "status")
+        put("operation_contract_version", 1)
+        put("operation_discovery_tool", "discover_operations")
         put("supported_read_apps", buildJsonArray {
             BrowserReadTarget.supported.forEach { target ->
                 add(buildJsonObject {

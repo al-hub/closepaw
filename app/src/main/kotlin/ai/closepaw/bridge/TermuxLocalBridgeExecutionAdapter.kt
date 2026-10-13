@@ -79,7 +79,7 @@ class TermuxLocalBridgeExecutionAdapter(
             try {
                 http.newCall(call).execute().use { response ->
                     if (!response.isSuccessful) {
-                        return@withContext ExecutionResult(id, response.code, "", "Local bridge HTTP ${response.code}")
+                        return@withContext ExecutionResult(id, null, "", "Local bridge HTTP ${response.code}")
                     }
                     val json = JSONObject(response.body.string())
                     val timedOut = json.optBoolean("timed_out", false)

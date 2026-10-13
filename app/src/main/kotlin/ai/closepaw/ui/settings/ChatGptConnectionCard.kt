@@ -2,6 +2,8 @@ package ai.closepaw.ui.settings
 
 import ai.closepaw.BuildConfig
 import ai.closepaw.chatgpt.AndroidOpenAiTunnelBinaryResolver
+import ai.closepaw.chatgpt.McpExecutionSettings
+import androidx.compose.material3.Switch
 import ai.closepaw.chatgpt.ChatGptMcpService
 import ai.closepaw.chatgpt.SecureMcpTunnelConfigStore
 import ai.closepaw.chatgpt.SecureMcpTunnelDiagnostics
@@ -36,6 +38,8 @@ internal fun ChatGptConnectionCard() {
     val context = LocalContext.current
     val state by ChatGptMcpService.connectionState.collectAsState()
     val scope = rememberCoroutineScope()
+    val executionSettings = remember(context) { McpExecutionSettings(context) }
+    var executionEnabled by remember { mutableStateOf(executionSettings.enabled) }
     val configStore = remember(context) { SecureMcpTunnelConfigStore(context.applicationContext) }
     var configuredTunnelId by remember {
         mutableStateOf(runCatching { configStore.load()?.tunnelId }.getOrNull())
@@ -70,6 +74,13 @@ internal fun ChatGptConnectionCard() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Allow ChatGPT Termux execution", modifier = Modifier.weight(1f))
+            Switch(checked = executionEnabled, onCheckedChange = {
+                executionSettings.enabled = it; executionEnabled = it
+            })
+        }
+        Text("When enabled, your private connection can run commands and change Termux files. Keep the connection URL private. Turning this off blocks new execution; running jobs continue.", style = MaterialTheme.typography.bodySmall)
         state.publicMcpUrl?.let { url ->
             SelectionContainer {
                 Text(

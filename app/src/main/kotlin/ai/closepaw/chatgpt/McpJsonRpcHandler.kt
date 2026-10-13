@@ -19,6 +19,7 @@ internal data class McpHttpResponse(
 internal class McpJsonRpcHandler(
     private val statusTool: ClosePawStatusTool,
     private val readAppTool: ReadAppTool? = null,
+    private val operationTools: McpOperationTools? = null,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -33,14 +34,14 @@ internal class McpJsonRpcHandler(
         val method = request["method"]?.jsonPrimitive?.content
             ?: return jsonError(id, -32600, "Invalid Request")
 
-        return when (method) {
+        return try { when (method) {
             "initialize" -> initialize(id, request)
             "notifications/initialized" -> McpHttpResponse(statusCode = 204)
             "ping" -> jsonResult(id, buildJsonObject {})
             "tools/list" -> listTools(id)
             "tools/call" -> callTool(id, request)
             else -> jsonError(id, -32601, "Method not found")
-        }
+        } } catch (_: Exception) { jsonError(id, -32602, "Invalid request arguments") }
     }
 
     private fun initialize(id: JsonElement, request: JsonObject): McpHttpResponse {
@@ -50,7 +51,7 @@ internal class McpJsonRpcHandler(
         return jsonResult(
             id,
             buildJsonObject {
-                put("protocolVersion", requestedProtocol)
+                put("protocolVersion", if (requestedProtocol in SUPPORTED_PROTOCOL_VERSIONS) requestedProtocol else DEFAULT_PROTOCOL_VERSION)
                 put("capabilities", buildJsonObject {
                     put("tools", buildJsonObject { put("listChanged", false) })
                 })
@@ -67,6 +68,7 @@ internal class McpJsonRpcHandler(
         buildJsonObject {
             put("tools", buildJsonArray {
                 add(statusToolDefinition())
+                if (operationTools != null) McpOperationContract.names.forEach { add(McpOperationContract.definition(it)) }
                 if (readAppTool != null) {
                     add(readAppToolDefinition())
                     add(diagnosticsToolDefinition())
@@ -134,6 +136,13 @@ internal class McpJsonRpcHandler(
         val name = params["name"]?.jsonPrimitive?.content
             ?: return jsonError(id, -32602, "Missing tool name")
 
+        if (operationTools != null && name in McpOperationContract.names) {
+            val arguments = params["arguments"] as? JsonObject ?: JsonObject(emptyMap())
+            val normalized = try { McpOperationContract.arguments(name, arguments) }
+                catch (_: Exception) { return jsonError(id, -32602, "Invalid operation tool arguments") }
+            return toolResult(id, operationTools.call(name, normalized))
+        }
+
         return when (name) {
             STATUS_TOOL_NAME -> toolResult(id, statusTool.snapshot())
             DIAGNOSTICS_TOOL_NAME -> if (readAppTool != null) {
@@ -188,7 +197,7 @@ internal class McpJsonRpcHandler(
         val summary = structured["summary"]?.jsonPrimitive?.content ?: "ClosePaw responded."
         val content = structured["content"]?.jsonPrimitive?.content
             ?.takeIf { it.isNotBlank() }
-            ?: summary
+            ?: structured.toString()
         val isError = structured["status"]?.jsonPrimitive?.content == "failed"
         return jsonResult(
             id,
@@ -233,5 +242,6 @@ internal class McpJsonRpcHandler(
         const val READ_APP_TOOL_NAME = "read_app"
         const val DIAGNOSTICS_TOOL_NAME = "get_diagnostics"
         const val DEFAULT_PROTOCOL_VERSION = "2025-06-18"
+        private val SUPPORTED_PROTOCOL_VERSIONS = setOf("2024-11-05", "2025-03-26", DEFAULT_PROTOCOL_VERSION)
     }
 }

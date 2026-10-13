@@ -22,7 +22,7 @@ class McpOperationContractTest {
     @Test fun jsonPayloadIsParsedBeforeDispatchAndExtraTopLevelArgumentsRejected() {
         var received: JsonObject? = null
         val handler = handler { _, args -> received = args; buildJsonObject { put("status", "queued") } }
-        val args = buildJsonObject { put("operation_id", "future.read"); put("operation_version", "1"); put("schema_hash", "hash"); put("input_json", "{\"new_field\":42}") }
+        val args = buildJsonObject { put("operation_id", "future.read"); put("operation_version", 1); put("schema_hash", "hash"); put("input_json", "{\"new_field\":42}") }
         fun call(arguments: JsonObject): JsonObject = Json.parseToJsonElement(handler.handle(buildJsonObject {
             put("jsonrpc", "2.0"); put("id", 1); put("method", "tools/call"); put("params", buildJsonObject { put("name", "query"); put("arguments", arguments) })
         }.toString()).body!!).jsonObject
