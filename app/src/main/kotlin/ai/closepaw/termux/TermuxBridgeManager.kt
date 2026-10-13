@@ -30,7 +30,7 @@ class TermuxBridgeManager internal constructor(
     companion object {
         private const val TAG = "TermuxBridgeManager"
         private const val BRIDGE_IDENTITY = "closepaw-bridge"
-        private const val BRIDGE_VERSION_EXPECTED = "1"
+        private const val BRIDGE_VERSION_EXPECTED = "2"
         private const val HEALTH_URL = "http://127.0.0.1:18422/v1/health"
         private const val PROBE_TIMEOUT_MS = 10_000L
         private const val INSTALL_TIMEOUT_MS = 180_000L

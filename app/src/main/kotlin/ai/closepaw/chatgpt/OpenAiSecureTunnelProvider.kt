@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 internal class OpenAiSecureTunnelProvider(
     private val binaryResolver: OpenAiTunnelBinaryResolver,
     private val configProvider: () -> SecureMcpTunnelConfig?,
+    private val mcpPath: String = McpHttpServer.DEFAULT_MCP_PATH,
     private val readyProbe: (String) -> Boolean = ::probeReady,
     private val controlPlaneProxy: AndroidControlPlaneConnectProxy = AndroidControlPlaneConnectProxy(),
 ) : TunnelProvider {
@@ -60,7 +61,7 @@ internal class OpenAiSecureTunnelProvider(
                 environment()["CONTROL_PLANE_API_KEY"] = config.runtimeApiKey
                 environment()["CONTROL_PLANE_TUNNEL_ID"] = config.tunnelId
                 environment()["CONTROL_PLANE_HTTP_PROXY"] = controlPlaneProxyUrl
-                environment()["MCP_SERVER_URL"] = "http://127.0.0.1:$localPort/mcp"
+                environment()["MCP_SERVER_URL"] = "http://127.0.0.1:$localPort$mcpPath"
             }.start()
         } catch (error: Exception) {
             controlPlaneProxy.stop()

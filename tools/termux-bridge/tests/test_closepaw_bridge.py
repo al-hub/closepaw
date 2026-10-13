@@ -52,7 +52,7 @@ def test_health_endpoint_returns_ok_version_and_identity(bridge_server):
 
     assert response.status == 200
     assert response.body["status"] == "ok"
-    assert response.body["version"] == "1"
+    assert response.body["version"] == "2"
     assert response.body["identity"] == "closepaw-bridge"
     assert isinstance(response.body["uptime_ms"], int)
     assert isinstance(response.body["last_request_ms_ago"], int)

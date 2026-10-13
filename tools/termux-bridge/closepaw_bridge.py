@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ClosePaw Termux bridge daemon."""
-BRIDGE_VERSION = "1"
+BRIDGE_VERSION = "2"
 import argparse
 import errno
 import hmac
@@ -16,6 +16,8 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from urllib.parse import urlsplit, parse_qs
+from closepaw_jobs import JobManager, JobError
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 IDENTITY = "closepaw-bridge"
@@ -275,6 +277,7 @@ class BridgeServer(ThreadingHTTPServer):
     daemon_threads = True
     def __init__(self, address, handler, idle_timeout_sec, watchdog_tick_sec, auth_token):
         super().__init__(address, handler)
+        self.jobs = JobManager(closepaw_dir() / "jobs", auth_token, exec_lock, parse_exec, InvalidRequest, kill_process_group)
         self.auth_token = auth_token
         self.started_at = time.monotonic()
         self.last_request_at = self.started_at
@@ -319,20 +322,68 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(data, dict):
             raise InvalidRequest
         return data
+    def authorized(self):
+        supplied = self.headers.get(AUTH_HEADER, "")
+        if not supplied or not hmac.compare_digest(supplied, self.server.auth_token):
+            self.send_json(401, {"error": "unauthorized"})
+            return False
+        return True
+    def job_request(self, method):
+        path = urlsplit(self.path).path
+        if not self.authorized():
+            return
+        try:
+            if method == "GET" and path == "/v1/jobs":
+                self.send_json(200, self.server.jobs.readiness())
+                return
+            if method == "POST" and path == "/v1/jobs":
+                self.send_json(202, self.server.jobs.submit(self.read_json()))
+                return
+            parts = path.split("/")
+            if len(parts) < 4 or not parts[3]:
+                raise JobError(404, "not_found")
+            job_id = parts[3]
+            if method == "GET" and len(parts) == 4:
+                query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                if set(query) - {"stdout_offset", "stderr_offset", "limit"} or any(len(v) != 1 for v in query.values()):
+                    raise InvalidRequest
+                self.send_json(200, self.server.jobs.snapshot(job_id,
+                    int(query.get("stdout_offset", [0])[0]), int(query.get("stderr_offset", [0])[0]),
+                    int(query.get("limit", [65536])[0])))
+                return
+            if method == "POST" and len(parts) == 5 and parts[4] == "cancel":
+                if self.read_json():
+                    raise InvalidRequest
+                self.send_json(200, self.server.jobs.cancel(job_id))
+                return
+            raise JobError(404, "not_found")
+        except WorkspaceEscape:
+            self.send_json(400, {"error": "workspace_escape"})
+        except (InvalidRequest, ValueError):
+            self.send_json(400, {"error": "invalid_request"})
+        except JobError as exc:
+            self.send_json(exc.status, {"error": exc.error})
     def do_GET(self):
         self.server.touch_request()
+        if self.path.split("?", 1)[0].startswith("/v1/jobs"):
+            self.job_request("GET")
+            return
         if self.path.split("?", 1)[0] != "/v1/health":
             self.send_json(404, {"error": "not_found"})
             return
         self.send_json(200, {
             "status": "ok",
             "version": BRIDGE_VERSION,
+            "job_api_version": 1,
             "identity": IDENTITY,
             "uptime_ms": self.server.uptime_ms(),
             "last_request_ms_ago": self.server.last_request_ms_ago(),
         })
     def do_POST(self):
         self.server.touch_request()
+        if self.path.split("?", 1)[0].startswith("/v1/jobs"):
+            self.job_request("POST")
+            return
         if self.path.split("?", 1)[0] != "/v1/exec":
             self.send_json(404, {"error": "not_found"})
             return
@@ -364,7 +415,7 @@ def watchdog(server):  # watchdog|idle
             continue
         with server.last_request_lock:
             idle = time.monotonic() - server.last_request_at
-        if idle > server.idle_timeout_sec:
+        if idle > server.idle_timeout_sec and not server.jobs.has_active_jobs():
             server.shutdown()
             return
 def parse_args():
