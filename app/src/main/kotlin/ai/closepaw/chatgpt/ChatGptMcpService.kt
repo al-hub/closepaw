@@ -49,6 +49,9 @@ class ChatGptMcpService : Service() {
                 statusTool = statusTool,
                 readAppTool = readApp,
                 operationTools = operations,
+                extraDiagnostics = { kotlinx.serialization.json.buildJsonObject {
+                    put("gemini_draft", operations.diagnosticSnapshot())
+                } },
             ),
         )
         val secureConfigStore = SecureMcpTunnelConfigStore(this)

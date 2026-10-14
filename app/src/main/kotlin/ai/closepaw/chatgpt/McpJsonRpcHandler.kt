@@ -20,6 +20,7 @@ internal class McpJsonRpcHandler(
     private val statusTool: ClosePawStatusTool,
     private val readAppTool: ReadAppTool? = null,
     private val operationTools: McpOperationTools? = null,
+    private val extraDiagnostics: () -> JsonObject = { JsonObject(emptyMap()) },
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -148,7 +149,7 @@ internal class McpJsonRpcHandler(
             STATUS_TOOL_NAME -> toolResult(id, statusTool.snapshot())
             DIAGNOSTICS_TOOL_NAME -> if (readAppTool != null) {
                 val status = statusTool.snapshot()
-                val diagnostics = BrowserReadDiagnostics.snapshot()
+                val diagnostics = JsonObject(BrowserReadDiagnostics.snapshot() + extraDiagnostics())
                 toolResult(id, JsonObject(diagnostics + status.filterKeys { it == "version_name" || it == "version_code" }))
             } else jsonError(id, -32602, "Unknown tool: $name")
             READ_APP_TOOL_NAME -> {

@@ -9,6 +9,9 @@ internal class McpExecutionSettings(context: Context) {
     var enabled: Boolean
         get() = prefs.getBoolean("enabled", false)
         set(value) { check(prefs.edit().putBoolean("enabled", value).commit()) }
+    var geminiDraftEnabled: Boolean
+        get() = prefs.getBoolean("gemini_draft_enabled", false)
+        set(value) { check(prefs.edit().putBoolean("gemini_draft_enabled", value).commit()) }
     @Synchronized fun endpointPath(): String {
         val existing = prefs.getString("endpoint_secret", null)
         val secret = existing ?: ByteArray(32).also { SecureRandom().nextBytes(it) }

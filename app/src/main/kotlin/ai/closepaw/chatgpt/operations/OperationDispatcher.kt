@@ -10,6 +10,7 @@ internal class OperationDispatcher(
     private val store: OperationTaskStore,
     private val scope: CoroutineScope,
     private val executeAllowed: () -> Boolean = { true },
+    private val operationAllowed: (String) -> Boolean = { true },
 ) {
     fun discover(arguments: JsonObject = JsonObject(emptyMap())): JsonObject {
         val filter = (arguments["operation_id"] as? JsonPrimitive)?.takeIf { it.isString }?.content
@@ -45,7 +46,7 @@ internal class OperationDispatcher(
     }
     @Synchronized fun execute(arguments: JsonObject): JsonObject {
         val operation = resolve(arguments) ?: return error("unknown_operation", "Operation is not registered.")
-        if (!executeAllowed()) return error("permission_denied", "Remote execution is disabled. Enable it locally in ClosePaw.")
+        if (!executeAllowed() || !operationAllowed(operation.descriptor.id)) return error("permission_denied", "Execution is disabled for this operation. Enable it locally in ClosePaw.")
         val request = (arguments["request_id"] as? JsonPrimitive)?.takeIf { it.isString }?.content
         if (request.isNullOrBlank() || request.length > 128) return error("invalid_request_id", "request_id must be a nonempty string of at most 128 characters.")
         validate(operation, arguments)?.let { return it }
@@ -74,7 +75,7 @@ internal class OperationDispatcher(
                 }
                 if (!shouldStart) return@launch
                 // Recheck after queuing: local permission may have been revoked.
-                if (!executeAllowed()) {
+                if (!executeAllowed() || !operationAllowed(operation.descriptor.id)) {
                     store.updateActive(taskId, mapOf("state" to JsonPrimitive("failed"), "summary" to JsonPrimitive("Remote execution permission revoked before start.")))
                     return@launch
                 }

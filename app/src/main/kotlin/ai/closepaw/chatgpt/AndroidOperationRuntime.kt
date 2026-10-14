@@ -23,6 +23,7 @@ internal class AndroidOperationRuntime(
     private val store = OperationTaskStore(File(context.filesDir, "mcp/tasks.json"))
     private val registry = OperationRegistry()
     private val screenMutex = Mutex()
+    private val draftDiagnostics = GeminiDraftDiagnostics(File(context.filesDir, "mcp/gemini-draft-diagnostics.json"))
     private val dispatcher: OperationDispatcher
     init {
         registry.register(OperationDescriptor(
@@ -61,8 +62,33 @@ internal class AndroidOperationRuntime(
                 else runBlocking { val readiness = client.probe(); OperationReadiness(readiness.ready, readiness.reason) }
             },
         ), shell)
-        dispatcher = OperationDispatcher(registry, store, scope, executeAllowed = { settings.enabled })
+        registry.register(GeminiDraftOperation.descriptor(
+            readiness = {
+                when {
+                    !settings.geminiDraftEnabled -> OperationReadiness(false, "gemini_draft_disabled")
+                    AgentService.instance == null -> OperationReadiness(false, "accessibility_permission_missing")
+                    runCatching { context.packageManager.getApplicationInfo(AndroidGeminiDraftUi.PACKAGE, 0) }.isFailure -> OperationReadiness(false, "app_not_installed")
+                    else -> OperationReadiness()
+                }
+            },
+        ), object : OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult = screenMutex.withLock {
+                val service = AgentService.instance
+                if (service == null) OperationResult(success = false, summary = "Accessibility service is not connected.")
+                else withTimeout(10_000) { GeminiDraftOperation(AndroidGeminiDraftUi(service) { settings.geminiDraftEnabled }, { settings.geminiDraftEnabled }, draftDiagnostics::record).invoke(invocation) }
+            }
+        })
+        dispatcher = OperationDispatcher(registry, store, scope,
+            executeAllowed = { settings.enabled || settings.geminiDraftEnabled },
+            operationAllowed = { id -> when(id) {
+                "linux.shell.exec" -> settings.enabled
+                "gemini.draft.insert" -> settings.geminiDraftEnabled
+                else -> false
+            } },
+        )
     }
+    fun diagnosticSnapshot(): JsonObject = draftDiagnostics.snapshot()
+
     override fun call(name: String, arguments: JsonObject): JsonObject = when(name) {
         "discover_operations" -> dispatcher.discover(arguments)
         "query" -> dispatcher.query(arguments)
