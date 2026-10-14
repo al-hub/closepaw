@@ -505,8 +505,12 @@ private fun exportTracesToDownloads(context: android.content.Context): String {
     val source = context.getExternalFilesDir(TRACE_DIR)
     val hasTraces = source?.exists() == true && source.walkTopDown().any { it.isFile }
     val hasBrowserDiagnostics = BrowserReadDiagnostics.hasEvents()
-    if (!hasTraces && !hasBrowserDiagnostics) {
-        return "No diagnostic logs yet. Run a browser read or enable Session Traces first."
+    val geminiDiagnostics = ai.closepaw.chatgpt.GeminiDraftDiagnostics(
+        java.io.File(context.filesDir, "mcp/gemini-draft-diagnostics.json")
+    ).snapshot()
+    val hasGeminiDiagnostics = (geminiDiagnostics["events"] as? kotlinx.serialization.json.JsonArray)?.isNotEmpty() == true
+    if (!hasTraces && !hasBrowserDiagnostics && !hasGeminiDiagnostics) {
+        return "No diagnostic logs yet. Run a screen read or Gemini draft operation, or enable Session Traces first."
     }
     val name = "closepaw-diagnostics-" + System.currentTimeMillis() + ".zip"
     return try {
@@ -529,6 +533,9 @@ private fun exportTracesToDownloads(context: android.content.Context): String {
                         zip.closeEntry()
                     }
                 }
+                zip.putNextEntry(ZipEntry("gemini-draft-diagnostics.json"))
+                zip.write(geminiDiagnostics.toString().toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
                 zip.putNextEntry(ZipEntry("browser-read-diagnostics.json"))
                 zip.write(BrowserReadDiagnostics.snapshot().toString().toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
