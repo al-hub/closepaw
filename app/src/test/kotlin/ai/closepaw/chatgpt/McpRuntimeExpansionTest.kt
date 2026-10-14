@@ -57,6 +57,12 @@ class McpRuntimeExpansionTest {
         assertThat(GeminiDraftTargetPolicy.recognized(AndroidGeminiDraftUi.GOOGLE_HOST, 1)).isTrue()
         assertThat(GeminiDraftTargetPolicy.recognized(AndroidGeminiDraftUi.PACKAGE, 0)).isTrue()
     }
+    @Test fun googleHostRequiresGeminiSpecificIdentityNotGenericPromptLabels() {
+        assertThat(GeminiDraftComposerPolicy.isComposer("Enter a prompt", "", "prompt_input", true)).isFalse()
+        assertThat(GeminiDraftComposerPolicy.isComposer("무엇이든 물어보세요", "", "", true)).isFalse()
+        assertThat(GeminiDraftComposerPolicy.isComposer("Ask Gemini", "", "", true)).isTrue()
+        assertThat(GeminiDraftComposerPolicy.isComposer("", "", "assistant_robin_input_text", true)).isTrue()
+    }
     @Test fun windowDiagnosticsContainOnlyMetadataAndPersistAcrossRecreation() {
         val file = java.io.File.createTempFile("gemini-window", ".json").apply { delete() }
         try {

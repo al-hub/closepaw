@@ -143,7 +143,7 @@ internal class AndroidGeminiDraftUi(private val service: AgentService, private v
         val hint = node.hintText?.toString().orEmpty()
         val description = node.contentDescription?.toString().orEmpty()
         val id = node.viewIdResourceName.orEmpty().substringAfterLast('/')
-        return GeminiDraftComposerPolicy.isComposer(hint, description, id)
+        return GeminiDraftComposerPolicy.isComposer(hint, description, id, node.packageName?.toString() == GOOGLE_HOST)
     }
     companion object {
         const val PACKAGE = "com.google.android.apps.bard"
@@ -152,7 +152,10 @@ internal class AndroidGeminiDraftUi(private val service: AgentService, private v
 }
 
 internal object GeminiDraftComposerPolicy {
-    fun isComposer(hint: String, description: String, resourceId: String): Boolean {
+    fun isComposer(hint: String, description: String, resourceId: String, requireGeminiIdentity: Boolean = false): Boolean {
+        if (requireGeminiIdentity) return listOf("Gemini에게 물어보", "Ask Gemini").any {
+            hint.contains(it, true) || description.contains(it, true)
+        } || resourceId in setOf("assistant_robin_input_text", "robin_input_text")
         val labels = listOf("Gemini에게 물어보", "무엇이든 물어보", "Ask Gemini", "Enter a prompt")
         return labels.any { hint.contains(it, true) || description.contains(it, true) } ||
             resourceId in setOf("assistant_robin_input_text", "robin_input_text", "prompt_input")
