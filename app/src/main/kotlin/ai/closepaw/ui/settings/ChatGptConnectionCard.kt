@@ -40,6 +40,7 @@ internal fun ChatGptConnectionCard() {
     val scope = rememberCoroutineScope()
     val executionSettings = remember(context) { McpExecutionSettings(context) }
     var executionEnabled by remember { mutableStateOf(executionSettings.enabled) }
+    var geminiDraftEnabled by remember { mutableStateOf(executionSettings.geminiDraftEnabled) }
     val configStore = remember(context) { SecureMcpTunnelConfigStore(context.applicationContext) }
     var configuredTunnelId by remember {
         mutableStateOf(runCatching { configStore.load()?.tunnelId }.getOrNull())
@@ -81,6 +82,13 @@ internal fun ChatGptConnectionCard() {
             })
         }
         Text("When enabled, your private connection can run commands and change Termux files. Keep the connection URL private. Turning this off blocks new execution; running jobs continue.", style = MaterialTheme.typography.bodySmall)
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Allow ChatGPT Gemini draft input", modifier = Modifier.weight(1f))
+            Switch(checked = geminiDraftEnabled, onCheckedChange = {
+                executionSettings.geminiDraftEnabled = it; geminiDraftEnabled = it
+            })
+        }
+        Text("Adds text only to an empty Gemini input. Does not press Send. Unlock the phone first; existing drafts are preserved.", style = MaterialTheme.typography.bodySmall)
         state.publicMcpUrl?.let { url ->
             SelectionContainer {
                 Text(
