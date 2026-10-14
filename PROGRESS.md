@@ -4,6 +4,14 @@ This is the live project milestone board for the ChatGPT Android control path.
 
 Progress work follows one rule: **implementation and this document move together**. A milestone is complete only when its real-device user experience has been verified.
 
+## v0.1.43 follow-up — implementation, CI and device acceptance
+
+Gemini foreground/root consistency, package/window diagnostic metadata and ZIP
+inclusion, plus a ninth read-only MCP runtime tool are in development. Existing
+eight tool definitions stay unchanged; client discovery without plugin refresh
+and actual Gemini draft insertion remain **PENDING real-device acceptance**.
+See [release acceptance](doc/dev/mcp-runtime-expansion-v0143.md).
+
 ## Current position
 
 ```text

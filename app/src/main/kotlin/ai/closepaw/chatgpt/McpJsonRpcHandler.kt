@@ -20,6 +20,7 @@ internal class McpJsonRpcHandler(
     private val statusTool: ClosePawStatusTool,
     private val readAppTool: ReadAppTool? = null,
     private val operationTools: McpOperationTools? = null,
+    private val runtimeInfoEnabled: Boolean = false,
     private val extraDiagnostics: () -> JsonObject = { JsonObject(emptyMap()) },
 ) {
     private val json = Json { ignoreUnknownKeys = true }
@@ -64,19 +65,51 @@ internal class McpJsonRpcHandler(
         )
     }
 
-    private fun listTools(id: JsonElement): McpHttpResponse = jsonResult(
-        id,
-        buildJsonObject {
-            put("tools", buildJsonArray {
+    private fun toolDefinitions() = buildJsonArray {
                 add(statusToolDefinition())
                 if (operationTools != null) McpOperationContract.names.forEach { add(McpOperationContract.definition(it)) }
                 if (readAppTool != null) {
                     add(readAppToolDefinition())
                     add(diagnosticsToolDefinition())
                 }
+                if (runtimeInfoEnabled) add(runtimeInfoToolDefinition())
+    }
+
+    private fun listTools(id: JsonElement): McpHttpResponse = jsonResult(id, buildJsonObject {
+        put("tools", toolDefinitions())
+    })
+
+    private fun runtimeInfoToolDefinition() = buildJsonObject {
+        put("name", RUNTIME_INFO_TOOL_NAME)
+        put("description", "Read the installed MCP tool contract fingerprint and optional redacted diagnostics. No app launch or input. Use existing get_status for fallback discovery if this newly added tool is unavailable in the client.")
+        put("inputSchema", buildJsonObject {
+            put("type", "object"); put("additionalProperties", false)
+            put("properties", buildJsonObject {
+                put("include_diagnostics", buildJsonObject { put("type", "boolean"); put("default", false) })
             })
+        })
+        put("annotations", readOnlyAnnotations())
+    }
+
+    private fun runtimeInfo(arguments: JsonObject): JsonObject {
+        require(arguments.keys.all { it == "include_diagnostics" })
+        val include = arguments["include_diagnostics"]?.let {
+            require(it is kotlinx.serialization.json.JsonPrimitive && !it.isString && it.content in setOf("true", "false"))
+            it.content == "true"
+        } ?: false
+        val definitions = toolDefinitions()
+        val hash = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(definitions.toString().toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        return buildJsonObject {
+            put("status", "succeeded"); put("version_name", statusTool.snapshot().getValue("version_name"))
+            put("version_code", statusTool.snapshot().getValue("version_code"))
+            put("tool_count", definitions.size); put("tool_schema_hash", hash)
+            put("tools", buildJsonArray { definitions.forEach { add(it.jsonObject.getValue("name")) } })
+            put("runtime_info_version", 1)
+            put("client_refresh_verified", false)
+            if (include) put("diagnostics", JsonObject(BrowserReadDiagnostics.snapshot() + extraDiagnostics()))
         }
-    )
+    }
 
     private fun statusToolDefinition(): JsonObject = buildJsonObject {
         put("name", STATUS_TOOL_NAME)
@@ -146,7 +179,16 @@ internal class McpJsonRpcHandler(
         }
 
         return when (name) {
-            STATUS_TOOL_NAME -> toolResult(id, statusTool.snapshot())
+            STATUS_TOOL_NAME -> toolResult(id, buildJsonObject {
+                statusTool.snapshot().forEach { (key, value) -> put(key, value) }
+                put("mcp_tool_count", toolDefinitions().size)
+                put("runtime_info_tool", if (runtimeInfoEnabled) RUNTIME_INFO_TOOL_NAME else "unavailable")
+                put("tool_list_refresh_verified", false)
+            })
+            RUNTIME_INFO_TOOL_NAME -> if (runtimeInfoEnabled) {
+                require(params["arguments"] == null || params["arguments"] is JsonObject)
+                toolResult(id, runtimeInfo(params["arguments"] as? JsonObject ?: JsonObject(emptyMap())))
+            } else jsonError(id, -32602, "Unknown tool: $name")
             DIAGNOSTICS_TOOL_NAME -> if (readAppTool != null) {
                 val status = statusTool.snapshot()
                 val diagnostics = JsonObject(BrowserReadDiagnostics.snapshot() + extraDiagnostics())
@@ -240,6 +282,7 @@ internal class McpJsonRpcHandler(
         )
 
     companion object {
+        const val RUNTIME_INFO_TOOL_NAME = "get_runtime_info"
         const val STATUS_TOOL_NAME = "get_status"
         const val READ_APP_TOOL_NAME = "read_app"
         const val DIAGNOSTICS_TOOL_NAME = "get_diagnostics"

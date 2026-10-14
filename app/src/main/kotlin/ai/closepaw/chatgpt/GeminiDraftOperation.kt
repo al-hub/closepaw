@@ -14,10 +14,29 @@ internal interface GeminiDraftUi {
     suspend fun inspect(): DraftComposerState
     suspend fun setIfEmpty(text: String): DraftWriteResult
     suspend fun matches(text: String): Boolean
+    fun evidence(): DraftWindowEvidence = DraftWindowEvidence()
+    val launchFailureReason: String get() = "target_not_foreground"
 }
-internal data class DraftDiagnostic(val taskId: String, val stage: String, val reason: String, val elapsedMs: Long) {
+internal data class DraftWindowEvidence(
+    val observedPackage: String? = null,
+    val rootPackage: String? = null,
+    val windowId: Int? = null,
+    val windowType: Int? = null,
+    val active: Boolean? = null,
+    val focused: Boolean? = null,
+    val reason: String = "not_observed",
+) {
     fun toJson() = buildJsonObject {
-        put("task_id", taskId); put("stage", stage); put("reason_code", reason); put("elapsed_ms", elapsedMs)
+        observedPackage?.let { put("observed_package", it.take(160)) }
+        rootPackage?.let { put("root_package", it.take(160)) }
+        windowId?.let { put("window_id", it) }; windowType?.let { put("window_type", it) }
+        active?.let { put("active", it) }; focused?.let { put("focused", it) }
+        put("window_reason", reason)
+    }
+}
+internal data class DraftDiagnostic(val taskId: String, val stage: String, val reason: String, val elapsedMs: Long, val window: DraftWindowEvidence = DraftWindowEvidence()) {
+    fun toJson() = buildJsonObject {
+        put("task_id", taskId); put("stage", stage); put("reason_code", reason); put("elapsed_ms", elapsedMs); put("window", window.toJson())
     }
 }
 
@@ -49,7 +68,7 @@ internal class GeminiDraftOperation(
         var writeAttempted = false
         var diagnosticsPersisted = true
         fun event(stage: String, reason: String = "ok") {
-            val diagnostic = DraftDiagnostic(invocation.taskId, stage, reason, (clock() - start).coerceAtLeast(0))
+            val diagnostic = DraftDiagnostic(invocation.taskId, stage, reason, (clock() - start).coerceAtLeast(0), ui.evidence())
             events.add(diagnostic)
             // Logging failure never repeats or changes the UI action.
             runCatching { record(diagnostic) }.onFailure { diagnosticsPersisted = false }
@@ -73,7 +92,7 @@ internal class GeminiDraftOperation(
             if (!allowed()) return finish("gemini_draft_disabled")
             if (ui.isLocked()) return finish("device_locked")
             event("launch")
-            if (!ui.launch()) return finish("target_not_foreground")
+            if (!ui.launch()) return finish(ui.launchFailureReason)
             event("find_composer")
             val composer = ui.inspect()
             if (!composer.foreground) return finish("target_not_foreground")

@@ -46,6 +46,7 @@ class ChatGptMcpService : Service() {
             port = McpHttpServer.DEFAULT_PORT,
             mcpPath = executionSettings.endpointPath(),
             handler = McpJsonRpcHandler(
+                runtimeInfoEnabled = true,
                 statusTool = statusTool,
                 readAppTool = readApp,
                 operationTools = operations,
