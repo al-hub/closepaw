@@ -69,6 +69,12 @@ class GeminiDraftOperationTest {
         assertThat(operation(switched).invoke(invocation()).success).isFalse()
         assertThat(switched.writes).isEqualTo(0)
     }
+    @Test fun loggingFailureDoesNotRepeatWriteAndIsReported() = runBlocking {
+        val ui = FakeUi()
+        val result = GeminiDraftOperation(ui, { true }, { error("disk unavailable") }).invoke(invocation())
+        assertThat(result.success).isTrue(); assertThat(ui.writes).isEqualTo(1)
+        assertThat(result.data["diagnostics_persisted"]!!.jsonPrimitive.boolean).isFalse()
+    }
     @Test fun verificationFailureIsNotSuccessOrAutomaticallyRetried() = runBlocking {
         val ui = FakeUi().apply { verified = false }
         val result = operation(ui).invoke(invocation())

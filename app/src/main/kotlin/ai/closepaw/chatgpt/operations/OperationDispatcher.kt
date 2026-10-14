@@ -9,8 +9,8 @@ internal class OperationDispatcher(
     private val registry: OperationRegistry,
     private val store: OperationTaskStore,
     private val scope: CoroutineScope,
-    private val executeAllowed: () -> Boolean = { true },
     private val operationAllowed: (String) -> Boolean = { true },
+    private val executeAllowed: () -> Boolean = { true },
 ) {
     fun discover(arguments: JsonObject = JsonObject(emptyMap())): JsonObject {
         val filter = (arguments["operation_id"] as? JsonPrimitive)?.takeIf { it.isString }?.content

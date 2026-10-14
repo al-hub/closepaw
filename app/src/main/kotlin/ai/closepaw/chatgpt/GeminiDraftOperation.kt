@@ -47,11 +47,12 @@ internal class GeminiDraftOperation(
         val start = clock()
         val events = mutableListOf<DraftDiagnostic>()
         var writeAttempted = false
+        var diagnosticsPersisted = true
         fun event(stage: String, reason: String = "ok") {
             val diagnostic = DraftDiagnostic(invocation.taskId, stage, reason, (clock() - start).coerceAtLeast(0))
             events.add(diagnostic)
             // Logging failure never repeats or changes the UI action.
-            runCatching { record(diagnostic) }
+            runCatching { record(diagnostic) }.onFailure { diagnosticsPersisted = false }
         }
         fun finish(reason: String, success: Boolean = false, unknown: Boolean = false): OperationResult {
             event("complete", reason)
@@ -62,7 +63,7 @@ internal class GeminiDraftOperation(
             }, data = buildJsonObject {
                 put("app", "gemini"); put("reason_code", reason); put("verified", success)
                 put("sent", false); put("send_action_invoked", false); put("outcome_unknown", unknown)
-                put("diagnostics", JsonArray(events.map { it.toJson() }))
+                put("diagnostics", JsonArray(events.map { it.toJson() })); put("diagnostics_persisted", diagnosticsPersisted)
             })
         }
         event("start")
