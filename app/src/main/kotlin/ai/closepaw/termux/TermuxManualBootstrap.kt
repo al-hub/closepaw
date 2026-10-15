@@ -14,10 +14,11 @@ TOKEN_FILE="${'$'}HOME/.closepaw/token"
 BRIDGE="${'$'}HOME/.closepaw/bridge.py"
 LOG_DIR="${'$'}HOME/closepaw/logs"
 BOOT_LOG="${'$'}LOG_DIR/boot.log"
-[ -s "${'$'}TOKEN_FILE" ] || exit 0
-[ -f "${'$'}BRIDGE" ] || exit 0
 mkdir -p "${'$'}LOG_DIR"
 printf 'attempt %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"
+[ -s "${'$'}TOKEN_FILE" ] || { printf 'missing_token %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"; exit 1; }
+[ -f "${'$'}BRIDGE" ] || { printf 'missing_bridge %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"; exit 1; }
+command -v python3 >/dev/null 2>&1 || { printf 'missing_python %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"; exit 1; }
 # The supervisor adopts a healthy daemon and keeps watching it; do not exit on health alone.
 printf 'exec_start %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"
 exec env CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" python3 "${'$'}BRIDGE" --supervise ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} >/dev/null 2>>"${'$'}LOG_DIR/bridge.err" </dev/null
