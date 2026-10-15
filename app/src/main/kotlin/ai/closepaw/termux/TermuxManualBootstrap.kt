@@ -14,16 +14,14 @@ TOKEN_FILE="${'$'}HOME/.closepaw/token"
 BRIDGE="${'$'}HOME/.closepaw/bridge.py"
 LOG_DIR="${'$'}HOME/closepaw/logs"
 BOOT_LOG="${'$'}LOG_DIR/boot.log"
-[ -s "${'$'}TOKEN_FILE" ] || exit 0
-[ -f "${'$'}BRIDGE" ] || exit 0
 mkdir -p "${'$'}LOG_DIR"
 printf 'attempt %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"
-if command -v curl >/dev/null 2>&1 && curl -fsS --max-time 1 http://127.0.0.1:18422/v1/health 2>/dev/null | grep -q '"identity":"closepaw-bridge"'; then
-  printf 'already_ready %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"
-  exit 0
-fi
+[ -s "${'$'}TOKEN_FILE" ] || { printf 'missing_token %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"; exit 1; }
+[ -f "${'$'}BRIDGE" ] || { printf 'missing_bridge %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"; exit 1; }
+command -v python3 >/dev/null 2>&1 || { printf 'missing_python %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"; exit 1; }
+# The supervisor adopts a healthy daemon and keeps watching it; do not exit on health alone.
 printf 'exec_start %s\\n' "${'$'}(date +%s)" >> "${'$'}BOOT_LOG"
-exec env CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" python3 "${'$'}BRIDGE" ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} >/dev/null 2>"${'$'}LOG_DIR/bridge.err" </dev/null
+exec env CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" python3 "${'$'}BRIDGE" --supervise ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} >/dev/null 2>>"${'$'}LOG_DIR/bridge.err" </dev/null
 """.trimIndent()
 
     fun command(): String {
@@ -35,8 +33,8 @@ exec env CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" python3 "${'$'}B
             "printf '%s' '$bootScriptBase64' | base64 -d > $BOOT_SCRIPT_PATH; " +
             "chmod 700 $BOOT_SCRIPT_PATH; " +
             "CLOSEPAW_BRIDGE_TOKEN=\"\$(cat ~/.closepaw/token)\" " +
-            "nohup python3 ~/.closepaw/bridge.py ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} " +
-            ">/dev/null 2>~/closepaw/logs/bridge.err </dev/null &"
+            "nohup python3 ~/.closepaw/bridge.py --supervise ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} " +
+            ">/dev/null 2>>~/closepaw/logs/bridge.err </dev/null &"
     }
 
     /**
@@ -55,12 +53,28 @@ exec env CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" python3 "${'$'}B
             "printf '%s' \"\$CLOSEPAW_TOKEN\" > ~/.closepaw/token; chmod 600 ~/.closepaw/token; unset CLOSEPAW_TOKEN; " +
             "printf '%s' '$boot' | base64 -d > $BOOT_SCRIPT_PATH; chmod 700 $BOOT_SCRIPT_PATH; " +
             "CLOSEPAW_BRIDGE_TOKEN=\"\$(cat ~/.closepaw/token)\" nohup python3 ~/.closepaw/bridge.py " +
-            "${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} " +
-            ">/dev/null 2>~/closepaw/logs/bridge.err </dev/null & " +
+            "--supervise ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} " +
+            ">/dev/null 2>>~/closepaw/logs/bridge.err </dev/null & " +
             "sleep 1; curl -fsS --max-time 2 http://127.0.0.1:18422/v1/health"
     }
 
     fun token(context: Context): String = TermuxBridgeAuth.token(context)
+
+    /** Runs only inside an authenticated, already paired daemon; credentials stay in env. */
+    fun recoveryInstallCommand(bridgePayload: String, bootPayload: String): String {
+        require(listOf(bridgePayload, bootPayload).all { it.matches(Regex("[A-Za-z0-9+/=]+")) })
+        return "set -e; umask 077; mkdir -p ~/.closepaw ~/.termux/boot ~/closepaw/logs; " +
+            "if ! grep -qx '88.1' ~/.closepaw/recovery-installed 2>/dev/null; then " +
+            "tmpf=\"\$(mktemp ~/.closepaw/bridge.py.XXXXXX)\"; " +
+            "trap 'rm -f \"\$tmpf\"' EXIT; " +
+            "printf '%s' '$bridgePayload' | base64 -d > \"\$tmpf\"; " +
+            "python3 -m py_compile \"\$tmpf\"; mv \"\$tmpf\" ~/.closepaw/bridge.py; " +
+            "printf '%s' '$bootPayload' | base64 -d > $BOOT_SCRIPT_PATH; chmod 700 $BOOT_SCRIPT_PATH; " +
+            "printf '88.1\\n' > ~/.closepaw/recovery-installed; fi; " +
+            "nohup python3 ~/.closepaw/bridge.py --supervise ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} " +
+            ">/dev/null 2>>~/closepaw/logs/bridge.err </dev/null & " +
+            "echo CLOSEPAW_RECOVERY=installed"
+    }
 
     fun bridgePayload(context: Context): String =
         context.resources.openRawResource(ai.closepaw.R.raw.closepaw_bridge_py).use {

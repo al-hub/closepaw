@@ -3,6 +3,7 @@
 BRIDGE_VERSION = "2"
 import argparse
 import errno
+import fcntl
 import hmac
 import json
 import os
@@ -21,6 +22,7 @@ from closepaw_jobs import JobManager, JobError
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 IDENTITY = "closepaw-bridge"
+RUNTIME_REVISION = "88.1"
 DEFAULT_HOST, DEFAULT_PORT = "127.0.0.1", 18422
 DEFAULT_TIMEOUT_MS = MAX_TIMEOUT_MS = 120_000
 DEFAULT_OUTPUT_BYTES = 65536
@@ -376,6 +378,8 @@ class Handler(BaseHTTPRequestHandler):
             "version": BRIDGE_VERSION,
             "job_api_version": 1,
             "identity": IDENTITY,
+            "runtime_revision": RUNTIME_REVISION,
+            "idle_timeout_sec": self.server.idle_timeout_sec,
             "uptime_ms": self.server.uptime_ms(),
             "last_request_ms_ago": self.server.last_request_ms_ago(),
         })
@@ -416,8 +420,134 @@ def watchdog(server):  # watchdog|idle
         with server.last_request_lock:
             idle = time.monotonic() - server.last_request_at
         if idle > server.idle_timeout_sec and not server.jobs.has_active_jobs():
+            recovery_event("idle_shutdown", idle_timeout_sec=server.idle_timeout_sec)
             server.shutdown()
             return
+def recovery_event(event, **fields):
+    """Bounded, private diagnostics. Never include commands, environment or tokens."""
+    root = closepaw_dir()
+    payload = {"event": event, "at": time.time(), "revision": RUNTIME_REVISION, **fields}
+    log = root / "recovery.jsonl"
+    if log.exists() and log.stat().st_size > 65536:
+        log.replace(root / "recovery.previous.jsonl")
+    with log.open("a") as stream:
+        stream.write(json.dumps(payload, separators=(",", ":")) + "\n")
+    os.chmod(log, 0o600)
+    temp = root / f"recovery.json.tmp.{os.getpid()}"
+    temp.write_text(json.dumps(payload, separators=(",", ":")))
+    os.chmod(temp, 0o600)
+    temp.replace(root / "recovery.json")
+
+def recovery_probe(port, token):
+    """Distinguish absence, incompatible listener and auth failure without executing a shell."""
+    base = f"http://127.0.0.1:{port}"
+    # Do not send a credential to a listener until public identity/version is checked.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    try:
+        with opener.open(base + "/v1/health", timeout=2) as response:
+            health = json.loads(response.read(8192).decode())
+        if not isinstance(health, dict) or health.get("identity") != IDENTITY:
+            return "port_conflict"
+        if str(health.get("version")) != BRIDGE_VERSION or health.get("job_api_version") != 1:
+            return "bridge_outdated"
+        request = urllib.request.Request(base + "/v1/jobs", headers={AUTH_HEADER: token})
+        with opener.open(request, timeout=2) as response:
+            data = json.loads(response.read(8192).decode())
+        return "ready" if isinstance(data, dict) and data.get("status") == "ready" else "bridge_unavailable"
+    except urllib.error.HTTPError as exc:
+        return "auth_mismatch" if exc.code == 401 else "port_conflict"
+    except (ValueError, OSError, urllib.error.URLError):
+        # A refused connection is absence; an occupied but hung/non-HTTP port is not.
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                return "port_conflict"
+        except ConnectionRefusedError:
+            return "daemon_absent"
+        except OSError:
+            return "bridge_unavailable"
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+def supervise(args):
+    """Termux-side recovery, including variants without Android RUN_COMMAND.
+
+    Android force-stop/whole-Termux kills cannot be repaired from inside this process.
+    The boot hook can re-enter this supervisor when Termux:Boot is supported/enabled.
+    """
+    lock = (closepaw_dir() / "supervisor.lock").open("a")
+    os.chmod(lock.name, 0o600)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock.close()
+        return 0  # An existing owner is responsible for recovery.
+    stop = threading.Event()
+    old_handlers = {}
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        old_handlers[sig] = signal.signal(sig, lambda *_: stop.set())
+    child = None
+    failures = 0
+    previous = None
+    launch_at = 0
+    recovery_event("supervisor_started", pid=os.getpid())
+    try:
+        while not stop.is_set():
+            state = recovery_probe(args.port, args.auth_token)
+            if state != previous:
+                recovery_event(state, attempts=failures)
+                previous = state
+            if state == "ready":
+                failures = 0
+                stop.wait(args.supervisor_interval_sec)
+                continue
+            if state != "daemon_absent":
+                # Never kill another listener, overwrite pairing, or loop on auth/permissions.
+                child = None  # Leave an unresponsive existing process intact for diagnosis.
+                return 3
+            if child is not None:
+                code = child.poll()
+                if code is None:
+                    if time.monotonic() - launch_at < 5:
+                        stop.wait(.25)
+                        continue
+                    # Do not spawn duplicates or kill a running but unresponsive daemon.
+                    recovery_event("child_unresponsive")
+                    child = None
+                    return 3
+                recovery_event("child_exited", exit_code=code)
+            if failures >= 5:
+                recovery_event("recovery_exhausted", attempts=failures)
+                return 4
+            if stop.wait(0 if failures == 0 else min(2 ** failures, 30)):
+                break
+            env = os.environ.copy()
+            env["CLOSEPAW_BRIDGE_TOKEN"] = args.auth_token
+            child = subprocess.Popen(
+                [sys.executable, str(Path(__file__).resolve()), "--host", args.host,
+                 "--port", str(args.port), "--idle-timeout-sec", "0"],
+                env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            )
+            failures += 1
+            launch_at = time.monotonic()
+            recovery_event("launch", child_pid=child.pid, attempts=failures)
+            # Allow startup before deciding a child is unresponsive.
+            stop.wait(1)
+        return 0
+    finally:
+        if child is not None and child.poll() is None:
+            child.terminate()
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+        recovery_event("supervisor_stopped")
+        for sig, handler in old_handlers.items():
+            signal.signal(sig, handler)
+        lock.close()
+
 def parse_args():
     parser = argparse.ArgumentParser(description="ClosePaw Termux bridge daemon")
     parser.add_argument("--host", default=DEFAULT_HOST)
@@ -425,6 +555,9 @@ def parse_args():
     parser.add_argument("--idle-timeout-sec", type=int, default=1800)
     parser.add_argument("--watchdog-tick-sec", type=float, default=60, help=argparse.SUPPRESS)
     parser.add_argument("--auth-token", default=os.environ.get("CLOSEPAW_BRIDGE_TOKEN"))
+    parser.add_argument("--persistent", action="store_true", help="Alias for --idle-timeout-sec 0")
+    parser.add_argument("--supervise", action="store_true", help="Monitor and recover the paired daemon")
+    parser.add_argument("--supervisor-interval-sec", type=float, default=10, help=argparse.SUPPRESS)
     return parser.parse_args()
 def main():
     args = parse_args()
@@ -437,6 +570,12 @@ def main():
     if not args.auth_token or len(args.auth_token) < 32:
         print("missing_or_weak_auth_token", file=sys.stderr)
         return 2
+    if args.supervisor_interval_sec <= 0:
+        return 2
+    if args.supervise:
+        return supervise(args)
+    if args.persistent:
+        args.idle_timeout_sec = 0
     pidfile = closepaw_dir() / "bridge.pid"
     kill_old_bridge(pidfile)
     try:

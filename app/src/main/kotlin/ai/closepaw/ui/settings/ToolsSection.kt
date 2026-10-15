@@ -152,6 +152,10 @@ private fun TermuxShellSettingsRow() {
                     NeedsSetupReason.TERMUX_NOT_RUNNING -> {
                         { context.launchTermux() }
                     }
+                    NeedsSetupReason.HEALTH_TIMEOUT -> {
+                        { scope.launch(Dispatchers.IO) { manager.ensureReadyForSession(8_000) } }
+                    }
+                    NeedsSetupReason.PORT_IN_USE -> null
                     NeedsSetupReason.PERMISSION_MISSING -> permissionRowAction(
                         gate = permissionGate,
                         runSetup = { scope.launch(Dispatchers.IO) { manager.setup() } },

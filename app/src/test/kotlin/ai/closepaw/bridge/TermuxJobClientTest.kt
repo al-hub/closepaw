@@ -45,7 +45,7 @@ class TermuxJobClientTest {
             server.enqueue(MockResponse().setResponseCode(401).setBody("""{"error":"unauthorized"}"""))
             val reply = client(server).poll("job-1") as TermuxJobReply.Failure
             assertThat(reply.httpStatus).isEqualTo(401)
-            assertThat(reply.code).isEqualTo("bridge_http_error")
+            assertThat(reply.code).isEqualTo("bridge_auth_mismatch")
         }
     }
 

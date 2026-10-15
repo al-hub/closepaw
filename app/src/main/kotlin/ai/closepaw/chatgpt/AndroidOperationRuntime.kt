@@ -4,6 +4,7 @@ import ai.closepaw.app.AgentService
 import ai.closepaw.bridge.*
 import ai.closepaw.chatgpt.operations.*
 import ai.closepaw.termux.TermuxBridgeAuth
+import ai.closepaw.termux.TermuxBridgeManager
 import android.content.Context
 import java.io.File
 import kotlinx.coroutines.*
@@ -19,6 +20,9 @@ internal class AndroidOperationRuntime(
     private val settings: McpExecutionSettings,
 ) : McpOperationTools {
     private val client = TermuxJobClient(TermuxBridgeAuth.token(context))
+    private val termuxBridge = TermuxBridgeManager.get(context)
+    private val recoveryMutex = Mutex()
+    private var lastRecoveryAttemptMs = 0L
     private val shell = TermuxShellOperation(client, TermuxJobLinkStore(File(context.filesDir, "mcp/job-links.tsv")))
     private val store = OperationTaskStore(File(context.filesDir, "mcp/tasks.json"))
     private val registry = OperationRegistry()
@@ -26,6 +30,11 @@ internal class AndroidOperationRuntime(
     private val draftDiagnostics = GeminiDraftDiagnostics(File(context.filesDir, "mcp/gemini-draft-diagnostics.json"))
     private val dispatcher: OperationDispatcher
     init {
+        // One bounded maintenance attempt per app runtime. Healthy paired Play Termux can
+        // install its supervisor without RUN_COMMAND or another manual pairing ceremony.
+        scope.launch {
+            if (settings.enabled) termuxBridge.ensureReadyForSession(8_000)
+        }
         registry.register(OperationDescriptor(
             id = "app.screen.read", description = "Read one visible screen from a registered app. May bring that app to foreground. Discover targets with app.targets.list. Does not type or send.",
             inputSchema = schema("app" to stringSchema(128), required = listOf("app")),
@@ -59,7 +68,20 @@ internal class AndroidOperationRuntime(
             inputSchema=schema("command" to stringSchema(32768, 1), "cwd" to stringSchema(4096, 1), "timeout_ms" to buildJsonObject { put("type", "integer"); put("minimum", 1000); put("maximum", 3600000) }, required=listOf("command")),
             readiness={
                 if(!settings.enabled) OperationReadiness(false,"remote_execution_disabled")
-                else runBlocking { val readiness = client.probe(); OperationReadiness(readiness.ready, readiness.reason) }
+                else runBlocking {
+                    var readiness = client.probe()
+                    if (!readiness.ready && readiness.reason?.startsWith("bridge_daemon_unreachable:") == true) {
+                        recoveryMutex.withLock {
+                            val now = android.os.SystemClock.elapsedRealtime()
+                            if (now - lastRecoveryAttemptMs >= 30_000 || lastRecoveryAttemptMs == 0L) {
+                                lastRecoveryAttemptMs = now
+                                termuxBridge.ensureReadyForSession(8_000)
+                                readiness = client.probe()
+                            }
+                        }
+                    }
+                    OperationReadiness(readiness.ready, readiness.reason)
+                }
             },
         ), shell)
         registry.register(GeminiDraftOperation.descriptor(

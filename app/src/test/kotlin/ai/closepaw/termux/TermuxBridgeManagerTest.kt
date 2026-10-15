@@ -97,6 +97,40 @@ class TermuxBridgeManagerTest {
     }
 
     @Test
+    fun `start exports persisted token to Python rather than mkdir`() = runTest {
+        val runner = FakeCommandRunner()
+        val manager = manager(runner, FakeHealthProbe(HealthProbe.Unavailable, runner))
+        assertThat(manager.setup()).isEqualTo(TermuxBridgeStatus.Ready)
+        assertThat(runner.lastStartCommand).contains("CLOSEPAW_BRIDGE_TOKEN=\"${'$'}(cat ~/.closepaw/token)\" nohup python3")
+        assertThat(runner.lastStartCommand).doesNotContain("test-token")
+        assertThat(runner.lastStartCommand).contains("--supervise")
+    }
+
+    @Test
+    fun `offline Play Termux does not ask for new pairing or use RUN_COMMAND`() = runTest {
+        val runner = FakeCommandRunner()
+        val manager = manager(runner, FakeHealthProbe(HealthProbe.Unavailable),
+            TermuxInstallProbe { TermuxInstallState.RunCommandUnavailable })
+        assertThat(manager.ensureReadyForSession(1000))
+            .isEqualTo(TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.TERMUX_NOT_RUNNING))
+        assertThat(runner.commands).isEmpty()
+    }
+
+    @Test
+    fun `restart never kills healthy or mismatched or foreign listener`() = runTest {
+        listOf(
+            HealthProbe.Ready to TermuxBridgeStatus.Ready,
+            HealthProbe.AuthMismatch to TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.AUTH_MISMATCH),
+            HealthProbe.InvalidIdentity to TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.PORT_IN_USE),
+        ).forEach { (health, expected) ->
+            val runner = FakeCommandRunner()
+            val manager = manager(runner, FakeHealthProbe(health))
+            assertThat(manager.restart()).isEqualTo(expected)
+            assertThat(runner.commands).isEmpty()
+        }
+    }
+
+    @Test
     fun `setup maps probe failures to refined setup reasons`() =
         runTest {
             val cases: List<Triple<RunCommandError, TermuxInstallProbe, NeedsSetupReason>> = listOf(

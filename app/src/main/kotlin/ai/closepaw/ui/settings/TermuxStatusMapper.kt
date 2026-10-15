@@ -9,7 +9,7 @@ import ai.closepaw.termux.TermuxBridgeStatus
  * renders. No Compose dependency — covered by JVM unit tests.
  *
  * Label words MUST stay exactly `"Ready" / "Needs Setup" / "Setting up…" / "Not Installed"
- * / "Disabled"` — `SettingsTermuxRowTest` matches on them.
+ * / "Disabled" / "Offline"` — `SettingsTermuxRowTest` matches on them.
  */
 internal fun termuxStatusUi(
     state: TermuxBridgeStatus,
@@ -27,7 +27,8 @@ internal fun termuxStatusUi(
 
 private fun TermuxBridgeStatus.label(): String = when (this) {
     TermuxBridgeStatus.NotInstalled -> "Not Installed"
-    is TermuxBridgeStatus.NeedsSetup -> "Needs Setup"
+    is TermuxBridgeStatus.NeedsSetup ->
+        if (reason == NeedsSetupReason.TERMUX_NOT_RUNNING || reason == NeedsSetupReason.HEALTH_TIMEOUT) "Offline" else "Needs Setup"
     TermuxBridgeStatus.SetupInProgress -> "Setting up…"
     TermuxBridgeStatus.Ready -> "Ready"
     TermuxBridgeStatus.Disabled -> "Disabled"
@@ -76,14 +77,14 @@ private fun NeedsSetupReason.toDisplayText(): String = when (this) {
     NeedsSetupReason.ALLOW_EXTERNAL_APPS_MISSING ->
         "Allow external apps is disabled in Termux. Enable it, then tap setup."
     NeedsSetupReason.TERMUX_NOT_RUNNING ->
-        "Termux is not running. Tap to open Termux, then return here."
+        "Local Bridge is offline; RUN_COMMAND recovery is unavailable. Open Termux and run ~/.termux/boot/10-closepaw-bridge. Existing pairing is retained."
     NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE ->
         "RUN_COMMAND is unavailable. Use the one-time Local Bridge bootstrap below."
     NeedsSetupReason.PACKAGES_MISSING -> "Missing packages — tap to install python/git/ripgrep"
     NeedsSetupReason.BRIDGE_OUTDATED -> "Bridge daemon out of date — tap to update"
     NeedsSetupReason.AUTH_MISMATCH ->
         "Local Bridge pairing token does not match. Repeat the pairing steps below."
-    NeedsSetupReason.HEALTH_TIMEOUT -> "Bridge unreachable — tap to retry setup"
+    NeedsSetupReason.HEALTH_TIMEOUT -> "Local Bridge is offline — retry recovery. Existing pairing is retained."
     NeedsSetupReason.TERMUX_TIMEOUT -> "Termux command timed out — open Termux once and retry"
     NeedsSetupReason.PORT_IN_USE -> "Port 18422 in use by another process"
     NeedsSetupReason.UNKNOWN -> "Setup error — tap to retry"

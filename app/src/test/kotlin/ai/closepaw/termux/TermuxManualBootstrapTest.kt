@@ -16,7 +16,7 @@ class TermuxManualBootstrapTest {
         assertThat(command).contains("~/.closepaw/token")
         assertThat(command).contains("chmod 600")
         assertThat(command).contains("cat ~/.closepaw/token")
-        assertThat(command).contains("nohup python3 ~/.closepaw/bridge.py")
+        assertThat(command).contains("nohup python3 ~/.closepaw/bridge.py --supervise")
     }
 
     @Test fun `bootstrap installs idempotent Termux Boot startup script`() {
@@ -62,7 +62,7 @@ class TermuxManualBootstrapTest {
         val script = TermuxManualBootstrap.bootScript()
         assertThat(script).contains("boot.log")
         assertThat(script).contains("attempt %s")
-        assertThat(script).contains("already_ready %s")
+        assertThat(script).contains("--supervise")
         assertThat(script).contains("exec_start %s")
     }
 
@@ -71,7 +71,6 @@ class TermuxManualBootstrapTest {
         assertThat(script).contains("TOKEN_FILE=\"\$HOME/.closepaw/token\"")
         assertThat(script).contains("cat \"\$TOKEN_FILE\"")
         assertThat(script).doesNotContain("test-token")
-        assertThat(script).contains("127.0.0.1:18422")
+        assertThat(script).doesNotContain("curl -fsS")
     }
 }
-
