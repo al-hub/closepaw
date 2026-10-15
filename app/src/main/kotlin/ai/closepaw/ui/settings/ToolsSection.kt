@@ -210,9 +210,11 @@ private fun TermuxShellSettingsRow() {
             (bridgeStatus as TermuxBridgeStatus.NeedsSetup).reason in setOf(
                 NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE,
                 NeedsSetupReason.AUTH_MISMATCH,
+                NeedsSetupReason.TERMUX_NOT_RUNNING,
             )
         ) {
             {
+                val keepPairing = (bridgeStatus as TermuxBridgeStatus.NeedsSetup).reason == NeedsSetupReason.TERMUX_NOT_RUNNING
                 Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.closePaw.spacing.sm)) {
                     Text(
                         text = if (
@@ -220,6 +222,8 @@ private fun TermuxShellSettingsRow() {
                             NeedsSetupReason.AUTH_MISMATCH
                         ) {
                             "The Local Bridge is running, but its pairing token does not match ClosePaw. Repeat the pairing steps once."
+                        } else if (keepPairing) {
+                            "The bridge is offline and remote recovery is unavailable. Run the recovery command once in Termux to keep your existing pairing."
                         } else {
                             "This Termux build does not expose RUN_COMMAND. Bootstrap the authenticated Local Bridge once inside Termux."
                         },
@@ -231,7 +235,9 @@ private fun TermuxShellSettingsRow() {
                             clipboard?.setPrimaryClip(
                                 ClipData.newPlainText(
                                     "ClosePaw Termux bootstrap",
-                                    TermuxManualBootstrap.manualSetupCommand(
+                                    if (keepPairing) TermuxManualBootstrap.manualRepairCommand(
+                                        TermuxManualBootstrap.bridgePayload(appContext)
+                                    ) else TermuxManualBootstrap.manualSetupCommand(
                                         TermuxManualBootstrap.bridgePayload(appContext)
                                     ),
                                 )
@@ -240,9 +246,9 @@ private fun TermuxShellSettingsRow() {
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("1. Copy setup command")
+                        Text(if (keepPairing) "Copy recovery command" else "1. Copy setup command")
                     }
-                    OutlinedButton(
+                    if (!keepPairing) OutlinedButton(
                         onClick = {
                             val clipboard = context.getSystemService(ClipboardManager::class.java)
                             clipboard?.setPrimaryClip(
@@ -258,7 +264,7 @@ private fun TermuxShellSettingsRow() {
                         Text("2. Copy pairing token")
                     }
                     Text(
-                        text = "Paste step 1 in Termux. When it waits for the pairing token, return here, copy step 2, then paste it in Termux. The token is not embedded in the setup command or shell history.",
+                        text = if (keepPairing) "Paste the recovery command in Termux and run it. No token entry or new pairing is needed." else "Paste step 1 in Termux. When it waits for the pairing token, return here, copy step 2, then paste it in Termux. The token is not embedded in the setup command or shell history.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     OutlinedButton(

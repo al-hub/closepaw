@@ -43,6 +43,11 @@ def test_killed_daemon_recovers_and_retains_pairing(tmp_path, free_port):
     bridge = BridgeProcess(free_port, tmp_path, supervisor)
     try:
         wait_for_health(bridge)
+        user_bin = tmp_path / 'bin'
+        user_bin.mkdir()
+        user_tool = user_bin / 'recovered-user-tool'
+        user_tool.write_text('#!/bin/sh\nprintf recovered-path-ok')
+        user_tool.chmod(0o700)
         original = pid(tmp_path)
         os.kill(original, signal.SIGKILL)
         eventually(lambda: pid(tmp_path) != original)
@@ -50,6 +55,9 @@ def test_killed_daemon_recovers_and_retains_pairing(tmp_path, free_port):
         result = bridge.post_json('/v1/exec', {'command': 'printf recovered'})
         assert result.body['exit_code'] == 0
         assert result.body['stdout'] == 'recovered'
+        resolved = bridge.post_json('/v1/exec', {'command': 'command -v recovered-user-tool; recovered-user-tool'})
+        assert resolved.body['exit_code'] == 0
+        assert resolved.body['stdout'] == str(user_tool) + '\nrecovered-path-ok'
         log = (tmp_path / '.closepaw/recovery.jsonl').read_text()
         assert '"exit_code":-9' in log
         assert AUTH_TOKEN not in log
@@ -172,3 +180,44 @@ def test_diagnostics_rotate_and_are_private(recovery_module, monkeypatch, tmp_pa
     assert (root / 'recovery.previous.jsonl').exists()
     assert (root / 'recovery.jsonl').stat().st_size < 1000
     assert (root / 'recovery.json').stat().st_mode & 0o777 == 0o600
+
+
+def test_adopted_killed_child_recovers_before_original_parent_reaps_it(tmp_path, free_port, bridge_factory):
+    """Android may retain an adopted daemon's zombie PID; no caller wait() is required."""
+    daemon = bridge_factory(free_port, tmp_path)
+    supervisor = launch_supervisor(tmp_path, free_port)
+    try:
+        eventually(lambda: (tmp_path / '.closepaw/recovery.json').exists())
+        eventually(lambda: json.loads((tmp_path / '.closepaw/recovery.json').read_text())['event'] == 'ready')
+        original = daemon.process.pid
+        os.kill(original, signal.SIGKILL)
+        # Deliberately no daemon.process.poll()/wait(): the original parent has not reaped it.
+        eventually(lambda: pid(tmp_path) != original)
+        assert request_json(free_port, 'GET', '/v1/jobs').status == 200
+    finally:
+        stop_process(supervisor)
+        # Reap only after observing recovery, and clean up the new owned child on supervisor exit.
+        daemon.process.wait(timeout=3)
+
+
+def test_flapping_daemon_cannot_reset_restart_budget_forever(recovery_module, monkeypatch, tmp_path, free_port):
+    """Briefly ready between crashes must not bypass the bounded recovery policy."""
+    monkeypatch.setenv('HOME', str(tmp_path))
+    count = {'waits': 0, 'launches': 0, 'probes': 0}
+    class FiniteWait:
+        def is_set(self): return count['waits'] >= 35
+        def wait(self, _): count['waits'] += 1; return False
+    monkeypatch.setattr(recovery_module.threading, 'Event', FiniteWait)
+    def probe(*_):
+        count['probes'] += 1
+        return 'ready' if count['probes'] % 2 == 0 else 'daemon_absent'
+    monkeypatch.setattr(recovery_module, 'recovery_probe', probe)
+    class ExitedChild:
+        pid = 123
+        def __init__(self, *_, **__): count['launches'] += 1
+        def poll(self): return 1
+    monkeypatch.setattr(recovery_module.subprocess, 'Popen', ExitedChild)
+    from types import SimpleNamespace
+    args = SimpleNamespace(port=free_port, host='127.0.0.1', auth_token=AUTH_TOKEN, supervisor_interval_sec=.1)
+    assert recovery_module.supervise(args) == 4
+    assert count['launches'] == 5

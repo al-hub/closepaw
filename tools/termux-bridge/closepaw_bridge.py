@@ -22,7 +22,7 @@ from closepaw_jobs import JobManager, JobError
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 IDENTITY = "closepaw-bridge"
-RUNTIME_REVISION = "88.1"
+RUNTIME_REVISION = "88.2"
 DEFAULT_HOST, DEFAULT_PORT = "127.0.0.1", 18422
 DEFAULT_TIMEOUT_MS = MAX_TIMEOUT_MS = 120_000
 DEFAULT_OUTPUT_BYTES = 65536
@@ -103,8 +103,14 @@ def kill_old_bridge(pidfile):
         except OSError:
             pass
         return
-    if data.get("identity") != IDENTITY or not health_is_bridge(data.get("port")):
+    if data.get("identity") != IDENTITY:
         port_in_use()
+    if not health_is_bridge(data.get("port")):
+        # A killed adopted daemon may remain a zombie until its original parent reaps it.
+        # A stale PID alone does not prove the port is occupied. Do not signal it; let
+        # bind() decide whether a listener exists and overwrite metadata only after success.
+        recovery_event("stale_pid_ignored", pid=pid)
+        return
     terminate_pid(pid)
 def write_pidfile(pidfile, port):
     payload = {"pid": os.getpid(), "port": port, "version": BRIDGE_VERSION,
@@ -200,8 +206,26 @@ def resolve_cwd(value):
     if not path.is_dir():
         raise InvalidRequest
     return str(path)
-def parse_env(value):
+def default_shell_environment():
+    """Noninteractive shells do not read .bashrc; supply only the missing user bin.
+
+    Preserve inherited command precedence and caller overrides. Never source profiles,
+    mutate the daemon environment, or add a relative/current working directory.
+    """
     merged = os.environ.copy()
+    path = merged.get("PATH", os.defpath)
+    home = merged.get("HOME", "")
+    if os.path.isabs(home):
+        user_bin = os.path.join(home, "bin")
+        entries = path.split(os.pathsep) if path else []
+        if user_bin not in entries:
+            entries.append(user_bin)
+        path = os.pathsep.join(entries)
+    merged["PATH"] = path
+    return merged
+
+def parse_env(value):
+    merged = default_shell_environment()
     if value is None:
         return merged
     if not isinstance(value, dict):
@@ -491,6 +515,7 @@ def supervise(args):
     failures = 0
     previous = None
     launch_at = 0
+    launches = []
     recovery_event("supervisor_started", pid=os.getpid())
     try:
         while not stop.is_set():
@@ -517,8 +542,10 @@ def supervise(args):
                     child = None
                     return 3
                 recovery_event("child_exited", exit_code=code)
-            if failures >= 5:
-                recovery_event("recovery_exhausted", attempts=failures)
+            now = time.monotonic()
+            launches = [started for started in launches if now - started < 300]
+            if failures >= 5 or len(launches) >= 5:
+                recovery_event("recovery_exhausted", attempts=failures, launches_in_window=len(launches), window_sec=300)
                 return 4
             if stop.wait(0 if failures == 0 else min(2 ** failures, 30)):
                 break
@@ -531,6 +558,7 @@ def supervise(args):
             )
             failures += 1
             launch_at = time.monotonic()
+            launches.append(launch_at)
             recovery_event("launch", child_pid=child.pid, attempts=failures)
             # Allow startup before deciding a child is unresponsive.
             stop.wait(1)
