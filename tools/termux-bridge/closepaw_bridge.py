@@ -504,6 +504,7 @@ def supervise(args):
                 continue
             if state != "daemon_absent":
                 # Never kill another listener, overwrite pairing, or loop on auth/permissions.
+                child = None  # Leave an unresponsive existing process intact for diagnosis.
                 return 3
             if child is not None:
                 code = child.poll()
@@ -513,6 +514,7 @@ def supervise(args):
                         continue
                     # Do not spawn duplicates or kill a running but unresponsive daemon.
                     recovery_event("child_unresponsive")
+                    child = None
                     return 3
                 recovery_event("child_exited", exit_code=code)
             if failures >= 5:
