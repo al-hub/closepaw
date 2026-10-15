@@ -60,17 +60,25 @@ exec env CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" python3 "${'$'}B
 
     fun token(context: Context): String = TermuxBridgeAuth.token(context)
 
+    /** Local fallback when no authenticated daemon or RUN_COMMAND transport remains. */
+    fun manualRepairCommand(bridgePayload: String): String {
+        val boot = JavaBase64.getEncoder().encodeToString(bootScript().toByteArray(Charsets.UTF_8))
+        return "set -e; umask 077; test -s ~/.closepaw/token || { echo 'Existing pairing required'; exit 1; }; " +
+            "export CLOSEPAW_BRIDGE_TOKEN=\"\$(cat ~/.closepaw/token)\"; " +
+            recoveryInstallCommand(bridgePayload, boot)
+    }
+
     /** Runs only inside an authenticated, already paired daemon; credentials stay in env. */
     fun recoveryInstallCommand(bridgePayload: String, bootPayload: String): String {
         require(listOf(bridgePayload, bootPayload).all { it.matches(Regex("[A-Za-z0-9+/=]+")) })
         return "set -e; umask 077; mkdir -p ~/.closepaw ~/.termux/boot ~/closepaw/logs; " +
-            "if ! grep -qx '88.1' ~/.closepaw/recovery-installed 2>/dev/null; then " +
+            "if ! grep -qx '88.2' ~/.closepaw/recovery-installed 2>/dev/null; then " +
             "tmpf=\"\$(mktemp ~/.closepaw/bridge.py.XXXXXX)\"; " +
             "trap 'rm -f \"\$tmpf\"' EXIT; " +
             "printf '%s' '$bridgePayload' | base64 -d > \"\$tmpf\"; " +
             "python3 -m py_compile \"\$tmpf\"; mv \"\$tmpf\" ~/.closepaw/bridge.py; " +
             "printf '%s' '$bootPayload' | base64 -d > $BOOT_SCRIPT_PATH; chmod 700 $BOOT_SCRIPT_PATH; " +
-            "printf '88.1\\n' > ~/.closepaw/recovery-installed; fi; " +
+            "printf '88.2\\n' > ~/.closepaw/recovery-installed; fi; " +
             "nohup python3 ~/.closepaw/bridge.py --supervise ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} " +
             ">/dev/null 2>>~/closepaw/logs/bridge.err </dev/null & " +
             "echo CLOSEPAW_RECOVERY=installed"

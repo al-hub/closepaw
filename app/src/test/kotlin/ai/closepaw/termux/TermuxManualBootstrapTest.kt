@@ -4,6 +4,16 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 class TermuxManualBootstrapTest {
+    @Test fun `offline repair updates runtime without replacing pairing`() {
+        val command = TermuxManualBootstrap.manualRepairCommand("YnJpZGdl")
+        assertThat(command).contains("cat ~/.closepaw/token")
+        assertThat(command).contains("--supervise")
+        assertThat(command).contains("88.2")
+        assertThat(command).doesNotContain("read -rs")
+        assertThat(command).doesNotContain("> ~/.closepaw/token")
+        assertThat(command).doesNotContain("test-token")
+    }
+
     @Test fun `bootstrap command never contains a permanent token literal`() {
         val command = TermuxManualBootstrap.command()
         assertThat(command).doesNotContain("test-token")
