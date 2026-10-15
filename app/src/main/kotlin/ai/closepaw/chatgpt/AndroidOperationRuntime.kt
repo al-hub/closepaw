@@ -4,6 +4,7 @@ import ai.closepaw.app.AgentService
 import ai.closepaw.bridge.*
 import ai.closepaw.chatgpt.operations.*
 import ai.closepaw.termux.TermuxBridgeAuth
+import ai.closepaw.termux.TermuxBridgeManager
 import android.content.Context
 import java.io.File
 import kotlinx.coroutines.*
@@ -26,6 +27,11 @@ internal class AndroidOperationRuntime(
     private val draftDiagnostics = GeminiDraftDiagnostics(File(context.filesDir, "mcp/gemini-draft-diagnostics.json"))
     private val dispatcher: OperationDispatcher
     init {
+        // One bounded maintenance attempt per app runtime. Healthy paired Play Termux can
+        // install its supervisor without RUN_COMMAND or another manual pairing ceremony.
+        scope.launch {
+            if (settings.enabled) TermuxBridgeManager.get(context).ensureReadyForSession(8_000)
+        }
         registry.register(OperationDescriptor(
             id = "app.screen.read", description = "Read one visible screen from a registered app. May bring that app to foreground. Discover targets with app.targets.list. Does not type or send.",
             inputSchema = schema("app" to stringSchema(128), required = listOf("app")),
@@ -122,3 +128,4 @@ internal class AndroidOperationRuntime(
         put("required", JsonArray(required.map { JsonPrimitive(it) }))
     }
 }
+

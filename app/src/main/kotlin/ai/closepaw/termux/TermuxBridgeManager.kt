@@ -66,11 +66,13 @@ class TermuxBridgeManager internal constructor(
                 "command -v python3 && command -v git && command -v rg)"
         private const val START_BRIDGE_COMMAND =
             "mkdir -p ~/closepaw/logs || exit 1; " +
-                "nohup python3 ~/.closepaw/bridge.py " + TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS +
-                " >/dev/null 2>~/closepaw/logs/bridge.err </dev/null & " +
+                "CLOSEPAW_BRIDGE_TOKEN=\"${'$'}(cat ~/.closepaw/token)\" " +
+                "nohup python3 ~/.closepaw/bridge.py --supervise " + TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS +
+                " >/dev/null 2>>~/closepaw/logs/bridge.err </dev/null & " +
                 "pid=${'$'}!; sleep 1; " +
                 "if ! kill -0 ${'$'}pid 2>/dev/null; then " +
-                "echo CLOSEPAW_START=failed; cat ~/closepaw/logs/bridge.err; exit 1; fi; " +
+                "wait ${'$'}pid; code=${'$'}?; if [ ${'$'}code -ne 0 ]; then " +
+                "echo CLOSEPAW_START=failed; exit 1; fi; fi; " +
                 "echo CLOSEPAW_START=ok"
 
         fun get(context: Context): TermuxBridgeManager = TermuxBridgeManagerHolder.instance(context)
@@ -88,6 +90,7 @@ class TermuxBridgeManager internal constructor(
     private val mutex = Mutex()
     private val inFlightLock = Any()
     private val inFlightJobs = mutableMapOf<OperationKind, Deferred<TermuxBridgeStatus>>()
+    private var recoveryInstalled = false
 
     constructor(context: Context) : this(
         commandRunner = AndroidTermuxCommandRunner(context.applicationContext),
@@ -112,7 +115,9 @@ class TermuxBridgeManager internal constructor(
         if (health == HealthProbe.AuthMismatch) {
             return@withLock emit(needsSetup(NeedsSetupReason.AUTH_MISMATCH))
         }
-        unavailableInstallStatus()?.let { return@withLock emit(it) }
+        if (health == HealthProbe.InvalidIdentity) return@withLock emit(needsSetup(NeedsSetupReason.PORT_IN_USE))
+        if (health == HealthProbe.BridgeOutdated) return@withLock emit(needsSetup(NeedsSetupReason.BRIDGE_OUTDATED))
+        unavailableRecoveryStatus()?.let { return@withLock emit(it) }
         emit(health.toPassiveStatus())
     }
 
@@ -127,8 +132,8 @@ class TermuxBridgeManager internal constructor(
     suspend fun restart(): TermuxBridgeStatus =
         awaitInFlight(OperationKind.Restart) { mutex.withLock { restartLocked() } }
 
-    // No background health polling here. The authenticated Local Bridge is intentionally
-    // persistent after pairing; session creation and Settings use one-shot health probes.
+    // Android uses bounded readiness probes. Ongoing process recovery belongs to the
+    // Termux-side supervisor, including variants without RUN_COMMAND.
 
     /** Captures the current bridge capability for a new session. */
     fun snapshot(enabled: Boolean): TermuxCapabilitySnapshot {
@@ -260,7 +265,14 @@ class TermuxBridgeManager internal constructor(
     }
 
     private suspend fun doRestart(): TermuxBridgeStatus {
-        unavailableInstallStatus()?.let { return it }
+        when (fetchHealth()) {
+            HealthProbe.Ready -> { installRecoveryIfNeeded(); return TermuxBridgeStatus.Ready }
+            HealthProbe.AuthMismatch -> return needsSetup(NeedsSetupReason.AUTH_MISMATCH)
+            HealthProbe.InvalidIdentity -> return needsSetup(NeedsSetupReason.PORT_IN_USE)
+            HealthProbe.BridgeOutdated -> return needsSetup(NeedsSetupReason.BRIDGE_OUTDATED)
+            HealthProbe.Unavailable -> Unit
+        }
+        unavailableRecoveryStatus()?.let { return it }
 
         return when (val start = startBridge()) {
             StartResult.Started ->
@@ -282,14 +294,18 @@ class TermuxBridgeManager internal constructor(
 
     private suspend fun ensureReadyForSessionLocked(): TermuxBridgeStatus {
         val health = fetchHealth()
-        if (health == HealthProbe.Ready) return emit(TermuxBridgeStatus.Ready)
+        if (health == HealthProbe.Ready) {
+            installRecoveryIfNeeded()
+            return emit(TermuxBridgeStatus.Ready)
+        }
         if (health == HealthProbe.AuthMismatch) {
             return emit(needsSetup(NeedsSetupReason.AUTH_MISMATCH))
         }
-        unavailableInstallStatus()?.let { return emit(it) }
+        if (health == HealthProbe.InvalidIdentity) return emit(needsSetup(NeedsSetupReason.PORT_IN_USE))
         if (health == HealthProbe.BridgeOutdated) {
             return emit(needsSetup(NeedsSetupReason.BRIDGE_OUTDATED))
         }
+        unavailableRecoveryStatus()?.let { return emit(it) }
 
         val passiveStatus = emit(health.toPassiveStatus())
         val bridgeExists =
@@ -319,6 +335,14 @@ class TermuxBridgeManager internal constructor(
 
     private fun detectTermuxInstall(): TermuxInstallState = termuxInstallProbe.inspect()
 
+    // Absence of RUN_COMMAND is not loss of pairing. A Termux-side supervisor may recover it.
+    private fun unavailableRecoveryStatus(): TermuxBridgeStatus? =
+        when (detectTermuxInstall()) {
+            TermuxInstallState.NotInstalled -> TermuxBridgeStatus.NotInstalled
+            TermuxInstallState.RunCommandUnavailable -> needsSetup(NeedsSetupReason.TERMUX_NOT_RUNNING)
+            TermuxInstallState.Available -> null
+        }
+
     private suspend fun hasDeployedBridge(): Boolean {
         val result = commandRunner.runShell(BRIDGE_EXISTS_COMMAND, timeoutMs = PROBE_TIMEOUT_MS)
         return result.exitCode == 0 && result.stdout.contains("CLOSEPAW_BRIDGE=present")
@@ -338,22 +362,23 @@ class TermuxBridgeManager internal constructor(
             val reason =
                 if (output.contains("port_in_use", ignoreCase = true)) {
                     NeedsSetupReason.PORT_IN_USE
+                } else if (output.contains("unrecognized arguments", ignoreCase = true)) {
+                    NeedsSetupReason.BRIDGE_OUTDATED
                 } else {
                     NeedsSetupReason.UNKNOWN
                 }
-            Log.w(TAG, "Termux bridge start failed: $output")
+            Log.w(TAG, "Termux bridge start failed: $reason")
             return StartResult.Failed(reason)
         }
 
         if (!result.stdout.contains("CLOSEPAW_START=ok")) {
-            Log.w(TAG, "Termux bridge start did not report success: $output")
+            Log.w(TAG, "Termux bridge start did not report success")
             return StartResult.Failed(NeedsSetupReason.UNKNOWN)
         }
         return StartResult.Started
     }
 
-    private fun startBridgeCommand(): String =
-        "CLOSEPAW_BRIDGE_TOKEN=${authToken} " + START_BRIDGE_COMMAND
+    private fun startBridgeCommand(): String = START_BRIDGE_COMMAND
 
     private suspend fun waitForReadyHealth(): HealthProbe {
         return withTimeoutOrNull(HEALTH_READY_TIMEOUT_MS) {
@@ -372,6 +397,18 @@ class TermuxBridgeManager internal constructor(
     }
 
     private suspend fun fetchHealth(): HealthProbe = healthProbe.fetch()
+
+    private suspend fun installRecoveryIfNeeded() {
+        if (recoveryInstalled) return
+        try {
+            recoveryInstalled = healthProbe.installRecovery(
+                bridgePayloadBase64(),
+                Base64.encodeToString(TermuxManualBootstrap.bootScript().toByteArray(Charsets.UTF_8), Base64.NO_WRAP),
+            )
+            if (!recoveryInstalled) Log.w(TAG, "Recovery installation deferred; bridge may be busy")
+        } catch (ce: CancellationException) { throw ce }
+        catch (_: Exception) { Log.w(TAG, "Recovery installation deferred") }
+    }
 
     private fun RunCommandError.toReason(fallback: NeedsSetupReason): NeedsSetupReason =
         when (this) {
@@ -403,7 +440,7 @@ class TermuxBridgeManager internal constructor(
             HealthProbe.Ready -> TermuxBridgeStatus.Ready
             HealthProbe.BridgeOutdated -> needsSetup(NeedsSetupReason.BRIDGE_OUTDATED)
             HealthProbe.AuthMismatch -> needsSetup(NeedsSetupReason.AUTH_MISMATCH)
-            HealthProbe.InvalidIdentity,
+            HealthProbe.InvalidIdentity -> needsSetup(NeedsSetupReason.PORT_IN_USE)
             HealthProbe.Unavailable -> needsSetup(NeedsSetupReason.HEALTH_TIMEOUT)
         }
 
@@ -412,7 +449,7 @@ class TermuxBridgeManager internal constructor(
             HealthProbe.Ready -> TermuxBridgeStatus.Ready
             HealthProbe.BridgeOutdated -> needsSetup(NeedsSetupReason.BRIDGE_OUTDATED)
             HealthProbe.AuthMismatch -> needsSetup(NeedsSetupReason.AUTH_MISMATCH)
-            HealthProbe.InvalidIdentity,
+            HealthProbe.InvalidIdentity -> needsSetup(NeedsSetupReason.PORT_IN_USE)
             HealthProbe.Unavailable -> needsSetup(NeedsSetupReason.HEALTH_TIMEOUT)
         }
 
@@ -450,3 +487,4 @@ class TermuxBridgeManager internal constructor(
             }
     }
 }
+

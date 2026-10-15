@@ -9,9 +9,9 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONException
 import org.json.JSONObject
@@ -26,6 +26,8 @@ internal interface TermuxCommandRunner {
 
 internal fun interface TermuxHealthProbe {
     suspend fun fetch(): HealthProbe
+
+    suspend fun installRecovery(bridgePayload: String, bootPayload: String): Boolean = true
 }
 
 internal fun interface TermuxInstallProbe {
@@ -129,6 +131,31 @@ internal class HttpTermuxHealthProbe(
             .callTimeout(3, TimeUnit.SECONDS)
             .build()
 
+    /** Upgrade an already paired bridge through its authenticated transport, including Play Termux.
+     * Never read, rotate or overwrite the existing token file. No user job is resubmitted.
+     */
+    override suspend fun installRecovery(bridgePayload: String, bootPayload: String): Boolean =
+        withContext(Dispatchers.IO) {
+            require(listOf(bridgePayload, bootPayload).all { it.matches(Regex("[A-Za-z0-9+/=]+")) })
+            val command = TermuxManualBootstrap.recoveryInstallCommand(bridgePayload, bootPayload)
+            val payload = JSONObject().put("command", command).put("timeout_ms", 5000)
+                .put("env", JSONObject().put("CLOSEPAW_BRIDGE_TOKEN", authToken))
+            val request = Request.Builder()
+                .url(healthUrl.removeSuffix("/v1/health") + "/v1/exec")
+                .header(AUTH_HEADER, authToken)
+                .post(payload.toString().toRequestBody("application/json".toMediaType())).build()
+            try {
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) false else {
+                        val result = JSONObject(response.body.string())
+                        result.optInt("exit_code", -1) == 0 &&
+                            result.optString("stdout").contains("CLOSEPAW_RECOVERY=installed")
+                    }
+                }
+            } catch (_: IOException) { false }
+            catch (_: JSONException) { false }
+        }
+
     override suspend fun fetch(): HealthProbe =
         withContext(Dispatchers.IO) {
             val request = Request.Builder().url(healthUrl).get().build()
@@ -154,29 +181,34 @@ internal class HttpTermuxHealthProbe(
             }
         }
     private fun authenticatedProbe(): HealthProbe {
-        val execUrl = healthUrl.removeSuffix("/v1/health") + "/v1/exec"
-        val body = """{"command":":","timeout_ms":2000}""".toRequestBody(JSON)
+        val execUrl = healthUrl.removeSuffix("/v1/health") + "/v1/jobs"
         val request = Request.Builder()
             .url(execUrl)
             .header(AUTH_HEADER, authToken)
-            .post(body)
+            .get()
             .build()
         return try {
             httpClient.newCall(request).execute().use { response ->
                 when {
                     response.code == 401 -> HealthProbe.AuthMismatch
-                    response.isSuccessful -> HealthProbe.Ready
+                    response.isSuccessful -> {
+                        val json = JSONObject(response.body.string())
+                        if (json.optString("status") == "ready" && json.optInt("job_api_version") == 1)
+                            HealthProbe.Ready else HealthProbe.BridgeOutdated
+                    }
                     else -> HealthProbe.Unavailable
                 }
             }
         } catch (_: IOException) {
+            HealthProbe.Unavailable
+        } catch (_: JSONException) {
             HealthProbe.Unavailable
         }
     }
 
     private companion object {
         const val AUTH_HEADER = "X-ClosePaw-Token"
-        val JSON = "application/json; charset=utf-8".toMediaType()
     }
 
 }
+

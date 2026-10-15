@@ -154,14 +154,15 @@ class TermuxStatusMapperTest {
     }
 
     @Test
-    fun `NeedsSetup TERMUX_NOT_RUNNING subtitle`() {
+    fun `offline Termux retains pairing and shows recovery instructions`() {
         val ui = termuxStatusUi(
             state = TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.TERMUX_NOT_RUNNING),
             permissionDisposition = null,
             enabledPref = true,
         )
+        assertThat(ui.label).isEqualTo("Offline")
         assertThat(ui.subtitle).isEqualTo(
-            "Termux is not running. Tap to open Termux, then return here."
+            "Local Bridge is offline; RUN_COMMAND recovery is unavailable. Open Termux and run ~/.termux/boot/10-closepaw-bridge. Existing pairing is retained."
         )
     }
 
@@ -216,7 +217,7 @@ class TermuxStatusMapperTest {
             permissionDisposition = null,
             enabledPref = true,
         )
-        assertThat(ui.subtitle).isEqualTo("Bridge unreachable — tap to retry setup")
+        assertThat(ui.subtitle).isEqualTo("Local Bridge is offline — retry recovery. Existing pairing is retained.")
     }
 
     @Test
@@ -249,3 +250,4 @@ class TermuxStatusMapperTest {
         assertThat(ui.subtitle).isEqualTo("Setup error — tap to retry")
     }
 }
+

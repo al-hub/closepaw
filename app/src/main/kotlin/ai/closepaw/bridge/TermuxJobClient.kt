@@ -41,8 +41,8 @@ class TermuxJobClient(
                     }
                 }
             }
-        } catch (_: IOException) {
-            TermuxJobReadiness(false, "Local bridge connection failed")
+        } catch (error: IOException) {
+            TermuxJobReadiness(false, connectionFailure(error))
         } catch (_: org.json.JSONException) {
             TermuxJobReadiness(false, "Invalid bridge readiness response")
         } catch (_: RuntimeException) {
@@ -97,7 +97,8 @@ class TermuxJobClient(
                 http.newCall(builder.build()).execute().use { response ->
                     if (!response.isSuccessful) {
                         return@withContext TermuxJobReply.Failure(
-                            "bridge_http_error", "Local bridge HTTP ${response.code}", response.code,
+                            if (response.code == 401) "bridge_auth_mismatch" else "bridge_http_error",
+                            if (response.code == 401) "Local bridge pairing token does not match" else "Local bridge HTTP ${response.code}", response.code,
                         )
                     }
                     try {
@@ -108,12 +109,20 @@ class TermuxJobClient(
                         TermuxJobReply.Failure("bridge_invalid_response", "Invalid bridge job response")
                     }
                 }
-            } catch (_: IOException) {
+            } catch (error: IOException) {
                 // A failed submission response does not establish whether the daemon accepted it.
                 // Callers may retry start with the same request ID, never a fresh ID automatically.
-                TermuxJobReply.Failure("bridge_transport_error", "Local bridge connection failed")
+                TermuxJobReply.Failure("bridge_transport_error", connectionFailure(error))
             }
         }
+
+    private fun connectionFailure(error: IOException): String = when (error) {
+        is java.net.ConnectException ->
+            "bridge_daemon_unreachable: Local Bridge is offline; pairing is retained. Check Termux recovery.jsonl and boot startup."
+        is java.net.SocketTimeoutException ->
+            "bridge_response_timeout: Local Bridge did not respond; process death is not confirmed."
+        else -> "bridge_connection_failed: transport interrupted; command outcome may be unknown."
+    }
 
     private fun readBounded(body: ResponseBody?): String {
         requireNotNull(body) { "Missing bridge response" }
@@ -182,3 +191,4 @@ sealed interface TermuxJobReply {
     data class Success(val snapshot: TermuxJobSnapshot) : TermuxJobReply
     data class Failure(val code: String, val message: String, val httpStatus: Int? = null) : TermuxJobReply
 }
+
