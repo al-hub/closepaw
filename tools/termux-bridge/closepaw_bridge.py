@@ -515,6 +515,7 @@ def supervise(args):
     failures = 0
     previous = None
     launch_at = 0
+    launches = []
     recovery_event("supervisor_started", pid=os.getpid())
     try:
         while not stop.is_set():
@@ -541,8 +542,10 @@ def supervise(args):
                     child = None
                     return 3
                 recovery_event("child_exited", exit_code=code)
-            if failures >= 5:
-                recovery_event("recovery_exhausted", attempts=failures)
+            now = time.monotonic()
+            launches = [started for started in launches if now - started < 300]
+            if failures >= 5 or len(launches) >= 5:
+                recovery_event("recovery_exhausted", attempts=failures, launches_in_window=len(launches), window_sec=300)
                 return 4
             if stop.wait(0 if failures == 0 else min(2 ** failures, 30)):
                 break
@@ -555,6 +558,7 @@ def supervise(args):
             )
             failures += 1
             launch_at = time.monotonic()
+            launches.append(launch_at)
             recovery_event("launch", child_pid=child.pid, attempts=failures)
             # Allow startup before deciding a child is unresponsive.
             stop.wait(1)

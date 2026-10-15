@@ -198,3 +198,26 @@ def test_adopted_killed_child_recovers_before_original_parent_reaps_it(tmp_path,
         stop_process(supervisor)
         # Reap only after observing recovery, and clean up the new owned child on supervisor exit.
         daemon.process.wait(timeout=3)
+
+
+def test_flapping_daemon_cannot_reset_restart_budget_forever(recovery_module, monkeypatch, tmp_path, free_port):
+    """Briefly ready between crashes must not bypass the bounded recovery policy."""
+    monkeypatch.setenv('HOME', str(tmp_path))
+    count = {'waits': 0, 'launches': 0, 'probes': 0}
+    class FiniteWait:
+        def is_set(self): return count['waits'] >= 35
+        def wait(self, _): count['waits'] += 1; return False
+    monkeypatch.setattr(recovery_module.threading, 'Event', FiniteWait)
+    def probe(*_):
+        count['probes'] += 1
+        return 'ready' if count['probes'] % 2 == 0 else 'daemon_absent'
+    monkeypatch.setattr(recovery_module, 'recovery_probe', probe)
+    class ExitedChild:
+        pid = 123
+        def __init__(self, *_, **__): count['launches'] += 1
+        def poll(self): return 1
+    monkeypatch.setattr(recovery_module.subprocess, 'Popen', ExitedChild)
+    from types import SimpleNamespace
+    args = SimpleNamespace(port=free_port, host='127.0.0.1', auth_token=AUTH_TOKEN, supervisor_interval_sec=.1)
+    assert recovery_module.supervise(args) == 4
+    assert count['launches'] == 5
