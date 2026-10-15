@@ -123,4 +123,3 @@ class TermuxJobClientTest {
     }
     private companion object { const val TOKEN = "0123456789abcdef0123456789abcdef" }
 }
-

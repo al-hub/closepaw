@@ -71,8 +71,6 @@ class TermuxManualBootstrapTest {
         assertThat(script).contains("TOKEN_FILE=\"\$HOME/.closepaw/token\"")
         assertThat(script).contains("cat \"\$TOKEN_FILE\"")
         assertThat(script).doesNotContain("test-token")
-        assertThat(script).contains("127.0.0.1:18422")
+        assertThat(script).doesNotContain("curl -fsS")
     }
 }
-
-

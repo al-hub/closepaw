@@ -89,4 +89,3 @@ private fun NeedsSetupReason.toDisplayText(): String = when (this) {
     NeedsSetupReason.PORT_IN_USE -> "Port 18422 in use by another process"
     NeedsSetupReason.UNKNOWN -> "Setup error — tap to retry"
 }
-

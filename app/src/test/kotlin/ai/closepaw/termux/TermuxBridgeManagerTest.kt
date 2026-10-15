@@ -506,4 +506,3 @@ class TermuxBridgeManagerTest {
         const val FGS_REJECTED_MESSAGE = "It is forbidden to start a 3rd process by service"
     }
 }
-

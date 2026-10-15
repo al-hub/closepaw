@@ -144,4 +144,3 @@ internal class AndroidOperationRuntime(
         put("required", JsonArray(required.map { JsonPrimitive(it) }))
     }
 }
-

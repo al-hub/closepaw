@@ -81,4 +81,3 @@ exec env CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" python3 "${'$'}B
             Base64.encodeToString(it.readBytes(), Base64.NO_WRAP)
         }
 }
-

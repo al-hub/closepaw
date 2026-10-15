@@ -487,4 +487,3 @@ class TermuxBridgeManager internal constructor(
             }
     }
 }
-

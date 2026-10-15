@@ -191,4 +191,3 @@ sealed interface TermuxJobReply {
     data class Success(val snapshot: TermuxJobSnapshot) : TermuxJobReply
     data class Failure(val code: String, val message: String, val httpStatus: Int? = null) : TermuxJobReply
 }
-

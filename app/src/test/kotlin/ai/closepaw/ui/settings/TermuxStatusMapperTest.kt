@@ -250,4 +250,3 @@ class TermuxStatusMapperTest {
         assertThat(ui.subtitle).isEqualTo("Setup error — tap to retry")
     }
 }
-
