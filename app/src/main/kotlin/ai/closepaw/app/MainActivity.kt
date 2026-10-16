@@ -351,6 +351,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        lifecycleScope.launch { ai.closepaw.chatgpt.ChatGptMcpService.restore(applicationContext) }
         AgentService.instance?.onMainAppVisible()
         onboardingViewModel?.onHostResumed()
         retryPendingAutoStartGoalIfReady()

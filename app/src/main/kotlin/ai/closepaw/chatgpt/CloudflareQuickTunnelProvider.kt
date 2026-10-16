@@ -13,8 +13,8 @@ import kotlinx.coroutines.launch
 
 internal class CloudflareQuickTunnelProvider(
     private val binaryResolver: CloudflaredBinaryResolver,
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) : TunnelProvider {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val processRef = AtomicReference<Process?>(null)
     private val _status = MutableStateFlow<TunnelStatus>(TunnelStatus.Stopped)
     override val status: StateFlow<TunnelStatus> = _status.asStateFlow()
@@ -44,12 +44,13 @@ internal class CloudflareQuickTunnelProvider(
                 process.inputStream.bufferedReader().useLines { lines ->
                     lines.forEach { line ->
                         CloudflareTunnelLogParser.extractPublicUrl(line)?.let { url ->
-                            _status.value = TunnelStatus.Connected(url)
+                            if (processRef.get() === process) _status.value = TunnelStatus.Connected(url)
                         }
                     }
                 }
+                val exitCode = process.waitFor()
                 if (processRef.compareAndSet(process, null) && _status.value !is TunnelStatus.Stopped) {
-                    _status.value = TunnelStatus.Failed("cloudflared_exited:${process.exitValue()}")
+                    _status.value = TunnelStatus.Failed("cloudflared_exited:$exitCode")
                 }
             } catch (error: Exception) {
                 if (processRef.compareAndSet(process, null) && _status.value !is TunnelStatus.Stopped) {
