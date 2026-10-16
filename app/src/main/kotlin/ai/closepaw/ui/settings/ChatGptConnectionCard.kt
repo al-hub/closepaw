@@ -75,6 +75,7 @@ internal fun ChatGptConnectionCard() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        Text("Connect resumes automatically after app launch, reboot, or a temporary connection failure. Stop keeps it paused until you press Connect.", style = MaterialTheme.typography.bodySmall)
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Allow ChatGPT Termux execution", modifier = Modifier.weight(1f))
             Switch(checked = executionEnabled, onCheckedChange = {
@@ -164,6 +165,7 @@ internal fun ChatGptConnectionCard() {
                             runtimeKeyInput = ""
                             editingSecureTunnel = false
                             configMessage = "Saved securely. Stop and reconnect to switch transport."
+                            scope.launch { ChatGptMcpService.restore(context.applicationContext) }
                         }
                         .onFailure { error ->
                             configMessage = error.message ?: "Could not save secure tunnel settings."

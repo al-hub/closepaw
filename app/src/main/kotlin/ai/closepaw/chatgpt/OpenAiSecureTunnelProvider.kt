@@ -19,8 +19,8 @@ internal class OpenAiSecureTunnelProvider(
     private val mcpPath: String = McpHttpServer.DEFAULT_MCP_PATH,
     private val readyProbe: (String) -> Boolean = ::probeReady,
     private val controlPlaneProxy: AndroidControlPlaneConnectProxy = AndroidControlPlaneConnectProxy(),
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) : TunnelProvider {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val processRef = AtomicReference<Process?>(null)
     private val _status = MutableStateFlow<TunnelStatus>(TunnelStatus.Stopped)
     override val status: StateFlow<TunnelStatus> = _status.asStateFlow()
@@ -79,8 +79,9 @@ internal class OpenAiSecureTunnelProvider(
                         SecureTunnelRuntimeLogBuffer.append(line)
                     }
                 }
+                val exitCode = process.waitFor()
                 if (processRef.compareAndSet(process, null) && _status.value !is TunnelStatus.Stopped) {
-                    _status.value = TunnelStatus.Failed("secure_tunnel_exited:${process.exitValue()}")
+                    _status.value = TunnelStatus.Failed("secure_tunnel_exited:$exitCode")
                 }
             } catch (error: Exception) {
                 if (processRef.compareAndSet(process, null) && _status.value !is TunnelStatus.Stopped) {
@@ -95,7 +96,9 @@ internal class OpenAiSecureTunnelProvider(
             repeat(READY_ATTEMPTS) {
                 if (processRef.get() !== process || !process.isAlive) return@launch
                 if (readyProbe(READY_URL)) {
-                    _status.value = TunnelStatus.Connected(tunnelId = config.tunnelId)
+                    if (processRef.get() === process && process.isAlive) {
+                        _status.value = TunnelStatus.Connected(tunnelId = config.tunnelId)
+                    }
                     return@launch
                 }
                 delay(READY_POLL_MS)
