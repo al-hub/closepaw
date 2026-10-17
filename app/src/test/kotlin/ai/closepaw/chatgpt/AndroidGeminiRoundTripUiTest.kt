@@ -93,6 +93,25 @@ class AndroidGeminiRoundTripUiTest {
         assertEquals(false, snapshot.generating)
         assertTrue(snapshot.traversalComplete)
     }
+    @Test fun nestedResponseRolesProduceOneOrderedAnswerWithParentCompletion() = runBlocking {
+        val first = node("assistant_robin_response_text", "first fragment", children = listOf(node(text = "first fragment")))
+        val second = node("robin_response_text", "second fragment")
+        val answer = node("assistant_robin_response_container", children = listOf(first, second, node("assistant_robin_copy_button", clickable = true)))
+        root = node(children = listOf(composer(), answer))
+        val snapshot = adapter().snapshot()
+        assertEquals(1, snapshot.replies.size)
+        assertEquals("first fragment\nsecond fragment", snapshot.replies.single().text)
+        assertTrue(snapshot.replies.single().complete)
+        assertTrue(snapshot.traversalComplete)
+    }
+    @Test fun oversizedResponseRootTextIsBoundedAndPartial() = runBlocking {
+        val answer = node("assistant_robin_response_container", "a".repeat(24001), children = listOf(node("assistant_robin_copy_button", clickable = true)))
+        root = node(children = listOf(composer(), answer))
+        val snapshot = adapter().snapshot()
+        assertEquals(24000, snapshot.replies.single().text.length)
+        assertFalse(snapshot.replies.single().complete)
+        assertFalse(snapshot.traversalComplete)
+    }
     @Test fun hiddenResponseTextPreventsFullCompletion() = runBlocking {
         val answer = node("assistant_robin_response_container", children = listOf(
             node(text = "visible"), node(text = "hidden", visible = false), node("assistant_robin_copy_button", clickable = true),

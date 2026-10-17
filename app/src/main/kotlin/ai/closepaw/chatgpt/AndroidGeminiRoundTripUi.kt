@@ -51,19 +51,41 @@ internal class AndroidGeminiRoundTripUi(
         val sends = nodes.filter { isSend(it) }
         val stop = nodes.any { semantic(it, GeminiRoundTripSemantics::isStop) }
         var replyTraversalComplete = true
-        val replies = nodes.filter { node -> semantic(node) { id, _ -> GeminiRoundTripSemantics.isReply(id) } }.mapIndexedNotNull { index, node ->
-            val (children, walkedComplete) = descendants(node)
+        val replyNodes = nodes.filter { node -> semantic(node) { id, _ -> GeminiRoundTripSemantics.isReply(id) } }
+        val coveredReplies = mutableSetOf<AccessibilityNodeInfo>()
+        val replies = replyNodes.mapIndexedNotNull { index, node ->
+            if (node in coveredReplies) return@mapIndexedNotNull null
+            val tree = descendants(node)
+            val children = tree.nodes
+            val walkedComplete = tree.complete
+            // Compare while descendant handles are live, but retain only the outer traversal handles.
+            coveredReplies.addAll(replyNodes.filter { candidate -> children.drop(1).any { it == candidate } })
             val subtreeComplete = walkedComplete && children.none { !it.isVisibleToUser && !it.text.isNullOrBlank() }
             replyTraversalComplete = replyTraversalComplete && subtreeComplete
             try {
-                val content = node.text?.toString()?.takeIf(String::isNotBlank) ?: children.filter { !it.isEditable && it.isVisibleToUser && !it.isClickable }
-                    .mapNotNull { it.text?.toString()?.takeIf(String::isNotBlank) }.distinct().joinToString("\n").take(24000)
-                if (content.length >= 24000) replyTraversalComplete = false
+                val selectedTextNodes = mutableSetOf<Int>()
+                val fragments = mutableListOf<String>()
+                children.forEachIndexed { childIndex, child ->
+                    var parentIndex = tree.parents[childIndex]
+                    var covered = false
+                    while (parentIndex >= 0) {
+                        if (parentIndex in selectedTextNodes) { covered = true; break }
+                        parentIndex = tree.parents[parentIndex]
+                    }
+                    if (!covered && !child.isEditable && child.isVisibleToUser && !child.isClickable) {
+                        child.text?.toString()?.takeIf(String::isNotBlank)?.let {
+                            fragments.add(it); selectedTextNodes.add(childIndex)
+                        }
+                    }
+                }
+                val rawContent = fragments.joinToString("\n")
+                val content = rawContent.take(24000)
+                if (rawContent.length > 24000) replyTraversalComplete = false
                 if (content.isBlank()) null else GeminiReply(
                     // Stable within a conversation while allowing two identical answers as separate turns.
                     id = "${node.viewIdResourceName}:$index",
                     text = content,
-                    complete = subtreeComplete && !stop && children.any { semantic(it, GeminiRoundTripSemantics::isCopy) },
+                    complete = subtreeComplete && rawContent.length <= 24000 && !stop && children.any { semantic(it, GeminiRoundTripSemantics::isCopy) },
                 )
             } finally { children.drop(1).forEach { it.recycleCompat() } }
         }
@@ -99,19 +121,22 @@ internal class AndroidGeminiRoundTripUi(
         try { visit(root, 0); return block(nodes.filter { it.packageName == root.packageName }, complete) }
         finally { nodes.forEach { it.recycleCompat() } }
     }
-    private fun descendants(root: AccessibilityNodeInfo): Pair<List<AccessibilityNodeInfo>, Boolean> {
+    private data class ReplyTree(val nodes: List<AccessibilityNodeInfo>, val parents: List<Int>, val complete: Boolean)
+    private fun descendants(root: AccessibilityNodeInfo): ReplyTree {
         val nodes = mutableListOf(root)
+        val parents = mutableListOf(-1)
         var complete = true
-        fun visit(node: AccessibilityNodeInfo, depth: Int) {
+        fun visit(node: AccessibilityNodeInfo, depth: Int, parentIndex: Int) {
             if (depth > 30 || nodes.size >= 300) { complete = false; return }
             if (node.childCount > 100) complete = false
             for (i in 0 until node.childCount.coerceAtMost(100)) {
                 if (nodes.size >= 300) { complete = false; break }
                 val child = node.getChild(i) ?: continue
-                nodes.add(child); visit(child, depth + 1)
+                val childIndex = nodes.size
+                nodes.add(child); parents.add(parentIndex); visit(child, depth + 1, childIndex)
             }
         }
-        visit(root, 0); return nodes to complete
+        visit(root, 0, 0); return ReplyTree(nodes, parents, complete)
     }
 }
 
