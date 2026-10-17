@@ -103,7 +103,7 @@ internal class GeminiRoundTripOperation(
             if (text.isBlank()) return finish("invalid_text")
             val timeout = invocation.input["timeout_ms"]?.jsonPrimitive?.longOrNull ?: 60_000L
             if (!event("not_sent", required = true)) return finish("task_storage_failed")
-            val submission = GeminiQuestionSubmitter(ui) { allowed() && !cancelled.get() }.submit(text) {
+            val submission = GeminiQuestionSubmitter(ui, { allowed() && !cancelled.get() }).submit(text) {
                 // Persist this boundary BEFORE the UI primitive. A failed write prevents all sends.
                 if (cancelled.get()) false else event("submitting", required = true)
             }
