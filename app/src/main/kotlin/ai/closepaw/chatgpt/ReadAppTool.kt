@@ -31,7 +31,7 @@ internal fun interface ReadAppTool {
 
 /**
  * Minimal P1/P2 read path for Samsung Internet, Chrome and Gemini.
- * 1) launch and verify the exact allowlisted foreground package,
+ * 1) launch and verify the allowlisted foreground (including positively identified hosted Gemini),
  * 2) collect visible Accessibility text, then
  * 3) capture one bounded screenshot for shared MCP image + local Korean OCR fallback.
  * No Shizuku, ADB, or Chrome CDP required.
@@ -67,31 +67,50 @@ internal class AndroidReadAppTool(
             )
         }
 
-        val alreadyForeground = platform.getCurrentPackageName() == target.packageName
+        // Inspection only: reuse the native/Google-host Gemini identity guard, never its write path.
+        val geminiUi = if (target.id == "gemini") AndroidGeminiDraftUi(service) { false } else null
+        suspend fun foreground(): ReadForeground? {
+            if (geminiUi == null) {
+                val pkg = platform.getCurrentPackageName()
+                return if (ReadAppForegroundPolicy.accepts(target, pkg, false)) ReadForeground(pkg!!) else null
+            }
+            if (geminiUi.isLocked()) return null
+            val state = geminiUi.inspect()
+            val evidence = geminiUi.evidence()
+            val pkg = evidence.rootPackage
+            // Never infer identity from a background window or a generic Google Search box.
+            if (pkg != evidence.observedPackage || !ReadAppForegroundPolicy.accepts(
+                    target, pkg, state.foreground && pkg == AndroidGeminiDraftUi.GOOGLE_HOST,
+                )) return null
+            return ReadForeground(pkg!!, evidence.windowId)
+        }
+
+        var verifiedForeground = foreground()
+        val alreadyForeground = verifiedForeground != null
         if (!alreadyForeground) {
             when (val launch = platform.launchApp(target.packageName)) {
                 is ActionResult.Failure -> {
-                    return@runBlocking failure(
-                        code = "launch_failed",
-                        summary = launch.reason,
-                    )
+                    return@runBlocking failure(code = "launch_failed", summary = launch.reason)
                 }
                 else -> Unit
             }
             delay(settleDelayMs)
+            verifiedForeground = foreground()
+            // A package launch can hand off to the Google-hosted Gemini activity asynchronously.
+            var attempts = 0
+            while (verifiedForeground == null && attempts++ < FOREGROUND_RECHECKS) {
+                delay(FOREGROUND_RECHECK_DELAY_MS)
+                verifiedForeground = foreground()
+            }
         }
-
-        val foregroundPackage = platform.getCurrentPackageName()
-        if (foregroundPackage != target.packageName) {
-            return@runBlocking failure(
-                code = "target_not_foreground",
-                summary = "${target.displayName} did not become the foreground app.",
-                packageName = foregroundPackage,
-            )
-        }
+        val readForeground = verifiedForeground ?: return@runBlocking failure(
+            code = "target_not_foreground",
+            summary = "${target.displayName} foreground identity could not be verified.",
+            packageName = platform.getCurrentPackageName(),
+        )
 
         val accessibility = withContext(Dispatchers.Main) {
-            readTargetApplicationText(service, target.packageName)
+            readTargetApplicationText(service, readForeground.packageName, readForeground.windowId)
         }
         val targetText = accessibility.text
 
@@ -105,6 +124,9 @@ internal class AndroidReadAppTool(
         }
         // Allow composited UI content to settle before the single JPEG capture.
         delay(SCREEN_SETTLE_DELAY_MS)
+        if (foreground() != readForeground) return@runBlocking failure(
+            code = "target_changed", summary = "Target foreground changed before screen capture.",
+        )
         val screenshotConfig = SessionConfig(
             perceptionConfig = PerceptionConfig.ScreenshotOnly(
                 // Screenshot OCR needs legible Korean body text; keep regular reads small.
@@ -123,6 +145,11 @@ internal class AndroidReadAppTool(
             enabled = true,
         )
 
+        // Drop both text and image if focus changed while Android captured the screenshot.
+        if (foreground() != readForeground) return@runBlocking failure(
+            code = "target_changed", summary = "Target foreground changed during screen capture.",
+            screenshotAttempts = 1,
+        )
         val image = screenshot?.image
         val accessibilityContent = targetText
         val accessibilityQuality = if (isGemini) {
@@ -202,7 +229,8 @@ internal class AndroidReadAppTool(
                 put("screen_kind", it.screenKind)
                 put("reply_status", it.replyStatus)
             }
-            put("package_name", target.packageName)
+            put("package_name", readForeground.packageName)
+            put("launch_package_name", target.packageName)
             put("scope", "visible_screen")
             put("content", pageContent)
             put("text_source", when {
@@ -241,6 +269,8 @@ internal class AndroidReadAppTool(
         )
     }
 
+    private data class ReadForeground(val packageName: String, val windowId: Int? = null)
+
     private data class AccessibilityRead(
         val text: String,
         val rootAvailable: Boolean,
@@ -252,13 +282,14 @@ internal class AndroidReadAppTool(
     private fun readTargetApplicationText(
         service: AgentService,
         packageName: String,
+        windowId: Int? = null,
     ): AccessibilityRead {
         val windows = runCatching { service.windows }.getOrNull()
         var root: AccessibilityNodeInfo? = null
         try {
             if (!windows.isNullOrEmpty()) {
                 val candidates = windows
-                    .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+                    .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && (windowId == null || it.id == windowId) }
                     .sortedByDescending { it.layer }
                 for (window in candidates) {
                     val candidate = window.root ?: continue
@@ -272,7 +303,7 @@ internal class AndroidReadAppTool(
 
             if (root == null) {
                 val activeRoot = service.rootInActiveWindow
-                if (activeRoot?.packageName?.toString() == packageName) {
+                if (activeRoot?.packageName?.toString() == packageName && (windowId == null || activeRoot.windowId == windowId)) {
                     root = activeRoot
                 } else {
                     activeRoot?.recycleCompat()
@@ -320,18 +351,23 @@ internal class AndroidReadAppTool(
         code: String,
         summary: String,
         packageName: String? = null,
+        screenshotAttempts: Int = 0,
     ): ReadAppToolResult = ReadAppToolResult(
         structured = buildJsonObject {
-            put("request_id", BrowserReadDiagnostics.record("unknown", code, 0, false))
+            put("request_id", BrowserReadDiagnostics.record("unknown", code, 0, false,
+                screenshotAttempts = screenshotAttempts))
             put("reason_code", code)
             put("status", "failed")
             put("error", code)
             put("summary", summary)
+            put("screenshot_attempts", screenshotAttempts)
             packageName?.let { put("package_name", it) }
         }
     )
 
     companion object {
+        private const val FOREGROUND_RECHECKS = 12
+        private const val FOREGROUND_RECHECK_DELAY_MS = 150L
         private const val DEFAULT_SETTLE_DELAY_MS = 1_000L
         private const val MAX_CONTENT_CHARS = 12_000
         private const val SCREENSHOT_MAX_DIMENSION = 1024
