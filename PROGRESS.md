@@ -6,15 +6,15 @@ Progress work follows one rule: **implementation and this document move together
 
 ## Verified checkpoint — 2026-10-17 (KST)
 
-Last verified installed baseline: **v0.1.47 / code 48**, Termux runtime **88.2**.
+Last verified installed baseline: **v0.1.48 / code 49**, Termux runtime **88.2**.
 Latest published APK: **v0.1.48 / code 49**, source `209dc9e20767cdfd39ca59ff2c7f1936de539579`.
 [Signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.48/closepaw-aa-bridge.apk).
-Device update and Gemini READ/Voice/draft acceptance remain pending.
-Release source: `bb7442a8c577669f53b79028e1d6d747c09210f2`.
+Device update, Gemini launch/read of the start screen, empty draft insertion and existing draft preservation passed. Generated reply READ/Voice remains pending.
+Installed APK release source: `209dc9e20767cdfd39ca59ff2c7f1936de539579`.
 Documentation-only commits after this source do not change the installed APK.
 
 - **P0/P1 DONE; P2 ACTIVE**: Chrome Voice and Samsung Internet READ accepted;
-  Gemini native READ/Voice and draft guard acceptance remain outstanding.
+  Gemini generated-reply READ/Voice and question/reply round-trip acceptance remain outstanding; draft insertion/preservation passed.
 - **P4 core execution VERIFIED**: authenticated MCP → Termux, plain `kv status`
   exit 0. Keep broader task-lifecycle/Voice acceptance separate; P4 is no longer
   an unimplemented future capability.
@@ -30,13 +30,13 @@ Documentation-only commits after this source do not change the installed APK.
   supersedes the old flow. One-line curl convenience is deferred; old token overwrite,
   direct deployment and unsupervised launch are discarded. Per-file disposition is
   recorded in the [PR description](https://github.com/al-hub/closepaw/pull/33).
-  Next: Gemini real-device READ/Voice and draft guard acceptance; P2 remains ACTIVE.
+  Next: Gemini generated-reply READ/Voice and question/reply round-trip acceptance; P2 remains ACTIVE.
 
 [Audit, evidence, residual tasks and copyable Works handoff](doc/project/WORKS_HANDOFF.md)
 are the current summary. Older dated entries below are historical checkpoints,
 not instructions to downgrade, re-pair, refresh plugins or repeat passed tests.
 
-## Gemini host read repair — v0.1.48 RELEASED; device acceptance pending
+## Gemini host read repair — v0.1.48 installed; reply/Voice acceptance pending
 
 - Real v0.1.47 READ after unlock rejected the Google host package
   (`target_not_foreground`, request `f17acf1b-bc7a-4b8c-b57a-160b9bf747fb`);
@@ -48,12 +48,17 @@ not instructions to downgrade, re-pair, refresh plugins or repeat passed tests.
   and [Signed Release](https://github.com/al-hub/closepaw/actions/runs/39023499964) passed.
   Same-signer verification and APK/checksum publication passed. APK SHA-256:
   `9045eaa1afeeb065c3dc95310295ec523168dc8af59f31e74a0eefc04ed24bef` (116,306,905 bytes).
-  Device installation, actual Gemini READ/Voice and draft acceptance remain pending.
-- The next full-control plan is documented on a separate planning branch:
-  [Gemini goal execution and verified round trip](https://github.com/al-hub/closepaw/blob/docs/gemini-roundtrip-plan-20261017/doc/project/GEMINI_ROUNDTRIP_PLAN.md).
-  Representative test: ask Gemini for current location; control round-trip and location
-  correctness are separate verdicts. Plan only; new feature/parallel-agent development
-  has not been authorized or started. Build-time optimization is deferred.
+  Device installation, hosted start-screen READ, empty draft insertion and draft guard passed. Actual generated-reply READ/Voice remains pending.
+- The [Gemini goal execution and verified round-trip plan](doc/project/GEMINI_ROUNDTRIP_PLAN.md) is now implemented on a separate development branch under PR #94. Three agents covered guarded submission/UI inspection, reply collection, and flow/failure tests. Representative test: ask Gemini for current location; control round-trip and location correctness remain separate verdicts. Build-time optimization is deferred.
+
+## Gemini question/reply round trip — v0.1.49 candidate
+
+- `gemini.question.ask` uses the existing operation discovery/execute/task envelope; no plugin re-registration is required. Local question-send permission is separate and defaults OFF.
+- Current conversation only. Existing drafts are preserved. A semantic Send click is distinct from observed submission; unknown outcomes and restarted tasks never auto-resend.
+- New replies require question correlation and completion evidence. Length/traversal limits return partial results; new-conversation selection and automatic scrolling are unsupported.
+- PR [#94](https://github.com/al-hub/closepaw/pull/94): Android CI and signed delivery pending. Local bridge suites passed: Termux 55, ChatGPT bridge 8. Local Gradle could not download its uncached distribution; no local Android success is claimed.
+- Existing signing certificate, pairing, tunnel and stored settings must be retained. After publication, install without clearing data, enable question permission, remove the previous unsent test draft manually, and validate the actual Galaxy Gemini accessibility roles plus one same-Voice round trip.
+- P2 remains ACTIVE; APK publication alone does not complete device acceptance.
 
 ## Current position
 
