@@ -110,6 +110,8 @@ internal class OperationDispatcher(
         if (!executeAllowed()) return error("permission_denied", "Remote execution is disabled.")
         val id = (arguments["task_id"] as? JsonPrimitive)?.content ?: return error("invalid_task_id", "task_id required")
         val task = store.get(id) ?: return error("unknown_task", "Task is not recorded.")
+        if (!operationAllowed(task["operation_id"]?.jsonPrimitive?.content.orEmpty()))
+            return error("permission_denied", "Execution is disabled for this operation. Enable it locally in ClosePaw.")
         if(task["state"]?.jsonPrimitive?.content in setOf("succeeded", "failed", "cancelled", "timed_out", "interrupted")) return page(task, 0, DEFAULT_PAGE)
         val operation = registry.get(task.getValue("operation_id").jsonPrimitive.content) ?: return error("unknown_operation", "Handler is unavailable.")
         val confirmed = try { runBlocking { withTimeout(10_000) { operation.handler.cancel(id) } } } catch (_: Exception) { false }
