@@ -74,4 +74,31 @@ class McpOperationContractTest {
         assertThat(initialized.body).contains("2025-06-18")
         assertThat(initialized.body).doesNotContain("2099-01-01")
     }
+
+    @Test fun tailscaleExpansionUsesTheSameMcpDefinitionsAndWorksWithoutTermux() {
+        val registry = OperationRegistry()
+        val file = File.createTempFile("tailscale-contract", ".json").apply { delete() }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val dispatcher = OperationDispatcher(registry, OperationTaskStore(file), scope)
+            val transport = handler { name, args -> when (name) {
+                "discover_operations" -> dispatcher.discover(args)
+                "query" -> dispatcher.query(args)
+                else -> error("unexpected operation")
+            } }
+            val before = transport.handle("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""").body
+            val platform = object : ai.closepaw.tailscale.TailscalePlatform {
+                override suspend fun observe() = ai.closepaw.tailscale.TailscaleLocalState(installed = false)
+                override suspend fun probe(target: ai.closepaw.tailscale.PrivateTarget, timeoutMs: Int) = error("no target requested")
+                override suspend fun connect() = error("read must never connect")
+            }
+            ai.closepaw.tailscale.TailscaleOperations(ai.closepaw.tailscale.TailscaleRecovery(platform, { false }), { false }).register(registry)
+            assertThat(transport.handle("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""").body).isEqualTo(before)
+            val descriptor = registry.get(ai.closepaw.tailscale.TailscaleOperations.STATUS)!!.descriptor
+            val response = transport.handle("""{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"query","arguments":{"operation_id":"${descriptor.id}","operation_version":1,"schema_hash":"${descriptor.schemaHash}","input_json":"{}"}}}""")
+            val data = Json.parseToJsonElement(response.body!!).jsonObject.getValue("result").jsonObject.getValue("structuredContent").jsonObject.getValue("data").jsonObject
+            assertThat(data.getValue("installed").jsonPrimitive.boolean).isFalse()
+            assertThat(data.getValue("state").jsonPrimitive.content).isEqualTo("app_not_installed")
+        } finally { scope.cancel(); file.delete() }
+    }
 }

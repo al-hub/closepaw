@@ -41,6 +41,7 @@ internal fun ChatGptConnectionCard() {
     val executionSettings = remember(context) { McpExecutionSettings(context) }
     var executionEnabled by remember { mutableStateOf(executionSettings.enabled) }
     var geminiDraftEnabled by remember { mutableStateOf(executionSettings.geminiDraftEnabled) }
+    var tailscaleRecoveryEnabled by remember { mutableStateOf(executionSettings.tailscaleRecoveryEnabled) }
     val configStore = remember(context) { SecureMcpTunnelConfigStore(context.applicationContext) }
     var configuredTunnelId by remember {
         mutableStateOf(runCatching { configStore.load()?.tunnelId }.getOrNull())
@@ -90,6 +91,13 @@ internal fun ChatGptConnectionCard() {
             })
         }
         Text("Adds text only to an empty Gemini input. Does not press Send. Unlock the phone first; existing drafts are preserved.", style = MaterialTheme.typography.bodySmall)
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Allow ChatGPT Tailscale recovery", modifier = Modifier.weight(1f))
+            Switch(checked = tailscaleRecoveryEnabled, onCheckedChange = {
+                executionSettings.tailscaleRecoveryEnabled = it; tailscaleRecoveryEnabled = it
+            })
+        }
+        Text("Allows a Tailscale connection request for a private-network task, followed by a target connection check. Installation, login or VPN approval may need your action. Commands are not replayed; an active VPN is not replaced.", style = MaterialTheme.typography.bodySmall)
         state.publicMcpUrl?.let { url ->
             SelectionContainer {
                 Text(

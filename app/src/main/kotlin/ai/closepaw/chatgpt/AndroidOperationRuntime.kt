@@ -5,6 +5,7 @@ import ai.closepaw.bridge.*
 import ai.closepaw.chatgpt.operations.*
 import ai.closepaw.termux.TermuxBridgeAuth
 import ai.closepaw.termux.TermuxBridgeManager
+import ai.closepaw.tailscale.*
 import android.content.Context
 import java.io.File
 import kotlinx.coroutines.*
@@ -28,8 +29,13 @@ internal class AndroidOperationRuntime(
     private val registry = OperationRegistry()
     private val screenMutex = Mutex()
     private val draftDiagnostics = GeminiDraftDiagnostics(File(context.filesDir, "mcp/gemini-draft-diagnostics.json"))
+    private val tailscaleDiagnostics = TailscaleDiagnostics(File(context.filesDir, "mcp/tailscale-recovery.json"))
     private val dispatcher: OperationDispatcher
     init {
+        TailscaleOperations(
+            TailscaleRecovery(AndroidTailscalePlatform(context), { settings.tailscaleRecoveryEnabled }, record = tailscaleDiagnostics::record),
+            { settings.tailscaleRecoveryEnabled },
+        ).register(registry)
         // One bounded maintenance attempt per app runtime. Healthy paired Play Termux can
         // install its supervisor without RUN_COMMAND or another manual pairing ceremony.
         scope.launch {
@@ -63,7 +69,7 @@ internal class AndroidOperationRuntime(
             }, summary="Read app targets and readiness returned.")
         })
         registry.register(OperationDescriptor(
-            id="linux.shell.exec", description="Execute a noninteractive shell command in paired Termux. Returns a task ID for output, errors and process exit code. No interactive terminal input is supported.",
+            id="linux.shell.exec", description="Execute a noninteractive shell command in paired Termux. Returns a task ID for output, errors and process exit code. No interactive terminal input is supported. For private-network/SSH failures, discover network.tailscale.status and network.tailscale.ensure_connected. Do not automatically replay writes or unknown outcomes.",
             readOnly=false, permissions=listOf("remote_execution", "termux_local_bridge"), effects=listOf("shell_execution"), cancellationSupported=true,
             inputSchema=schema("command" to stringSchema(32768, 1), "cwd" to stringSchema(4096, 1), "timeout_ms" to buildJsonObject { put("type", "integer"); put("minimum", 1000); put("maximum", 3600000) }, required=listOf("command")),
             readiness={
@@ -101,15 +107,17 @@ internal class AndroidOperationRuntime(
             }
         })
         dispatcher = OperationDispatcher(registry, store, scope,
-            executeAllowed = { settings.enabled || settings.geminiDraftEnabled },
+            executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.tailscaleRecoveryEnabled },
             operationAllowed = { id -> when(id) {
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled
+                TailscaleOperations.ENSURE -> settings.tailscaleRecoveryEnabled
                 else -> false
             } },
         )
     }
     fun diagnosticSnapshot(): JsonObject = draftDiagnostics.snapshot()
+    fun tailscaleDiagnosticSnapshot(): JsonObject = tailscaleDiagnostics.snapshot()
 
     override fun call(name: String, arguments: JsonObject): JsonObject = when(name) {
         "discover_operations" -> dispatcher.discover(arguments)

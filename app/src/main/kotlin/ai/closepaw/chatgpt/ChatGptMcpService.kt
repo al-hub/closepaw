@@ -54,6 +54,7 @@ class ChatGptMcpService : Service() {
                 operationTools = operations,
                 extraDiagnostics = { kotlinx.serialization.json.buildJsonObject {
                     put("gemini_draft", operations.diagnosticSnapshot())
+                    put("tailscale_recovery", operations.tailscaleDiagnosticSnapshot())
                 } },
             ),
         )

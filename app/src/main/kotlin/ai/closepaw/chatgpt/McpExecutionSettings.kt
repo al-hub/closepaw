@@ -12,6 +12,9 @@ internal class McpExecutionSettings(context: Context) {
     var geminiDraftEnabled: Boolean
         get() = prefs.getBoolean("gemini_draft_enabled", false)
         set(value) { check(prefs.edit().putBoolean("gemini_draft_enabled", value).commit()) }
+    var tailscaleRecoveryEnabled: Boolean
+        get() = prefs.getBoolean("tailscale_recovery_enabled", false)
+        set(value) { prefs.edit().putBoolean("tailscale_recovery_enabled", value).apply() }
     @Synchronized fun endpointPath(): String {
         val existing = prefs.getString("endpoint_secret", null)
         val secret = existing ?: ByteArray(32).also { SecureRandom().nextBytes(it) }
