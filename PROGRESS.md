@@ -33,6 +33,16 @@ Documentation-only commits after this source do not change the installed APK.
 are the current summary. Older dated entries below are historical checkpoints,
 not instructions to downgrade, re-pair, refresh plugins or repeat passed tests.
 
+## Gemini host read repair — v0.1.48 candidate
+
+- Real v0.1.47 READ after unlock rejected the Google host package
+  (`target_not_foreground`, request `f17acf1b-bc7a-4b8c-b57a-160b9bf747fb`);
+  no response text or screenshot was captured.
+- Candidate reuses the existing Gemini-specific composer identity guard for reads,
+  rejects generic Google Search and discards captures if identity changes.
+- [Repair and acceptance](doc/dev/gemini-hosted-read-v0148.md); PR #93.
+  CI/release and installed-device READ/Voice remain distinct pending gates.
+
 ## Current position
 
 ```text
