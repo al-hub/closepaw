@@ -8,6 +8,7 @@ import ai.closepaw.termux.TermuxBridgeManager
 import ai.closepaw.tailscale.*
 import android.content.Context
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,6 +30,7 @@ internal class AndroidOperationRuntime(
     private val registry = OperationRegistry()
     private val screenMutex = Mutex()
     private val draftDiagnostics = GeminiDraftDiagnostics(File(context.filesDir, "mcp/gemini-draft-diagnostics.json"))
+    private val roundTripDiagnostics = GeminiDraftDiagnostics(File(context.filesDir, "mcp/gemini-roundtrip-diagnostics.json"))
     private val tailscaleDiagnostics = TailscaleDiagnostics(File(context.filesDir, "mcp/tailscale-recovery.json"))
     private val dispatcher: OperationDispatcher
     init {
@@ -106,17 +108,58 @@ internal class AndroidOperationRuntime(
                 else withTimeout(10_000) { GeminiDraftOperation(AndroidGeminiDraftUi(service) { settings.geminiDraftEnabled }, { settings.geminiDraftEnabled }, draftDiagnostics::record).invoke(invocation) }
             }
         })
+        val activeQuestions = ConcurrentHashMap<String, GeminiRoundTripOperation>()
+        val stoppedQuestions = ConcurrentHashMap.newKeySet<String>()
+        registry.register(GeminiRoundTripOperation.descriptor(readiness = {
+            when {
+                !settings.geminiQuestionEnabled -> OperationReadiness(false, "gemini_question_disabled")
+                AgentService.instance == null -> OperationReadiness(false, "accessibility_permission_missing")
+                runCatching { context.packageManager.getApplicationInfo(AndroidGeminiDraftUi.PACKAGE, 0) }.isFailure -> OperationReadiness(false, "app_not_installed")
+                else -> OperationReadiness()
+            }
+        }), object : OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult {
+                try {
+                    return screenMutex.withLock {
+                        if (stoppedQuestions.contains(invocation.taskId)) return@withLock OperationResult(
+                            success = false, summary = "Observation stopped before the question started. No send action was invoked.",
+                            data = buildJsonObject { put("state", "interrupted"); put("sent", false); put("send_action_invoked", false); put("generation_cancelled", false) },
+                        )
+                        val service = AgentService.instance ?: return@withLock OperationResult(success = false, summary = "Accessibility service is not connected.")
+                        val allowed = { settings.geminiQuestionEnabled && AgentService.instance === service && !stoppedQuestions.contains(invocation.taskId) }
+                        val operation = GeminiRoundTripOperation(AndroidGeminiRoundTripUi(service, allowed), allowed, { taskId, stage, reason ->
+                            // This metadata-only ledger boundary must succeed before a send is possible.
+                            check(store.updateActive(taskId, mapOf(
+                                "submission_state" to JsonPrimitive(stage), "reason_code" to JsonPrimitive(reason),
+                                "observed_at_ms" to JsonPrimitive(System.currentTimeMillis()),
+                            ))) { "Task is no longer active" }
+                            // Logging is best-effort and cannot turn a durable submission into a retry.
+                            runCatching { roundTripDiagnostics.record(DraftDiagnostic(taskId, stage, reason, 0)) }
+                        })
+                        activeQuestions[invocation.taskId] = operation
+                        try { operation.invoke(invocation) } finally { activeQuestions.remove(invocation.taskId, operation) }
+                    }
+                } finally { stoppedQuestions.remove(invocation.taskId) }
+            }
+            override suspend fun cancel(taskId: String): Boolean {
+                stoppedQuestions.add(taskId)
+                activeQuestions[taskId]?.cancel(taskId)
+                // Only observation stops. Never claim Gemini generation was cancelled.
+                return false
+            }
+        })
         dispatcher = OperationDispatcher(registry, store, scope,
-            executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.tailscaleRecoveryEnabled },
+            executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled },
             operationAllowed = { id -> when(id) {
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled
+                "gemini.question.ask" -> settings.geminiQuestionEnabled
                 TailscaleOperations.ENSURE -> settings.tailscaleRecoveryEnabled
                 else -> false
             } },
         )
     }
-    fun diagnosticSnapshot(): JsonObject = draftDiagnostics.snapshot()
+    fun diagnosticSnapshot(): JsonObject = JsonObject(draftDiagnostics.snapshot() + ("roundtrip" to roundTripDiagnostics.snapshot()))
     fun tailscaleDiagnosticSnapshot(): JsonObject = tailscaleDiagnostics.snapshot()
 
     override fun call(name: String, arguments: JsonObject): JsonObject = when(name) {

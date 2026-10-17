@@ -41,6 +41,7 @@ internal fun ChatGptConnectionCard() {
     val executionSettings = remember(context) { McpExecutionSettings(context) }
     var executionEnabled by remember { mutableStateOf(executionSettings.enabled) }
     var geminiDraftEnabled by remember { mutableStateOf(executionSettings.geminiDraftEnabled) }
+    var geminiQuestionEnabled by remember { mutableStateOf(executionSettings.geminiQuestionEnabled) }
     var tailscaleRecoveryEnabled by remember { mutableStateOf(executionSettings.tailscaleRecoveryEnabled) }
     val configStore = remember(context) { SecureMcpTunnelConfigStore(context.applicationContext) }
     var configuredTunnelId by remember {
@@ -91,6 +92,13 @@ internal fun ChatGptConnectionCard() {
             })
         }
         Text("Adds text only to an empty Gemini input. Does not press Send. Unlock the phone first; existing drafts are preserved.", style = MaterialTheme.typography.bodySmall)
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Allow ChatGPT Gemini questions", modifier = Modifier.weight(1f))
+            Switch(checked = geminiQuestionEnabled, onCheckedChange = {
+                executionSettings.geminiQuestionEnabled = it; geminiQuestionEnabled = it
+            })
+        }
+        Text("Allows questions you request to be sent to Gemini, then reads the new reply. Existing drafts are preserved. Turning this off stops observation and blocks further sends; Gemini may continue generating a question already sent.", style = MaterialTheme.typography.bodySmall)
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Allow ChatGPT Tailscale recovery", modifier = Modifier.weight(1f))
             Switch(checked = tailscaleRecoveryEnabled, onCheckedChange = {

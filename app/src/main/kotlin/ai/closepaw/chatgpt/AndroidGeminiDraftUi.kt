@@ -117,7 +117,7 @@ internal class AndroidGeminiDraftUi(private val service: AgentService, private v
      * Active IME roots may be replaced only by an active/focused APPLICATION window.
      * Never select a background Gemini window just because it exists.
      */
-    private fun foregroundRoot(): AccessibilityNodeInfo? {
+    internal fun foregroundRoot(): AccessibilityNodeInfo? {
         val observed = platform.getCurrentPackageName()
         val activeRoot = service.rootInActiveWindow
         val windows = service.windows.orEmpty()
@@ -139,7 +139,7 @@ internal class AndroidGeminiDraftUi(private val service: AgentService, private v
             return root
         } finally { windows.forEach { runCatching { it.recycle() } } }
     }
-    private fun isComposer(node: AccessibilityNodeInfo): Boolean {
+    internal fun isComposer(node: AccessibilityNodeInfo): Boolean {
         val hint = node.hintText?.toString().orEmpty()
         val description = node.contentDescription?.toString().orEmpty()
         val id = node.viewIdResourceName.orEmpty().substringAfterLast('/')
