@@ -44,7 +44,7 @@ class GeminiRoundTripOperationTest {
     private fun input(extra: JsonObject = buildJsonObject {}) = JsonObject(mapOf("text" to JsonPrimitive(QUESTION)) + extra)
     private fun invocation(extra: JsonObject = buildJsonObject {}) = OperationInvocation("task", input(extra))
     private fun operation(ui: Ui, events: MutableList<String> = mutableListOf(), record: ((String,String,String)->Unit)? = null): GeminiRoundTripOperation {
-        return GeminiRoundTripOperation(ui, { ui.enabled }, record ?: { _, stage, reason -> events.add("$stage:$reason") }, { timeout ->
+        return GeminiRoundTripOperation(ui, { ui.enabled }, record ?: { _, stage, reason -> events.add("$stage:$reason"); Unit }, { timeout ->
             var time = 0L
             GeminiReplyCollector(ui, { ui.enabled }, clockMillis = { time }, pause = { time += it },
                 timeoutMs = timeout, pollMs = 100, stableMs = 100, maxPolls = 100)
