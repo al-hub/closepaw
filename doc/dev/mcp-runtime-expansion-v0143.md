@@ -1,5 +1,12 @@
 # v0.1.43: Gemini foreground repair and MCP tool expansion
 
+> Historical version-specific plan. Current installed/released baseline is
+> v0.1.47/code48. See [current Works handoff](../project/WORKS_HANDOFF.md).
+> Do not downgrade, re-pair or recreate the plugin to replay this checklist.
+> Operation expansion was verified with Tailscale on the existing connection;
+> Gemini draft/Voice and ninth-tool client discovery remain separate evidence gates.
+
+
 ## Scope and evidence
 
 v0.1.42/code43 reported four operations through eight unchanged MCP tools. Two real

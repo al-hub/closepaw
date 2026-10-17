@@ -95,9 +95,25 @@ The pre-development Termux package query was denied cross-user permission. It
 does not establish that Tailscale is missing or unsupported. Android-side queries
 include package visibility and are checked by the released app itself.
 
-New feature phone acceptance is pending APK installation: enable its local
-permission; discover/query while installed and connected; disconnect Tailscale
-locally without stopping ClosePaw; diagnose then ensure a known private PC TCP
-target; verify `kv status` in Termux. Also inspect unsupported/user-action paths
-without deleting existing app data or pairing. Unit/host evidence is not marked
-as actual phone execution.
+## Installed-phone acceptance — 2026-10-17
+
+Galaxy v0.1.47/code48 with local recovery permission enabled discovered the new
+operations without plugin registration changes. Installed Tailscale 1.104.1
+reported connect receiver/control support. Connected-target ensure returned
+`target_already_reachable`, `connect_requested=false` (task
+`481bf242-bf5b-400e-8797-86430599ec0f`).
+
+The user switched Tailscale OFF. Diagnosis returned no VPN/link, target unreachable,
+and `invoke_network_tailscale_ensure_connected`. One ensure request returned
+`target_reachable`, `connect_requested=true`, VPN/link present (task
+`605be889-c9b3-4228-9e79-f028a5ea7836`). One get_task timed out during network
+transition; querying the same task again confirmed success without resubmission.
+A separate plain `command -v kv && kv status` completed exit 0 and confirmed
+PC/SSH/WSL/KUM health (task `7c0dcc54-6558-439c-8bc3-cb72952baedd`). No manual
+Tailscale Connect was needed. Exact recovery duration was not measured.
+
+Missing app/login/first VPN consent, conflicting or stalled active VPN, total
+internet loss and reboot combined with Tailscale recovery remain unverified on
+this phone. Host tests are not phone acceptance for those cases.
+
+[Detailed evidence and remaining work](../project/WORKS_HANDOFF.md).

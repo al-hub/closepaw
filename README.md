@@ -1,4 +1,7 @@
 <h1 align="center">
+
+> ChatGPT bridge delivery: [current progress](PROGRESS.md) · [Works handoff and remaining PR work](doc/project/WORKS_HANDOFF.md).
+
   <img src="doc/release/play-store/app-icon-512.png" width="72" alt="ClosePaw" /><br/>
   ClosePaw
 </h1>

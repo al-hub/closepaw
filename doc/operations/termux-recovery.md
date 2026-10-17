@@ -49,3 +49,20 @@ If the old installed runtime has already exhausted recovery and Termux has no RU
 The pre-test Android boot ID and token file inode/size/mtime were recorded without reading the token. New APK installation, renewed real-device SIGKILL recovery, token-metadata comparison, unqualified `command -v kv` / `kv status`, and actual Android reboot remain acceptance steps until observed. The package-query check did not find a visible Termux:Boot add-on; package visibility and support must be accounted for before asserting boot capability. A host reentry test is not an Android reboot test.
 
 The flapping regression also showed that a brief healthy response could reset the consecutive-attempt counter indefinitely. Revision 88.2 retains that backoff and adds a rolling cap of five launches per 300 seconds. Exhaustion records both the attempt count and window count; it does not clear credentials or replay jobs. The test alternates healthy/absent states and proves recovery stops after five launches.
+
+## Installed-device acceptance update — v0.1.45–47
+
+The earlier pending paragraphs are historical. On v0.1.45/runtime88.2, plain
+`command -v kv` and `kv status` succeeded (exit 0). A controlled daemon SIGKILL
+recovered PID 6171→7877 in 4.416 seconds; token file inode/size/mtime were unchanged.
+A duplicate boot hook did not duplicate the daemon. Wrong-token HTTP 401 was
+distinguished from a healthy correctly authenticated bridge. Actual phone reboot
+also restored the Termux bridge; ChatGPT's manual-Connect gap led to v0.1.46.
+
+v0.1.46 actual reboot recovered ChatGPT/Termux without Connect after unlock and
+manual Tailscale launch. v0.1.47 plain `kv status` succeeded after task-directed
+Tailscale OFF recovery. These do not prove whole-Termux force-stop recovery or
+identify the original daemon disappearance cause. Runtime88.2 is the current
+revision; 88.1 above describes its historical predecessor.
+
+[Evidence matrix / residual work](../project/WORKS_HANDOFF.md).

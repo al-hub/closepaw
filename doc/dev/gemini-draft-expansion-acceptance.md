@@ -1,5 +1,12 @@
 # Gemini draft operation: v0.1.42
 
+> Historical version-specific plan. Current installed/released baseline is
+> v0.1.47/code48. See [current Works handoff](../project/WORKS_HANDOFF.md).
+> Do not downgrade, re-pair or recreate the plugin to replay this checklist.
+> Operation expansion was verified with Tailscale on the existing connection;
+> Gemini draft/Voice and ninth-tool client discovery remain separate evidence gates.
+
+
 ## Goal and baseline
 
 Keep the v0.1.41 connection, all eight tools/list definitions, Secure Tunnel configuration,

@@ -4,13 +4,30 @@ This is the live project milestone board for the ChatGPT Android control path.
 
 Progress work follows one rule: **implementation and this document move together**. A milestone is complete only when its real-device user experience has been verified.
 
-## v0.1.43 follow-up — implementation, CI and device acceptance
+## Verified checkpoint — 2026-10-17 (KST)
 
-Gemini foreground/root consistency, package/window diagnostic metadata and ZIP
-inclusion, plus a ninth read-only MCP runtime tool are in development. Existing
-eight tool definitions stay unchanged; client discovery without plugin refresh
-and actual Gemini draft insertion remain **PENDING real-device acceptance**.
-See [release acceptance](doc/dev/mcp-runtime-expansion-v0143.md).
+Installed/released baseline: **v0.1.47 / code 48**, Termux runtime **88.2**.
+Release source: `bb7442a8c577669f53b79028e1d6d747c09210f2`.
+Documentation-only commits after this source do not change the installed APK.
+
+- **P0/P1 DONE; P2 ACTIVE**: Chrome Voice and Samsung Internet READ accepted;
+  Gemini native READ/Voice and draft guard acceptance remain outstanding.
+- **P4 core execution VERIFIED**: authenticated MCP → Termux, plain `kv status`
+  exit 0. Keep broader task-lifecycle/Voice acceptance separate; P4 is no longer
+  an unimplemented future capability.
+- **P5/P7 PARTIAL evidence**: PC/SSH/WSL/KUM healthy; v0.1.46 reboot restore,
+  explicit Stop persistence across reopening, and Wi-Fi→mobile restore observed.
+  This does not establish bidirectional network recovery or daily Voice reliability.
+- **Issue #88 core recovery accepted**: v0.1.45 daemon SIGKILL recovery/token
+  metadata retention and v0.1.47 Tailscale OFF → connection request → private
+  target reachable → plain `kv status` exit 0. Original disappearance cause is
+  still unproven; whole-app force-stop is an Android recovery boundary.
+- **Only open PR at audit: #33**. It has a failed historical check and overlaps
+  current main. Do not merge the old bootstrap wholesale.
+
+[Audit, evidence, residual tasks and copyable Works handoff](doc/project/WORKS_HANDOFF.md)
+are the current summary. Older dated entries below are historical checkpoints,
+not instructions to downgrade, re-pair, refresh plugins or repeat passed tests.
 
 ## Current position
 
@@ -21,7 +38,7 @@ Completed: 2 / 10
 ✅ P1 · Browser Read MVP
 🟡 P2 · General Read            ← ACTIVE
 ⏭ P3 · Kakao Read
-⬜ P4 · Termux Execute
+🟡 P4 · Termux Execute          ← CORE VERIFIED; lifecycle acceptance pending
 ⬜ P5 · PC Continuity
 ⬜ P6 · Toss Read
 ⬜ P7 · Reliability
@@ -182,7 +199,10 @@ ChatGPT Voice
 
 **Current checkpoint (2026-10-12):** Signed v0.1.38 release published and installed (Galaxy version code 39), Samsung Internet direct OCR regression PASS, Chrome article direct MCP READ PASS (two one-screenshot captures), and ChatGPT Voice Chrome three-sentence summary user-visible PASS (16s). The direct Chrome capture contained a Dong-A Ilbo article on Unification Minister Jeong Dong-yeong; the user-provided Voice screenshot displayed the Chrome READ tool step and three accurate sentences matching the same article. No internal request ID correlation is claimed. An unrelated headline appeared in Chrome Accessibility UI text but not in the Voice summary. **Gemini app READ + Voice summary remain pending**. The connected `closepaw_galaxy.read_app` tool schema still exposes only Chrome and Samsung Internet, despite v0.1.38 app code supporting Gemini. P2 remains ACTIVE; P7 retains tunnel recovery.
 
-**Next action:** Confirm/refresh ChatGPT MCP `read_app(gemini)` tool visibility → Galaxy Gemini direct one-screen READ → ChatGPT Voice three-sentence summary matching visible content. Close P2 only after this succeeds.
+**Next action (2026-10-17):** use the existing operation envelope to discover
+`app.screen.read` and its current schema, then verify native Gemini visible reply
+READ and a grounded Voice response. Historical stale `read_app` enums are not a
+reason to recreate the plugin. Close P2 only with actual matching screen evidence.
 
 ### Chrome Voice evidence · 2026-10-12 18:13 KST
 
@@ -208,9 +228,14 @@ Do not mark P2 DONE until a real Gemini conversation response and Voice answer a
 
 Read a bounded KakaoTalk conversation range and let ChatGPT summarize it. Add scrolling/dedup only as real use requires it.
 
-## P4 · Termux Execute — LATER ⬜
+## P4 · Termux Execute — CORE VERIFIED / acceptance review 🟡
 
-Expose the already-proven Termux execution path through MCP with the smallest safe interface.
+PR #85 exposes authenticated durable jobs through the fixed MCP operation envelope.
+On v0.1.47, `command -v kv && kv status` succeeded before and after Tailscale
+recovery (exit 0). No absolute-path workaround remains. Task cancellation,
+interrupted-job re-observation, duplicate-request and Voice-specific device checks
+must be recorded independently; do not infer them from this read-only smoke test.
+See [current acceptance matrix](doc/project/WORKS_HANDOFF.md).
 
 ## P5 · PC Continuity — LATER ⬜
 
@@ -220,13 +245,16 @@ Termux → SSH → PC. Add persistent tmux/session behavior only when interrupti
 
 Limited financial READ only. Return the requested value or summary, not broad raw screen data. No transfer/payment/auth actions.
 
-## P7 · Reliability — LATER ⬜
+## P7 · Reliability — PARTIAL evidence / remaining scope deferred ⬜
 
 Own long-running reliability separately from P1 single-snapshot READ:
 
-- [ ] Secure MCP tunnel reconnect after ClosePaw app restart
-- [ ] Secure MCP tunnel reconnect after Wi-Fi↔5G switching
-- [ ] Secure MCP tunnel reconnect after Galaxy reboot
+- [x] v0.1.46 Galaxy reboot → unlock → user starts Tailscale → ClosePaw tunnel and Termux recover without Connect
+- [x] v0.1.46 Stop → home → reopen stays Stopped; manual Connect resumes execution
+- [x] v0.1.46 Wi-Fi→mobile restores remote execution without manual Connect (exact latency unmeasured)
+- [ ] Process death/app restart recovery while connection is intended to remain enabled
+- [ ] Mobile→Wi-Fi, prolonged total internet loss, and Stop→reboot persistence
+- [ ] Reboot combined with v0.1.47 task-directed Tailscale recovery (without manually launching Tailscale)
 - [ ] Voice continuity and performance under daily-use app/UI changes
 - [ ] Retire old Quick Tunnel connector only after the recovery path is verified
 

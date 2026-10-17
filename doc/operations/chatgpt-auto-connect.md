@@ -45,3 +45,16 @@ when visible. This release does not control Tailscale or guarantee network
 availability. Actual device install, Stop persistence, network transitions and
 post-reboot tunnel connection must be checked after the signed APK is installed;
 host and CI tests alone do not prove those phone behaviors.
+
+## Observed Galaxy acceptance — 2026-10-17
+
+v0.1.46/code47: actual reboot → unlock → user launched Tailscale; ClosePaw and
+Termux recovered without pressing Connect or opening Termux. Boot ID changed;
+plain `kv status` exit 0. Stop → home → reopen remained Stopped; Connect resumed
+execution. Wi-Fi OFF→mobile restored execution without manual Connect after an
+initial timeout; exact recovery latency/mechanism was not measured.
+
+This is not evidence for mobile→Wi-Fi, prolonged total offline, Stop across reboot,
+force-stop recovery or unattended Tailscale startup. v0.1.47 adds separate
+[task-directed Tailscale tools](tailscale-tools.md), not global VPN management.
+See the [current handoff](../project/WORKS_HANDOFF.md).

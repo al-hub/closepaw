@@ -1,5 +1,12 @@
 # Extensible MCP operations: v0.1.41 acceptance
 
+> Historical version-specific plan. Current installed/released baseline is
+> v0.1.47/code48. See [current Works handoff](../project/WORKS_HANDOFF.md).
+> Do not downgrade, re-pair or recreate the plugin to replay this checklist.
+> Operation expansion was verified with Tailscale on the existing connection;
+> Gemini draft/Voice and ninth-tool client discovery remain separate evidence gates.
+
+
 Implementation: fixed MCP discovery/query/execute/get_task/cancel_task tools; dynamic operation registry; schema-version/hash guards; local execution opt-in; persistent task ledger and daemon job links; authenticated asynchronous Termux jobs. Existing read_app/status/diagnostics remain available. Gemini support remains screen reading, without input or send.
 
 ## Update once

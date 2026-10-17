@@ -1,51 +1,24 @@
 # ClosePaw · Project Dashboard
 
-> **Source of truth:** [PROGRESS.md](../../PROGRESS.md). Last verified update: **2026-10-11 (KST)**. This file is a human-readable snapshot; the GitHub Projects board has separate status fields and **must not be assumed synchronized**.
+> 기준 **2026-10-17 KST**. [PROGRESS.md](../../PROGRESS.md)가 milestone 기준이며,
+> [Works 인계/감사](WORKS_HANDOFF.md)에 전체 이슈·PR·증거·잔여 작업을 기록한다.
+> GitHub Projects의 실제 Status/자동화와 이 문서는 별도다.
 
-## At a glance
-
-| Area | Verified position | Evidence / next gate |
+| 영역 | 확인 상태 | 다음 게이트 |
 | --- | --- | --- |
-| Overall roadmap | **2/10 milestones DONE**: P0 and P1; **P2 NEXT**; P3–P9 LATER | [Current progress](../../PROGRESS.md) |
-| P0 · MCP Connection | ✅ DONE | Galaxy ChatGPT text/voice → ClosePaw `get_status()` verified |
-| P1 · Browser Read MVP | ✅ DONE | [Issue #68](../../issues/68) closed as completed: Galaxy v0.1.37, one screenshot + local Korean OCR; ChatGPT Voice summarized visible Korean article text in **19 seconds** on 2026-10-11 |
-| P2 · General Read | ⏭ NEXT | [Issue #69](../../issues/69) open: Chrome + Gemini READ, retaining Samsung regression |
-| P7 · Reliability | ⬜ LATER | [Issue #74](../../issues/74) open: reconnect after app restart, Wi-Fi↔5G, reboot; deliberately outside P1 gate |
-| Signed release | ✅ v0.1.37 (38) | [Verified signed APK](../../releases/tag/v0.1.37), installed on Galaxy; [PR #80](../../pull/80) |
-| GitHub Projects board | ⚠️ Status **not independently verified here** | [ClosePaw Delivery Project #2](https://github.com/users/al-hub/projects/2/views/1). Closing Issue #68 does not prove its Project **Status** field changed. This integration can update repository files/issues, not GitHub Projects v2 item fields. |
+| 전체 | P0/P1 **2/10 DONE**, P2 ACTIVE | Gemini native READ/Voice |
+| P0 / P1 | MCP Text/Voice 및 Samsung 화면 Voice 통과 | 검증 기준 보존 |
+| P2 #69 | Chrome Voice, Samsung 회귀 통과 | Gemini READ/Voice 및 draft 인수는 각각 확인 |
+| P4 #71 | MCP Termux 실행·경로 없는 kv status 실기기 통과 | 작업 수명주기/Voice 별도 인수 |
+| P5 #72 | PC/SSH/WSL/KUM 연결 정상 | 세션 연속성은 별도 |
+| P7 #74 | v46 reboot, Stop→재열기, Wi-Fi→mobile 증거 | 역방향/장기 오프라인/Stop→reboot/Voice |
+| #88 | 브리지·PATH·Tailscale OFF 복구 핵심 인수 통과 | 최초 소실 계기 미확정; Android 제약 보존 |
+| Signed APK | [v0.1.47 / code48](https://github.com/al-hub/closepaw/releases/tag/v0.1.47), 설치 확인 | 문서 commit은 새 APK가 아님 |
+| Open PR | [#33](https://github.com/al-hub/closepaw/pull/33) 한 개 | 최신 main 중복/고유 기능 대조 후 supersede 또는 작은 대체 PR |
+| P3/P6/P8/P9 | LATER | 자동 착수하지 않음 |
+| Projects #2 | 실제 필드·자동화 이번 감사 미검증 | [보드](https://github.com/users/al-hub/projects/2/views/1)에서 별도 확인 |
 
-## Roadmap
-
-```mermaid
-flowchart TD
-  P0["✅ P0 MCP Connection"] --> P1["✅ P1 Browser Read MVP"]
-  P1 --> P2["⏭ P2 General Read"]
-  P2 --> P3["⬜ P3 Kakao Read"]
-  P3 --> P4["⬜ P4 Termux Execute"]
-  P4 --> P5["⬜ P5 PC Continuity"]
-  P5 --> P6["⬜ P6 Toss Read"]
-  P6 --> P7["⬜ P7 Reliability"]
-  P7 --> P8["⬜ P8 App Extensibility"]
-  P8 --> P9["⬜ P9 Portability"]
-```
-
-## Project board and synchronization
-
-The previously configured **ClosePaw Delivery Project #2** is a separate GitHub Projects board; the connected GitHub tool can read/change repository issues and files but does not currently expose GitHub Projects v2 project items or custom-field updates. Consequently:
-
-- **P1 Issue #68:** verified `Closed / Completed`. **P1 Projects card Status:** not directly verified and may still show `In Progress`.
-- **P2 Issue #69:** verified `Open`. Keep as the next milestone; move the Projects card into the active execution column when beginning P2.
-- **P7 Issue #74:** verified `Open`; remains a future reliability milestone, not a P1 blocker.
-- For future auto-updates, check the Projects **Workflows** configuration (for example, `Item closed` → `Done`). Do not claim that any automation has been enabled until its actual Project settings or effects are verified.
-
-If Overview, Execution, or Roadmap views exist, keep them consistent with the issue state and this [milestone source of truth](../../PROGRESS.md). The repository has enabled Issues and P0–P9 milestone issues already exist; the old 2026-10-09 pilot statement that Issues are disabled or no Project exists is obsolete.
-
-## Acceptance and handoff rules
-
-- Completion requires real user-facing Galaxy evidence, not merely code, a successful workflow, or an APK install.
-- P1 covers **one visible-screen snapshot**, not full-page extraction, URL/tab monitoring or long-running tunnel recovery. The successful user-visible Voice summary took **19 seconds**. Its internal tool request ID was not provided, so no exact trace correlation is claimed.
-- Keep separate links for source changes, signed Release, on-device installation, and Voice result. Preserve historical investigation notes in [Issue #68](../../issues/68).
-- **Next action: P2 General Read #69** — use the established visible-screen READ approach for Chrome and Gemini, check Galaxy behavior and Voice accuracy.
-- Never change signing secrets, Release triggers, or production branches as part of Projects dashboard maintenance.
-
-> **Important:** This documentation update does **not** modify the live GitHub Projects board item Status or enable its Workflows.
+다음 Works는 [복사 가능한 시작 지침](WORKS_HANDOFF.md#8-다른-works에-복사할-시작-지침)으로
+PR #33부터 정리한다. CI/릴리스/설치/실제 결과를 구분하며, 이슈가 OPEN인 것만으로
+이미 검증한 기능을 미구현이라 하지 않는다. 반대로 코드 병합만으로 실기기 완료를
+주장하지 않는다. 페어링·서명키·릴리스 태그·KUM 데이터는 유지한다.

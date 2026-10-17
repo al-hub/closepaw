@@ -31,7 +31,14 @@ All day-to-day work uses the **debug** APK. The **release** APK is only for ship
 - Keep the keystore and password outside the repo, with owner-only permissions.
 - Export `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD` in a trusted shell before running `scripts/release-build.sh`.
 - New maintainer onboarding: get release signing material through a private credential handoff, or generate a fresh keystore for personal/dev work. `.gitignore` covers `*.keystore` `*.jks` `*.password`, but the canonical boundary is outside the repo.
-- CI publishes via `.github/workflows/release.yml` (fires on `v*` tag push; reads `KEYSTORE_BASE64` + `KEYSTORE_PASSWORD` from GitHub Secrets).
+- This fork publishes via `.github/workflows/signed-release.yml` after successful
+  main Security CI (plus manual dispatch and a scheduled unpublished-version fallback).
+  It uses the existing `CLOSEPAW_*` signing secrets and verifies certificate continuity.
+  Never recreate the production signing key. A documentation-only commit does not
+  need a version bump or a replacement APK; preserve immutable released tags.
+  Use `[skip ci]` on a strictly documentation-only commit if intentionally avoiding
+  an unchanged-version release attempt; do not apply it to executable changes.
+  See [current delivery handoff](../project/WORKS_HANDOFF.md).
 
 **R8 keep-rule pitfalls already handled** (in `app/proguard-rules.pro` + `app/build.gradle.kts`):
 - snakeyaml (direct dep, `SkillFrontmatterParser`) calls `java.beans.*` which Android lacks → `-dontwarn java.beans.**` + `-keep org.yaml.snakeyaml.**`.
