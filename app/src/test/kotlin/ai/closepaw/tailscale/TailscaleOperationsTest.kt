@@ -55,6 +55,23 @@ class TailscaleOperationsTest {
         assertEquals(0, platform.connects)
     }
 
+    @Test fun recoverableDiagnosisPointsToTheToolBeforeAskingTheUser() = runBlocking {
+        val registry = OperationRegistry()
+        val platform = FakePlatform().apply { installed = true }
+        TailscaleOperations(TailscaleRecovery(platform, { true }), { true }).register(registry)
+        val result = registry.get(TailscaleOperations.STATUS)!!.handler.invoke(OperationInvocation("diagnose", buildJsonObject { put("host", "pc.ts.net") }))
+        assertEquals("invoke_network_tailscale_ensure_connected", result.data["next_action"]?.jsonPrimitive?.content)
+        assertEquals(0, platform.connects)
+    }
+
+    @Test fun missingAppIsNotHiddenByAnUnreachableTarget() = runBlocking {
+        val registry = OperationRegistry()
+        TailscaleOperations(TailscaleRecovery(FakePlatform(), { true }), { true }).register(registry)
+        val result = registry.get(TailscaleOperations.STATUS)!!.handler.invoke(OperationInvocation("missing", buildJsonObject { put("host", "pc.ts.net") }))
+        assertEquals("app_not_installed", result.data["state"]?.jsonPrimitive?.content)
+        assertEquals("install_tailscale_with_user", result.data["next_action"]?.jsonPrimitive?.content)
+    }
+
     @Test fun reachableTcpDoesNotClaimSshOrOriginalCommandCompletion() = runBlocking {
         val registry = OperationRegistry()
         val platform = FakePlatform().apply { reachable = true }
@@ -108,7 +125,8 @@ class TailscaleOperationsTest {
         var connects = 0
         var observations = 0
         var reachable = false
-        override suspend fun observe(): TailscaleLocalState { observations++; return TailscaleLocalState(installed = false) }
+        var installed = false
+        override suspend fun observe(): TailscaleLocalState { observations++; return TailscaleLocalState(installed = installed) }
         override suspend fun probe(target: PrivateTarget, timeoutMs: Int) = TargetProbe(if (reachable) "reachable" else "target_unreachable")
         override suspend fun connect(): ConnectDispatch { connects++; return ConnectDispatch(true) }
     }

@@ -17,10 +17,16 @@ internal class TailscaleRecovery(
     suspend fun status(target: PrivateTarget? = null): TailscaleOutcome {
         val local = platform.observe()
         val probe = target?.let { platform.probe(it, 2000) }
+        val state = when {
+            probe?.reachable == true -> "target_reachable"
+            probe?.reason in setOf("target_port_refused", "target_outside_private_network", "probe_permission_denied") -> probe!!.reason
+            localReason(local) != null -> localReason(local)!!
+            probe != null -> probe.reason
+            local.overlayAddressPresent -> "overlay_link_observed"
+            else -> "connection_not_observed"
+        }
         return TailscaleOutcome(
-            probe?.let { if (it.reachable) "target_reachable" else it.reason } ?: localReason(local) ?:
-                if (local.overlayAddressPresent) "overlay_link_observed" else "connection_not_observed",
-            local, probe, success = probe?.reachable == true,
+            state, local, probe, success = probe?.reachable == true,
         )
     }
 

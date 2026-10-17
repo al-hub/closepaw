@@ -66,7 +66,14 @@ internal class TailscaleOperations(private val recovery: TailscaleRecovery, priv
                 "connection_cooldown" -> "wait_for_cooldown"
                 "recovery_in_progress" -> "wait_for_current_recovery"
                 "target_port_refused" -> "check_target_service"
-                "target_dns_failed" -> "check_private_dns_and_target"
+                "target_dns_failed", "target_unreachable", "target_probe_timeout", "connection_not_observed" -> when {
+                    outcome.local.vpnPresent -> "inspect_active_vpn_and_target_without_switching_vpn"
+                    !enabled() -> "enable_local_tailscale_recovery"
+                    readOnly && outcome.probe == null -> "provide_private_target_then_ensure_connected"
+                    readOnly -> "invoke_network_tailscale_ensure_connected"
+                    else -> "open_tailscale_check_login_vpn_approval_and_target"
+                }
+                "overlay_link_observed" -> "provide_private_target_for_verification"
                 "target_outside_private_network", "invalid_target" -> "provide_private_target"
                 "vpn_active_target_unreachable", "vpn_conflict_or_unidentified" -> "inspect_active_vpn_and_target_without_switching_vpn"
                 else -> "open_tailscale_check_login_vpn_approval_and_target"
