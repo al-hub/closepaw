@@ -4,11 +4,11 @@ This is the live project milestone board for the ChatGPT Android control path.
 
 Progress work follows one rule: **implementation and this document move together**. A milestone is complete only when its real-device user experience has been verified.
 
-## Verified checkpoint — 2026-10-17 (KST)
+## Verified checkpoint — 2026-10-18 (KST)
 
 Last verified installed baseline: **v0.1.48 / code 49**, Termux runtime **88.2**.
-Latest published APK: **v0.1.48 / code 49**, source `209dc9e20767cdfd39ca59ff2c7f1936de539579`.
-[Signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.48/closepaw-aa-bridge.apk).
+Latest published APK: **v0.1.49 / code 50**, source `74b03398042a3bbe419032525ff636f9ca9e27db`.
+[Signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.49/closepaw-aa-bridge.apk).
 Device update, Gemini launch/read of the start screen, empty draft insertion and existing draft preservation passed. Generated reply READ/Voice remains pending.
 Installed APK release source: `209dc9e20767cdfd39ca59ff2c7f1936de539579`.
 Documentation-only commits after this source do not change the installed APK.
@@ -51,12 +51,13 @@ not instructions to downgrade, re-pair, refresh plugins or repeat passed tests.
   Device installation, hosted start-screen READ, empty draft insertion and draft guard passed. Actual generated-reply READ/Voice remains pending.
 - The [Gemini goal execution and verified round-trip plan](doc/project/GEMINI_ROUNDTRIP_PLAN.md) is now implemented on a separate development branch under PR #94. Three agents covered guarded submission/UI inspection, reply collection, and flow/failure tests. Representative test: ask Gemini for current location; control round-trip and location correctness remain separate verdicts. Build-time optimization is deferred.
 
-## Gemini question/reply round trip — v0.1.49 candidate
+## Gemini question/reply round trip — v0.1.49 RELEASED; device acceptance pending
 
 - `gemini.question.ask` uses the existing operation discovery/execute/task envelope; no plugin re-registration is required. Local question-send permission is separate and defaults OFF.
 - Current conversation only. Existing drafts are preserved. A semantic Send click is distinct from observed submission; unknown outcomes and restarted tasks never auto-resend.
 - New replies require question correlation and completion evidence. Length/traversal limits return partial results; new-conversation selection and automatic scrolling are unsupported.
-- PR [#94](https://github.com/al-hub/closepaw/pull/94): Android CI and signed delivery pending. Local bridge suites passed: Termux 55, ChatGPT bridge 8. Local Gradle could not download its uncached distribution; no local Android success is claimed.
+- PR [#94](https://github.com/al-hub/closepaw/pull/94) merged. PR/main Security CI and Signed Release passed. XML reports confirm 2,344 Android tests (58 new), zero failures/errors/skips; bridge suites passed 55 + 8 tests. Local Gradle was blocked before compilation.
+- [Delivery and device acceptance](doc/dev/gemini-roundtrip-v0149.md): downloaded APK version/code, preserved signer, checksum, both native runtimes and source tag verified. SHA-256 `939a82d3d938fe7188c2ddf07bb01876920d8bcbf599496cf8422bf45b481342`, 116,330,053 bytes. Installation and real-device round-trip/Voice remain pending.
 - Existing signing certificate, pairing, tunnel and stored settings must be retained. After publication, install without clearing data, enable question permission, remove the previous unsent test draft manually, and validate the actual Galaxy Gemini accessibility roles plus one same-Voice round trip.
 - P2 remains ACTIVE; APK publication alone does not complete device acceptance.
 
