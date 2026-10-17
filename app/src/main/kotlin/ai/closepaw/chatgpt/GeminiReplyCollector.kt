@@ -73,7 +73,8 @@ internal class GeminiReplyCollector(
                     if (snapshot.generating == true) observedGenerating = true
                     val candidates = snapshot.replies.filter {
                         it.id.isNotBlank() && it.id !in baselineIds && it.text.isNotBlank() &&
-                            it.text.trim() != question.trim() && it.text.trim() !in baselineTexts
+                            it.text.trim() != question.trim() && it.text.trim() !in baselineTexts &&
+                            (it.textEvidence.isEmpty() || it.textEvidence.none { evidence -> evidence in baseline.observedTextEvidence })
                     }.distinctBy { it.id }
                     if (candidates.size > 1) return finish("reply_ambiguous")
                     val candidate = candidates.singleOrNull()

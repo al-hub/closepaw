@@ -4,17 +4,25 @@ This is the live project milestone board for the ChatGPT Android control path.
 
 Progress work follows one rule: **implementation and this document move together**. A milestone is complete only when its real-device user experience has been verified.
 
-## Verified checkpoint — 2026-10-18 (KST)
+## Latest checkpoint — 2026-10-18 (KST)
 
-Last verified installed baseline: **v0.1.48 / code 49**, Termux runtime **88.2**.
-Latest published APK: **v0.1.49 / code 50**, source `74b03398042a3bbe419032525ff636f9ca9e27db`.
-[Signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.49/closepaw-aa-bridge.apk).
-Device update, Gemini launch/read of the start screen, empty draft insertion and existing draft preservation passed. Generated reply READ/Voice remains pending.
-Installed APK release source: `209dc9e20767cdfd39ca59ff2c7f1936de539579`.
-Documentation-only commits after this source do not change the installed APK.
+Verified installed baseline: **v0.1.49 / code 50**, release source
+`74b03398042a3bbe419032525ff636f9ca9e27db`. Termux runtime baseline remains **88.2**.
+[Published APK](https://github.com/al-hub/closepaw/releases/download/v0.1.49/closepaw-aa-bridge.apk).
+Automatic Gemini submission returned **`send_unavailable`, `sent=false`**.
+After the user sent manually, existing `read_app` captured the actual response and completion toolbar.
+Generated-response READ is verified; automatic question/reply and same-Voice acceptance remain pending.
+
+Candidate **v0.1.50 / code 51**, [PR #95](https://github.com/al-hub/closepaw/pull/95),
+repairs visible text/nearest-wrapper Send recognition, bounded readiness waits, scoped response parsing,
+pre-send text freshness, and read-only role metadata. Three RED regressions were observed in
+[CI 39079668411](https://github.com/al-hub/closepaw/actions/runs/39079668411): 2,347 tests, 3 failures.
+Candidate full CI and Signed Release are **PENDING**; no v0.1.50 device success is claimed.
+[Repair, evidence and remaining acceptance](doc/dev/gemini-roundtrip-v0150.md).
+This checkpoint supersedes older installation/READ-pending statements below; those are historical.
 
 - **P0/P1 DONE; P2 ACTIVE**: Chrome Voice and Samsung Internet READ accepted;
-  Gemini generated-reply READ/Voice and question/reply round-trip acceptance remain outstanding; draft insertion/preservation passed.
+  Gemini generated-reply READ passed after manual submission; automatic question/reply and same-Voice acceptance remain outstanding. Draft insertion/preservation passed.
 - **P4 core execution VERIFIED**: authenticated MCP → Termux, plain `kv status`
   exit 0. Keep broader task-lifecycle/Voice acceptance separate; P4 is no longer
   an unimplemented future capability.

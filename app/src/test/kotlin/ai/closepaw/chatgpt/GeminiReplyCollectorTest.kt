@@ -30,6 +30,35 @@ class GeminiReplyCollectorTest {
             timeoutMs = 1000, pollMs = 100, stableMs = 200, maxAnswerChars = maxChars, maxPolls = 15)
         return collector.collect(question, baseline, cancelled) to ui
     }
+    @Test fun unparsedOldBodyCannotBecomeFreshReplyUnderNewQuestion() = runBlocking {
+        val oldHash = GeminiUiTextEvidence.hash("old body")
+        val before = baseline.copy(replies = emptyList(), observedTextEvidence = setOf(oldHash))
+        val oldFrame = before.copy(submittedQuestion = question,
+            replies = listOf(GeminiReply("correlated", "old body", true, setOf(oldHash))))
+        var now = 0L
+        val stale = GeminiReplyCollector(FakeUi(listOf(oldFrame)), clockMillis = { now },
+            pause = { now += it }, timeoutMs = 600, pollMs = 100, stableMs = 200).collect(question, before)
+        assertThat(stale.answer).isNull()
+        val freshFrame = oldFrame.copy(replies = listOf(GeminiReply("correlated", "fresh body", true,
+            setOf(GeminiUiTextEvidence.hash("fresh body")))))
+        now = 0L
+        val fresh = GeminiReplyCollector(FakeUi(listOf(oldFrame, freshFrame)), clockMillis = { now },
+            pause = { now += it }, timeoutMs = 1000, pollMs = 100, stableMs = 200).collect(question, before)
+        assertThat(fresh.state).isEqualTo("completed")
+        assertThat(fresh.answer).isEqualTo("fresh body")
+    }
+    @Test fun mixedOldAndFreshParagraphsCannotMasqueradeAsOneNewReply() = runBlocking {
+        val oldHash = GeminiUiTextEvidence.hash("old paragraph")
+        val before = baseline.copy(replies = emptyList(), observedTextEvidence = setOf(oldHash))
+        val mixed = before.copy(submittedQuestion = question, replies = listOf(GeminiReply(
+            "mixed", "old paragraph\nfresh paragraph", true,
+            setOf(oldHash, GeminiUiTextEvidence.hash("fresh paragraph")))))
+        var now = 0L
+        val result = GeminiReplyCollector(FakeUi(listOf(mixed)), clockMillis = { now },
+            pause = { now += it }, timeoutMs = 600, pollMs = 100, stableMs = 200).collect(question, before)
+        assertThat(result.answer).isNull()
+        assertThat(result.state).isEqualTo("failed")
+    }
     @Test fun generationMustBeObservedThenExplicitlyStoppedAndStable() = runBlocking {
         val (result, ui) = collect(listOf(observation(generating = true), observation()))
         assertThat(result.state).isEqualTo("completed")

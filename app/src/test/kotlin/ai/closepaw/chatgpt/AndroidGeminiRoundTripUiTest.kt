@@ -6,6 +6,8 @@ import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
+import ai.closepaw.chatgpt.operations.OperationInvocation
+import kotlinx.serialization.json.*
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -27,6 +29,7 @@ class AndroidGeminiRoundTripUiTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         coEvery { draft.isLocked() } returns false
         every { draft.foregroundRoot() } answers { root }
+        every { draft.evidence() } answers { DraftWindowEvidence(rootPackage = root?.packageName?.toString(), windowId = 7) }
         every { draft.isComposer(any()) } answers { firstArg<AccessibilityNodeInfo>().viewIdResourceName?.endsWith("/assistant_robin_input_text") == true }
     }
     @After fun teardown() { unmockkAll(); Dispatchers.resetMain() }
@@ -37,6 +40,8 @@ class AndroidGeminiRoundTripUiTest {
         every { n.packageName } returns pkg
         every { n.windowId } returns 7
         every { n.viewIdResourceName } returns "$pkg:id/$id"
+        every { n.className } returns "android.view.View"
+        every { n.contentDescription } returns null
         every { n.text } returns text
         every { n.isVisibleToUser } returns visible
         every { n.isEnabled } returns true
@@ -64,12 +69,81 @@ class AndroidGeminiRoundTripUiTest {
         assertEquals(GeminiSendResult.TARGET_CHANGED, ui.sendIfMatches("query", "$google:7"))
         verify(exactly = 0) { send.performAction(any()) }
     }
+    @Test fun wholeRoundTripUsesHostedChildSendAndQuestionAnchoredReplyToolbar() = runBlocking {
+        val question = "short test question"
+        val input = node("assistant_robin_input_text", "", pkg = google, editable = true)
+        val label = node(text = "보내기", pkg = google)
+        val send = node("compose_button", children = listOf(label), pkg = google, clickable = true)
+        root = node(children = listOf(input, send), pkg = google)
+        coEvery { draft.launch() } returns true
+        coEvery { draft.setIfEmpty(question) } answers {
+            every { input.text } returns question
+            DraftWriteResult.WRITTEN
+        }
+        coEvery { draft.matches(question) } returns true
+        every { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) } answers {
+            every { input.text } returns ""
+            root = node(children = listOf(
+                node(text = question, pkg = google),
+                node(text = "verified answer", pkg = google),
+                node(text = "대답이 마음에 들어요", pkg = google, clickable = true),
+                node(text = "대답이 마음에 들지 않아요", pkg = google, clickable = true),
+                node(text = "복사", pkg = google, clickable = true),
+                node(text = "Gemini는 AI이며 실수를 할 수 있습니다.", pkg = google),
+                input, node(text = "Gemini Argon", pkg = google), node(text = "새 채팅", pkg = google),
+            ), pkg = google)
+            true
+        }
+        val ui = adapter(); var time = 0L
+        val events = mutableListOf<String>()
+        val op = GeminiRoundTripOperation(ui, { true }, { _, stage, _ -> events.add(stage); Unit }, { timeout ->
+            GeminiReplyCollector(ui, clockMillis = { time }, pause = { time += it }, timeoutMs = timeout,
+                pollMs = 100, stableMs = 100)
+        })
+        val result = op.invoke(OperationInvocation("hosted-flow", buildJsonObject { put("text", question) }))
+        assertTrue(result.summary, result.success)
+        assertEquals("verified answer", result.stdout)
+        assertTrue(result.data.getValue("sent").jsonPrimitive.boolean)
+        assertEquals("semantic_complete_and_stable", result.data.getValue("completion_evidence").jsonPrimitive.content)
+        assertTrue(events.indexOf("submitting") < events.indexOf("send_action_invoked"))
+        verify(exactly = 1) { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+        verify(exactly = 0) { label.performAction(any()) }
+        val metadata = ui.metadataSnapshot().toString()
+        assertFalse(metadata.contains(question)); assertFalse(metadata.contains("verified answer"))
+    }
     @Test fun exactlyOneSemanticSendIsClickedOnce() = runBlocking {
         val send = node("assistant_robin_send_button", clickable = true)
         root = node(children = listOf(composer(), send))
         val ui = adapter(); val snapshot = ui.snapshot()
         assertEquals(1, snapshot.sendCandidates)
         assertEquals(GeminiSendResult.CLICKED, ui.sendIfMatches("question", snapshot.targetKey))
+        verify(exactly = 1) { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+    }
+    @Test fun visibleTextSendInGoogleHostedGeminiIsRecognizedAndClicked() = runBlocking {
+        val send = node(text = "보내기", pkg = google, clickable = true)
+        root = node(children = listOf(composer(google), send), pkg = google)
+        val ui = adapter(); val state = ui.snapshot()
+        assertEquals(1, state.sendCandidates)
+        assertEquals(GeminiSendResult.CLICKED, ui.sendIfMatches("question", state.targetKey))
+        verify(exactly = 1) { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+    }
+    @Test fun semanticLabelChildResolvesOnlyItsNearestClickableParent() = runBlocking {
+        val label = node(text = "보내기")
+        val button = node("compose_button", children = listOf(label), clickable = true)
+        root = node(children = listOf(composer(), button))
+        val ui = adapter(); val state = ui.snapshot()
+        assertEquals(1, state.sendCandidates)
+        assertEquals(GeminiSendResult.CLICKED, ui.sendIfMatches("question", state.targetKey))
+        verify(exactly = 1) { button.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+        verify(exactly = 0) { label.performAction(any()) }
+    }
+    @Test fun semanticClickableControlDoesNotRequireDuplicatedClickActionFlag() = runBlocking {
+        val send = node("assistant_robin_send_button", clickable = true)
+        every { send.actionList } returns emptyList()
+        root = node(children = listOf(composer(), send))
+        val ui = adapter(); val state = ui.snapshot()
+        assertEquals(1, state.sendCandidates)
+        assertEquals(GeminiSendResult.CLICKED, ui.sendIfMatches("question", state.targetKey))
         verify(exactly = 1) { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
     }
     @Test fun ambiguousSemanticSendDoesNotClickEitherControl() = runBlocking {

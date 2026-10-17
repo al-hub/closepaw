@@ -127,14 +127,18 @@ internal class AndroidOperationRuntime(
                         )
                         val service = AgentService.instance ?: return@withLock OperationResult(success = false, summary = "Accessibility service is not connected.")
                         val allowed = { settings.geminiQuestionEnabled && AgentService.instance === service && !stoppedQuestions.contains(invocation.taskId) }
-                        val operation = GeminiRoundTripOperation(AndroidGeminiRoundTripUi(service, allowed), allowed, { taskId, stage, reason ->
+                        val ui = AndroidGeminiRoundTripUi(service, allowed)
+                        val started = android.os.SystemClock.elapsedRealtime()
+                        val operation = GeminiRoundTripOperation(ui, allowed, { taskId, stage, reason ->
                             // This metadata-only ledger boundary must succeed before a send is possible.
                             check(store.updateActive(taskId, mapOf(
                                 "submission_state" to JsonPrimitive(stage), "reason_code" to JsonPrimitive(reason),
                                 "observed_at_ms" to JsonPrimitive(System.currentTimeMillis()),
+                                "ui_metadata" to ui.metadataSnapshot(),
                             ))) { "Task is no longer active" }
                             // Logging is best-effort and cannot turn a durable submission into a retry.
-                            runCatching { roundTripDiagnostics.record(DraftDiagnostic(taskId, stage, reason, 0)) }
+                            runCatching { roundTripDiagnostics.record(DraftDiagnostic(taskId, stage, reason,
+                                (android.os.SystemClock.elapsedRealtime() - started).coerceAtLeast(0), ui.evidence())) }
                         })
                         activeQuestions[invocation.taskId] = operation
                         try { operation.invoke(invocation) } finally { activeQuestions.remove(invocation.taskId, operation) }
@@ -146,6 +150,20 @@ internal class AndroidOperationRuntime(
                 activeQuestions[taskId]?.cancel(taskId)
                 // Only observation stops. Never claim Gemini generation was cancelled.
                 return false
+            }
+        })
+        registry.register(GeminiUiInspectionOperation.descriptor(readiness = {
+            OperationReadiness(AgentService.instance != null,
+                if (AgentService.instance == null) "accessibility_permission_missing" else null)
+        }), GeminiUiInspectionOperation {
+            screenMutex.withLock {
+                val service = AgentService.instance
+                if (service == null) buildJsonObject { put("foreground", false); put("reason_code", "accessibility_permission_missing") }
+                else {
+                    val ui = AndroidGeminiRoundTripUi(service, { AgentService.instance === service })
+                    ui.snapshot()
+                    ui.metadataSnapshot()
+                }
             }
         })
         dispatcher = OperationDispatcher(registry, store, scope,

@@ -5,138 +5,133 @@ import ai.closepaw.util.recycleCompat
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
 
-/** Semantic-only adapter; unsupported accessibility layouts intentionally fail closed. */
+/** Scoped semantic controls; UI text stays invocation-local and never enters diagnostics. */
 internal class AndroidGeminiRoundTripUi(
     private val service: AgentService,
     private val allowed: () -> Boolean,
     private val draft: AndroidGeminiDraftUi = AndroidGeminiDraftUi(service, allowed),
 ) : GeminiRoundTripUi, GeminiDraftUi by draft {
+    private var expectedQuestion: String? = null
     private var lastSnapshot: GeminiUiSnapshot? = null
+    private var lastInspection = GeminiUiSnapshot(false, "")
+    private var lastNodes: List<GeminiUiNode> = emptyList()
+
+    override suspend fun setIfEmpty(text: String): DraftWriteResult {
+        val result = draft.setIfEmpty(text)
+        if (result == DraftWriteResult.WRITTEN) expectedQuestion = text
+        return result
+    }
 
     override suspend fun snapshot(): GeminiUiSnapshot = withContext(Dispatchers.Main) {
-        if (!allowed() || draft.isLocked()) return@withContext GeminiUiSnapshot(false, "")
-        withTree { nodes, complete -> observe(nodes, complete).also { lastSnapshot = it } }
+        if (!allowed() || draft.isLocked()) {
+            lastNodes = emptyList(); lastInspection = GeminiUiSnapshot(false, "")
+            return@withContext lastInspection
+        }
+        withTree { _, nodes, complete -> observe(nodes, complete).also { lastSnapshot = it } }
     }
+
+    fun metadataSnapshot(): JsonObject = GeminiUiMetadata.build(lastNodes, draft.evidence(), lastInspection)
 
     override suspend fun sendIfMatches(text: String, targetKey: String): GeminiSendResult = withContext(Dispatchers.Main) {
         if (!allowed() || draft.isLocked()) return@withContext GeminiSendResult.TARGET_CHANGED
-        withTree { nodes, complete ->
-            val expected = lastSnapshot ?: return@withTree GeminiSendResult.TARGET_CHANGED
+        val expected = lastSnapshot ?: return@withContext GeminiSendResult.TARGET_CHANGED
+        withTree outer@{ handles, nodes, complete ->
             val state = observe(nodes, complete)
-            if (state.submittedQuestion != expected.submittedQuestion || state.replies != expected.replies) return@withTree GeminiSendResult.TARGET_CHANGED
-            if (!state.foreground || state.targetKey != targetKey) return@withTree GeminiSendResult.TARGET_CHANGED
-            if (!state.traversalComplete || state.composerCandidates != 1 || state.composerText != text) return@withTree GeminiSendResult.INPUT_CHANGED
-            val send = nodes.filter { isSend(it) }.singleOrNull()
-            val composer = nodes.filter { isUsableComposer(it) }.singleOrNull()
-            if (send == null || composer == null || !state.sendEnabled || state.generating == true) return@withTree GeminiSendResult.REJECTED
-            // Refresh retained nodes immediately before acting. No key events, coordinates or generic search buttons.
-            if (!allowed() || !send.refresh() || !composer.refresh() || !isSend(send) || !send.isEnabled ||
-                !isUsableComposer(composer) || composer.text?.toString().orEmpty() != text) return@withTree GeminiSendResult.INPUT_CHANGED
-            // A fresh foreground acquisition detects a window/app switch without using a stale background node.
-            val currentRoot = draft.foregroundRoot()
-            val sameTarget = currentRoot?.let { key(it) == targetKey } == true
-            currentRoot?.recycleCompat()
-            if (!sameTarget || draft.isLocked() || !allowed()) return@withTree GeminiSendResult.TARGET_CHANGED
-            if (send.performAction(AccessibilityNodeInfo.ACTION_CLICK)) GeminiSendResult.CLICKED else GeminiSendResult.REJECTED
+            if (!sameConversation(state, expected) || !state.foreground || state.targetKey != targetKey)
+                return@outer GeminiSendResult.TARGET_CHANGED
+            if (!validInput(state, text)) return@outer GeminiSendResult.INPUT_CHANGED
+            if (state.generating == true) return@outer GeminiSendResult.REJECTED
+            val targetIndex = GeminiUiControlResolver.sendTargets(nodes).singleOrNull()
+                ?: return@outer GeminiSendResult.REJECTED
+            val target = handles.getOrNull(targetIndex) ?: return@outer GeminiSendResult.REJECTED
+            val composerIndex = nodes.singleOrNull { it.composer && it.packageName == nodes.first().packageName }?.index
+                ?: return@outer GeminiSendResult.INPUT_CHANGED
+            val composer = handles[composerIndex]
+            if (!target.refresh() || !composer.refresh() || !target.isEnabled || !allowed())
+                return@outer GeminiSendResult.INPUT_CHANGED
+            // Reacquire the complete semantic path, including a child label, immediately before the one click.
+            withTree fresh@{ currentHandles, currentNodes, currentComplete ->
+                val current = observe(currentNodes, currentComplete)
+                if (!current.foreground || current.targetKey != targetKey || !sameConversation(current, expected))
+                    return@fresh GeminiSendResult.TARGET_CHANGED
+                if (!validInput(current, text)) return@fresh GeminiSendResult.INPUT_CHANGED
+                if (current.generating == true) return@fresh GeminiSendResult.REJECTED
+                val freshIndex = GeminiUiControlResolver.sendTargets(currentNodes).singleOrNull()
+                    ?: return@fresh GeminiSendResult.REJECTED
+                val freshTarget = currentHandles[freshIndex]
+                if (freshTarget != target || !freshTarget.isEnabled || draft.isLocked() || !allowed())
+                    return@fresh GeminiSendResult.TARGET_CHANGED
+                if (freshTarget.performAction(AccessibilityNodeInfo.ACTION_CLICK)) GeminiSendResult.CLICKED
+                else GeminiSendResult.REJECTED
+            }
         }
     }
 
-    private fun observe(nodes: List<AccessibilityNodeInfo>, complete: Boolean): GeminiUiSnapshot {
-        val root = nodes.firstOrNull() ?: return GeminiUiSnapshot(false, "", traversalComplete = complete)
-        val pkg = root.packageName?.toString()
-        val composers = nodes.filter { isUsableComposer(it) }
-        val recognized = GeminiDraftTargetPolicy.recognized(pkg, composers.size)
-        if (!recognized) return GeminiUiSnapshot(false, key(root), traversalComplete = complete)
-        val sends = nodes.filter { isSend(it) }
-        val stop = nodes.any { semantic(it, GeminiRoundTripSemantics::isStop) }
-        var replyTraversalComplete = true
-        val replyNodes = nodes.filter { node -> semantic(node) { id, _ -> GeminiRoundTripSemantics.isReply(id) } }
-        val coveredReplies = mutableSetOf<AccessibilityNodeInfo>()
-        val replies = replyNodes.mapIndexedNotNull { index, node ->
-            if (node in coveredReplies) return@mapIndexedNotNull null
-            val tree = descendants(node)
-            val children = tree.nodes
-            val walkedComplete = tree.complete
-            // Compare while descendant handles are live, but retain only the outer traversal handles.
-            coveredReplies.addAll(replyNodes.filter { candidate -> children.drop(1).any { it == candidate } })
-            val subtreeComplete = walkedComplete && children.none { !it.isVisibleToUser && !it.text.isNullOrBlank() }
-            replyTraversalComplete = replyTraversalComplete && subtreeComplete
-            try {
-                val selectedTextNodes = mutableSetOf<Int>()
-                val fragments = mutableListOf<String>()
-                children.forEachIndexed { childIndex, child ->
-                    var parentIndex = tree.parents[childIndex]
-                    var covered = false
-                    while (parentIndex >= 0) {
-                        if (parentIndex in selectedTextNodes) { covered = true; break }
-                        parentIndex = tree.parents[parentIndex]
-                    }
-                    if (!covered && !child.isEditable && child.isVisibleToUser && !child.isClickable) {
-                        child.text?.toString()?.takeIf(String::isNotBlank)?.let {
-                            fragments.add(it); selectedTextNodes.add(childIndex)
-                        }
-                    }
-                }
-                val rawContent = fragments.joinToString("\n")
-                val content = rawContent.take(24000)
-                if (rawContent.length > 24000) replyTraversalComplete = false
-                if (content.isBlank()) null else GeminiReply(
-                    // Stable within a conversation while allowing two identical answers as separate turns.
-                    id = "${node.viewIdResourceName}:$index",
-                    text = content,
-                    complete = subtreeComplete && rawContent.length <= 24000 && !stop && children.any { semantic(it, GeminiRoundTripSemantics::isCopy) },
-                )
-            } finally { children.drop(1).forEach { it.recycleCompat() } }
-        }
-        val questions = nodes.filter { semantic(it) { id, _ -> GeminiRoundTripSemantics.isQuestion(id) } }
+    private fun sameConversation(a: GeminiUiSnapshot, b: GeminiUiSnapshot) =
+        a.submittedQuestion == b.submittedQuestion && a.replies == b.replies
+    private fun validInput(state: GeminiUiSnapshot, text: String) = state.traversalComplete &&
+        state.composerCandidates == 1 && state.composerText == text
+
+    private fun observe(nodes: List<GeminiUiNode>, complete: Boolean): GeminiUiSnapshot {
+        lastNodes = nodes
+        val root = nodes.firstOrNull()
+        if (root == null) return GeminiUiSnapshot(false, "", traversalComplete = complete).also { lastInspection = it }
+        val composers = nodes.filter { it.composer && it.packageName == root.packageName }
+        val recognized = GeminiDraftTargetPolicy.recognized(root.packageName, composers.size)
+        if (!recognized) return GeminiUiSnapshot(false, key(root), traversalComplete = complete).also { lastInspection = it }
+        val sends = GeminiUiControlResolver.sendTargets(nodes)
+        val conversation = GeminiConversationParser.parse(nodes, expectedQuestion, complete)
         return GeminiUiSnapshot(
             foreground = true, targetKey = key(root), composerCandidates = composers.size,
-            composerText = composers.singleOrNull()?.let { if (it.isShowingHintText) "" else it.text?.toString().orEmpty() }.orEmpty(),
-            sendCandidates = sends.size, sendEnabled = sends.singleOrNull()?.isEnabled == true,
-            generating = when { stop -> true; replies.lastOrNull()?.complete == true -> false; else -> null },
-            submittedQuestion = questions.lastOrNull()?.text?.toString(), replies = replies, traversalComplete = complete && replyTraversalComplete,
-        )
+            composerText = composers.singleOrNull()?.let { if (it.showingHint) "" else it.text }.orEmpty(),
+            sendCandidates = sends.size, sendEnabled = sends.singleOrNull()?.let { nodes[it].enabled } == true,
+            generating = conversation.generating, submittedQuestion = conversation.submittedQuestion,
+            replies = conversation.replies, traversalComplete = conversation.traversalComplete,
+            observedTextEvidence = nodes.filter { node ->
+                node.visible && !node.editable && !node.password && !node.composer &&
+                    node.packageName == root.packageName && generateSequence(node) { current ->
+                        nodes.getOrNull(current.parent)
+                    }.take(42).none { it.editable || it.password || it.composer }
+            }.map { it.text.ifBlank { it.description }.trim() }.filter { it.isNotEmpty() }
+                .map { GeminiUiTextEvidence.hash(it) }.toSet(),
+        ).also { lastInspection = it }
     }
-    private fun key(node: AccessibilityNodeInfo) = "${node.packageName}:${node.windowId}"
-    private fun isUsableComposer(node: AccessibilityNodeInfo) = node.isVisibleToUser && node.isEnabled && node.isEditable && !node.isPassword && draft.isComposer(node)
-    private fun isSend(node: AccessibilityNodeInfo) = node.isVisibleToUser && !node.isEditable && node.isClickable &&
-        node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK } && semantic(node, GeminiRoundTripSemantics::isSend)
-    private fun semantic(node: AccessibilityNodeInfo, check: (String, String) -> Boolean): Boolean = node.isVisibleToUser &&
-        check(node.viewIdResourceName.orEmpty().substringAfterLast('/'), node.contentDescription?.toString().orEmpty())
+    private fun key(node: GeminiUiNode) = "${node.packageName}:$lastWindowId"
+    private var lastWindowId = -1
+    private fun isComposer(node: AccessibilityNodeInfo) = node.isVisibleToUser && node.isEnabled && node.isEditable &&
+        !node.isPassword && draft.isComposer(node)
 
-    private suspend fun <T> withTree(block: suspend (List<AccessibilityNodeInfo>, Boolean) -> T): T {
-        val root = draft.foregroundRoot() ?: return block(emptyList(), true)
-        val nodes = mutableListOf(root)
-        var complete = true
-        fun visit(node: AccessibilityNodeInfo, depth: Int) {
-            if (depth > 40 || nodes.size >= 500) { complete = false; return }
-            if (node.childCount > 100) complete = false
-            for (i in 0 until node.childCount.coerceAtMost(100)) {
-                if (nodes.size >= 500) { complete = false; break }
-                val child = node.getChild(i) ?: continue
-                nodes.add(child); visit(child, depth + 1)
-            }
-        }
-        try { visit(root, 0); return block(nodes.filter { it.packageName == root.packageName }, complete) }
-        finally { nodes.forEach { it.recycleCompat() } }
-    }
-    private data class ReplyTree(val nodes: List<AccessibilityNodeInfo>, val parents: List<Int>, val complete: Boolean)
-    private fun descendants(root: AccessibilityNodeInfo): ReplyTree {
-        val nodes = mutableListOf(root)
+    private suspend fun <T> withTree(block: suspend (List<AccessibilityNodeInfo>, List<GeminiUiNode>, Boolean) -> T): T {
+        val root = draft.foregroundRoot() ?: return block(emptyList(), emptyList(), true)
+        lastWindowId = root.windowId
+        val handles = mutableListOf(root)
         val parents = mutableListOf(-1)
         var complete = true
-        fun visit(node: AccessibilityNodeInfo, depth: Int, parentIndex: Int) {
-            if (depth > 30 || nodes.size >= 300) { complete = false; return }
+        fun visit(node: AccessibilityNodeInfo, depth: Int, parent: Int) {
+            if (depth > 40 || handles.size >= 500) { complete = false; return }
             if (node.childCount > 100) complete = false
             for (i in 0 until node.childCount.coerceAtMost(100)) {
-                if (nodes.size >= 300) { complete = false; break }
+                if (handles.size >= 500) { complete = false; break }
                 val child = node.getChild(i) ?: continue
-                val childIndex = nodes.size
-                nodes.add(child); parents.add(parentIndex); visit(child, depth + 1, childIndex)
+                val index = handles.size
+                handles.add(child); parents.add(parent); visit(child, depth + 1, index)
             }
         }
-        visit(root, 0, 0); return ReplyTree(nodes, parents, complete)
+        try {
+            visit(root, 0, 0)
+            val nodes = handles.mapIndexed { index, node -> GeminiUiNode(
+                index = index, parent = parents[index], packageName = node.packageName?.toString().orEmpty(),
+                resourceId = node.viewIdResourceName.orEmpty(), className = node.className?.toString().orEmpty(),
+                text = node.text?.toString().orEmpty(), description = node.contentDescription?.toString().orEmpty(),
+                visible = node.isVisibleToUser, enabled = node.isEnabled, editable = node.isEditable,
+                password = node.isPassword, clickable = node.isClickable,
+                clickAction = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
+                composer = isComposer(node), showingHint = node.isShowingHintText,
+            ) }
+            return block(handles, nodes, complete)
+        } finally { handles.forEach { it.recycleCompat() } }
     }
 }
 

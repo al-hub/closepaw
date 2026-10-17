@@ -1,7 +1,7 @@
 package ai.closepaw.chatgpt
 
 /** Transient accessibility observations. Never put question/reply text in diagnostics. */
-internal data class GeminiReply(val id: String, val text: String, val complete: Boolean = false)
+internal data class GeminiReply(val id: String, val text: String, val complete: Boolean = false, val textEvidence: Set<String> = emptySet())
 internal data class GeminiUiSnapshot(
     val foreground: Boolean,
     val targetKey: String,
@@ -13,6 +13,7 @@ internal data class GeminiUiSnapshot(
     val submittedQuestion: String? = null,
     val replies: List<GeminiReply> = emptyList(),
     val traversalComplete: Boolean = true,
+    val observedTextEvidence: Set<String> = emptySet(),
 )
 internal enum class GeminiSendResult { CLICKED, TARGET_CHANGED, INPUT_CHANGED, REJECTED }
 internal interface GeminiRoundTripUi : GeminiDraftUi {
