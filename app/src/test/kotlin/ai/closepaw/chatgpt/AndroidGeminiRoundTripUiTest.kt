@@ -72,6 +72,33 @@ class AndroidGeminiRoundTripUiTest {
         assertEquals(GeminiSendResult.CLICKED, ui.sendIfMatches("question", snapshot.targetKey))
         verify(exactly = 1) { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
     }
+    @Test fun visibleTextSendInGoogleHostedGeminiIsRecognizedAndClicked() = runBlocking {
+        val send = node(text = "보내기", pkg = google, clickable = true)
+        root = node(children = listOf(composer(google), send), pkg = google)
+        val ui = adapter(); val state = ui.snapshot()
+        assertEquals(1, state.sendCandidates)
+        assertEquals(GeminiSendResult.CLICKED, ui.sendIfMatches("question", state.targetKey))
+        verify(exactly = 1) { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+    }
+    @Test fun semanticLabelChildResolvesOnlyItsNearestClickableParent() = runBlocking {
+        val label = node(text = "보내기")
+        val button = node("compose_button", children = listOf(label), clickable = true)
+        root = node(children = listOf(composer(), button))
+        val ui = adapter(); val state = ui.snapshot()
+        assertEquals(1, state.sendCandidates)
+        assertEquals(GeminiSendResult.CLICKED, ui.sendIfMatches("question", state.targetKey))
+        verify(exactly = 1) { button.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+        verify(exactly = 0) { label.performAction(any()) }
+    }
+    @Test fun semanticClickableControlDoesNotRequireDuplicatedClickActionFlag() = runBlocking {
+        val send = node("assistant_robin_send_button", clickable = true)
+        every { send.actionList } returns emptyList()
+        root = node(children = listOf(composer(), send))
+        val ui = adapter(); val state = ui.snapshot()
+        assertEquals(1, state.sendCandidates)
+        assertEquals(GeminiSendResult.CLICKED, ui.sendIfMatches("question", state.targetKey))
+        verify(exactly = 1) { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+    }
     @Test fun ambiguousSemanticSendDoesNotClickEitherControl() = runBlocking {
         val one = node("assistant_robin_send_button", clickable = true)
         val two = node("robin_send_button", clickable = true)
