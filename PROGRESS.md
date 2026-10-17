@@ -22,8 +22,12 @@ Documentation-only commits after this source do not change the installed APK.
   metadata retention and v0.1.47 Tailscale OFF → connection request → private
   target reachable → plain `kv status` exit 0. Original disappearance cause is
   still unproven; whole-app force-stop is an Android recovery boundary.
-- **Only open PR at audit: #33**. It has a failed historical check and overlaps
-  current main. Do not merge the old bootstrap wholesale.
+- **PR #33 CLOSED without merge (2026-10-17)**: all seven files reviewed against
+  main `6dcb384`; capability gating/tests already exist and current setup/recovery UI
+  supersedes the old flow. One-line curl convenience is deferred; old token overwrite,
+  direct deployment and unsupervised launch are discarded. Per-file disposition is
+  recorded in the [PR description](https://github.com/al-hub/closepaw/pull/33).
+  Next: Gemini real-device READ/Voice and draft guard acceptance; P2 remains ACTIVE.
 
 [Audit, evidence, residual tasks and copyable Works handoff](doc/project/WORKS_HANDOFF.md)
 are the current summary. Older dated entries below are historical checkpoints,

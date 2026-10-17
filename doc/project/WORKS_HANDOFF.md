@@ -38,7 +38,7 @@ GitHub Projects의 실제 필드·자동화 설정은 이번 감사에서 읽거
 | P8 #75 | LATER / OPEN | 반복 통합 근거 없이 전면 AppProfile 추상화 금지 |
 | P9 #76 | LATER / OPEN | 두 번째 기기·이식성 인수 미완료 |
 | #88 | 핵심 장애 복구·PATH·릴리스 인수 통과 / OPEN | 원래 소실 계기 미확정, 플랫폼 제약·확장 검증 분리; 아래 참조 |
-| PR #33 | 유일한 OPEN PR, 역사적 CI failure | 아래 검토 작업으로 최신 main에서 새로 판단; 자동 병합 금지 |
+| PR #33 | CLOSED / 미병합, superseded (2026-10-17) | 7파일 검토 완료; main 대체 경로와 폐기 근거를 PR 설명에 기록 |
 | PR #82–87, #89–92 | MERGED | 병합은 해당 기능의 모든 실기기 검증 완료를 뜻하지 않음 |
 
 단계 완료 수는 **P0/P1의 2/10**을 유지한다. P4 핵심 실행은 이미 검증되어
@@ -70,41 +70,28 @@ v0.1.47 신규 테스트 30개(로컬 Kotlin/통합27, Android 설정2, MCP 계�
 Python Termux55+bridge core8, 전체 Android JVM 및 debug/signed 빌드 통과.
 이는 새 미설치·로그아웃·충돌·전체 오프라인 실기기 테스트의 대체 증거가 아니다.
 
-## 4. 다음 신규 작업 A — 열린 PR #33 정리 (먼저 수행)
+## 4. 작업 A 완료 — PR #33 미병합 종료
 
-[PR #33](https://github.com/al-hub/closepaw/pull/33),
-`feature/play-termux-bootstrap-v019`, head
-`76b308148a09bbce47194661d44d8dfb9be5e722`, 2026-10-06 이후 갱신 없음.
-7파일, +217/-7, 11커밋. review/review-comment 없음.
-[역사적 CI 실패](https://github.com/al-hub/closepaw/actions/runs/37419249515)
-확인; 이번 감사는 실패 원인을 추측하거나 그 오래된 분기의 빌드를 재시도하지 않았다.
-mergeable=null/unknown 응답은 conflict 확정 증거가 아니다.
+[PR #33](https://github.com/al-hub/closepaw/pull/33)은 사용자 승인 후
+2026-10-17 18:40 KST에 **CLOSED / merged=false**로 종료했다.
+main `6dcb384fae0c0b89f9874054b4559684001e30a7`과 7개 변경 파일을 비교했다.
 
-main과 대조한 결과:
+| 파일 | 판정 | 근거 |
+| --- | --- | --- |
+| TermuxRunCommandExecutionAdapter.kt | 이미 반영 | capabilityAware 및 install probe gate |
+| SessionToolingBootstrapper.kt | 이미 반영 | AndroidTermuxInstallProbe 연결 |
+| TermuxRunCommandExecutionAdapterTest.kt | 이미 반영 | 미지원 시 서비스 미실행 회귀 테스트 |
+| TermuxStatusMapper.kt | 현재 경로로 대체 | 초기 설정·인증 불일치·오프라인 복구 안내 |
+| ToolsSection.kt | 현재 경로로 대체 | 수동 초기 페어링과 기존 토큰 유지 복구 UI |
+| TermuxPlayBootstrap.kt | 구형 구현 폐기 | 토큰 포함/덮어쓰기, 직접 파일 교체, supervisor 없는 실행 |
+| TermuxPlayBootstrapTest.kt | 구형 테스트 폐기 | 폐기한 설치 구조를 검증; base64는 토큰 비밀성 보장이 아님 |
 
-- RUN_COMMAND capability gate는 이미
-  `TermuxRunCommandExecutionAdapter.capabilityAware`와
-  `SessionToolingBootstrapper`에 있다. 예전 internal 생성자를 그대로 적용하지 않는다.
-- `TermuxManualBootstrap` 및 현재 UI는 초기 수동 설정과 기존 토큰을 읽는
-  복구 명령을 제공한다. #89/#90 supervisor·PATH·토큰 보존 개선이 더 최신이다.
-- PR의 새로운 `TermuxPlayBootstrap.kt`는 loopback 일회성 curl 설치 편의를
-  추가하지만 installer에 토큰을 넣어 파일을 덮어쓰고, bridge를 직접 교체하며
-  supervisor 없이 데몬을 띄운다. 현재 복구 경로에 그대로 합치면 회귀 위험이다.
-- 예전 ToolsSection/status mapper 변경도 현재 Offline/복구 UI와 중복 검토한다.
-
-다음 Works의 완료 기준:
-
-1. 최신 main에서 깨끗한 새 branch/worktree를 만들고 7개 diff 각각을
-   `이미 반영 / 아직 필요한 고유 기능 / 폐기할 구형 변경` 표로 검토한다.
-2. 한 줄 curl bootstrap의 실제 필요성이 없으면 근거와 대체 main 경로를
-   PR 설명에 남기고 #33을 superseded로 종료한다. 종료는 미병합 상태로 하며
-   오래된 11커밋을 main에 병합하지 않는다.
-3. 고유 기능이 필요하면 최신 main에서 작은 새 PR로 대체한다. 먼저 failing
-   tests: 기존 token 유지, 초기 설정과 복구 분리, atomic deploy, singleton
-   supervisor, lifecycle/timeout, 토큰 비노출, 불완전 설치/동시 호출 방어.
-4. 새 PR만 CI 검증한다. 실행 코드 변경이면 최신 버전을 재조회한 뒤 충돌 없는
-   Version Name/Code 증가→main CI→Signed Release→서명/자산→실기기 인수.
-5. #33 최종 disposition과 대체 PR 링크를 이 문서/PROGRESS에 기록한다.
+필수 고유 동작은 남지 않았다. 한 줄 curl 설치 편의는 필요가 구체화될 때만
+최신 main의 토큰 보존·atomic deploy·singleton supervisor·lifecycle/timeout·
+불완전 설치 방어를 재사용하는 별도 작업으로 검토한다.
+오래된 11커밋은 병합하지 않았으며 대체 PR은 필요하지 않다.
+실행 코드·APK·기기 설정은 변경하지 않았고 오래된 CI도 재실행하지 않았다.
+다음 순서는 B(Gemini 실제 인수)이며 P2는 ACTIVE를 유지한다.
 
 ## 5. 다음 신규 작업 B — Gemini 실제 인수 (#69, #86/#87 후속)
 
@@ -162,11 +149,9 @@ al-hub/closepaw 작업을 이어서 진행해줘.
 최신 main의 AGENTS.md/CLAUDE.md, PROGRESS.md,
 doc/project/WORKS_HANDOFF.md를 먼저 읽고 현재 GitHub 상태를 대조해줘.
 
-우선 신규 작업 A: 열린 PR #33의 7개 변경을 최신 main과 비교해
-이미 반영/고유 필요/폐기 표를 만들고 오래된 bootstrap을 그대로 병합하지 마.
-필요 없는 PR이면 근거를 남겨 superseded로 닫고, 필요한 고유 변경만
-최신 main의 새 branch/PR에서 SRP·TDD·최소 변경으로 진행해줘.
-그 후 B(Gemini 실제 READ/Voice·draft)와 C(잔여 신뢰성)는
+작업 A(PR #33)는 7파일 검토 후 superseded로 미병합 종료했다.
+PR 설명과 이 문서의 최종 판정을 보존하고 구형 11커밋을 병합하지 마.
+다음은 B(Gemini 실제 READ/Voice·draft)와 C(잔여 신뢰성)를
 현재 사용 가능한 도구·증거 기준으로 순서대로 이어가되 통과 항목을 반복하지 마.
 
 기준 APK v0.1.47/code48, runtime88.2. PATH 없는 kv status,
