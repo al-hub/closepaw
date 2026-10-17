@@ -1,4 +1,4 @@
-# Gemini hosted screen read — v0.1.48 / code 49 candidate
+# Gemini hosted screen read — v0.1.48 / code 49 released
 
 ## Reproduced device failure
 
@@ -35,7 +35,13 @@ does not establish that the screen was Gemini rather than Google Search.
   no draft writes, Search refusal and identity loss during capture.
 - Local Gradle cannot download its distribution because network is unreachable.
   GitHub Security CI and Signed Release remain authoritative; record actual results.
-- Installed-device Gemini READ/Voice and draft acceptance remain PENDING.
+- PR #93 merged as `209dc9e20767cdfd39ca59ff2c7f1936de539579`.
+- [Green PR Security CI](https://github.com/al-hub/closepaw/actions/runs/39022708800),
+  [main CI](https://github.com/al-hub/closepaw/actions/runs/39023231120), and
+  [Signed Release](https://github.com/al-hub/closepaw/actions/runs/39023499964) passed.
+- Published v0.1.48/code49 APK and checksum; source tag version verified, same-signer
+  validation passed. APK SHA-256 `9045eaa1afeeb065c3dc95310295ec523168dc8af59f31e74a0eefc04ed24bef`, 116,306,905 bytes.
+- Device installation and actual Gemini READ/Voice/draft acceptance remain PENDING.
 
 ## Device acceptance after signed publication
 

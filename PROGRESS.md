@@ -6,7 +6,10 @@ Progress work follows one rule: **implementation and this document move together
 
 ## Verified checkpoint — 2026-10-17 (KST)
 
-Installed/released baseline: **v0.1.47 / code 48**, Termux runtime **88.2**.
+Last verified installed baseline: **v0.1.47 / code 48**, Termux runtime **88.2**.
+Latest published APK: **v0.1.48 / code 49**, source `209dc9e20767cdfd39ca59ff2c7f1936de539579`.
+[Signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.48/closepaw-aa-bridge.apk).
+Device update and Gemini READ/Voice/draft acceptance remain pending.
 Release source: `bb7442a8c577669f53b79028e1d6d747c09210f2`.
 Documentation-only commits after this source do not change the installed APK.
 
@@ -33,7 +36,7 @@ Documentation-only commits after this source do not change the installed APK.
 are the current summary. Older dated entries below are historical checkpoints,
 not instructions to downgrade, re-pair, refresh plugins or repeat passed tests.
 
-## Gemini host read repair — v0.1.48 candidate
+## Gemini host read repair — v0.1.48 RELEASED; device acceptance pending
 
 - Real v0.1.47 READ after unlock rejected the Google host package
   (`target_not_foreground`, request `f17acf1b-bc7a-4b8c-b57a-160b9bf747fb`);
@@ -41,7 +44,16 @@ not instructions to downgrade, re-pair, refresh plugins or repeat passed tests.
 - Candidate reuses the existing Gemini-specific composer identity guard for reads,
   rejects generic Google Search and discards captures if identity changes.
 - [Repair and acceptance](doc/dev/gemini-hosted-read-v0148.md); PR #93.
-  CI/release and installed-device READ/Voice remain distinct pending gates.
+  PR #93 merged. [Main CI](https://github.com/al-hub/closepaw/actions/runs/39023231120)
+  and [Signed Release](https://github.com/al-hub/closepaw/actions/runs/39023499964) passed.
+  Same-signer verification and APK/checksum publication passed. APK SHA-256:
+  `9045eaa1afeeb065c3dc95310295ec523168dc8af59f31e74a0eefc04ed24bef` (116,306,905 bytes).
+  Device installation, actual Gemini READ/Voice and draft acceptance remain pending.
+- The next full-control plan is documented on a separate planning branch:
+  [Gemini goal execution and verified round trip](https://github.com/al-hub/closepaw/blob/docs/gemini-roundtrip-plan-20261017/doc/project/GEMINI_ROUNDTRIP_PLAN.md).
+  Representative test: ask Gemini for current location; control round-trip and location
+  correctness are separate verdicts. Plan only; new feature/parallel-agent development
+  has not been authorized or started. Build-time optimization is deferred.
 
 ## Current position
 

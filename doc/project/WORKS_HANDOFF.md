@@ -7,16 +7,18 @@ GitHub Projects의 실제 필드·자동화 설정은 이번 감사에서 읽거
 ## 1. 시작 기준과 보존 조건
 
 - 앱 기준 커밋: `bb7442a8c577669f53b79028e1d6d747c09210f2`.
-- 최신 공개·설치 APK: **v0.1.47 / code 48**, Termux runtime **88.2**.
-- [릴리스](https://github.com/al-hub/closepaw/releases/tag/v0.1.47),
-  [Signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.47/closepaw-aa-bridge.apk).
-- APK SHA-256: `22251254b912a4798e2677277787b9de45bafa9981d86a913a80644fbd624bb4`.
-  크기 116,303,181 bytes. 배포 파일 버전/내용/체크섬을 검증했다.
+- 마지막 실기기 설치 확인: **v0.1.47 / code 48**, Termux runtime **88.2**.
+- 최신 공개 APK: **v0.1.48 / code 49**, source
+  `209dc9e20767cdfd39ca59ff2c7f1936de539579`. **기기 업데이트와 Gemini 인수는 아직 대기**.
+- [릴리스](https://github.com/al-hub/closepaw/releases/tag/v0.1.48),
+  [Signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.48/closepaw-aa-bridge.apk).
+- APK SHA-256: `9045eaa1afeeb065c3dc95310295ec523168dc8af59f31e74a0eefc04ed24bef`.
+  크기 116,306,905 bytes. 배포 파일 버전/내용/체크섬을 검증했다.
 - 서명 인증서 SHA-256:
   `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`.
   CI에서 기존 인증서와 일치 확인. 기존 키·태그·릴리스 자산은 변경하지 않는다.
-- [main CI](https://github.com/al-hub/closepaw/actions/runs/39002227928),
-  [실제 Signed APK 빌드·발행](https://github.com/al-hub/closepaw/actions/runs/39002578644): 성공.
+- [v0.1.48 main CI](https://github.com/al-hub/closepaw/actions/runs/39023231120),
+  [v0.1.48 Signed APK 빌드·발행](https://github.com/al-hub/closepaw/actions/runs/39023499964): 성공.
   이후 성공한 예약 실행은 발행 작업이 아니라 이미 있는 자산을 확인한 no-op일 수 있다.
 - 이번 인계 커밋은 문서 전용이다. main이 앱 기준 SHA보다 앞서더라도 새 APK를
   뜻하지 않는다. 다음 Works에서는 먼저 최신 main을 확인한다.
@@ -95,7 +97,8 @@ main `6dcb384fae0c0b89f9874054b4559684001e30a7`과 7개 변경 파일을 비교�
 
 ## 5. 다음 신규 작업 B — Gemini 실제 인수 (#69, #86/#87 후속)
 
-- 최신 설치 v0.1.47 유지. `discover_operations`로 `app.screen.read`,
+- v0.1.48/code49를 기존 앱 위에 업데이트 설치한 뒤 진행한다. 현재 마지막 설치
+  확인은 v0.1.47이다. `discover_operations`로 `app.screen.read`,
   `gemini.draft.insert` 현재 schema/version/hash를 읽는다. 미지원이면 즉시
   이유를 기록하며 Chrome/웹 검색으로 대체하지 않는다.
 - 사용자에게 완료된 Gemini 응답 한 화면만 준비하게 한 뒤 실제 READ와
@@ -154,7 +157,7 @@ PR 설명과 이 문서의 최종 판정을 보존하고 구형 11커밋을 병�
 다음은 B(Gemini 실제 READ/Voice·draft)와 C(잔여 신뢰성)를
 현재 사용 가능한 도구·증거 기준으로 순서대로 이어가되 통과 항목을 반복하지 마.
 
-기준 APK v0.1.47/code48, runtime88.2. PATH 없는 kv status,
+공개 APK v0.1.48/code49, 마지막 설치 확인 v0.1.47/code48, runtime88.2. PATH 없는 kv status,
 브리지 SIGKILL/토큰 유지, v46 reboot 및 Wi-Fi→mobile,
 v47 Tailscale OFF→ClosePaw 복구→kv status는 기록된 실기기 통과다.
 Gemini 및 다른 VPN/로그인/전체 오프라인/재부팅+Tailscale 조합은 미검증이다.
@@ -167,3 +170,14 @@ GitHub 문서·이슈·PR 상태를 함께 갱신하고 변경 파일/테스트/
 APK 링크/미해결 제약을 보고해줘. 별도 Works 생성은 내가 할 테니
 현재 Works에서 새 창을 만들었다고 주장하지 마.
 ```
+
+## 9. 다음 전체 제어 계획 — 계획만 작성, 개발 미착수
+
+사용자 요청으로 [Gemini 전체 동작 계획](https://github.com/al-hub/closepaw/blob/docs/gemini-roundtrip-plan-20261017/doc/project/GEMINI_ROUNDTRIP_PLAN.md)을 별도 브랜치에 저장했다.
+대표 실기기 인수는 “Gemini를 통해 현재 위치 알려줘”다. 질문·전송·답변 수집·
+Voice 보고의 왕복과 Gemini 위치 정보의 정확성/권한은 별도로 판정한다.
+초안만 작성/현재 답변 읽기/명시한 추가 질문도 목표 실행·관측·후속 조치 흐름으로
+정의했다. 질문 전송 기능은 v0.1.48에 없다.
+서브 에이전트 3역할(입력·전송/답변 수집/통합 테스트)의 병렬 개발은 의견만 제시했으며
+아직 실행 승인이 없고 시작하지 않았다. 배포 시간 최적화도 보류한다.
+계획 문서 작성을 추가 기능 개발 승인으로 해석하지 않는다.
