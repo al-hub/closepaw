@@ -13,7 +13,7 @@ internal data class GeminiConversationObservation(
 internal object GeminiConversationParser {
     private const val MAX_ANSWER_CHARS = 24_000
     private val replyIds = setOf("assistant_robin_response_text", "robin_response_text", "assistant_robin_response_container")
-    private val questionIds = setOf("assistant_robin_query_text", "robin_query_text", "user_query")
+    private val questionIds = setOf("assistant_robin_query_text", "robin_query_text", "user_query", "assistant_robin_user_message_text")
     private val positive = setOf("대답이 마음에 들어요", "good response", "like response")
     private val negative = setOf("대답이 마음에 들지 않아요", "bad response", "dislike response")
     private val toolbarLabels = positive + negative + setOf(

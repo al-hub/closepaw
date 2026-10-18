@@ -23,6 +23,10 @@ class GeminiConversationParserTest {
     private fun parse(nodes: List<GeminiUiNode> = fixture(), expected: String? = question, complete: Boolean = true) =
         GeminiConversationParser.parse(nodes, expected, complete)
 
+    @Test fun newerNativeUserMessageIsExposedAsTurnChange() {
+        val nodes = fixture() + node(13, "new native turn", id = "assistant_robin_user_message_text")
+        assertEquals("new native turn", parse(nodes).submittedQuestion)
+    }
     @Test fun exactQuestionAndVerifiedKoreanFeedbackToolbarBoundOneAnswer() {
         val result = parse()
         assertEquals(question, result.submittedQuestion)

@@ -17,6 +17,10 @@ requested item; that read does not validate automatic paging or completion attri
 
 ## Correction
 
+- Actual native history exposes one long response TextView and a toolbar whose RecyclerView
+  attachment order can precede the current question/body. Paging uses screen top/left geometry
+  when available, instead of assuming attachment order is document order. Adds the observed
+  native user-message ID to later-turn guards. Geometry-less fixtures retain existing order.
 - Empty body at the submitted question waits within the original deadline instead of failing.
 - A temporarily replaced startup region can recover before body acceptance or any scroll.
 - A missing forward action after body capture waits for further content, footer or timeout;
