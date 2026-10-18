@@ -13,11 +13,16 @@ Automatic Gemini submission returned **`send_unavailable`, `sent=false`**.
 After the user sent manually, existing `read_app` captured the actual response and completion toolbar.
 Generated-response READ is verified; automatic question/reply and same-Voice acceptance remain pending.
 
-Candidate **v0.1.50 / code 51**, [PR #95](https://github.com/al-hub/closepaw/pull/95),
+Released **v0.1.50 / code 51**, [PR #95](https://github.com/al-hub/closepaw/pull/95),
 repairs visible text/nearest-wrapper Send recognition, bounded readiness waits, scoped response parsing,
 pre-send text freshness, and read-only role metadata. Three RED regressions were observed in
 [CI 39079668411](https://github.com/al-hub/closepaw/actions/runs/39079668411): 2,347 tests, 3 failures.
-Candidate full CI and Signed Release are **PENDING**; no v0.1.50 device success is claimed.
+PR/main CI, signed runtime probe and Signed Release passed. XML: **2,430 Android tests**
+(86 added), zero failures/errors/skips; bridge tests 55 + 8 passed.
+Published APK version/code, preserved signer, both native runtimes, checksum and source tag verified.
+APK source `94db85162bb3ebca5bbbe7c9238a221ff58e8609`; SHA-256 `04aee12642d101437ea047e8b8cd84a072308ea5b7d0b2f56a0670274360af91`,
+116,349,561 bytes. [Install APK](https://github.com/al-hub/closepaw/releases/download/v0.1.50/closepaw-aa-bridge.apk).
+**v0.1.50 installation and automatic round-trip/Voice acceptance remain PENDING**.
 [Repair, evidence and remaining acceptance](doc/dev/gemini-roundtrip-v0150.md).
 This checkpoint supersedes older installation/READ-pending statements below; those are historical.
 

@@ -8,10 +8,11 @@ GitHub Projects의 실제 필드·자동화 설정은 이번 감사에서 읽거
 
 - **v0.1.49/code50 설치 확인**. PR #94의 발행·서명·체크섬 검증 결과는 [발행 기록](../dev/gemini-roundtrip-v0149.md)에 보존한다.
 - 실제 자동 질문은 **`send_unavailable`, `sent=false`**로 중단됐다. 이후 사용자 수동 전송 뒤 기존 `read_app`으로 실제 응답과 완료 툴바 READ에 성공했다. 자동 왕복·같은 Voice 인수는 미완료다.
-- 현재 후보: **v0.1.50/code51**, [PR #95](https://github.com/al-hub/closepaw/pull/95), `fix/gemini-visible-controls-v0150`. 에이전트들은 전송 컨트롤/대기, 응답 범위·새 답변 보호, 진단·통합을 나누어 진행했다.
-- 수정 전 [RED CI 39079668411](https://github.com/al-hub/closepaw/actions/runs/39079668411)에서 Android 2,347개 중 3개 실패로 visible-text Send, click 플래그, 가까운 클릭 부모 문제를 재현했다. 후보의 전체 CI·서명 APK 발행은 **PENDING**이다.
-- 후보는 의미 기반 text/description+제한된 클릭 부모, 전송 준비 대기, 질문/응답 툴바 경계 수집, 전송 전 본문 지문 대조, 읽기 전용 역할 메타데이터를 포함한다. [수정·검증·인수 체크포인트](../dev/gemini-roundtrip-v0150.md).
-- 다음 순서: PR #95 필수 CI → 기존 인증서의 Signed Release/자산 검증 → 업데이트 설치 → 실제 한 번 전송과 이번 응답 수집·같은 Voice 설명 검증. 실패/불확실 상태는 같은 task를 조회하며 자동 재전송하지 않는다.
+- 현재 발행본: **v0.1.50/code51**, [PR #95](https://github.com/al-hub/closepaw/pull/95), `fix/gemini-visible-controls-v0150`. 에이전트들은 전송 컨트롤/대기, 응답 범위·새 답변 보호, 진단·통합을 나누어 진행했다.
+- 수정 전 [RED CI 39079668411](https://github.com/al-hub/closepaw/actions/runs/39079668411)에서 Android 2,347개 중 3개 실패로 visible-text Send, click 플래그, 가까운 클릭 부모 문제를 재현했다. PR/main CI·서명 probe·Signed Release 성공. Android 2,430개(86개 추가), 브리지 55+8개 통과. **실기기 설치·자동 왕복은 PENDING**이다.
+- 발행본은 의미 기반 text/description+제한된 클릭 부모, 전송 준비 대기, 질문/응답 툴바 경계 수집, 전송 전 본문 지문 대조, 읽기 전용 역할 메타데이터를 포함한다. [수정·검증·인수 체크포인트](../dev/gemini-roundtrip-v0150.md).
+- 발행·검증 완료: 소스/태그 `94db85162bb3ebca5bbbe7c9238a221ff58e8609`, APK 116,349,561 bytes, SHA-256 `04aee12642d101437ea047e8b8cd84a072308ea5b7d0b2f56a0670274360af91`. 공개 APK의 버전0.1.50/code51·기존 인증서·두 네이티브 런타임·체크섬을 확인했다. 이후 문서 커밋은 APK 소스와 구분한다.
+- 다음 순서: [업데이트 APK](https://github.com/al-hub/closepaw/releases/download/v0.1.50/closepaw-aa-bridge.apk) 설치 → 실제 한 번 전송과 이번 응답 수집·같은 Voice 설명 검증. 실패/불확실 상태는 같은 task를 조회하며 자동 재전송하지 않는다.
 - 기존 MCP 계약·페어링·터널·설정은 유지한다. 플러그인 재등록·데이터 초기화·재페어링은 요구하지 않는다. **P2 ACTIVE**, 자동 왕복 미완료를 유지한다.
 - 아래 감사와 이전 발행 당시의 설치/READ 대기 문구는 역사 기록이다. 현재 상태는 이 절과 v0.1.50 체크포인트를 우선한다. 실제 질문·응답 원문과 위치 정보는 공개 문서에 남기지 않는다.
 

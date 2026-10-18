@@ -1,7 +1,7 @@
-# Gemini 실제 UI 왕복 복구 — v0.1.50 / code 51 후보
+# Gemini 실제 UI 왕복 복구 — v0.1.50 / code 51 RELEASED
 
 최신 체크포인트: 2026-10-18 KST. [PR #95](https://github.com/al-hub/closepaw/pull/95),
-브랜치 `fix/gemini-visible-controls-v0150`. **전체 CI·서명 APK 발행·실기기 자동 왕복 인수는 대기 중이다.**
+브랜치 `fix/gemini-visible-controls-v0150`. **전체 CI·서명 APK 발행·배포 파일 검증 완료. 실기기 업데이트 및 자동 왕복 인수는 대기 중이다.**
 이 문서가 v0.1.49 발행 당시의 설치 대기 기록보다 최신 상태다.
 
 ## 실제 확인과 남은 문제
@@ -31,7 +31,7 @@ job `117533867723`: Android 테스트 **2,347개 중 3개 실패**로 이전 동
 
 이는 수정 전 실패 재현이다. 후보 코드의 전체 CI 성공이나 서명 APK 발행 증거로 사용하지 않는다.
 
-## 후보 수정 범위
+## 배포 수정 범위
 
 - **전송 컨트롤:** text/description의 정확한 의미 역할과 기존 ID를 함께 처리한다.
   의미 라벨이 비클릭 자식에 있으면 가까운 실행 가능한 부모만 제한적으로 선택한다.
@@ -56,14 +56,32 @@ ID 없는 일반 UI에서는 좋아요·싫어요·복사 툴바가 확인되기
 기존 MCP operation envelope, 페어링·터널·서명 키·저장된 권한을 유지한다.
 초안 입력은 계속 전송하지 않는다. 중단은 관측 중단이며 Gemini 생성 취소를 뜻하지 않는다.
 
-## 다음 완료 조건
+## 발행 및 검증 결과
 
-1. PR #95 전체 필수 검사와 통합 왕복·보호 테스트 결과를 확인한다.
-2. v0.1.50/code51 Signed Release를 발행하고 APK 버전·기존 인증서·체크섬·자산을 검증한다.
-3. 기존 앱 위에 업데이트 설치하고 필요한 경우에만 기존 미전송 초안을 사용자가 정리한다.
-4. 잠금 해제 상태에서 같은 요청 ID로 한 번 전송하고 같은 task만 조회한다.
+- PR #95 병합. 앱 소스 및 불변 태그 `v0.1.50`: `94db85162bb3ebca5bbbe7c9238a221ff58e8609`.
+- [PR Security CI](https://github.com/al-hub/closepaw/actions/runs/39080398077),
+  [main Security CI](https://github.com/al-hub/closepaw/actions/runs/39080761105),
+  [보안 터널 서명 probe](https://github.com/al-hub/closepaw/actions/runs/39080398083),
+  [Signed Release](https://github.com/al-hub/closepaw/actions/runs/39081073211) 모두 성공.
+- XML 보고서: Android **2,430개**, 실패/오류/스킵 0개. v0.1.49 대비 **86개 추가**.
+  세 RED 테스트와 실제 Android 어댑터→operation→collector 통합 테스트 통과.
+  브리지 테스트 55 + 8개 통과. 로컬 Gradle 및 pytest 실행 환경은 준비되지 않아 CI를 검증 근거로 사용했다.
+- [공개 APK](https://github.com/al-hub/closepaw/releases/download/v0.1.50/closepaw-aa-bridge.apk) 및
+  [체크섬](https://github.com/al-hub/closepaw/releases/download/v0.1.50/closepaw-aa-bridge.apk.sha256) 발행.
+  공개 파일을 직접 내려받아 체크섬, manifest `ai.closepaw` / `0.1.50` / code `51`,
+  OpenAI tunnel/cloudflared arm64 런타임 포함, 태그의 앱 소스 일치를 확인했다.
+- APK **116,349,561 bytes**, SHA-256 `04aee12642d101437ea047e8b8cd84a072308ea5b7d0b2f56a0670274360af91`.
+- 기존 서명 인증서 SHA-256
+  `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba` 유지.
+  CI의 apksigner 검증 및 공개 APK 인증서 대조 통과.
+- 이 발행 기록 이후 문서 전용 커밋은 APK/태그 소스를 바꾸지 않는다.
+
+## 남은 실기기 완료 조건
+
+1. 기존 앱 위에 업데이트 설치하고 필요한 경우에만 기존 미전송 초안을 사용자가 정리한다.
+2. 잠금 해제 상태에서 같은 요청 ID로 한 번 전송하고 같은 task만 조회한다.
    실제 새 답변·완료/부분 상태와 같은 Voice의 결과 설명을 확인한다.
-5. 실패하면 읽기 전용 역할 메타데이터로 원인을 구분한다. 불확실한 전송을 다시 실행하지 않는다.
+3. 실패하면 읽기 전용 역할 메타데이터로 원인을 구분한다. 불확실한 전송을 다시 실행하지 않는다.
 
-현재 **v0.1.50 후보 CI, 서명 APK 발행 및 실기기 설치/자동 왕복은 모두 PENDING**이다.
+현재 **v0.1.50 발행 및 파일 검증은 완료, 실기기 설치/자동 왕복은 PENDING**이다.
 실제 응답 READ 성공을 보존하며 P2와 자동 왕복 완료는 인수 전 ACTIVE로 유지한다.
