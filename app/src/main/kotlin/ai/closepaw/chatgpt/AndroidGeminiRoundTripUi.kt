@@ -2,6 +2,7 @@ package ai.closepaw.chatgpt
 
 import ai.closepaw.app.AgentService
 import ai.closepaw.util.recycleCompat
+import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -146,7 +147,9 @@ internal class AndroidGeminiRoundTripUi(
         }
         try {
             visit(root, 0, 0)
-            val nodes = handles.mapIndexed { index, node -> GeminiUiNode(
+            val nodes = handles.mapIndexed { index, node ->
+                val bounds = Rect().also { node.getBoundsInScreen(it) }
+                GeminiUiNode(
                 index = index, parent = parents[index], packageName = node.packageName?.toString().orEmpty(),
                 resourceId = node.viewIdResourceName.orEmpty(), className = node.className?.toString().orEmpty(),
                 text = node.text?.toString().orEmpty(), description = node.contentDescription?.toString().orEmpty(),
@@ -157,6 +160,8 @@ internal class AndroidGeminiRoundTripUi(
                 scrollable = node.isScrollable,
                 scrollForward = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD },
                 scrollBackward = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD },
+                screenTop = bounds.takeUnless { it.isEmpty }?.top,
+                screenLeft = bounds.takeUnless { it.isEmpty }?.left,
             ) }
             return block(handles, nodes, complete)
         } finally { handles.forEach { it.recycleCompat() } }

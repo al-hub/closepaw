@@ -50,6 +50,26 @@ class GeminiReplyPageParserTest {
         val nodes = fixture().map { if (it.index in 7..8) it.copy(clickable = false) else it }
         assertFalse(GeminiReplyPageParser.parse(nodes, question, true)!!.endVisible)
     }
+    @Test fun recycledToolbarBeforeQuestionInAttachmentOrderUsesScreenGeometry() {
+        val original = fixture().map { n -> when (n.index) {
+            2, 3 -> n.copy(visible = false)
+            4 -> n.copy(resourceId = "assistant_robin_user_message_text", screenTop = -100, screenLeft = 0)
+            5 -> n.copy(screenTop = -50, screenLeft = 0)
+            6 -> n.copy(screenTop = 300, screenLeft = 0)
+            7, 8, 9 -> n.copy(screenTop = 600, screenLeft = n.index * 30)
+            else -> n
+        } }
+        val attached = original.filter { it.index !in 4..9 } + original.filter { it.index in 7..9 } + original.filter { it.index in 4..6 }
+        val p = GeminiReplyPageParser.parse(attached, question, true)!!
+        assertTrue(p.questionVisible); assertTrue(p.endVisible)
+        assertEquals("first paragraph\nlast paragraph", p.text)
+    }
+    @Test fun nativeUserMessageAfterCurrentAnswerCannotBeCollectedAsBody() {
+        val nodes = fixture() + node(11, "another native question").copy(resourceId = "assistant_robin_user_message_text")
+        val p = GeminiReplyPageParser.parse(nodes, question, true)!!
+        assertTrue(p.conflictingTurn)
+        assertNull(GeminiReplyPageParser.target(nodes, question, true, p.containerKey, true))
+    }
     @Test fun menuOrActionableAnswerIsRejected() {
         assertNull(GeminiReplyPageParser.parse(fixture().map { if (it.index == 5) it.copy(clickable = true) else it }, question, true))
         assertNull(GeminiReplyPageParser.parse(fixture().map { if (it.index == 1) it.copy(resourceId = "popup_menu") else it }, question, true))

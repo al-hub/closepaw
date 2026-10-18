@@ -20,6 +20,8 @@ internal data class GeminiUiNode(
     val scrollable: Boolean = false,
     val scrollForward: Boolean = false,
     val scrollBackward: Boolean = false,
+    val screenTop: Int? = null,
+    val screenLeft: Int? = null,
 )
 
 /** Invocation-local fingerprints only; never serialized into diagnostics. */

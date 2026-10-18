@@ -15,7 +15,7 @@ internal data class GeminiReplyPage(
 
 /** Restricts paging to one vertical conversation region, excluding composer and app chrome. */
 internal object GeminiReplyPageParser {
-    private val questionIds = setOf("assistant_robin_query_text", "robin_query_text", "user_query")
+    private val questionIds = setOf("assistant_robin_query_text", "robin_query_text", "user_query", "assistant_robin_user_message_text")
     private val replyIds = setOf("assistant_robin_response_text", "robin_response_text", "assistant_robin_response_container")
     private val toolbar = setOf("대답이 마음에 들어요", "대답이 마음에 들지 않아요", "good response", "bad response",
         "like response", "dislike response", "복사", "copy", "copy response", "답변 복사", "옵션 다시 실행",
@@ -56,7 +56,12 @@ internal object GeminiReplyPageParser {
             (key(n) == trustedKey || nodes.any { safe(it) && within(it, n) && (it.body() == question || it.id() in replyIds || control(it)) }) }
         // Nested scroll regions are deliberately unsupported; never guess a list/carousel.
         val root = containers.singleOrNull() ?: return null
-        val scope = nodes.filter { safe(it) && within(it, root) && it.index != root.index }
+        val region = nodes.filter { safe(it) && within(it, root) && it.index != root.index }
+        // RecyclerView attachment order can put the response toolbar before its question/body.
+        // Physical top/left order restores the visible turn boundary without trusting stale children.
+        val scope = if (region.any { it.screenTop != null }) region.sortedWith(
+            compareBy<GeminiUiNode>({ it.screenTop ?: Int.MAX_VALUE }, { it.screenLeft ?: Int.MAX_VALUE }, { it.index })
+        ) else region
         val anchors = scope.filter { it.body() == question && !control(it) }.filter { n ->
             scope.none { it.index != n.index && it.body() == question && chain(n).drop(1).any { a -> a.index == it.index } }
         }

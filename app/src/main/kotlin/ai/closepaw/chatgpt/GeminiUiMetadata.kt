@@ -49,6 +49,7 @@ internal object GeminiUiMetadata {
                 node.className.takeIf { it in classNames }?.let { put("class_name", it) }
                 put("visible",node.visible); put("enabled",node.enabled); put("editable",node.editable)
                 put("clickable",node.clickable); put("click_action",node.clickAction)
+                put("scrollable",node.scrollable); put("scroll_forward",node.scrollForward); put("scroll_backward",node.scrollBackward)
                 put("text_length",node.text.length); put("description_length",node.description.length)
                 put("role", when {
                     node.composer -> "composer"
