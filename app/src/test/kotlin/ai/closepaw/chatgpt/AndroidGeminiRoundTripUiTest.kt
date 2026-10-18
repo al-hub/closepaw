@@ -155,6 +155,25 @@ class AndroidGeminiRoundTripUiTest {
         verify(exactly = 0) { input.performAction(any()) }
     }
 
+    @Test fun completeVisibleShortTurnRemainsValidWhenOuterScrollerContainsComposer() = runBlocking {
+        val question = "short visible turn"
+        val input = node("assistant_robin_input_text", "", pkg = google, editable = true)
+        coEvery { draft.setIfEmpty(question) } returns DraftWriteResult.WRITTEN
+        val ui = adapter(); ui.setIfEmpty(question)
+        root = node(children = listOf(node(text = question, pkg = google), node(text = "short answer", pkg = google),
+            node(text = "대답이 마음에 들어요", pkg = google, clickable = true),
+            node(text = "대답이 마음에 들지 않아요", pkg = google, clickable = true),
+            node(text = "복사", pkg = google, clickable = true), input), pkg = google)
+        every { root!!.isScrollable } returns true
+        val back = mockk<AccessibilityNodeInfo.AccessibilityAction>()
+        every { back.id } returns AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        every { root!!.actionList } returns listOf(back)
+        val state = ui.snapshot()
+        assertNull(state.replyPage)
+        assertTrue(state.replies.single().complete)
+        assertTrue(state.replyCoverageComplete)
+    }
+
     @Test fun exactlyOneSemanticSendIsClickedOnce() = runBlocking {
         val send = node("assistant_robin_send_button", clickable = true)
         root = node(children = listOf(composer(), send))

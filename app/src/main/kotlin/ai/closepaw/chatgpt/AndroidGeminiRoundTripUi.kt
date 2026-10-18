@@ -104,7 +104,10 @@ internal class AndroidGeminiRoundTripUi(
         if (page != null) pagingContainerKey = page.containerKey
         return GeminiUiSnapshot(
             replyPage = page,
-            replyCoverageComplete = page != null || nodes.none { it.visible && it.scrollable &&
+            // Exact visible question + complete response/footer already proves a short turn's scope.
+            // An unrelated or composer-containing scroller must not downgrade that verified reply.
+            replyCoverageComplete = page != null || (conversation.submittedQuestion == expectedQuestion &&
+                conversation.replies.isNotEmpty() && conversation.replies.all { it.complete } && conversation.traversalComplete) || nodes.none { it.visible && it.scrollable &&
                 (it.scrollForward || it.scrollBackward) && !it.className.contains("Horizontal", true) },
             foreground = true, targetKey = key(root), composerCandidates = composers.size,
             composerText = composers.singleOrNull()?.let { if (it.showingHint) "" else it.text }.orEmpty(),
