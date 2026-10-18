@@ -13,7 +13,7 @@ class SelfUpdateOperationsTest {
         every { updater.enabled() } returns false
         val registry = OperationRegistry()
         SelfUpdateOperations(updater).register(registry)
-        assertEquals(4, registry.all().size)
+        assertEquals(3, registry.all().size)
         val install = registry.get(SelfUpdateOperations.INSTALL)!!.descriptor
         assertFalse(install.readOnly)
         assertFalse(install.safeReadiness().ready)
@@ -42,26 +42,4 @@ class SelfUpdateOperationsTest {
         assertFalse(result.success)
         verify(exactly = 0) { updater.start(any(), any()) }
     }
-    @Test fun diagnosticsIsReadOnlyAndCannotClaimInstallationOrStartWork() = runTest {
-        val updater = mockk<AndroidSelfUpdater>()
-        every { updater.diagnostics() } returns buildJsonObject {
-            put("warning_removal_verified", false)
-            put("security_warning_owner", JsonNull)
-        }
-        val registry = OperationRegistry()
-        SelfUpdateOperations(updater).register(registry)
-        val operation = registry.get(SelfUpdateOperations.DIAGNOSTICS)!!
-        assertTrue(operation.descriptor.readOnly)
-        assertTrue(operation.descriptor.effects.isEmpty())
-        assertTrue(operation.descriptor.permissions.isEmpty())
-        assertNotNull(OperationSchemaValidator.validate(operation.descriptor.inputSchema,
-            buildJsonObject { put("install", true) }))
-        val result = operation.handler.invoke(OperationInvocation("read", buildJsonObject {}))
-        assertFalse(result.data["warning_removal_verified"]!!.jsonPrimitive.boolean)
-        assertTrue(result.summary.contains("not verified"))
-        verify(exactly = 0) { updater.start(any(), any()) }
-        verify(exactly = 0) { updater.status() }
-        verify(exactly = 1) { updater.diagnostics() }
-    }
-
 }

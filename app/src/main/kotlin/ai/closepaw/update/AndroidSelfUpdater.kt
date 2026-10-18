@@ -42,14 +42,6 @@ internal class AndroidSelfUpdater private constructor(private val context: Conte
         ))
     }
 
-    /** Does not reconcile state, install, launch an app, or change any settings. */
-    @Synchronized fun diagnostics(): JsonObject = buildJsonObject {
-        put("device", SelfUpdateDiagnostics.collect(context))
-        put("remote_update_enabled", enabled())
-        put("installer_callbacks", ledger.read()["installer_callbacks"] ?: JsonArray(emptyList()))
-        put("warning_removal_verified", false)
-    }
-
     fun enabled(): Boolean = context.getSharedPreferences("mcp_execution", Context.MODE_PRIVATE)
         .getBoolean("self_update_enabled", false)
 
