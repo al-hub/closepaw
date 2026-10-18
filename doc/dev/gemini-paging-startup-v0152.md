@@ -1,5 +1,23 @@
 # Gemini paging startup recovery — v0.1.52 / code 53
 
+## Verified signed delivery — 2026-10-18
+
+- [PR #97](https://github.com/al-hub/closepaw/pull/97) merged at `bd15ab56cfc0398c1b530f4049e4b374d93935f7`.
+- Final Android regression suite: **2,464 passed; 0 failures, errors or skips**. Main Security CI
+  and the separate signed runtime probe also succeeded.
+- [Signed Release run 39103302799](https://github.com/al-hub/closepaw/actions/runs/39103302799) succeeded.
+- [v0.1.52 APK](https://github.com/al-hub/closepaw/releases/download/v0.1.52/closepaw-aa-bridge.apk)
+  was downloaded after transfer completion: package `ai.closepaw`, version `0.1.52`, code `53`,
+  **116,372,941 bytes**. Manifest, APK v2 signature and both arm64 ELF native runtimes verified.
+- SHA-256 `912b4acdc917cdca680457802bcc4eafcf9ea49139e29e95b8db8e0601b9d826` matches the checksum asset and GitHub asset digest.
+- Certificate SHA-256 `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba` matches the previous signed APK.
+- The immutable version tag resolves to the exact validated main commit above.
+- **Installed v0.1.52 acceptance remains pending.** v0.1.51 short-answer collection succeeded,
+  but its long-answer automatic collection failed; the later screen read did not close that gate.
+  Validate a different long prompt after updating, without resending the original failed task.
+  Perceived completion/speech latency also remains an installed-device observation.
+
+
 ## Real-device finding (2026-10-18)
 
 v0.1.51/code52 installation was confirmed through device status. Short task
@@ -31,5 +49,5 @@ requested item; that read does not validate automatic paging or completion attri
 - Regressions reproduce delayed body/footer, empty timeout, startup-region replacement and
   repeated final-body observations after an actual forward scroll.
 
-CI, signed publication and installed-device acceptance are pending. The v0.1.51 long-answer
-acceptance failure remains open until a later APK is verified on the Galaxy.
+CI and signed publication are complete; installed-device acceptance remains pending. The
+v0.1.51 long-answer acceptance failure stays open until v0.1.52 is verified on the Galaxy.

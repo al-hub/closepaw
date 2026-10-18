@@ -1,5 +1,17 @@
 # Gemini 목표 실행·확인·후속 조치 전체 동작 계획
 
+## 2026-10-18 v0.1.52 delivery supersedes earlier pending-release notes
+
+- v0.1.51 short automatic round trip succeeded, but the long-answer collection stopped before
+  the body appeared. Completion evidence→collection for the short test was 585 ms; actual
+  visual completion and spoken latency were not established by that metric.
+- PR #97 / v0.1.52(code53) fixes startup/footer waiting, recycled page ordering and native
+  later-turn detection. Android 2,464 tests, main CI, signed runtime probe and public APK
+  manifest/signer/checksum/native/tag verification passed.
+- [Evidence and acceptance gate](../dev/gemini-paging-startup-v0152.md). Installed v0.1.52
+  long-answer coverage and perceived latency are still pending. P2 remains ACTIVE.
+
+
 ## 2026-10-18 latest delivery / acceptance boundary
 
 - Baseline v0.1.50 automatic text and Voice round trips are confirmed in the user conversation record.

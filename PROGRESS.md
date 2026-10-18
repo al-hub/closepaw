@@ -1,11 +1,12 @@
 # ClosePaw Progress
 
-## v0.1.51 device result / v0.1.52 startup correction in progress
+## v0.1.51 device result / v0.1.52 signed correction delivered
 
 - Installed v0.1.51 verified. Short answer automatic round trip succeeded; completion evidence→collection was 585 ms, but full perceived latency is unverified.
 - Long request was submitted once, then collection stopped after 783 ms on an empty pre-generation viewport (`reply_end_unconfirmed`). No resend. Automatic long-answer acceptance **failed**, despite successful CI/signed delivery.
 - [Evidence and correction](doc/dev/gemini-paging-startup-v0152.md): wait for body/footer instead of treating absent forward scrolling as an end condition.
-- v0.1.52/code53 fixes and regression tests are prepared; CI/release/device acceptance pending. **P2 ACTIVE**.
+- [v0.1.52/code53 APK](https://github.com/al-hub/closepaw/releases/tag/v0.1.52) published and downloaded/verified. Android **2,464/2,464**, main CI and signed runtime probe passed; manifest/signer/checksum/native runtimes/tag verified.
+- Installed v0.1.52 long-answer and perceived latency acceptance remain pending. The v0.1.51 long-answer failure is not closed by CI alone. **P2 ACTIVE**.
 
 
 ## Gemini reply latency + long-answer paging — v0.1.51 signed delivery verified
