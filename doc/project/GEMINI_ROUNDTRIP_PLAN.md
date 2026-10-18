@@ -1,5 +1,14 @@
 # Gemini 목표 실행·확인·후속 조치 전체 동작 계획
 
+## v0.1.54/code55 signed correction delivered — device acceptance open
+
+- Installed v0.1.53 retrieved all40 requested items (201–240, arithmetic verified), 1,238 Unicode code points, in6,554ms. It still ended partial/reply_scroll_stalled after its first scroll; coverage and automatic terminal completion were unconfirmed. One send; no resend. Perceived latency is unverified.
+- PR #99 permits bounded continued scrolling for the invocation's identical exact-question-owned native whole body until its visible footer. Generic stalls, limits and safety checks remain. [Evidence and verified delivery](../dev/gemini-identical-body-paging-v0154.md).
+- Android **2,477 tests**, zero failures/errors/skips; PR/main Security CI, signed native runtime probe and Signed Release succeeded.
+- [v0.1.54 APK](https://github.com/al-hub/closepaw/releases/download/v0.1.54/closepaw-aa-bridge.apk) independently downloaded and verified: package/version/code55, checksum/GitHub digest, previous signer, native runtimes and immutable tag target `1e580e353d0da3f9cc6c1778f79a81a482b7cdd6`.
+- **Installed-v0.1.54 automatic completion, long-answer coverage and perceived latency acceptance remain pending. P2 ACTIVE.** Earlier pending-release statements below are historical; successful delivery does not close the device gate.
+
+
 ## v0.1.53/code54 signed delivery verified — device acceptance pending
 
 - v0.1.52 long-answer test failed after one send: 119,827 ms, zero collected pages, no answer returned. The new response existed offscreen while the old body/toolbar remained visible; no resend occurred.

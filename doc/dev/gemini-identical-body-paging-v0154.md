@@ -31,5 +31,25 @@ multiple viewports, so equal text alone cannot establish failed movement.
 - Regressions cover four native viewports, recycled question, delayed footer, action limit,
   unrelated replacement, cancellation and unchanged generic-page stall.
 
-CI/release/new installed-device acceptance pending. **P2 ACTIVE.** The v0.1.53 body-content
-check passed, but automatic terminal completion failed; prior long-answer failures stay recorded.
+## Verified delivery
+
+- PR #99 merged as `1e580e353d0da3f9cc6c1778f79a81a482b7cdd6`.
+- Android XML reports: **2,477 tests, zero failures/errors/skips**. Includes collector19,
+  Android adapter17 and native parser7 tests.
+- PR Security CI `39109314270`, main Security CI `39109579971`, signed native runtime
+  probe `39109314278`, Signed Release `39109911610`: all succeeded.
+- [v0.1.54/code55 signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.54/closepaw-aa-bridge.apk)
+  independently downloaded: 116,381,677 bytes; manifest/package/version/code, checksum file,
+  GitHub asset digest, APK v2 signature and previous signing identity verified. Both bundled
+  native runtimes are AArch64 and retain their previous hashes. Immutable release tag resolves
+  to the merged code SHA above.
+- APK SHA-256: `61f0113a3d34cb8576b2c0c3c7e5f2c494c90f700b77619e426acbe3a89ab38e`.
+- Certificate SHA-256: `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`.
+- OpenAI runtime SHA-256: `d25d4f8977ec93089dfed41667acd91ab6174042e8c6943428a150dca8895288`.
+- Cloudflared SHA-256: `5a16aea0f429f1dfc635b7d61c21cd1c357f4d0e7b8992d16cadf160f7166f76`.
+
+**Installed v0.1.54 acceptance pending. P2 ACTIVE.** The v0.1.53 body-content check passed,
+but automatic terminal completion failed; prior long-answer failures stay recorded. Next
+acceptance must use a fresh unique long question, preserve Gemini foreground/unlocked,
+verify first/last and all items, terminal completion/coverage, and report timing with its limits.
+Do not equate collection_ms or completion-evidence timing with visual-to-speech latency.
