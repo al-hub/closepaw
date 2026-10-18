@@ -73,3 +73,10 @@ published public APK/checksum anonymously and checks manifest/version/code, cert
 with a verification artifact. Local release-assets downloads are network-blocked, so actual public download verification
 must run on the release runner and its recorded output must be inspected.
 Earlier local-blocked /19-tests notes are checkpoint history; do not report them as the current state after CI completes.
+
+## Lint finding
+
+CI39127351069 exposed one inherited error in McpHttpServer: InputStream.readNBytes requires Android API33,
+but this app supports API31. Replaced it with DataInputStream.readFully, retaining incomplete-body400 behavior.
+Two socket regressions cover fragmented and truncated requests. The candidate now adds28 tests total.
+This fixes the reported API compatibility error without suppressing lint or changing the minimum SDK.

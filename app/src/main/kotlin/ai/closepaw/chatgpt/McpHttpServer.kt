@@ -1,5 +1,7 @@
 package ai.closepaw.chatgpt
 
+import java.io.DataInputStream
+import java.io.EOFException
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.net.InetAddress
@@ -77,8 +79,12 @@ internal class McpHttpServer(
                     if (length <= 0 || length > MAX_BODY_BYTES) {
                         McpHttpResponse(400, "{\"error\":\"invalid_content_length\"}")
                     } else {
-                        val bodyBytes = input.readNBytes(length)
-                        if (bodyBytes.size != length) {
+                        val bodyBytes = ByteArray(length)
+                        val complete = try {
+                            DataInputStream(input).readFully(bodyBytes)
+                            true
+                        } catch (_: EOFException) { false }
+                        if (!complete) {
                             McpHttpResponse(400, "{\"error\":\"incomplete_body\"}")
                         } else {
                             handler.handle(bodyBytes.toString(StandardCharsets.UTF_8))
