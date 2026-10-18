@@ -71,12 +71,19 @@ internal object GeminiReplyPageParser {
         val candidates = beforeFooter.filter { it.body().isNotBlank() && !control(it) && !disclaimer(it.body()) && it.body() != question }
         val outer = candidates.filter { n -> candidates.none { a -> a.index != n.index && chain(n).drop(1).any { it.index == a.index } } }
         val footer = if (footerIndex >= 0) tail.drop(footerIndex) else emptyList()
-        val copy = footer.any { GeminiUiControlResolver.isCopyRole(it) && (it.clickable || it.clickAction) }
-        val positive = footer.any { n -> labels(n).any { it in setOf("대답이 마음에 들어요", "good response", "like response") } }
-        val negative = footer.any { n -> labels(n).any { it in setOf("대답이 마음에 들지 않아요", "bad response", "dislike response") } }
+        fun actionTarget(n: GeminiUiNode) = chain(n).take(4).firstOrNull {
+            it.index != root.index && !it.scrollable && safe(it) && (it.clickable || it.clickAction)
+        }?.index
+        val copy = footer.filter { GeminiUiControlResolver.isCopyRole(it) }.mapNotNull(::actionTarget).distinct()
+        val positive = footer.filter { n -> labels(n).any { it in setOf("대답이 마음에 들어요", "good response", "like response") } }
+            .mapNotNull(::actionTarget).distinct()
+        val negative = footer.filter { n -> labels(n).any { it in setOf("대답이 마음에 들지 않아요", "bad response", "dislike response") } }
+            .mapNotNull(::actionTarget).distinct()
+        val verifiedToolbar = copy.size == 1 && positive.size == 1 && negative.size == 1 &&
+            (copy + positive + negative).distinct().size == 3
         val explicit = scope.any { it.id() in replyIds }
         return GeminiReplyPage(key(root), root.index, outer.joinToString("\n") { it.body() }, anchor != null,
-            copy && ((positive && negative) || explicit), root.scrollForward, root.scrollBackward, otherTurn, outer.map { GeminiUiTextEvidence.hash(it.body()) }.toSet())
+            verifiedToolbar || (copy.size == 1 && explicit), root.scrollForward, root.scrollBackward, otherTurn, outer.map { GeminiUiTextEvidence.hash(it.body()) }.toSet())
     }
 
     /** Re-resolve the exact same path, package and viewport immediately before scrolling. */

@@ -46,6 +46,10 @@ class GeminiReplyPageParserTest {
     @Test fun footerRequiresCopyAndBothFeedbackRoles() {
         for (missing in listOf(7, 8, 9)) assertFalse(GeminiReplyPageParser.parse(fixture().filter { it.index != missing }, question, true)!!.endVisible)
     }
+    @Test fun plainFeedbackWordsWithoutDistinctActionsNeverProveCompletion() {
+        val nodes = fixture().map { if (it.index in 7..8) it.copy(clickable = false) else it }
+        assertFalse(GeminiReplyPageParser.parse(nodes, question, true)!!.endVisible)
+    }
     @Test fun menuOrActionableAnswerIsRejected() {
         assertNull(GeminiReplyPageParser.parse(fixture().map { if (it.index == 5) it.copy(clickable = true) else it }, question, true))
         assertNull(GeminiReplyPageParser.parse(fixture().map { if (it.index == 1) it.copy(resourceId = "popup_menu") else it }, question, true))
