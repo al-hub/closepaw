@@ -203,7 +203,7 @@ internal class AndroidOperationRuntime(
                     ))
                 }
             }
-            dispatcher.getTask(arguments)
+            runBlocking { GeminiTaskAwaiter(dispatcher::getTask).get(arguments) }
         }
         else -> buildJsonObject { put("status", "failed"); put("error_code", "unknown_tool") }
     }

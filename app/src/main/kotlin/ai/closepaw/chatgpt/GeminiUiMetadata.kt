@@ -64,6 +64,11 @@ internal object GeminiUiMetadata {
             exported.add(entry); used += cost
         }
         return buildJsonObject {
+            put("reply_page_available", verified && snapshot.replyPage != null)
+            snapshot.replyPage?.takeIf { verified }?.let { page ->
+                put("page_start_visible", page.questionVisible); put("page_end_visible", page.endVisible)
+                put("page_can_forward", page.canForward); put("page_can_backward", page.canBackward)
+            }
             put("foreground",verified); put("reason_code",reason)
             put("window",buildJsonObject {
                 window.observedPackage?.takeIf { it in packages }?.let { put("observed_package",it) }

@@ -13,6 +13,7 @@ internal class AndroidGeminiRoundTripUi(
     private val allowed: () -> Boolean,
     private val draft: AndroidGeminiDraftUi = AndroidGeminiDraftUi(service, allowed),
 ) : GeminiRoundTripUi, GeminiDraftUi by draft {
+    private var pagingContainerKey: String? = null
     private var expectedQuestion: String? = null
     private var lastSnapshot: GeminiUiSnapshot? = null
     private var lastInspection = GeminiUiSnapshot(false, "")
@@ -20,7 +21,7 @@ internal class AndroidGeminiRoundTripUi(
 
     override suspend fun setIfEmpty(text: String): DraftWriteResult {
         val result = draft.setIfEmpty(text)
-        if (result == DraftWriteResult.WRITTEN) expectedQuestion = text
+        if (result == DraftWriteResult.WRITTEN) { expectedQuestion = text; pagingContainerKey = null }
         return result
     }
 
@@ -30,6 +31,22 @@ internal class AndroidGeminiRoundTripUi(
             return@withContext lastInspection
         }
         withTree { _, nodes, complete -> observe(nodes, complete).also { lastSnapshot = it } }
+    }
+
+    override suspend fun scrollReply(targetKey: String, containerKey: String, forward: Boolean): Boolean = withContext(Dispatchers.Main) {
+        if (!allowed() || draft.isLocked() || pagingContainerKey != containerKey) return@withContext false
+        withTree { handles, nodes, complete ->
+            val state = observe(nodes, complete)
+            if (!state.foreground || state.targetKey != targetKey || state.composerText.isNotBlank() || state.generating == true)
+                return@withTree false
+            val index = GeminiReplyPageParser.target(nodes, expectedQuestion, complete, containerKey, forward)
+                ?: return@withTree false
+            val node = handles[index]
+            if (!node.refresh() || !node.isVisibleToUser || !node.isEnabled || !allowed() || draft.isLocked()) return@withTree false
+            val action = if (forward) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+            if (node.actionList.none { it.id == action }) return@withTree false
+            node.performAction(action)
+        }
     }
 
     fun metadataSnapshot(): JsonObject = GeminiUiMetadata.build(lastNodes, draft.evidence(), lastInspection)
@@ -83,7 +100,15 @@ internal class AndroidGeminiRoundTripUi(
         if (!recognized) return GeminiUiSnapshot(false, key(root), traversalComplete = complete).also { lastInspection = it }
         val sends = GeminiUiControlResolver.sendTargets(nodes)
         val conversation = GeminiConversationParser.parse(nodes, expectedQuestion, complete)
+        val page = GeminiReplyPageParser.parse(nodes, expectedQuestion, complete, pagingContainerKey)
+        if (page != null) pagingContainerKey = page.containerKey
         return GeminiUiSnapshot(
+            replyPage = page,
+            // Exact visible question + complete response/footer already proves a short turn's scope.
+            // An unrelated or composer-containing scroller must not downgrade that verified reply.
+            replyCoverageComplete = page != null || (conversation.submittedQuestion == expectedQuestion &&
+                conversation.replies.isNotEmpty() && conversation.replies.all { it.complete } && conversation.traversalComplete) || nodes.none { it.visible && it.scrollable &&
+                (it.scrollForward || it.scrollBackward) && !it.className.contains("Horizontal", true) },
             foreground = true, targetKey = key(root), composerCandidates = composers.size,
             composerText = composers.singleOrNull()?.let { if (it.showingHint) "" else it.text }.orEmpty(),
             sendCandidates = sends.size, sendEnabled = sends.singleOrNull()?.let { nodes[it].enabled } == true,
@@ -129,6 +154,9 @@ internal class AndroidGeminiRoundTripUi(
                 password = node.isPassword, clickable = node.isClickable,
                 clickAction = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
                 composer = isComposer(node), showingHint = node.isShowingHintText,
+                scrollable = node.isScrollable,
+                scrollForward = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD },
+                scrollBackward = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD },
             ) }
             return block(handles, nodes, complete)
         } finally { handles.forEach { it.recycleCompat() } }

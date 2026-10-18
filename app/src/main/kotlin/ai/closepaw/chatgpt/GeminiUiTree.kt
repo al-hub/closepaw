@@ -17,6 +17,9 @@ internal data class GeminiUiNode(
     val clickAction: Boolean = false,
     val composer: Boolean = false,
     val showingHint: Boolean = false,
+    val scrollable: Boolean = false,
+    val scrollForward: Boolean = false,
+    val scrollBackward: Boolean = false,
 )
 
 /** Invocation-local fingerprints only; never serialized into diagnostics. */
