@@ -56,6 +56,7 @@ internal object GeminiReplyPageParser {
             (key(n) == trustedKey || nodes.any { safe(it) && within(it, n) && (it.body() == question || it.id() in replyIds || control(it)) }) }
         // Nested scroll regions are deliberately unsupported; never guess a list/carousel.
         val root = containers.singleOrNull() ?: return null
+        GeminiNativeReplyPageParser.parse(nodes, question, root, key(root))?.let { return it }
         val region = nodes.filter { safe(it) && within(it, root) && it.index != root.index }
         // RecyclerView attachment order can put the response toolbar before its question/body.
         // Physical top/left order restores the visible turn boundary without trusting stale children.

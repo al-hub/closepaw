@@ -174,6 +174,53 @@ class AndroidGeminiRoundTripUiTest {
         assertTrue(state.replyCoverageComplete)
     }
 
+    @Test fun nativeOffscreenNewResponseIsCollectedBeforeScrollingToItsOwnToolbar() = runBlocking {
+        val question = "new offscreen native test"
+        val input = node("assistant_robin_input_text", "", pkg = google, editable = true)
+        val send = node("send_button", pkg = google, clickable = true)
+        val old = node("assistant_robin_content_message_container", children = listOf(
+            node("assistant_robin_text", "old answer", pkg = google), node(text = "복사", pkg = google, clickable = true),
+            node(text = "대답이 마음에 들어요", pkg = google, clickable = true), node(text = "대답이 마음에 들지 않아요", pkg = google, clickable = true)), pkg = google)
+        val body = node("assistant_robin_text", "new answer first item through last item", pkg = google, visible = false)
+        val copy = node(text = "복사", pkg = google, clickable = true, visible = false)
+        val up = node(text = "대답이 마음에 들어요", pkg = google, clickable = true, visible = false)
+        val down = node(text = "대답이 마음에 들지 않아요", pkg = google, clickable = true, visible = false)
+        val reply = node("assistant_robin_content_message_container", children = listOf(body, copy, up, down), pkg = google, visible = false)
+        val history = node("assistant_robin_chat_history_list", children = listOf(old,
+            node("assistant_robin_user_message_text", question, pkg = google), reply), pkg = google)
+        val forward = mockk<AccessibilityNodeInfo.AccessibilityAction>()
+        every { forward.id } returns AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+        val backward = mockk<AccessibilityNodeInfo.AccessibilityAction>()
+        every { backward.id } returns AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        every { history.isScrollable } returns true
+        every { history.actionList } returns listOf(forward, backward)
+        every { history.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) } answers {
+            every { old.isVisibleToUser } returns false
+            listOf(reply, body, copy, up, down).forEach { every { it.isVisibleToUser } returns true }
+            every { history.actionList } returns listOf(backward)
+            true
+        }
+        root = node(children = listOf(input, send), pkg = google)
+        coEvery { draft.launch() } returns true
+        coEvery { draft.setIfEmpty(question) } answers { every { input.text } returns question; DraftWriteResult.WRITTEN }
+        coEvery { draft.matches(question) } returns true
+        every { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) } answers {
+            every { input.text } returns ""; root = node(children = listOf(history, input), pkg = google); true
+        }
+        val ui = adapter(); var time = 0L
+        val op = GeminiRoundTripOperation(ui, { true }, { _, _, _ -> }, { timeout ->
+            GeminiReplyCollector(ui, clockMillis = { time }, pause = { time += it }, timeoutMs = timeout,
+                pollMs = 100, stableMs = 100)
+        })
+        val result = op.invoke(OperationInvocation("native-offscreen-flow", buildJsonObject { put("text", question) }))
+        assertTrue(result.summary, result.success)
+        assertEquals("new answer first item through last item", result.stdout)
+        assertFalse(result.stdout.contains("old answer"))
+        verify(exactly = 1) { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+        verify(exactly = 1) { history.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) }
+        verify(exactly = 0) { copy.performAction(any()) }
+    }
+
     @Test fun exactlyOneSemanticSendIsClickedOnce() = runBlocking {
         val send = node("assistant_robin_send_button", clickable = true)
         root = node(children = listOf(composer(), send))
