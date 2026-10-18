@@ -1,10 +1,20 @@
 package ai.closepaw.ui.settings
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Switch
+import ai.closepaw.chatgpt.McpExecutionSettings
+import ai.closepaw.update.AndroidSelfUpdater
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +55,9 @@ internal fun SoftwareUpdatePage(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val executionSettings = remember { McpExecutionSettings(context) }
+    var remoteUpdate by remember { mutableStateOf(executionSettings.selfUpdateEnabled) }
+    var updateStatus by remember { mutableStateOf("Open status to check installation progress.") }
     var state by remember { mutableStateOf<UpdateUiState>(UpdateUiState.Idle) }
 
     fun checkForUpdate() {
@@ -80,6 +93,8 @@ internal fun SoftwareUpdatePage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = MaterialTheme.closePaw.spacing.lg, vertical = MaterialTheme.closePaw.spacing.md),
             verticalArrangement = Arrangement.spacedBy(MaterialTheme.closePaw.spacing.md),
         ) {
@@ -125,6 +140,41 @@ internal fun SoftwareUpdatePage(
                     }
                 }
             }
+
+            Text("Allow updates requested through ChatGPT")
+            Switch(checked = remoteUpdate, onCheckedChange = {
+                executionSettings.selfUpdateEnabled = it
+                remoteUpdate = it
+            })
+            Text("Downloads and verifies the signed release, then requests installation. Android security checks may still require approval. Keep ClosePaw notifications enabled for approval requests.")
+            Button(onClick = {
+                context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:${context.packageName}")))
+            }) { Text("Allow installation from ClosePaw") }
+            Button(onClick = {
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { AndroidSelfUpdater.get(context).status() }
+                    updateStatus = when (result["state"]?.jsonPrimitive?.contentOrNull) {
+                        "installed" -> "Update installed. Current version: ${BuildConfig.VERSION_NAME}."
+                        "installing" -> "Android is installing the update. Recheck after reconnection."
+                        "user_action_required" -> "Android needs your approval. Tap the update notification or Review pending installation."
+                        "install_permission_required" -> "Allow installation from ClosePaw before requesting an update."
+                        "install_outcome_unknown" -> "Installation outcome is unconfirmed. Check the installed version before retrying."
+                        "failed" -> "Update failed. Check your installation and security settings."
+                        "downloading", "checking" -> "Preparing the verified update."
+                        "up_to_date" -> "ClosePaw is up to date."
+                        "interrupted_before_install" -> "Update preparation was interrupted before installation. Request the update again."
+                        else -> "No remote update is pending."
+                    }
+                }
+            }) { Text("Refresh update status") }
+            Text(updateStatus)
+            Button(onClick = {
+                scope.launch {
+                    val opened = withContext(Dispatchers.IO) { AndroidSelfUpdater.get(context).openApproval() }
+                    if (!opened) updateStatus = "No approval is available here. Check the existing update notification."
+                }
+            }) { Text("Review pending installation") }
 
             if (state is UpdateUiState.Idle || state is UpdateUiState.UpToDate || state is UpdateUiState.InstallPermissionRequired) {
                 Button(onClick = { checkForUpdate() }) {

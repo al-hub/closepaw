@@ -1,5 +1,7 @@
 package ai.closepaw.chatgpt
 
+import ai.closepaw.update.AndroidSelfUpdater
+import ai.closepaw.update.SelfUpdateOperations
 import ai.closepaw.app.AgentService
 import ai.closepaw.bridge.*
 import ai.closepaw.chatgpt.operations.*
@@ -34,6 +36,7 @@ internal class AndroidOperationRuntime(
     private val tailscaleDiagnostics = TailscaleDiagnostics(File(context.filesDir, "mcp/tailscale-recovery.json"))
     private val dispatcher: OperationDispatcher
     init {
+        SelfUpdateOperations(AndroidSelfUpdater.get(context)).register(registry)
         TailscaleOperations(
             TailscaleRecovery(AndroidTailscalePlatform(context), { settings.tailscaleRecoveryEnabled }, record = tailscaleDiagnostics::record),
             { settings.tailscaleRecoveryEnabled },
@@ -167,8 +170,9 @@ internal class AndroidOperationRuntime(
             }
         })
         dispatcher = OperationDispatcher(registry, store, scope,
-            executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled },
+            executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled },
             operationAllowed = { id -> when(id) {
+                SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled
                 "gemini.question.ask" -> settings.geminiQuestionEnabled

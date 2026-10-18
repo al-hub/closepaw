@@ -18,6 +18,7 @@ class ChatGptConnectionReceiver : BroadcastReceiver() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope.launch {
             try {
+                runCatching { ai.closepaw.update.AndroidSelfUpdater.get(context).status() }
                 ChatGptMcpService.restore(context.applicationContext)
             } finally {
                 pending.finish()

@@ -45,14 +45,22 @@ object AppUpdater {
         CheckResult.Failed(e.message ?: e.javaClass.simpleName)
     }
 
-    fun downloadAndVerify(context: Context, release: Release): Result<File> = runCatching {
+    @Synchronized fun downloadAndVerify(context: Context, release: Release): Result<File> = runCatching {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
-        val apk = File(dir, APK_NAME)
+        val apk = File.createTempFile("closepaw-${release.version}-", ".apk", dir)
         download(release.apkUrl, apk)
         val expected = readText(release.shaUrl).trim().substringBefore(' ').lowercase()
         require(expected.matches(Regex("[0-9a-f]{64}"))) { "Invalid release checksum." }
         val actual = sha256(apk)
         require(actual == expected) { "Downloaded APK checksum mismatch." }
+        val pm = context.packageManager
+        val candidate = pm.getPackageArchiveInfo(apk.path, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+            ?: error("APK package metadata unavailable.")
+        val installed = pm.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+        fun signers(info: android.content.pm.PackageInfo): Set<String> = info.signingInfo?.apkContentsSigners
+            ?.map { MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { b -> "%02x".format(b) } }?.toSet().orEmpty()
+        SelfUpdatePolicy.verifyIdentity(candidate.packageName, context.packageName, candidate.versionName,
+            release.version, candidate.longVersionCode, installed.longVersionCode, signers(candidate), signers(installed))
         apk
     }
 
