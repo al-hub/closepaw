@@ -1,6 +1,6 @@
 # Generic non-node freshness v0.1.59
 
-Status: test-first RED in progress. Installed baseline v0.1.58/code59. No new delivery claimed.
+Status: RED confirmed; GREEN implementation in progress. Installed baseline v0.1.58/code59. No new delivery claimed.
 
 The earlier depth32 failure is corrected in v0.1.58: complete device observations reached depth47.
 App open was still refused twice before execution with screen_changed. Code confirms that Home/app launch
@@ -18,3 +18,5 @@ Three added tests first reproduce global-navigation content-refresh refusal whil
 Run RED before uploading implementation, then GREEN/full lint/build, review/merge/main CI/signed delivery/public verification
 and exactly one remote update. Re-test app launch using fresh actual screen evidence and preserve all drafts/questions.
 The user has not specified a target model; inspect actual choices before requesting a selection. P2 ACTIVE.
+
+RED evidence: Security CI39172782002/job117809145663 ran2,531 tests with exactly2 assertion failures: globalNavigationIgnoresOnlyOrdinaryContentRefresh (expected null, actual screen_changed) and globalNavigationCanStartFromAnUpdatingClient. This reproduces the refusal in existing code; the node/Back content-check regression passed.
