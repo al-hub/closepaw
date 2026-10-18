@@ -1,11 +1,14 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
-## Gemini reply latency + long-answer paging — v0.1.51 in development
+## Gemini reply latency + long-answer paging — v0.1.51 signed delivery verified
 
 - User-authorized combined improvement: shorten completion/return latency and collect below-viewport answer text.
 - Current baseline: v0.1.50 basic text/Voice round trip confirmed; continuous-use reliability remains partial.
 - Implementation and acceptance scope: [v0.1.51 notes](../dev/gemini-reply-latency-scroll-v0151.md).
-- Release and real-device acceptance are pending; no background/locked operation claim.
+- [v0.1.51 / code 52 signed APK](https://github.com/al-hub/closepaw/releases/tag/v0.1.51) published and independently downloaded/verified.
+- Android **2,457/2,457**, main Security CI and signed runtime probe passed; signer/manifest/checksum/native runtimes/tag verified.
+- User conversation records confirm the baseline Voice round trip. New v0.1.51 short-answer timing and long-answer coverage device acceptance remains pending; **P2 ACTIVE**.
+- No background/locked operation claim. This entry supersedes older pending-Voice/release notes below.
 
 
 ## 실기기 자동 왕복 확인 — 2026-10-18 10:06 KST

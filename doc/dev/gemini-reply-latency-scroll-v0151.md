@@ -1,5 +1,24 @@
 # Gemini reply latency and bounded full-answer collection — v0.1.51 / code 52
 
+## Verified signed delivery — 2026-10-18
+
+- [PR #96](https://github.com/al-hub/closepaw/pull/96) merged at `1232e6aeba7523e6013d0bfd1c5f783103464dc5`.
+- Final PR Android tests: **2,457 passed, 0 failed/errors/skipped**, including actual Android adapter
+  send→scroll→reply collection. Main Security CI and the signed runtime probe also passed.
+- [Signed Release run 39101240835](https://github.com/al-hub/closepaw/actions/runs/39101240835) succeeded.
+- [Published v0.1.51 APK](https://github.com/al-hub/closepaw/releases/tag/v0.1.51): package `ai.closepaw`, version `0.1.51`, code `52`,
+  **116,370,657 bytes**. Downloaded the public APK and checksum; `aapt` manifest and
+  `apksigner verify` passed (APK v2 signature).
+- APK SHA-256: `487fda71c6f01c13e9315d324eca6921109cdb8faec05118910218d1a6295fd6`. Matches both the published checksum file and GitHub asset digest.
+- Signing certificate SHA-256: `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`. Matches the previously
+  verified v0.1.50 certificate; CI also compared against the original v0.1.33 release.
+- Both arm64 native tunnel runtimes are present and ELF AArch64. Annotated version tag resolves
+  to the exact validated main commit above.
+- **Device acceptance remains pending:** short-answer perceived latency and long-answer paging
+  have not yet been verified on the installed v0.1.51. Keep Gemini unlocked and foreground.
+  CI/signed delivery is complete; do not claim all Gemini layouts or full Voice latency are verified.
+
+
 ## Observed user feedback (2026-10-18)
 
 v0.1.50 basic text and Voice round trips succeeded on the Galaxy. During three ordinary requests,

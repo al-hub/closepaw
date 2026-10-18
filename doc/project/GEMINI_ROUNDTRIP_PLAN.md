@@ -1,5 +1,17 @@
 # Gemini 목표 실행·확인·후속 조치 전체 동작 계획
 
+## 2026-10-18 latest delivery / acceptance boundary
+
+- Baseline v0.1.50 automatic text and Voice round trips are confirmed in the user conversation record.
+- PR #96 / v0.1.51(code52) adds shorter semantic settling, terminal-aware task reads and bounded
+  overlapping reply paging. Signed APK publication and public-file verification are complete.
+- Android 2,457 tests passed with zero failures/errors/skips; main CI and signed runtime probe passed.
+- [Implementation + verified release evidence](../dev/gemini-reply-latency-scroll-v0151.md).
+- Actual installed v0.1.51 perceived timing and 3+-viewport coverage acceptance are pending;
+  P2 remains ACTIVE. Foreground/unlocked requirement remains. Older pending-Voice notes below
+  describe the state before baseline acceptance, not the latest delivery state.
+
+
 ## 실기기 자동 왕복 확인 — 2026-10-18 10:06 KST
 
 - **v0.1.50/code51 업데이트 설치 및 자동 질문→전송→이번 새 응답 수집 성공**.
