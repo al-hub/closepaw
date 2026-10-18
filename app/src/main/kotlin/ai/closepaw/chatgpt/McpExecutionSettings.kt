@@ -18,6 +18,9 @@ internal class McpExecutionSettings(context: Context) {
     var tailscaleRecoveryEnabled: Boolean
         get() = prefs.getBoolean("tailscale_recovery_enabled", false)
         set(value) { prefs.edit().putBoolean("tailscale_recovery_enabled", value).apply() }
+    var selfUpdateEnabled: Boolean
+        get() = prefs.getBoolean("self_update_enabled", false)
+        set(value) { check(prefs.edit().putBoolean("self_update_enabled", value).commit()) }
     @Synchronized fun endpointPath(): String {
         val existing = prefs.getString("endpoint_secret", null)
         val secret = existing ?: ByteArray(32).also { SecureRandom().nextBytes(it) }
