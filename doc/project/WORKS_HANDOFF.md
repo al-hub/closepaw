@@ -1,5 +1,18 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## Generic Android controller — PR CI in progress (2026-10-18 KST)
+
+- User explicitly approved public source push, PR merge and signed APK publication after the initial approval-review block.
+- [PR #102](https://github.com/al-hub/closepaw/pull/102) adds common observe/apps/action operations, independent default-OFF consent,
+  fresh single-use node observations, shared UI locking and existing-policy checks. Candidate v0.1.57/code58 is not delivered yet.
+- Python Termux55 + ChatGPT bridge8 tests passed locally.26 Kotlin cases cover freshness, bounds, policy, native target capability,
+  dedicated handoff, no progress, shared locking and durable dedup. Android tests/lint/build are running in PR CI.
+- Shell git write lacks credentials; the existing authenticated GitHub connector publishes the approved changes. No reconnect required.
+- PR review/CI/main merge/signed release/public APK verification/new-version installation remain PENDING.
+  Existing installed v0.1.56/code57 and update consent/install-source permission were read-only confirmed.
+- Generic local consent, requested Gemini model selection, dedicated question/new response, second-app and Voice acceptance remain pending.
+  P2 stays ACTIVE. [Implementation and resumption notes](../dev/generic-android-control-v0157.md).
+
 ## v0.1.55/code56 remote self-update APK delivered — device acceptance pending
 
 - User explicitly approved public source publication and release delivery in this conversation. [PR #100](https://github.com/al-hub/closepaw/pull/100) merged; immutable APK source/tag target `19593ea0556be272a8eadffe5835de976539e031`.

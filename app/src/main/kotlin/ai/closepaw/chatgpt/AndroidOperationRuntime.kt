@@ -1,5 +1,6 @@
 package ai.closepaw.chatgpt
 
+import ai.closepaw.chatgpt.control.*
 import ai.closepaw.update.AndroidSelfUpdater
 import ai.closepaw.update.SelfUpdateOperations
 import ai.closepaw.app.AgentService
@@ -36,6 +37,18 @@ internal class AndroidOperationRuntime(
     private val tailscaleDiagnostics = TailscaleDiagnostics(File(context.filesDir, "mcp/tailscale-recovery.json"))
     private val dispatcher: OperationDispatcher
     init {
+        val genericPort = AndroidControlPort(context, mutationBlock = { pkg ->
+            if (pkg in setOf(AndroidGeminiDraftUi.PACKAGE, AndroidGeminiDraftUi.GOOGLE_HOST) &&
+                store.latestOutcomeUnknown("gemini.question.ask")) "dedicated_submission_unresolved" else null
+        }) { settings.genericControlEnabled }
+        val genericControl = GenericControl(genericPort, { settings.genericControlEnabled })
+        GenericControlOperations(genericControl, genericPort, screenMutex) {
+            when {
+                !settings.genericControlEnabled -> OperationReadiness(false, "generic_control_disabled")
+                AgentService.instance == null -> OperationReadiness(false, "accessibility_permission_missing")
+                else -> OperationReadiness()
+            }
+        }.register(registry)
         SelfUpdateOperations(AndroidSelfUpdater.get(context)).register(registry)
         TailscaleOperations(
             TailscaleRecovery(AndroidTailscalePlatform(context), { settings.tailscaleRecoveryEnabled }, record = tailscaleDiagnostics::record),
@@ -53,6 +66,7 @@ internal class AndroidOperationRuntime(
             readiness = { OperationReadiness(AgentService.instance != null, if(AgentService.instance == null) "accessibility_permission_missing" else null) },
         ), object : OperationHandler {
             override suspend fun invoke(invocation: OperationInvocation): OperationResult = screenMutex.withLock {
+                genericControl.invalidate()
                 val captured = withContext(Dispatchers.IO) { readApp.read(invocation.input.getValue("app").jsonPrimitive.content) }
                 OperationResult(data = captured.structured,
                     success = captured.structured["status"]?.jsonPrimitive?.content != "failed",
@@ -106,6 +120,7 @@ internal class AndroidOperationRuntime(
             },
         ), object : OperationHandler {
             override suspend fun invoke(invocation: OperationInvocation): OperationResult = screenMutex.withLock {
+                genericControl.invalidate()
                 val service = AgentService.instance
                 if (service == null) OperationResult(success = false, summary = "Accessibility service is not connected.")
                 else withTimeout(10_000) { GeminiDraftOperation(AndroidGeminiDraftUi(service) { settings.geminiDraftEnabled }, { settings.geminiDraftEnabled }, draftDiagnostics::record).invoke(invocation) }
@@ -124,6 +139,7 @@ internal class AndroidOperationRuntime(
             override suspend fun invoke(invocation: OperationInvocation): OperationResult {
                 try {
                     return screenMutex.withLock {
+                        genericControl.invalidate()
                         if (stoppedQuestions.contains(invocation.taskId)) return@withLock OperationResult(
                             success = false, summary = "Observation stopped before the question started. No send action was invoked.",
                             data = buildJsonObject { put("state", "interrupted"); put("sent", false); put("send_action_invoked", false); put("generation_cancelled", false) },
@@ -160,6 +176,7 @@ internal class AndroidOperationRuntime(
                 if (AgentService.instance == null) "accessibility_permission_missing" else null)
         }), GeminiUiInspectionOperation {
             screenMutex.withLock {
+                genericControl.invalidate()
                 val service = AgentService.instance
                 if (service == null) buildJsonObject { put("foreground", false); put("reason_code", "accessibility_permission_missing") }
                 else {
@@ -170,8 +187,9 @@ internal class AndroidOperationRuntime(
             }
         })
         dispatcher = OperationDispatcher(registry, store, scope,
-            executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled },
+            executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled || settings.genericControlEnabled },
             operationAllowed = { id -> when(id) {
+                GenericControlOperations.ACTION -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled

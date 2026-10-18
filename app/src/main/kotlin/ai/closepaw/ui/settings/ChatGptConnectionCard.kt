@@ -40,6 +40,7 @@ internal fun ChatGptConnectionCard() {
     val scope = rememberCoroutineScope()
     val executionSettings = remember(context) { McpExecutionSettings(context) }
     var executionEnabled by remember { mutableStateOf(executionSettings.enabled) }
+    var genericControlEnabled by remember { mutableStateOf(executionSettings.genericControlEnabled) }
     var geminiDraftEnabled by remember { mutableStateOf(executionSettings.geminiDraftEnabled) }
     var geminiQuestionEnabled by remember { mutableStateOf(executionSettings.geminiQuestionEnabled) }
     var tailscaleRecoveryEnabled by remember { mutableStateOf(executionSettings.tailscaleRecoveryEnabled) }
@@ -85,6 +86,13 @@ internal fun ChatGptConnectionCard() {
             })
         }
         Text("When enabled, your private connection can run commands and change Termux files. Keep the connection URL private. Turning this off blocks new execution; running jobs continue.", style = MaterialTheme.typography.bodySmall)
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Allow ChatGPT Android screen control", modifier = Modifier.weight(1f))
+            Switch(checked = genericControlEnabled, onCheckedChange = {
+                executionSettings.genericControlEnabled = it; genericControlEnabled = it
+            })
+        }
+        Text("Lets ChatGPT read the current screen and perform the taps, text input, navigation and scrolling you request. Unlock the phone and keep the target screen visible. Protected apps and authentication screens are excluded. Turning this off blocks new actions; past app effects remain.", style = MaterialTheme.typography.bodySmall)
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Allow ChatGPT Gemini draft input", modifier = Modifier.weight(1f))
             Switch(checked = geminiDraftEnabled, onCheckedChange = {

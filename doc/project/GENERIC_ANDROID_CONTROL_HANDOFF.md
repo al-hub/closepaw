@@ -1,6 +1,11 @@
 # 범용 Android 제어기 — 개발 착수용 Works 인계
 
-상태: **PREPARED / NOT STARTED**. 2026-10-18 KST 사용자 요청으로 계획과 인계만 등록한다.
+상태: **IMPLEMENTED / PR CI IN PROGRESS**.
+2026-10-18 사용자 개발 착수 요청에 따라 `feat/generic-android-control`에서 구현을 시작했다. 공개 승인을 받았으며 PR #102에서 검증 중이다.
+[현재 구현과 검증 제한](../dev/generic-android-control-v0157.md)을 우선 참조한다.
+아래 PREPARED 문구는 최초 인계 당시 기록이다. 아직 CI/발행/설치/실기기 인수를 완료하지 않았다.
+
+최초 인계 상태: **PREPARED / NOT STARTED**. 2026-10-18 KST 사용자 요청으로 계획과 인계만 등록한다.
 이 문서 등록은 구현·휴대폰 조작·버전 변경·APK 발행을 시작하라는 지시가 아니다.
 사용자가 다른 Works에서 “범용 제어기 개발 시작”을 요청하면 아래 범위로 진행한다.
 
