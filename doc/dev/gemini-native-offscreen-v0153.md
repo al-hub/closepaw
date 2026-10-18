@@ -30,5 +30,25 @@ new content_message_container, under assistant_robin_chat_history_list.
 - Regressions reproduce the observed two-response tree and actual Android adapter send→hidden
   body capture→forward scroll→current visible completion controls, with exactly one send.
 
-CI, signed release and installed-device acceptance are pending. Neither v0.1.51 nor v0.1.52
-passed automatic long-answer acceptance; their successful CI/signed delivery does not close it.
+## Verified delivery
+
+- PR #98 merged as `feecbe5c23a2dd545c3d3c9568d6b1f871489bca`.
+- Android XML reports: **2,472 tests; zero failures, errors or skips**. PR Security CI
+  `39104502533`, main Security CI `39104833661`, signed native runtime probe
+  `39104502485`, and Signed Release `39105170441` all succeeded.
+- [v0.1.53/code54 APK](https://github.com/al-hub/closepaw/releases/download/v0.1.53/closepaw-aa-bridge.apk)
+  independently downloaded: 116,378,621 bytes. Manifest version/package, checksum file,
+  GitHub asset digest, APK v2 signature, previous signing identity, AArch64 native runtimes
+  and immutable release tag target verified.
+- APK SHA-256: `255e2f654b7ac981b6b76a5dd23608ae5d1cb1304449b06134463975e0303b81`.
+- Signing certificate SHA-256:
+  `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`.
+- Bundled native hashes remain unchanged: OpenAI tunnel
+  `d25d4f8977ec93089dfed41667acd91ab6174042e8c6943428a150dca8895288`,
+  cloudflared `5a16aea0f429f1dfc635b7d61c21cd1c357f4d0e7b8992d16cadf160f7166f76`.
+
+**Installed v0.1.53 acceptance is pending; P2 remains ACTIVE.** Neither v0.1.51 nor v0.1.52
+passed automatic long-answer acceptance; successful CI/signed delivery does not close it.
+The v0.1.51 short test's completion-evidence→collection interval was 585 ms, which does
+not establish visual-completion→speech latency. Next acceptance needs a fresh unique long
+prompt, first/last item and coverage verification, and foreground/unlocked Gemini throughout.

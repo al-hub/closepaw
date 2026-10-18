@@ -1,5 +1,14 @@
 # Gemini 목표 실행·확인·후속 조치 전체 동작 계획
 
+## v0.1.53/code54 signed delivery verified — device acceptance pending
+
+- v0.1.52 long-answer test failed after one send: 119,827 ms, zero collected pages, no answer returned. The new response existed offscreen while the old body/toolbar remained visible; no resend occurred.
+- PR #98 adds exact native current-question/response ownership and captures its offscreen body while requiring its own visible completion controls. [Diagnosis, regression coverage and delivery evidence](../dev/gemini-native-offscreen-v0153.md).
+- Android **2,472 tests, zero failures/errors/skips**; PR/main Security CI, signed native runtime probe and Signed Release all passed.
+- [v0.1.53 APK](https://github.com/al-hub/closepaw/releases/download/v0.1.53/closepaw-aa-bridge.apk) independently downloaded and verified: package/version/code, checksum and GitHub digest, previous signer, native runtimes and release tag target `feecbe5c23a2dd545c3d3c9568d6b1f871489bca`.
+- **Installed v0.1.53 long-answer coverage and perceived latency remain pending. P2 ACTIVE.** v0.1.51/v0.1.52 automatic long-answer acceptance failed; CI does not close that gate. Earlier pending-release notes below are historical.
+
+
 ## 2026-10-18 v0.1.52 delivery supersedes earlier pending-release notes
 
 - v0.1.51 short automatic round trip succeeded, but the long-answer collection stopped before
