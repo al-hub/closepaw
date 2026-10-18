@@ -1,7 +1,8 @@
 # Generic Android control v0.1.57 — design and acceptance
 
-Status: implementation submitted in PR #102; Android validation in progress, release not delivered. Baseline main 6662e95f, installed v0.1.56/code57.
-No open PR existed at start. Existing updater reports installed57, consent and install-source permission true.
+Status: **SIGNED DELIVERY AND REMOTE UPDATE VERIFIED; GENERIC DEVICE ACCEPTANCE PENDING**.
+Started from main6662e95f / installed v0.1.56/code57; current installed version is v0.1.57/code58.
+No open PR existed at start. The baseline updater reported code57 with consent and install-source permission true; the latest evidence below supersedes that baseline.
 
 ChatGPT chooses each bounded action from returned screen data. ClosePaw supplies no extra LLM account or planner.
 Three operations share the fixed MCP envelope: `android.screen.observe`, `android.apps.list`, `android.ui.action`.
@@ -19,13 +20,12 @@ Existing classifier BLOCKED floor is preserved. Unknown/CAUTIOUS apps cannot be 
 Home launcher and verified Gemini host are recognized by runtime identity. Password/auth/permission/installer/own settings
 boundaries fail closed. Screen text is untrusted data. Raw device screen, app list, questions and responses stay out of public records.
 
-RED regression tests cover stale/wrong/expired/consumed observation IDs, consent revocation, truncation,
+Regression tests cover stale/wrong/expired/consumed observation IDs, consent revocation, truncation,
 missing node, nonempty draft, protected screen and unknown click outcomes.
 Local Android Gradle is unavailable because services.gradle.org is unreachable; use PR/main CI.
 
-Pending: GREEN tests, full suite/lint/build, review, PR/main CI, signed release, independent public APK verification,
-remote updater replacement/reconnect, local opt-in, Gemini menu actual requested model selection/re-observation,
-one dedicated question/new answer, a second ordinary app and Voice latency. P2 remains ACTIVE.
+Pending: local generic opt-in, actual Gemini model choice/selection and re-observation, one dedicated question/new reply,
+second-app navigation/scroll and Voice latency. P2 remains ACTIVE. CI, signed delivery, public download checks and remote replacement are complete.
 
 ## Local checkpoint
 
@@ -80,3 +80,61 @@ CI39127351069 exposed one inherited error in McpHttpServer: InputStream.readNByt
 but this app supports API31. Replaced it with DataInputStream.readFully, retaining incomplete-body400 behavior.
 Two socket regressions cover fragmented and truncated requests. The candidate now adds28 tests total.
 This fixes the reported API compatibility error without suppressing lint or changing the minimum SDK.
+
+## Main delivery checkpoint —2026-10-19 KST
+
+PR #102 merged as `2cbdb1a10fe81dd2f7f36dd3bef59eff21f15300` after final review.
+PR Security CI39127838851 and signed native-runtime probe39127838744 succeeded.
+Downloaded PR reports:2521 tests,0 failures,0 errors,0 skipped;28 new tests; lint0 errors/108 warnings.
+Main Security CI39167500480 succeeded. Existing Signed Release39168050184 started automatically from that source.
+The installed baseline remains v0.1.56/code57 until a higher-version update is independently confirmed.
+The device currently reports remote-update consent and install-source permission true; no update request was sent before release verification.
+
+- PR: https://github.com/al-hub/closepaw/pull/102
+- PR CI: https://github.com/al-hub/closepaw/actions/runs/39127838851
+- Signed probe: https://github.com/al-hub/closepaw/actions/runs/39127838744
+- Main CI: https://github.com/al-hub/closepaw/actions/runs/39167500480
+- Signed Release: https://github.com/al-hub/closepaw/actions/runs/39168050184
+
+
+## v0.1.57/code58 delivered and remotely installed — generic device acceptance pending (2026-10-19 KST)
+
+- [PR #102](https://github.com/al-hub/closepaw/pull/102) merged. Immutable release source/tag target: `2cbdb1a10fe81dd2f7f36dd3bef59eff21f15300`.
+- Android **2,521 tests**, zero failures/errors/skips, including28 new cases. Lint **0 errors/108 warnings**; Python Termux55 + ChatGPT bridge8 passed.
+  PR Security CI39127838851, signed native probe39127838744, main Security CI39167500480 and Signed Release39168050184 succeeded.
+- [Published APK](https://github.com/al-hub/closepaw/releases/download/v0.1.57/closepaw-aa-bridge.apk):116,414,765 bytes;
+  SHA-256 `7ef114d80b5aa7c46ff7adf85d7bfaf7e190bbee23a95545492e36364a1a30b6`.
+  Anonymous public downloads on the release runner matched the built APK and checksum; manifest ai.closepaw/0.1.57/code58,
+  original certificate, APK v2 integrity, both native runtimes and source/tag were verified. GitHub asset digest matches.
+- **Remote update executed exactly once**, task `882ca03b-1c93-4018-a3c9-3e896454b700`.
+  First status was installing on v0.1.56; later app response confirmed **installed/current v0.1.57/code58**.
+  Remote-update consent and install-source permission remain true. The same existing MCP connection responds after replacement;
+  no plugin re-registration, app removal, data reset or re-pairing was performed. This does not establish every retained setting or a warning's root cause.
+- Installed discovery exposes `android.screen.observe`, `android.apps.list`, `android.ui.action`. All report `generic_control_disabled`,
+  confirming the independent opt-in remains OFF. A read-only observe request was refused before screen capture, as designed.
+- **Required user step:** ClosePaw Settings → ChatGPT Voice → **Allow ChatGPT Android screen control** ON, then leave an unlocked ordinary screen visible.
+  Gemini model choices/requested selection and re-observation, one dedicated question/new reply, second-app navigation/scroll and Voice latency remain PENDING.
+  Do not mark generic real-device acceptance or P2 DONE based on APK delivery/update. **P2 ACTIVE**.
+
+## Delivery evidence detail
+
+- Signed release run: https://github.com/al-hub/closepaw/actions/runs/39168050184
+- Public verification artifact: `public-apk-verification-39168050184` (verification/signature/manifest text).
+- Public APK verification stdout at2026-10-18 21:39:41 UTC reported package ai.closepaw, version0.1.57/code58,
+  source_commit2cbdb1a10fe81dd2f7f36dd3bef59eff21f15300 and the published SHA/size above.
+- apksigner independently verified the downloaded file's APK v2 signature and certificate SHA-256
+  `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`.
+  Verified native entries: libopenaitunnel.so28,970,086 bytes; libcloudflared.so29,003,496 bytes, both arm64-v8a.
+- Update request: `generic-control-v0157-update-20261019-0640-01`, task882ca03b-1c93-4018-a3c9-3e896454b700,
+  PackageInstaller session332382236. The task's succeeded/installing receipt was NOT counted as installation.
+  The later self_update.status response reported installed/current0.1.57/code58 and preserved update permissions.
+- The installed generic read refusal appeared as not_ready in the raw protocol and INVALID_ARGUMENT in connector-normalized metadata;
+  both reported generic_control_disabled. This is the expected local permission gate, not a broken registration or connection.
+- No real app contents, model list, question/reply, private app list or device screenshot were published.
+
+Continue after the user enables the local switch: rediscover current schemas/readiness; observe the current screen;
+list/launch Gemini by exact package; inspect actual model options; use the user's specified available model without substitution;
+re-observe the selected model; hand control to the existing dedicated question operation once; confirm its new response.
+Repeat safe navigation/scroll in a second ordinary app through the same generic operations and measure timings separately.
+Do not bypass local consent or automatically replay unknown effects. No new APK is required merely to enable the switch.
+This documentation-only checkpoint is newer than the immutable APK source; it does not create another release.

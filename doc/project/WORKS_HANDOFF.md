@@ -1,17 +1,25 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
-## Generic Android controller — PR CI in progress (2026-10-18 KST)
+## v0.1.57/code58 delivered and remotely installed — generic device acceptance pending (2026-10-19 KST)
 
-- User explicitly approved public source push, PR merge and signed APK publication after the initial approval-review block.
-- [PR #102](https://github.com/al-hub/closepaw/pull/102) adds common observe/apps/action operations, independent default-OFF consent,
-  fresh single-use node observations, shared UI locking and existing-policy checks. Candidate v0.1.57/code58 is not delivered yet.
-- Python Termux55 + ChatGPT bridge8 tests passed locally.26 Kotlin cases cover freshness, bounds, policy, native target capability,
-  dedicated handoff, no progress, shared locking and durable dedup. Android tests/lint/build are running in PR CI.
-- Shell git write lacks credentials; the existing authenticated GitHub connector publishes the approved changes. No reconnect required.
-- PR review/CI/main merge/signed release/public APK verification/new-version installation remain PENDING.
-  Existing installed v0.1.56/code57 and update consent/install-source permission were read-only confirmed.
-- Generic local consent, requested Gemini model selection, dedicated question/new response, second-app and Voice acceptance remain pending.
-  P2 stays ACTIVE. [Implementation and resumption notes](../dev/generic-android-control-v0157.md).
+- [PR #102](https://github.com/al-hub/closepaw/pull/102) merged. Immutable release source/tag target: `2cbdb1a10fe81dd2f7f36dd3bef59eff21f15300`.
+- Android **2,521 tests**, zero failures/errors/skips, including28 new cases. Lint **0 errors/108 warnings**; Python Termux55 + ChatGPT bridge8 passed.
+  PR Security CI39127838851, signed native probe39127838744, main Security CI39167500480 and Signed Release39168050184 succeeded.
+- [Published APK](https://github.com/al-hub/closepaw/releases/download/v0.1.57/closepaw-aa-bridge.apk):116,414,765 bytes;
+  SHA-256 `7ef114d80b5aa7c46ff7adf85d7bfaf7e190bbee23a95545492e36364a1a30b6`.
+  Anonymous public downloads on the release runner matched the built APK and checksum; manifest ai.closepaw/0.1.57/code58,
+  original certificate, APK v2 integrity, both native runtimes and source/tag were verified. GitHub asset digest matches.
+- **Remote update executed exactly once**, task `882ca03b-1c93-4018-a3c9-3e896454b700`.
+  First status was installing on v0.1.56; later app response confirmed **installed/current v0.1.57/code58**.
+  Remote-update consent and install-source permission remain true. The same existing MCP connection responds after replacement;
+  no plugin re-registration, app removal, data reset or re-pairing was performed. This does not establish every retained setting or a warning's root cause.
+- Installed discovery exposes `android.screen.observe`, `android.apps.list`, `android.ui.action`. All report `generic_control_disabled`,
+  confirming the independent opt-in remains OFF. A read-only observe request was refused before screen capture, as designed.
+- **Required user step:** ClosePaw Settings → ChatGPT Voice → **Allow ChatGPT Android screen control** ON, then leave an unlocked ordinary screen visible.
+  Gemini model choices/requested selection and re-observation, one dedicated question/new reply, second-app navigation/scroll and Voice latency remain PENDING.
+  Do not mark generic real-device acceptance or P2 DONE based on APK delivery/update. **P2 ACTIVE**.
+
+[Detailed evidence and resumption instructions](../dev/generic-android-control-v0157.md).
 
 ## v0.1.55/code56 remote self-update APK delivered — device acceptance pending
 
