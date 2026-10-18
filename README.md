@@ -1,6 +1,8 @@
 <h1 align="center">
 
 > ChatGPT bridge delivery: [current progress](PROGRESS.md) · [Works handoff and remaining PR work](doc/project/WORKS_HANDOFF.md).
+>
+> **범용 제어기 개발 준비 완료 / 구현 미착수:** [Generic Android control — Works 개발 인계](doc/project/GENERIC_ANDROID_CONTROL_HANDOFF.md). 다른 Works에서 범용 제어기 개발을 시작할 때 이 문서를 먼저 읽는다.
 
   <img src="doc/release/play-store/app-icon-512.png" width="72" alt="ClosePaw" /><br/>
   ClosePaw
