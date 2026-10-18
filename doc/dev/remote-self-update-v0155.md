@@ -2,7 +2,20 @@
 
 ## Status
 
-Implementation prepared locally. The user explicitly approved publication to the existing public al-hub/closepaw repository and release APK delivery on 2026-10-18. Android CI, signed release and installed-device acceptance remain pending; no unattended-update claim is made.
+## v0.1.55/code56 remote self-update APK delivered — device acceptance pending
+
+- User explicitly approved public source publication and release delivery in this conversation. [PR #100](https://github.com/al-hub/closepaw/pull/100) merged; immutable APK source/tag target `19593ea0556be272a8eadffe5835de976539e031`.
+- PR [Security CI](https://github.com/al-hub/closepaw/actions/runs/39119481080), main [Security CI](https://github.com/al-hub/closepaw/actions/runs/39119872501), and [Signed Release](https://github.com/al-hub/closepaw/actions/runs/39120247413) succeeded.
+- Downloaded published [v0.1.55 APK](https://github.com/al-hub/closepaw/releases/download/v0.1.55/closepaw-aa-bridge.apk): 116,397,169 bytes; package `ai.closepaw`, version `0.1.55`, code56. SHA-256 `d9048083a8cbef2ca8f74fca3145472ad15791c50ad80db2d5451fcff6c09f56` matches published checksum and GitHub asset digest. Independently verified APK v2 signature AND whole-file chunk digest, original certificate `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`, both native runtimes and new install permission.
+- Android report: **2,493 tests, zero failures/errors/skips**, including16 new policy/ledger/operation tests. Python bridge55+8 also passed. These are not an installed Android PackageInstaller/approval test.
+- Manual update buttons remain. Added fixed-envelope operations `app.self_update.check`, `app.self_update.install`, `app.self_update.status`; no MCP tool re-registration. Separate local remote-update consent defaults OFF.
+- **First install manually** using Settings → Software Update. Capture the actual security warning before deciding the remedy. Then enable “Allow updates requested through ChatGPT” and allow installation from ClosePaw if required.
+- After installation, discover operations and query status to verify version56, local consent and install-source permission. This establishes preparation only. Actual unattended replacement/reconnect requires a **later higher version code** and separate device acceptance. Do not claim full automation, warning removal or successful device installation based on this release.
+- System-required approval is reported; Play Protect/Samsung checks are not bypassed. Unknown installation outcomes block automatic resubmission; query target installed version after reconnection. Existing pairing/settings and manual workflow remain.
+- The user's plan: capture the warning during this manual update, then verify readiness before attempting a later remote update. Broader Gemini/P2 acceptance remains unchanged.
+
+
+Implementation prepared locally. The user explicitly approved publication to the existing public al-hub/closepaw repository and release APK delivery on 2026-10-18. Android CI and signed delivery are now verified above; installed-device acceptance remains pending; no unattended-update claim is made.
 
 ## Behavior
 
