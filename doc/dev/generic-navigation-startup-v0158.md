@@ -46,3 +46,32 @@ Home on a partial observation was rejected, navigation_actions was absent, and a
 behind the early truncation refusal. Back/node-action partial rejection still passed. This was not a build/dependency failure.
 RED run: https://github.com/al-hub/closepaw/actions/runs/39169664784
 The GREEN candidate adds7 cases total over v0.1.57 (expected2528 tests), including the shared native policy and output-node cap.
+
+## GREEN and main checkpoint
+
+Downloaded GREEN PR reports:2528 tests,0 failures,0 errors,0 skipped; lint0 errors/108 warnings.
+PR Security CI39170137043 and signed native-runtime probe39170137041 succeeded before merge.
+PR #103 merged as `2b06fa860d0332d4ed33e4b14274dbbd03a76592`.
+Main Security CI39170962046 succeeded and automatically started Signed Release39171432082.
+No update to v0.1.58 has yet been claimed; installed baseline remains v0.1.57 until actual replacement is confirmed.
+
+- PR: https://github.com/al-hub/closepaw/pull/103
+- GREEN Security CI: https://github.com/al-hub/closepaw/actions/runs/39170137043
+- Signed probe: https://github.com/al-hub/closepaw/actions/runs/39170137041
+- Main CI: https://github.com/al-hub/closepaw/actions/runs/39170962046
+- Signed Release: https://github.com/al-hub/closepaw/actions/runs/39171432082
+
+## v0.1.58 delivery and actual startup follow-up
+
+Signed Release39171432082 succeeded. Source/tag2b06fa860d0332d4ed33e4b14274dbbd03a76592;
+public APK116,416,361 bytes, SHA-25662cebe8e0c5cad69124fd567bce0f2b2e450ec62fc098ea13a34404af2c4fe97.
+Anonymous public checksum/package/version0.1.58/code59/original signer/native runtime/tag checks passed; GitHub asset digest agrees.
+One remote update task243ac41c-6ff6-4819-9500-453c526a0e06 reached installed/current0.1.58/code59 after reconnect.
+Generic consent remains ON and all3 operations ready.
+Actual starting observations now report complete211/depth47 and180/depth46 nodes/depth metadata, so the old depth32 ceiling is no longer blocking them.
+Two exact Gemini app-open tasks (b2171fec-6160-4ed3-a7f9-ea601188248f and216c6c10-c3f5-4087-bd3f-baffc6b65cce)
+were rejected before any effect: screen_changed, action_attempted=false, outcome_unknown=false. The second used a fresh observation.
+Both observations identify the same chat-client app/window; internal refusal metadata does not reveal the exact changed component.
+Code inspection confirms the entire content fingerprint is also required for non-node navigation, so normal client UI refresh can cause this rejection.
+No further identical attempt or question send was made. This is distinct from the repaired traversal cap and from the earlier secure-window boundary.
+The generic real-device launch gate remains OPEN; v0.1.59 will distinguish non-node foreground leases from node-content freshness.

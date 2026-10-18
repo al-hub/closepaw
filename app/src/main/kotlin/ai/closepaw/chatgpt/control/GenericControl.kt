@@ -19,7 +19,7 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
 internal data class ControlEffect(val attempted: Boolean, val acknowledged: Boolean, val reason: String)
 internal interface ControlPort {
     suspend fun capture(): ControlFrame
-    // Must recheck consent, foreground fingerprint and node identity at the native action boundary.
+    // Must recheck consent and action-scoped freshness/identity at the native action boundary.
     suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect
     suspend fun apps(filter: String): JsonArray
 }
@@ -60,6 +60,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             put("package_name", frame.packageName); put("window_id", frame.windowId)
             put("truncated", bounded.truncated); put("actionable", !bounded.truncated)
             put("node_actions_allowed", !bounded.truncated)
+            put("global_navigation_validation_scope", "foreground_app_window")
+            put("node_and_back_validation_scope", "full_screen_fingerprint")
             put("navigation_actions", JsonArray((if (bounded.truncated) listOf("home", "open_app") else listOf("home", "back", "open_app")).map { JsonPrimitive(it) }))
             put("truncation_reasons", JsonArray(bounded.truncationReasons.sorted().map { JsonPrimitive(it) }))
             put("visited_nodes", bounded.visitedNodes); put("max_depth", bounded.maxDepth)
@@ -80,7 +82,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (action !in setOf("click", "long_press", "type", "scroll", "home", "back", "open_app")) return failure("unsupported_action")
         val frame = observation.frame
         val fresh = port.capture()
-        GenericControlActionPolicy.refusal(frame, fresh, action)?.let { return failure(it) }
+        GenericControlActionPolicy.refusal(frame, fresh, action)?.let { return failure(it, GenericControlActionPolicy.validationScope(action)) }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
         if (action in setOf("click", "long_press", "type", "scroll")) {
@@ -106,6 +108,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         return OperationResult(success = verified, summary = if (verified)
             "Action acknowledged; inspect the returned observation to confirm the requested app result." else effect.reason,
             data = buildJsonObject {
+                put("validation_scope", GenericControlActionPolicy.validationScope(action))
                 put("reason_code", if (!inputVerified) "input_unconfirmed" else effect.reason)
                 put("action_attempted", effect.attempted); put("action_acknowledged", effect.acknowledged)
                 put("outcome_unknown", effect.attempted && !verified); put("screen_changed", changed)
@@ -113,6 +116,6 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 observed?.let { put("observation", it.data) }
             })
     }
-    private fun failure(reason: String) = OperationResult(success = false, summary = reason,
-        data = buildJsonObject { put("reason_code", reason); put("action_attempted", false); put("outcome_unknown", false) })
+    private fun failure(reason: String, validationScope: String? = null) = OperationResult(success = false, summary = reason,
+        data = buildJsonObject { put("reason_code", reason); put("action_attempted", false); put("outcome_unknown", false); validationScope?.let { put("validation_scope", it) } })
 }

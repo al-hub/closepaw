@@ -1,5 +1,12 @@
 # 범용 Android 제어기 — 개발 착수용 Works 인계
 
+## v0.1.58 delivered / v0.1.59 navigation freshness correction in progress
+
+v0.1.58/code59 passed 2,528 Android tests and lint (0 errors/108 warnings), was signed and anonymously downloaded/verified, then remotely installed and reconnected. Depth47 complete observations confirm the depth correction. Two app-open requests were refused before effect (screen_changed, no unknown outcome). PR #104 adds RED regressions and scopes Home/exact selected app launch to fresh foreground app/window identity; Back and node operations retain complete content hashing. Security, consent, expiry and single-use checks remain. Candidate v0.1.59/code60 is not delivered. P2 ACTIVE; real Gemini/second-app/Voice acceptance pending.
+
+See [v0.1.59 evidence and contract](../dev/generic-navigation-freshness-v0159.md). Earlier status sections below are historical checkpoints.
+
+
 상태: **v0.1.57 DELIVERED / STARTUP CORRECTION v0.1.58 IN PROGRESS**.
 로컬 허용 ON 및 실제 관측/앱 검색을 확인했다. 불완전한 관측에서 Home/앱 열기도 막히는 시작 경로 결함을 발견해 PR #103에서 수정 중이다.
 [최신 시작 경로 수정 기록](../dev/generic-navigation-startup-v0158.md)을 먼저 읽는다.

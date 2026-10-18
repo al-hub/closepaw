@@ -1,5 +1,12 @@
 # ClosePaw Progress
 
+## v0.1.58 delivered / v0.1.59 navigation freshness correction in progress
+
+v0.1.58/code59 passed 2,528 Android tests and lint (0 errors/108 warnings), was signed and anonymously downloaded/verified, then remotely installed and reconnected. Depth47 complete observations confirm the depth correction. Two app-open requests were refused before effect (screen_changed, no unknown outcome). PR #104 adds RED regressions and scopes Home/exact selected app launch to fresh foreground app/window identity; Back and node operations retain complete content hashing. Security, consent, expiry and single-use checks remain. Candidate v0.1.59/code60 is not delivered. P2 ACTIVE; real Gemini/second-app/Voice acceptance pending.
+
+See [v0.1.59 evidence and contract](doc/dev/generic-navigation-freshness-v0159.md). Earlier status sections below are historical checkpoints.
+
+
 ## v0.1.57 generic startup acceptance blocked / v0.1.58 correction in progress
 
 - User enabled the independent Android screen control switch; all3 generic operations report ready on installed v0.1.57/code58.
