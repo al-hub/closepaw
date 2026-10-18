@@ -1,5 +1,12 @@
 # ClosePaw Progress
 
+## v0.1.53 full test body captured / v0.1.54 completion correction in progress
+
+- Installed v0.1.53/code54 test captured all40 items (201–240, arithmetic validated) in6,554ms, but ended partial/reply_scroll_stalled with unconfirmed coverage; one send, no resend.
+- Whole native body stays equal while scrolling toward its footer. The old collector stopped after its first action. [Evidence and bounded continuation correction](doc/dev/gemini-identical-body-paging-v0154.md).
+- CI, release and installed-v0.1.54 acceptance pending. Automatic completion and perceived latency remain unverified. **P2 ACTIVE**.
+
+
 ## v0.1.53/code54 signed delivery verified — device acceptance pending
 
 - v0.1.52 long-answer test failed after one send: 119,827 ms, zero collected pages, no answer returned. The new response existed offscreen while the old body/toolbar remained visible; no resend occurred.

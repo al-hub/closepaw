@@ -175,6 +175,14 @@ class AndroidGeminiRoundTripUiTest {
     }
 
     @Test fun nativeOffscreenNewResponseIsCollectedBeforeScrollingToItsOwnToolbar() = runBlocking {
+        nativeWholeBodyFlow(1, false)
+    }
+
+    @Test fun nativeWholeBodySurvivesRecycledQuestionAndSeveralScrollsToItsOwnToolbar() = runBlocking {
+        nativeWholeBodyFlow(4, true)
+    }
+
+    private suspend fun nativeWholeBodyFlow(scrollsToFooter: Int, recycleQuestion: Boolean) {
         val question = "new offscreen native test"
         val input = node("assistant_robin_input_text", "", pkg = google, editable = true)
         val send = node("send_button", pkg = google, clickable = true)
@@ -194,10 +202,19 @@ class AndroidGeminiRoundTripUiTest {
         every { backward.id } returns AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
         every { history.isScrollable } returns true
         every { history.actionList } returns listOf(forward, backward)
+        var scrolls = 0
         every { history.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) } answers {
+            scrolls++
             every { old.isVisibleToUser } returns false
-            listOf(reply, body, copy, up, down).forEach { every { it.isVisibleToUser } returns true }
-            every { history.actionList } returns listOf(backward)
+            listOf(reply, body).forEach { every { it.isVisibleToUser } returns true }
+            if (recycleQuestion) {
+                every { history.childCount } returns 1
+                every { history.getChild(any()) } answers { if (firstArg<Int>() == 0) reply else null }
+            }
+            if (scrolls == scrollsToFooter) {
+                listOf(copy, up, down).forEach { every { it.isVisibleToUser } returns true }
+                every { history.actionList } returns listOf(backward)
+            }
             true
         }
         root = node(children = listOf(input, send), pkg = google)
@@ -217,7 +234,7 @@ class AndroidGeminiRoundTripUiTest {
         assertEquals("new answer first item through last item", result.stdout)
         assertFalse(result.stdout.contains("old answer"))
         verify(exactly = 1) { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
-        verify(exactly = 1) { history.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) }
+        verify(exactly = scrollsToFooter) { history.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) }
         verify(exactly = 0) { copy.performAction(any()) }
     }
 
