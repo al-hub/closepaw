@@ -141,18 +141,18 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     put("text_hash", operationHash(text)); put("description_hash", operationHash(description)); put("hint", operationHash(hint))
                     put("resource", resource); put("class", node.className?.toString().orEmpty()); put("bounds", rect.flattenToString())
                     put("visible", node.isVisibleToUser); put("enabled", node.isEnabled); put("clickable", node.isClickable)
-                    put("editable", node.isEditable); put("scrollable", node.isScrollable); put("password", node.isPassword)
+                    put("long_clickable", node.isLongClickable); put("editable", node.isEditable); put("scrollable", node.isScrollable); put("password", node.isPassword)
                     put("child_count", node.childCount); put("actions", node.actionList.joinToString { it.id.toString() })
                 }
                 identity.append(json.toString()).append('\n')
                 if (node.isVisibleToUser && !rect.isEmpty &&
-                    (text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isEditable || node.isScrollable ||
+                    (text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable ||
                         node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })) {
                     if (nodes.size >= 50) truncated = true
                     else {
                         nodes.add(ControlNode(index, if (node.isShowingHintText) "" else text.take(2001), description.take(100), resource.take(100),
                             node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, node.isEditable, node.isScrollable,
-                            node.isEnabled, node.isPassword, node.isShowingHintText || text.isEmpty(), rect.flattenToString(), parent))
+                            node.isEnabled, node.isPassword, node.isShowingHintText || text.isEmpty(), rect.flattenToString(), parent, node.isLongClickable))
                         native.add(node)
                     }
                 }
@@ -164,6 +164,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
             visit(root, 0, -1)
             val code = when {
+                classifier.classify(pkg) == AppTier.BLOCKED -> "blocked_app"
                 protected -> "authentication_boundary"
                 (pkg == AndroidGeminiDraftUi.GOOGLE_HOST && !gemini) ||
                     (!packageAllowed(pkg) && !(pkg == AndroidGeminiDraftUi.GOOGLE_HOST && gemini)) -> "blocked_or_cautious_app"

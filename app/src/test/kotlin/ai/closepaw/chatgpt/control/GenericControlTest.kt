@@ -96,4 +96,12 @@ class GenericControlTest {
         assertFalse(control.action(ambiguous).success); assertEquals(0, port.writes)
     }
 
+    @Test fun longPressOnlyUsesAnExplicitLongClickTarget() = runBlocking {
+        val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
+        assertFalse(control.action(input(id, "long_press")).success); assertEquals(0, port.writes)
+        port.frame = port.frame.copy(nodes = listOf(ControlNode(1, longClickable = true)))
+        val fresh = observe(control)
+        assertTrue(control.action(input(fresh, "long_press")).success); assertEquals(1, port.writes)
+    }
+
 }

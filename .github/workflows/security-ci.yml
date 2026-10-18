@@ -49,8 +49,8 @@ jobs:
             exit 1
           fi
 
-      - name: Android unit tests
-        run: ./gradlew :app:testDebugUnitTest --stacktrace
+      - name: Android unit tests and lint
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug --stacktrace
 
       - name: Upload Android test reports
         if: always()
@@ -60,6 +60,7 @@ jobs:
           path: |
             app/build/test-results/testDebugUnitTest
             app/build/reports/tests/testDebugUnitTest
+            app/build/reports/lint-results-debug.*
           if-no-files-found: ignore
           retention-days: 7
 

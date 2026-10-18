@@ -7,10 +7,10 @@ import kotlinx.serialization.json.*
 internal data class ControlNode(val id: Int, val text: String = "", val description: String = "", val resourceId: String = "",
     val clickable: Boolean = false, val editable: Boolean = false, val scrollable: Boolean = false,
     val enabled: Boolean = true, val password: Boolean = false, val empty: Boolean = true,
-    val bounds: String = "", val parent: Int = -1) {
+    val bounds: String = "", val parent: Int = -1, val longClickable: Boolean = false) {
     fun json() = buildJsonObject {
         put("node_id", id); put("text", text.take(100)); put("description", description.take(100)); put("resource_id", resourceId.take(100))
-        put("bounds", bounds); put("parent", parent); put("clickable", clickable); put("editable", editable); put("scrollable", scrollable); put("enabled", enabled)
+        put("long_clickable", longClickable); put("bounds", bounds); put("parent", parent); put("clickable", clickable); put("editable", editable); put("scrollable", scrollable); put("enabled", enabled)
     }
 }
 internal data class ControlFrame(val packageName: String, val windowId: Int, val fingerprint: String,
@@ -73,7 +73,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val node = frame.nodes.singleOrNull { it.id == id }
         if (action in setOf("click", "long_press", "type", "scroll")) {
             if (node == null || !node.enabled || node.password) return failure("target_unavailable")
-            if (action in setOf("click", "long_press") && !node.clickable) return failure("target_not_clickable")
+            if ((action == "click" && !node.clickable) || (action == "long_press" && !node.longClickable)) return failure("target_not_clickable")
             if (action == "scroll" && (!node.scrollable || input["direction"]?.jsonPrimitive?.content !in setOf("up", "down"))) return failure("target_not_scrollable")
             if (action == "type" && (!node.editable || !node.empty || input["text"]?.jsonPrimitive?.content.isNullOrBlank())) return failure("draft_not_empty_or_not_editable")
         }
