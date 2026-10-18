@@ -1,19 +1,17 @@
 # ClosePaw Progress
 
-## Generic Android controller — local implementation, not delivered (2026-10-18 KST)
+## Generic Android controller — PR CI in progress (2026-10-18 KST)
 
-- User requested handoff implementation through signed release and remote update verification.
-- Local branch `feat/generic-android-control` adds common observe/apps/action operations, independent default-OFF consent,
-  fresh single-use node observations, shared UI locking and existing-policy checks. Candidate v0.1.57/code58 is unbuilt.
-- Python Termux55 + ChatGPT bridge8 tests passed.19 new Kotlin tests are written but NOT EXECUTED.
-  Local Gradle distribution download is network-blocked. No RED/GREEN Android result is claimed.
-- GitHub push was rejected by automatic approval review: explicit authorization to publish the new source/tests
-  to the external repository was considered insufficient. No connector/alternate push is used to bypass rejection.
-- PR/CI/main merge/signed release/public-download verification/new-version installation remain PENDING.
+- User explicitly approved public source push, PR merge and signed APK publication after the initial approval-review block.
+- [PR #102](https://github.com/al-hub/closepaw/pull/102) adds common observe/apps/action operations, independent default-OFF consent,
+  fresh single-use node observations, shared UI locking and existing-policy checks. Candidate v0.1.57/code58 is not delivered yet.
+- Python Termux55 + ChatGPT bridge8 tests passed locally.26 Kotlin cases cover freshness, bounds, policy, native target capability,
+  dedicated handoff, no progress, shared locking and durable dedup. Android tests/lint/build are running in PR CI.
+- Shell git write lacks credentials; the existing authenticated GitHub connector publishes the approved changes. No reconnect required.
+- PR review/CI/main merge/signed release/public APK verification/new-version installation remain PENDING.
   Existing installed v0.1.56/code57 and update consent/install-source permission were read-only confirmed.
 - Generic local consent, requested Gemini model selection, dedicated question/new response, second-app and Voice acceptance remain pending.
   P2 stays ACTIVE. [Implementation and resumption notes](doc/dev/generic-android-control-v0157.md).
-
 
 ## Installed v0.1.54/code55 — long-answer acceptance passed (2026-10-18 17:38 KST)
 

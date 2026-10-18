@@ -1,7 +1,7 @@
 # 범용 Android 제어기 — 개발 착수용 Works 인계
 
-상태: **LOCAL IMPLEMENTATION / CI AND PUBLICATION BLOCKED**.
-2026-10-18 사용자 개발 착수 요청에 따라 `feat/generic-android-control`에서 구현을 시작했다.
+상태: **IMPLEMENTED / PR CI IN PROGRESS**.
+2026-10-18 사용자 개발 착수 요청에 따라 `feat/generic-android-control`에서 구현을 시작했다. 공개 승인을 받았으며 PR #102에서 검증 중이다.
 [현재 구현과 검증 제한](../dev/generic-android-control-v0157.md)을 우선 참조한다.
 아래 PREPARED 문구는 최초 인계 당시 기록이다. 아직 CI/발행/설치/실기기 인수를 완료하지 않았다.
 

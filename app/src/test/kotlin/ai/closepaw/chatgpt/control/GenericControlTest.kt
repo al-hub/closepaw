@@ -104,4 +104,18 @@ class GenericControlTest {
         assertTrue(control.action(input(fresh, "long_press")).success); assertEquals(1, port.writes)
     }
 
+    @Test fun dedicatedHandoffInvalidatesGenericTargets() = runBlocking {
+        val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
+        control.invalidate()
+        assertFalse(control.action(input(id)).success); assertEquals(0, port.writes)
+    }
+    @Test fun noProgressLimitStopsRepeatedActions() = runBlocking {
+        val port = Port(); val control = GenericControl(port, { true }); var id = observe(control)
+        repeat(3) {
+            val result = control.action(input(id)); assertTrue(result.success)
+            id = result.data.getValue("observation").jsonObject.getValue("observation_id").jsonPrimitive.content
+        }
+        assertFalse(control.action(input(id)).success); assertEquals(3, port.writes)
+    }
+
 }

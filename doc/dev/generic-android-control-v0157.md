@@ -1,6 +1,6 @@
 # Generic Android control v0.1.57 — design and acceptance
 
-Status: local implementation; Android validation and publication blocked. Baseline main 6662e95f, installed v0.1.56/code57.
+Status: implementation submitted in PR #102; Android validation in progress, release not delivered. Baseline main 6662e95f, installed v0.1.56/code57.
 No open PR existed at start. Existing updater reports installed57, consent and install-source permission true.
 
 ChatGPT chooses each bounded action from returned screen data. ClosePaw supplies no extra LLM account or planner.
@@ -11,7 +11,7 @@ One observation owns its node IDs, expires after60 seconds, and is consumed befo
 The complete bounded tree fingerprint, app and window are rechecked immediately before execution.
 Unknown outcomes never replay. Existing durable request/task ledger and screen mutex cover generic and dedicated paths.
 A single operation performs one action and returns one new observation; no unlimited macro.
-Each call has a10-second bound, output has at most50 nodes and100 characters per text field.
+Each call has a10-second bound; a chain stops after20 actions,180 seconds or3 unchanged screens. Output has at most50 nodes,100 characters per text field and24k serialized node characters.
 Truncated observations are read-only. No coordinate fallback or model-name-specific branch is introduced.
 Native accessibility is sufficient for the first adapter; optional imagery/OCR is explicitly absent.
 
@@ -60,3 +60,16 @@ metadata/public synthetic fixtures; keep real screens/app list/question/response
 Conservative initial limitations: no screenshot/OCR returned, no coordinate/swipe fallback, no Android12/13 generic
 operation without a secure-window signal, no CAUTIOUS unknown apps, no automation of own/permission/auth settings.
 A generic action is one atomic attempt; running native effects cannot be undone/cancelled by cancel_task.
+
+## Approval resolved / final code review
+
+The user explicitly approved public source push, PR merge and signed APK publication at2026-10-18 21:24 KST.
+The earlier review rejection is historical and no longer blocks publication. Shell git push has no credentials;
+GitHub connector publication succeeded and PR #102 is open.26 Kotlin cases are now in the candidate suite.
+Review fixed a verified-host exception that could soften a user BLOCKED tier, checked long-click capability separately,
+invalidated generic observations at dedicated-controller handoff, bounded unchanged-screen loops and matched typed-field
+identity by resource AND bounds. Security CI also runs Android lint. The existing release workflow independently downloads
+published public APK/checksum anonymously and checks manifest/version/code, certificate, native runtimes and source/tag,
+with a verification artifact. Local release-assets downloads are network-blocked, so actual public download verification
+must run on the release runner and its recorded output must be inspected.
+Earlier local-blocked /19-tests notes are checkpoint history; do not report them as the current state after CI completes.

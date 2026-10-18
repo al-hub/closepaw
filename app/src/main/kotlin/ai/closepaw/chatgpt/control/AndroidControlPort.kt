@@ -163,14 +163,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 }
             }
             visit(root, 0, -1)
-            val code = when {
-                classifier.classify(pkg) == AppTier.BLOCKED -> "blocked_app"
-                protected -> "authentication_boundary"
-                (pkg == AndroidGeminiDraftUi.GOOGLE_HOST && !gemini) ||
-                    (!packageAllowed(pkg) && !(pkg == AndroidGeminiDraftUi.GOOGLE_HOST && gemini)) -> "blocked_or_cautious_app"
-                nodes.isEmpty() -> "screen_unreadable"
-                else -> reason(service)
-            }
+            val code = GenericScreenPolicy.refusal(
+                blocked = classifier.classify(pkg) == AppTier.BLOCKED, sensitive = protected,
+                packageAllowed = packageAllowed(pkg), isGeminiHost = pkg == AndroidGeminiDraftUi.GOOGLE_HOST,
+                verifiedGemini = gemini, readable = nodes.isNotEmpty(),
+            ) ?: reason(service)
             block(ControlFrame(pkg, root.windowId, operationHash(identity.toString()), nodes, code, truncated), native)
         } finally {
             owned.forEach { it.recycleCompat() }

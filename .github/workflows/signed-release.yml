@@ -100,6 +100,7 @@ jobs:
           test -n "$version" && test -n "$code"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
 
       - name: Validate main and CI; classify release state
         id: state
@@ -332,3 +333,50 @@ jobs:
             gh release create "$TAG" closepaw-aa-bridge.apk closepaw-aa-bridge.apk.sha256 \
               --title "ClosePaw AA-Bridge $TAG" --generate-notes
           fi
+
+      - name: Independently verify public APK download
+        if: steps.state.outputs.skip != 'true'
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+          EXPECTED_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/public-apk-verification"
+          mkdir -p "$out"
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG"
+          # Anonymous public downloads, separate from the signed build/upload copies.
+          curl --fail --location --retry 2 "$base/closepaw-aa-bridge.apk" -o "$out/closepaw-aa-bridge.apk"
+          curl --fail --location --retry 2 "$base/closepaw-aa-bridge.apk.sha256" -o "$out/closepaw-aa-bridge.apk.sha256"
+          (cd "$out" && sha256sum -c closepaw-aa-bridge.apk.sha256)
+          test "$(sha256sum closepaw-aa-bridge.apk | cut -d' ' -f1)" = "$(sha256sum "$out/closepaw-aa-bridge.apk" | cut -d' ' -f1)"
+          signer="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          aapt="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)"
+          "$signer" verify --verbose --print-certs "$out/closepaw-aa-bridge.apk" | tee "$out/signature.txt"
+          grep -Fq 'certificate SHA-256 digest: d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba' "$out/signature.txt"
+          "$aapt" dump badging "$out/closepaw-aa-bridge.apk" > "$out/manifest.txt"
+          grep -F "package: name='ai.closepaw' versionCode='$EXPECTED_CODE' versionName='$EXPECTED_VERSION'" "$out/manifest.txt"
+          unzip -l "$out/closepaw-aa-bridge.apk" > "$out/entries.txt"
+          grep -F 'lib/arm64-v8a/libopenaitunnel.so' "$out/entries.txt"
+          grep -F 'lib/arm64-v8a/libcloudflared.so' "$out/entries.txt"
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$(git rev-parse HEAD)"
+          {
+            echo "source_commit=$(git rev-parse HEAD)"
+            echo "release_tag=$RELEASE_TAG"
+            echo "version=$EXPECTED_VERSION"
+            echo "version_code=$EXPECTED_CODE"
+            sha256sum "$out/closepaw-aa-bridge.apk"
+            wc -c < "$out/closepaw-aa-bridge.apk"
+          } | tee "$out/verification.txt"
+
+      - name: Upload public APK verification evidence
+        if: success() && steps.state.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-apk-verification-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/public-apk-verification/verification.txt
+            ${{ runner.temp }}/public-apk-verification/signature.txt
+            ${{ runner.temp }}/public-apk-verification/manifest.txt
+          if-no-files-found: error
+          retention-days: 14

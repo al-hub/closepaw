@@ -28,8 +28,14 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     private val now: () -> Long = System::currentTimeMillis) {
     private data class Observation(val id: String, val at: Long, val frame: ControlFrame)
     private var current: Observation? = null
+    private var chainStarted = 0L
+    private var chainActions = 0
+    private var noProgress = 0
+    fun invalidate() { current = null }
+
     suspend fun observe(): OperationResult {
         current = null
+        chainStarted = now(); chainActions = 0; noProgress = 0
         if (!allowed()) return failure("generic_control_disabled")
         return publish(port.capture())
     }
@@ -61,6 +67,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         // Consume before any native side effect, including failure, cancellation and lost transport.
         current = null
         if (now() - observation.at !in 0L..60_000L) return failure("observation_expired")
+        if (chainActions >= 20 || now() - chainStarted !in 0L..180_000L || noProgress >= 3)
+            return failure("control_chain_limit_observe_again")
         val frame = observation.frame
         if (frame.truncated) return failure("truncated_observation")
         val fresh = port.capture()
@@ -79,15 +87,17 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         if (action == "open_app" && input["package_name"]?.jsonPrimitive?.content.isNullOrBlank()) return failure("package_required")
         if (!allowed()) return failure("generic_control_disabled")
+        chainActions++
         val effect = port.perform(frame, input, node)
         // After an attempted action even a negative native acknowledgement is not proof of no effect.
         val post = if (effect.attempted) port.capture() else null
         val observed = if (post != null && allowed()) publish(post) else null
         val changed = post != null && post.reason == null &&
             (frame.fingerprint != post.fingerprint || frame.packageName != post.packageName || frame.windowId != post.windowId)
-        val inputVerified = action != "type" || post?.nodes?.any {
-            it.editable && it.resourceId == node?.resourceId && it.text == input["text"]?.jsonPrimitive?.content
-        } == true
+        noProgress = if (changed) 0 else noProgress + 1
+        val inputVerified = action != "type" || post?.nodes?.singleOrNull {
+            it.editable && it.resourceId == node?.resourceId && it.bounds == node?.bounds
+        }?.text == input["text"]?.jsonPrimitive?.content
         val verified = effect.acknowledged && observed?.success == true && inputVerified
         return OperationResult(success = verified, summary = if (verified)
             "Action acknowledged; inspect the returned observation to confirm the requested app result." else effect.reason,
