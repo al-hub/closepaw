@@ -1,10 +1,12 @@
 # ClosePaw Progress
 
-## v0.1.58 delivered / v0.1.59 navigation freshness correction in progress
+## v0.1.59/code60 delivered and remotely installed — real UI acceptance blocked by device lock
 
-v0.1.58/code59 passed 2,528 Android tests and lint (0 errors/108 warnings), was signed and anonymously downloaded/verified, then remotely installed and reconnected. Depth47 complete observations confirm the depth correction. Two app-open requests were refused before effect (screen_changed, no unknown outcome). PR #104 adds RED regressions and scopes Home/exact selected app launch to fresh foreground app/window identity; Back and node operations retain complete content hashing. Security, consent, expiry and single-use checks remain. Candidate v0.1.59/code60 is not delivered. P2 ACTIVE; real Gemini/second-app/Voice acceptance pending.
+[PR #104](https://github.com/al-hub/closepaw/pull/104) merged as bf8bbeba6647495234a76be42130fb93078002c6. Home/exact selected app launch now validate foreground app/window identity; Back and node operations retain complete content hashing. RED reproduced2 failures; GREEN2,531 Android tests passed with0 failures/errors/skips, lint0 errors/108 warnings, Python55+8 passed. PR CI, signed probe, main CI39174209365 and Signed Release39174729253 all passed.
 
-See [v0.1.59 evidence and contract](doc/dev/generic-navigation-freshness-v0159.md). Earlier status sections below are historical checkpoints.
+[Signed APK v0.1.59](https://github.com/al-hub/closepaw/releases/download/v0.1.59/closepaw-aa-bridge.apk) is116,417,125 bytes, SHA-256 2c2ba127c98f7b8b54277db44de7e5c08cc396f5cbbd53c1b9a653f9d6325be6. Anonymous public download, original signer, manifest/code60, both native runtimes and immutable tag/source were verified. Exactly one remote update was requested; after reconnection current/installed version0.1.59/code60 was confirmed. All3 generic operations remained ready.
+
+The first new-version screen query returned device_locked; no v0.1.59 app launch/node write/question was attempted. Unlock and ordinary foreground screen are required to continue actual Gemini/model/one-question/second-app checks. Target model is not yet specified. **P2 ACTIVE**, including Voice acceptance. [Evidence and next steps](doc/dev/generic-navigation-freshness-v0159.md). Earlier status sections below are historical checkpoints.
 
 
 ## v0.1.57 generic startup acceptance blocked / v0.1.58 correction in progress
