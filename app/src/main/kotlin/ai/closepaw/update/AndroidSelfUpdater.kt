@@ -107,22 +107,11 @@ internal class AndroidSelfUpdater private constructor(private val context: Conte
         if (intent.getIntExtra("expected_session_id", -1) != id ||
             intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1) != id) return
         if (record["state"]?.jsonPrimitive?.content == "installed") return
-        val result = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
-        @Suppress("DEPRECATION")
-        val confirmation = if (result == PackageInstaller.STATUS_PENDING_USER_ACTION)
-            intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) else null
-        val resolvedPackage = confirmation?.let { request -> runCatching {
-            context.packageManager.resolveActivity(request, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
-        }.getOrNull() }
-        val event = InstallerCallbackEvidence.build(result,
-            intent.getStringExtra(PackageInstaller.EXTRA_OTHER_PACKAGE_NAME),
-            confirmation?.action, confirmation?.component?.flattenToShortString(), resolvedPackage, System.currentTimeMillis())
-        val history = (record["installer_callbacks"] as? JsonArray)?.toList().orEmpty()
-        ledger.patch("installer_callbacks" to JsonArray((history + event).takeLast(8)))
-        when (result) {
+        when (val result = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 ledger.patch("state" to JsonPrimitive("user_action_required"))
-                if (confirmation == null) return
+                @Suppress("DEPRECATION")
+                val confirmation = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
                 val manager = context.getSystemService(NotificationManager::class.java)
                 manager.createNotificationChannel(NotificationChannel(CHANNEL, "Software updates", NotificationManager.IMPORTANCE_HIGH))
                 val pending = PendingIntent.getActivity(context, id, confirmation.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
