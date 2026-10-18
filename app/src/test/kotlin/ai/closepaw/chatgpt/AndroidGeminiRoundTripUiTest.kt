@@ -111,6 +111,50 @@ class AndroidGeminiRoundTripUiTest {
         val metadata = ui.metadataSnapshot().toString()
         assertFalse(metadata.contains(question)); assertFalse(metadata.contains("verified answer"))
     }
+    @Test fun actualAdapterScrollsOnlyVerifiedConversationAndCollectsLongReply() = runBlocking {
+        val question = "long test question"
+        val input = node("assistant_robin_input_text", "", pkg = google, editable = true)
+        val send = node("send_button", pkg = google, clickable = true)
+        val firstPage = node("conversation", children = listOf(node(text = question, pkg = google),
+            node(text = "first paragraph\nshared paragraph", pkg = google)), pkg = google)
+        val lastPage = node("conversation", children = listOf(node(text = "shared paragraph\nlast paragraph", pkg = google),
+            node(text = "대답이 마음에 들어요", pkg = google, clickable = true),
+            node(text = "대답이 마음에 들지 않아요", pkg = google, clickable = true),
+            node(text = "복사", pkg = google, clickable = true)), pkg = google)
+        val forward = mockk<AccessibilityNodeInfo.AccessibilityAction>()
+        every { forward.id } returns AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+        val backward = mockk<AccessibilityNodeInfo.AccessibilityAction>()
+        every { backward.id } returns AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        every { firstPage.isScrollable } returns true
+        every { firstPage.actionList } returns listOf(forward)
+        every { lastPage.isScrollable } returns true
+        every { lastPage.actionList } returns listOf(backward)
+        root = node(children = listOf(input, send), pkg = google)
+        coEvery { draft.launch() } returns true
+        coEvery { draft.setIfEmpty(question) } answers { every { input.text } returns question; DraftWriteResult.WRITTEN }
+        coEvery { draft.matches(question) } returns true
+        every { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) } answers {
+            every { input.text } returns ""
+            root = node(children = listOf(firstPage, input), pkg = google); true
+        }
+        every { firstPage.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) } answers {
+            root = node(children = listOf(lastPage, input), pkg = google); true
+        }
+        val ui = adapter(); var time = 0L
+        val op = GeminiRoundTripOperation(ui, { true }, { _, _, _ -> }, { timeout ->
+            GeminiReplyCollector(ui, clockMillis = { time }, pause = { time += it }, timeoutMs = timeout,
+                pollMs = 100, stableMs = 100)
+        })
+        val result = op.invoke(OperationInvocation("paged-flow", buildJsonObject { put("text", question) }))
+        assertTrue(result.summary, result.success)
+        assertEquals("first paragraph\nshared paragraph\nlast paragraph", result.stdout)
+        assertEquals("complete", result.data.getValue("coverage").jsonPrimitive.content)
+        assertEquals(2, result.data.getValue("pages_collected").jsonPrimitive.int)
+        verify(exactly = 1) { send.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+        verify(exactly = 1) { firstPage.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) }
+        verify(exactly = 0) { input.performAction(any()) }
+    }
+
     @Test fun exactlyOneSemanticSendIsClickedOnce() = runBlocking {
         val send = node("assistant_robin_send_button", clickable = true)
         root = node(children = listOf(composer(), send))

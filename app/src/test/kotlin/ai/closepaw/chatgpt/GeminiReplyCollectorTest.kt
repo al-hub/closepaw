@@ -190,4 +190,17 @@ class GeminiReplyCollectorTest {
         assertThat(cancelled.state).isEqualTo("cancelled")
     }
 
+    @Test fun defaultCompletionSettlesWithinFourHundredMillis() = runBlocking {
+        val ui = FakeUi(listOf(observation(complete = true))); var now = 0L
+        val result = GeminiReplyCollector(ui, clockMillis = { now }, pause = { now += it }).collect(question, baseline)
+        assertThat(result.state).isEqualTo("completed")
+        assertThat(result.collectionMs).isEqualTo(400L)
+        assertThat(result.completionObservedMs).isEqualTo(0L)
+    }
+    @Test fun unverifiedScrollableCoverageCannotReturnFullSuccess() = runBlocking {
+        val (result, _) = collect(listOf(observation(complete = true).copy(replyCoverageComplete = false)))
+        assertThat(result.state).isEqualTo("partial")
+        assertThat(result.reason).isEqualTo("reply_scroll_region_unverified")
+    }
+
 }

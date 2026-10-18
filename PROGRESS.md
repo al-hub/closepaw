@@ -1,5 +1,13 @@
 # ClosePaw Progress
 
+## Gemini reply latency + long-answer paging — v0.1.51 in development
+
+- User-authorized combined improvement: shorten completion/return latency and collect below-viewport answer text.
+- Current baseline: v0.1.50 basic text/Voice round trip confirmed; continuous-use reliability remains partial.
+- Implementation and acceptance scope: [v0.1.51 notes](doc/dev/gemini-reply-latency-scroll-v0151.md).
+- Release and real-device acceptance are pending; no background/locked operation claim.
+
+
 ## 실기기 자동 왕복 확인 — 2026-10-18 10:06 KST
 
 - **v0.1.50/code51 업데이트 설치 및 자동 질문→전송→이번 새 응답 수집 성공**.

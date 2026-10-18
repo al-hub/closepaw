@@ -12,7 +12,7 @@ internal class GeminiRoundTripOperation(
     private val allowed: () -> Boolean,
     private val record: (taskId: String, stage: String, reason: String) -> Unit,
     private val collectorFactory: (Long) -> GeminiReplyCollector = { timeout ->
-        GeminiReplyCollector(ui, allowed, timeoutMs = timeout, maxPolls = 300)
+        GeminiReplyCollector(ui, allowed, timeoutMs = timeout, maxPolls = 650)
     },
 ) : OperationHandler {
     private val cancellations = ConcurrentHashMap<String, AtomicBoolean>()
@@ -20,7 +20,7 @@ internal class GeminiRoundTripOperation(
     companion object {
         fun descriptor(readiness: () -> OperationReadiness = { OperationReadiness() }) = OperationDescriptor(
             id = "gemini.question.ask",
-            description = "Ask one question in the current Gemini conversation and observe its new reply. Sends at most once per request ID, preserves existing drafts, requires an unlocked phone and separate local question-send permission. Use execute then get_task. A partial or unknown result must never be automatically resubmitted. Cancellation stops ClosePaw observation, not Gemini generation. New-conversation selection is unsupported.",
+            description = "Ask one question in the current Gemini conversation and observe its new reply. Sends at most once per request ID, preserves existing drafts, requires an unlocked phone and separate local question-send permission. Use execute then get_task. A partial or unknown result must never be automatically resubmitted. Cancellation stops ClosePaw observation, not Gemini generation. Bounded automatic reply scrolling uses verified overlap; partial results indicate missing coverage. New-conversation selection is unsupported.",
             inputSchema = buildJsonObject {
                 put("type", "object"); put("additionalProperties", false)
                 put("properties", buildJsonObject {
@@ -32,7 +32,7 @@ internal class GeminiRoundTripOperation(
             },
             readOnly = false,
             permissions = listOf("accessibility", "gemini_question_send"),
-            effects = listOf("app_launch", "draft_input", "question_send"),
+            effects = listOf("app_launch", "draft_input", "question_send", "conversation_scroll"),
             cancellationSupported = true, readiness = readiness,
         )
     }
@@ -54,6 +54,7 @@ internal class GeminiRoundTripOperation(
         var sendActionInvoked = false
         var unknown = false
         var diagnosticsPersisted = true
+        var collectionMetrics: GeminiReplyCollection? = null
         fun event(next: String, reason: String = "ok", required: Boolean = false): Boolean {
             return try {
                 record(invocation.taskId, next, reason)
@@ -93,6 +94,12 @@ internal class GeminiRoundTripOperation(
                 put("timed_out", timedOut); put("observation_stopped", stopped)
                 put("cancel_confirmed", false); put("generation_cancelled", false)
                 put("diagnostics_persisted", diagnosticsPersisted)
+                collectionMetrics?.let { metrics ->
+                    metrics.collectionMs?.let { put("collection_ms", it) }
+                    metrics.completionObservedMs?.let { put("completion_observed_ms", it) }
+                    put("pages_collected", metrics.pagesCollected)
+                    put("coverage", if (completed && !partial) "complete" else "unconfirmed")
+                }
                 evidence?.let { put("completion_evidence", it) }
             })
         }
@@ -125,6 +132,7 @@ internal class GeminiRoundTripOperation(
                     }
                     event("waiting")
                     val reply = collectorFactory(timeout).collect(text, submission.baseline) { cancelled.get() }
+                    collectionMetrics = reply
                     sent = reply.submissionObserved
                     unknown = !sent
                     if (sent) event("sent")
