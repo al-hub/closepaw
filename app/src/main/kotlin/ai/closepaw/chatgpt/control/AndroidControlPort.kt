@@ -124,8 +124,15 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             var protected = false
             var gemini = false
             var visited = 0
+            var deepest = 0
+            val truncationReasons = linkedSetOf<String>()
             fun visit(node: AccessibilityNodeInfo, depth: Int, parent: Int) {
-                if (depth > 32 || visited >= 512) { truncated = true; return }
+                deepest = maxOf(deepest, depth)
+                if (depth > 64 || visited >= 512) {
+                    truncated = true
+                    truncationReasons.add(if (depth > 64) "depth_limit" else "node_limit")
+                    return
+                }
                 val index = visited++
                 val rect = Rect(); node.getBoundsInScreen(rect)
                 val text = node.text?.toString().orEmpty()
@@ -148,7 +155,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (node.isVisibleToUser && !rect.isEmpty &&
                     (text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable ||
                         node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })) {
-                    if (nodes.size >= 50) truncated = true
+                    if (nodes.size >= 50) { truncated = true; truncationReasons.add("output_node_limit") }
                     else {
                         nodes.add(ControlNode(index, if (node.isShowingHintText) "" else text.take(2001), description.take(100), resource.take(100),
                             node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, node.isEditable, node.isScrollable,
@@ -157,7 +164,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     }
                 }
                 for (i in 0 until node.childCount) {
-                    if (visited >= 512) { truncated = true; break }
+                    if (visited >= 512) { truncated = true; truncationReasons.add("node_limit"); break }
                     val child = node.getChild(i) ?: continue
                     owned.add(child); visit(child, depth + 1, index)
                 }
@@ -168,7 +175,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 packageAllowed = packageAllowed(pkg), isGeminiHost = pkg == AndroidGeminiDraftUi.GOOGLE_HOST,
                 verifiedGemini = gemini, readable = nodes.isNotEmpty(),
             ) ?: reason(service)
-            block(ControlFrame(pkg, root.windowId, operationHash(identity.toString()), nodes, code, truncated), native)
+            block(ControlFrame(pkg, root.windowId, operationHash(identity.toString()), nodes, code, truncated,
+                truncationReasons, visited, deepest), native)
         } finally {
             owned.forEach { it.recycleCompat() }
             windows.forEach { runCatching { it.recycle() } }
@@ -179,8 +187,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         secureWindow(service)?.let { return ControlEffect(false, false, it) }
         val action = input.getValue("action").jsonPrimitive.content
         val effect = withTree(service) { fresh, native ->
-            val failure = fresh.reason ?: if (fresh.truncated || fresh.packageName != frame.packageName ||
-                fresh.windowId != frame.windowId || fresh.fingerprint != frame.fingerprint) "screen_changed" else null
+            val failure = GenericControlActionPolicy.refusal(frame, fresh, action)
             if (failure != null) return@withTree ControlEffect(false, false, failure)
             reason(service)?.let { return@withTree ControlEffect(false, false, it) }
             mutationBlock(fresh.packageName)?.let { return@withTree ControlEffect(false, false, it) }

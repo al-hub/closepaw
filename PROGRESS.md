@@ -1,5 +1,20 @@
 # ClosePaw Progress
 
+## v0.1.57 generic startup acceptance blocked / v0.1.58 correction in progress
+
+- User enabled the independent Android screen control switch; all3 generic operations report ready on installed v0.1.57/code58.
+- First current-screen observation returned truncated=true/actionable=false; filtered app discovery found the intended Gemini target.
+  No node write was attempted from the partial screen. Old responses do not expose which traversal/output cap caused truncation.
+- v0.1.57 refuses Home/app launch along with node actions, so a bounded partial starting screen cannot begin generic navigation.
+  [PR #103](https://github.com/al-hub/closepaw/pull/103) starts with RED regression cases, then shares a guarded Home/exact app-launch policy
+  between the common engine and native boundary. Back and all node-targeted operations still require completeness.
+- Add depth/count/truncation-cause metadata; traversal depth64 retains512-node and50-output caps. Candidate v0.1.58/code59 is not delivered.
+- A separate dedicated Gemini READ did not verify foreground identity; the next generic read returned secure_window. No bypass/retry/send.
+  These results are distinct from the startup truncation defect. Real acceptance requires an unlocked ordinary screen after delivery.
+- **P2 ACTIVE**. Model choices/selection, one dedicated question/new reply, second-app navigation/scroll and Voice acceptance remain pending.
+  [Evidence and correction](doc/dev/generic-navigation-startup-v0158.md).
+
+
 ## v0.1.57/code58 delivered and remotely installed — generic device acceptance pending (2026-10-19 KST)
 
 - [PR #102](https://github.com/al-hub/closepaw/pull/102) merged. Immutable release source/tag target: `2cbdb1a10fe81dd2f7f36dd3bef59eff21f15300`.

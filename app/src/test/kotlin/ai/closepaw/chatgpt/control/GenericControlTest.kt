@@ -118,4 +118,46 @@ class GenericControlTest {
         assertFalse(control.action(input(id)).success); assertEquals(3, port.writes)
     }
 
+    @Test fun truncatedObservationAllowsHomeAndAppLaunchWithoutNodeTargeting() = runBlocking {
+        for (action in listOf("home", "open_app")) {
+            val port = Port(); port.frame = port.frame.copy(truncated = true)
+            val control = GenericControl(port, { true }); val id = observe(control)
+            val result = control.action(input(id, action, mapOf("package_name" to JsonPrimitive("example.target"))))
+            assertTrue("Bounded $action must not depend on node completeness", result.success)
+            assertEquals(1, port.writes)
+        }
+    }
+    @Test fun truncatedObservationStillRejectsBackAndAllNodeWrites() = runBlocking {
+        for (action in listOf("back", "click", "long_press", "type", "scroll")) {
+            val port = Port(); port.frame = port.frame.copy(truncated = true, nodes = listOf(ControlNode(1, clickable = true,
+                editable = true, scrollable = true, longClickable = true)))
+            val control = GenericControl(port, { true }); val id = observe(control)
+            val result = control.action(input(id, action, mapOf("text" to JsonPrimitive("hello"), "direction" to JsonPrimitive("down"))))
+            assertFalse(result.success); assertEquals(0, port.writes)
+        }
+    }
+    @Test fun truncatedNavigationStillChecksTheForegroundIdentity() = runBlocking {
+        val port = Port(); port.frame = port.frame.copy(truncated = true)
+        val control = GenericControl(port, { true }); val id = observe(control)
+        port.frame = port.frame.copy(packageName = "other.app")
+        val result = control.action(input(id, "home"))
+        assertEquals("screen_changed", result.data["reason_code"]?.jsonPrimitive?.content); assertEquals(0, port.writes)
+    }
+    @Test fun truncatedObservationAdvertisesOnlyNonNodeNavigation() = runBlocking {
+        val port = Port(); port.frame = port.frame.copy(truncated = true)
+        val result = GenericControl(port, { true }).observe()
+        assertEquals(JsonArray(listOf(JsonPrimitive("home"), JsonPrimitive("open_app"))), result.data["navigation_actions"])
+        assertEquals(JsonPrimitive(false), result.data["node_actions_allowed"])
+    }
+
+    @Test fun outputNodeLimitKeepsNodeWritesBlockedButAllowsHome() = runBlocking {
+        val port = Port(); port.frame = port.frame.copy(nodes = (0..50).map { ControlNode(it, clickable = true) })
+        val control = GenericControl(port, { true }); val observed = control.observe()
+        assertEquals(JsonPrimitive(true), observed.data["truncated"])
+        assertEquals(JsonPrimitive(false), observed.data["node_actions_allowed"])
+        assertTrue(control.action(input(observed.data.getValue("observation_id").jsonPrimitive.content, "home")).success)
+        val next = observe(control)
+        assertFalse(control.action(input(next)).success); assertEquals(1, port.writes)
+    }
+
 }

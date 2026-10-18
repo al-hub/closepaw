@@ -14,7 +14,8 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
     }
 }
 internal data class ControlFrame(val packageName: String, val windowId: Int, val fingerprint: String,
-    val nodes: List<ControlNode>, val reason: String? = null, val truncated: Boolean = false)
+    val nodes: List<ControlNode>, val reason: String? = null, val truncated: Boolean = false,
+    val truncationReasons: Set<String> = emptySet(), val visitedNodes: Int = 0, val maxDepth: Int = 0)
 internal data class ControlEffect(val attempted: Boolean, val acknowledged: Boolean, val reason: String)
 internal interface ControlPort {
     suspend fun capture(): ControlFrame
@@ -49,13 +50,19 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             if (size + json.toString().length > 24_000) break
             rendered.add(json); size += json.toString().length
         }
-        val bounded = frame.copy(truncated = frame.truncated || rendered.size < frame.nodes.size)
+        val outputLimited = rendered.size < frame.nodes.size
+        val bounded = frame.copy(truncated = frame.truncated || outputLimited,
+            truncationReasons = frame.truncationReasons + if (outputLimited) setOf("output_budget") else emptySet())
         val observation = Observation(UUID.randomUUID().toString(), now(), bounded)
         current = observation
         return OperationResult(data = buildJsonObject {
             put("observation_id", observation.id); put("observed_at_ms", observation.at); put("expires_in_ms", 60_000)
             put("package_name", frame.packageName); put("window_id", frame.windowId)
             put("truncated", bounded.truncated); put("actionable", !bounded.truncated)
+            put("node_actions_allowed", !bounded.truncated)
+            put("navigation_actions", JsonArray((if (bounded.truncated) listOf("home", "open_app") else listOf("home", "back", "open_app")).map { JsonPrimitive(it) }))
+            put("truncation_reasons", JsonArray(bounded.truncationReasons.sorted().map { JsonPrimitive(it) }))
+            put("visited_nodes", bounded.visitedNodes); put("max_depth", bounded.maxDepth)
             put("content_trust", "untrusted_screen_data"); put("image_included", false)
             put("nodes", JsonArray(rendered))
         }, summary = "Current accessibility screen observed; node IDs belong only to this observation.")
@@ -69,14 +76,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (now() - observation.at !in 0L..60_000L) return failure("observation_expired")
         if (chainActions >= 20 || now() - chainStarted !in 0L..180_000L || noProgress >= 3)
             return failure("control_chain_limit_observe_again")
-        val frame = observation.frame
-        if (frame.truncated) return failure("truncated_observation")
-        val fresh = port.capture()
-        if (fresh.reason != null) return failure(fresh.reason)
-        if (fresh.truncated || frame.packageName != fresh.packageName || frame.windowId != fresh.windowId ||
-            frame.fingerprint != fresh.fingerprint) return failure("screen_changed")
         val action = input["action"]?.jsonPrimitive?.content.orEmpty()
         if (action !in setOf("click", "long_press", "type", "scroll", "home", "back", "open_app")) return failure("unsupported_action")
+        val frame = observation.frame
+        val fresh = port.capture()
+        GenericControlActionPolicy.refusal(frame, fresh, action)?.let { return failure(it) }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
         if (action in setOf("click", "long_press", "type", "scroll")) {
