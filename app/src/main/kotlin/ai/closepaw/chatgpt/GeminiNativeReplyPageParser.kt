@@ -67,5 +67,6 @@ internal object GeminiNativeReplyPageParser {
             .mapNotNull(::target).distinct()
         val end = copy.size == 1 && positive.size == 1 && negative.size == 1 && (copy + positive + negative).distinct().size == 3
         return page(fragments.joinToString("\n"), end, evidence = fragments.map(GeminiUiTextEvidence::hash).toSet())
+            .copy(nativeWholeBody = true)
     }
 }

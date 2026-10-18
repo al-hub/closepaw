@@ -23,6 +23,7 @@ class GeminiNativeReplyPageParserTest {
         val p = parse()!!
         assertEquals("new answer from first item through last item", p.text)
         assertTrue(p.questionVisible); assertTrue(p.canForward); assertFalse(p.endVisible)
+        assertTrue(p.nativeWholeBody)
         assertFalse(p.text.contains("old answer"))
         assertEquals(1, GeminiReplyPageParser.target(fixture(), question, true, p.containerKey, true))
     }

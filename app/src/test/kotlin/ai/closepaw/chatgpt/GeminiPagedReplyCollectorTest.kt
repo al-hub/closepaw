@@ -56,6 +56,43 @@ class GeminiPagedReplyCollectorTest {
         val result = collect(ui)
         assertEquals("reply_scroll_stalled", result.reason); assertTrue(result.partial); assertEquals(1, ui.scrolls.size)
     }
+    private fun nativeFrame(text: String, start: Boolean = false, end: Boolean = false, forward: Boolean = true) =
+        frame(text, start, end, forward = forward).let { it.copy(replyPage = it.replyPage!!.copy(nativeWholeBody = true)) }
+    @Test fun entireNativeBodyRepeatsAcrossViewportsUntilVisibleFooterWithoutInflatingPages() = runBlocking {
+        val full = "201 first item\n240 last item"
+        val ui = Ui(listOf(nativeFrame(full, start = true), frame(full), frame(full), frame(full, end = true)))
+        val result = collect(ui)
+        assertEquals("completed", result.state); assertEquals(full, result.answer)
+        assertEquals(1, result.pagesCollected); assertEquals(listOf(true, true, true), ui.scrolls)
+    }
+    @Test fun repeatedNativeBodyWithoutFooterStillStopsAtActionLimitAndCannotClaimCoverage() = runBlocking {
+        val ui = Ui(listOf(nativeFrame("complete native body", start = true)))
+        var now = 0L
+        val result = GeminiPagedReplyCollector(ui, { true }, { now }, { now += it }, 5000, 100, 200, 16000, 3)
+            .collect(question, baseline, ui.snapshot(), { false })
+        assertEquals("reply_scroll_limit", result.reason); assertTrue(result.partial)
+        assertEquals(3, ui.scrolls.size); assertEquals(1, result.pagesCollected); assertNull(result.completionEvidence)
+    }
+    @Test fun vanishedForwardActionWaitsForNativeFooterWithoutAnotherScroll() = runBlocking {
+        val full = "whole native body"
+        val delegate = Ui(listOf(nativeFrame(full, start = true), frame(full, forward = false)))
+        var now = 0L
+        val ui = object : GeminiRoundTripUi by delegate {
+            override suspend fun snapshot(): GeminiUiSnapshot = delegate.snapshot().let {
+                if (now >= 1200) it.copy(replyPage = it.replyPage!!.copy(endVisible = true)) else it
+            }
+        }
+        val result = GeminiPagedReplyCollector(ui, { true }, { now }, { now += it }, 3000, 100, 200, 16000)
+            .collect(question, baseline, ui.snapshot(), { false })
+        assertEquals("completed", result.state); assertEquals(1, delegate.scrolls.size); assertEquals(1, result.pagesCollected)
+    }
+    @Test fun nativeContinuationRejectsUnrelatedReplacementAndRechecksCancellation() = runBlocking {
+        val first = nativeFrame("whole native body", start = true)
+        assertEquals("reply_scroll_gap", collect(Ui(listOf(first, frame("unrelated replacement", end = true)))).reason)
+        val ui = Ui(listOf(first, frame("whole native body")))
+        val result = collect(ui, cancelled = { ui.scrolls.size >= 2 })
+        assertEquals("cancelled", result.state); assertEquals(2, ui.scrolls.size); assertTrue(result.partial)
+    }
     @Test fun rejectedScrollAndMissingFooterReturnPartial() = runBlocking {
         assertEquals("reply_scroll_unavailable", collect(Ui(listOf(frame("first", true)), false)).reason)
         assertEquals("reply_timeout", collect(Ui(listOf(frame("first", true, forward = false)))).reason)

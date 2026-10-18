@@ -11,6 +11,8 @@ internal data class GeminiReplyPage(
     val canBackward: Boolean,
     val conflictingTurn: Boolean = false,
     val textEvidence: Set<String> = emptySet(),
+    // Exact native question/response ownership exposes the entire body, including offscreen text.
+    val nativeWholeBody: Boolean = false,
 )
 
 /** Restricts paging to one vertical conversation region, excluding composer and app chrome. */

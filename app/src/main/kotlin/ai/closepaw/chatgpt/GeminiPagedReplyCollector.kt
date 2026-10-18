@@ -20,12 +20,22 @@ internal class GeminiPagedReplyCollector(
         var previousPage: String? = null; var stableSince = start
         var lastScrolledText: String? = null; var movingForward = false
         var unchanged = 0; var polls = 0; var lastAcceptedPage: String? = null
+        var nativeWholeBody = false
         fun result(reason: String, done: Boolean = false, cancelled: Boolean = false) = GeminiReplyCollection(
             if (done) "completed" else if (cancelled) "cancelled" else if (text.isNotBlank()) "partial" else "failed",
             reason, text.takeIf { it.isNotBlank() }, !done && text.isNotBlank(),
             if (done) "paged_start_overlap_end_and_stable" else null, submission,
             collectionMs = (clockMillis() - start).coerceAtLeast(0), pagesCollected = pages,
         )
+        suspend fun scroll(page: GeminiReplyPage, forward: Boolean): String? {
+            if (scrolls >= maxScrolls) return "reply_scroll_limit"
+            if (isCancelled()) return "observer_cancelled"
+            if (!allowed()) return "gemini_question_disabled"
+            if (ui.isLocked()) return "device_locked"
+            if (!ui.scrollReply(baseline.targetKey, page.containerKey, forward)) return "reply_scroll_unavailable"
+            scrolls++; movingForward = forward; lastScrolledText = page.text; stableSince = clockMillis()
+            return null
+        }
         while (++polls <= 600 && (clockMillis() - start).coerceAtLeast(0) < timeoutMs) {
             if (isCancelled()) return result("observer_cancelled", cancelled = true)
             if (!allowed()) return result("gemini_question_disabled")
@@ -49,7 +59,7 @@ internal class GeminiPagedReplyCollector(
             val stable = clockMillis() - stableSince >= stableMs
             if (frame.generating == true) {
                 // Generation can still replace the body. Never join snapshots across that boundary.
-                text = ""; anchored = false; lastScrolledText = null; pages = 0; lastAcceptedPage = null; stableSince = clockMillis()
+                text = ""; anchored = false; nativeWholeBody = false; lastScrolledText = null; pages = 0; lastAcceptedPage = null; stableSince = clockMillis()
             } else if (stable && (page.text.isNotBlank() || !page.questionVisible)) {
                 if ((anchored || page.questionVisible) && page.textEvidence.any { it in baseline.observedTextEvidence })
                     return result("reply_prior_text_overlap")
@@ -57,10 +67,18 @@ internal class GeminiPagedReplyCollector(
                     return result("reply_completed", done = true)
                 if (lastScrolledText != null && page.text == lastScrolledText) {
                     // Android may report success for an animation or no-op; allow bounded settling.
-                    if (++unchanged >= 3) return result("reply_scroll_stalled")
+                    if (++unchanged >= 3) {
+                        // Native accessibility can expose the same whole body across many viewports.
+                        // Only this invocation's anchored exact body may continue toward a visible footer.
+                        if (!anchored || !nativeWholeBody || page.text != text) return result("reply_scroll_stalled")
+                        if (page.canForward) {
+                            scroll(page, true)?.let { return result(it, cancelled = it == "observer_cancelled") }
+                        } else lastScrolledText = null // Wait for footer/layout instead of scrolling a stale action.
+                        unchanged = 0
+                    }
                 } else {
                     if (!anchored && page.questionVisible) {
-                        anchored = true; text = page.text; pages = 1; lastAcceptedPage = page.text
+                        anchored = true; nativeWholeBody = page.nativeWholeBody; text = page.text; pages = 1; lastAcceptedPage = page.text
                     } else if (anchored && movingForward) {
                         val joined = joinOverlapping(text, page.text) ?: return result("reply_scroll_gap")
                         text = joined
@@ -75,12 +93,7 @@ internal class GeminiPagedReplyCollector(
                         // No forward action is not an end marker: response/layout/footer can still arrive.
                         pause(pollMs); frame = ui.snapshot(); continue
                     }
-                    if (scrolls >= maxScrolls) return result("reply_scroll_limit")
-                    if (isCancelled()) return result("observer_cancelled", cancelled = true)
-                    if (!allowed()) return result("gemini_question_disabled")
-                    if (ui.isLocked()) return result("device_locked")
-                    if (!ui.scrollReply(baseline.targetKey, page.containerKey, forward)) return result("reply_scroll_unavailable")
-                    scrolls++; movingForward = forward; lastScrolledText = page.text; stableSince = clockMillis()
+                    scroll(page, forward)?.let { return result(it, cancelled = it == "observer_cancelled") }
                 }
             }
             pause(pollMs)
