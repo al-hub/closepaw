@@ -160,4 +160,15 @@ class GenericControlTest {
         assertFalse(control.action(input(next)).success); assertEquals(1, port.writes)
     }
 
+    @Test fun globalNavigationCanStartFromAnUpdatingClient() = runBlocking {
+        for (action in listOf("home", "open_app")) {
+            val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
+            port.frame = port.frame.copy(fingerprint = "ordinary-content-refreshed")
+            val result = control.action(input(id, action, mapOf("package_name" to JsonPrimitive("example.target"))))
+            assertTrue("Global navigation must not target changing message content", result.success)
+            assertEquals(1, port.writes)
+            assertEquals(JsonPrimitive("foreground_app_window"), result.data["validation_scope"])
+        }
+    }
+
 }

@@ -16,7 +16,17 @@ class GenericControlActionPolicyTest {
             assertEquals("blocked_app", GenericControlActionPolicy.refusal(frame, frame.copy(reason = "blocked_app"), action))
             assertEquals("device_locked", GenericControlActionPolicy.refusal(frame, frame.copy(reason = "device_locked"), action))
             assertEquals("screen_changed", GenericControlActionPolicy.refusal(frame, frame.copy(windowId = 5), action))
-            assertEquals("screen_changed", GenericControlActionPolicy.refusal(frame, frame.copy(fingerprint = "changed"), action))
+            assertEquals("screen_changed", GenericControlActionPolicy.refusal(frame, frame.copy(packageName = "other.app"), action))
         }
     }
+    @Test fun globalNavigationIgnoresOnlyOrdinaryContentRefresh() {
+        for (action in listOf("home", "open_app"))
+            assertNull(GenericControlActionPolicy.refusal(frame, frame.copy(fingerprint = "new-content"), action))
+    }
+    @Test fun nodeActionsAndBackStillRequireTheObservedContent() {
+        val complete = frame.copy(truncated = false)
+        for (action in listOf("click", "long_press", "type", "scroll", "back"))
+            assertEquals("screen_changed", GenericControlActionPolicy.refusal(complete, complete.copy(fingerprint = "new-content"), action))
+    }
+
 }
