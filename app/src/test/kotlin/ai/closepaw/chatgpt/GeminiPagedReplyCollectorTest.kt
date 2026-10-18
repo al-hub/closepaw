@@ -58,7 +58,7 @@ class GeminiPagedReplyCollectorTest {
     }
     @Test fun rejectedScrollAndMissingFooterReturnPartial() = runBlocking {
         assertEquals("reply_scroll_unavailable", collect(Ui(listOf(frame("first", true)), false)).reason)
-        assertEquals("reply_end_unconfirmed", collect(Ui(listOf(frame("first", true, forward = false)))).reason)
+        assertEquals("reply_timeout", collect(Ui(listOf(frame("first", true, forward = false)))).reason)
     }
     @Test fun generationStillRunningCannotProduceSuccess() = runBlocking {
         val result = collect(Ui(listOf(frame("first", true, true).copy(generating = true))))
@@ -80,6 +80,60 @@ class GeminiPagedReplyCollectorTest {
         assertEquals("submitted_question_changed", collect(Ui(listOf(start, other.copy(submittedQuestion = "another question")))).reason)
         assertEquals("reply_scroll_region_changed", collect(Ui(listOf(start, other.copy(replyPage = other.replyPage!!.copy(containerKey = "other"))))).reason)
     }
+    @Test fun initiallyEmptyAnswerWithNoForwardActionWaitsForBodyAndFooter() = runBlocking {
+        val delegate = Ui(listOf(frame("", true, forward = false)))
+        var reads = 0; var now = 0L
+        val ui = object : GeminiRoundTripUi by delegate {
+            override suspend fun snapshot(): GeminiUiSnapshot {
+                reads++
+                return when {
+                    reads < 3 -> frame("", true, forward = false)
+                    reads < 6 -> frame("delayed answer", true, forward = false)
+                    else -> frame("delayed answer", true, true, forward = false)
+                }
+            }
+        }
+        val result = GeminiPagedReplyCollector(ui, { true }, { now }, { now += it }, 2000, 100, 200, 16000)
+            .collect(question, baseline, ui.snapshot(), { false })
+        assertEquals("completed", result.state); assertEquals("delayed answer", result.answer)
+        assertTrue(now >= 500); assertEquals(1, result.pagesCollected)
+        assertTrue(delegate.scrolls.isEmpty())
+    }
+    @Test fun emptyAnswerNeverFailsEarlyOrClaimsCoverage() = runBlocking {
+        val result = collect(Ui(listOf(frame("", true, forward = false))))
+        assertEquals("reply_timeout", result.reason); assertNull(result.answer)
+        assertEquals(0, result.pagesCollected); assertTrue(result.submissionObserved)
+        assertEquals(3000L, result.collectionMs)
+    }
+    @Test fun temporarilyMissingStartupRegionCanRecoverBeforeAnyBodyIsAccepted() = runBlocking {
+        val delegate = Ui(listOf(frame("", true, forward = false)))
+        var reads = 0; var now = 0L
+        val ui = object : GeminiRoundTripUi by delegate {
+            override suspend fun snapshot(): GeminiUiSnapshot = when (++reads) {
+                1 -> frame("", true, forward = false)
+                2 -> baseline.copy(submittedQuestion = question)
+                else -> frame("finished answer", true, true, forward = false)
+            }
+        }
+        val result = GeminiPagedReplyCollector(ui, { true }, { now }, { now += it }, 2000, 100, 200, 16000)
+            .collect(question, baseline, ui.snapshot(), { false })
+        assertEquals("completed", result.state); assertEquals("finished answer", result.answer)
+    }
+    @Test fun unchangedFinalBodyWaitingForFooterDoesNotInflatePageCount() = runBlocking {
+        val delegate = Ui(listOf(frame("first\nshared paragraph", true), frame("shared paragraph\nlast", forward = false)))
+        var now = 0L
+        val ui = object : GeminiRoundTripUi by delegate {
+            override suspend fun snapshot(): GeminiUiSnapshot {
+                val observed = delegate.snapshot()
+                return if (delegate.position == 1 && now >= 1400) observed.copy(replyPage = observed.replyPage!!.copy(endVisible = true)) else observed
+            }
+        }
+        val result = GeminiPagedReplyCollector(ui, { true }, { now }, { now += it }, 3000, 100, 200, 16000)
+            .collect(question, baseline, ui.snapshot(), { false })
+        assertEquals("completed", result.state); assertEquals(2, result.pagesCollected)
+        assertEquals("first\nshared paragraph\nlast", result.answer)
+    }
+
     @Test fun baselineParagraphCannotMasqueradeAsNewPagedReply() = runBlocking {
         val hash = GeminiUiTextEvidence.hash("old paragraph")
         val initial = frame("old paragraph", true, true).let { it.copy(replyPage = it.replyPage!!.copy(textEvidence = setOf(hash))) }

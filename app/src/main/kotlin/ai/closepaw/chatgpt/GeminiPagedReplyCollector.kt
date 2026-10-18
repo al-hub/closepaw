@@ -19,7 +19,7 @@ internal class GeminiPagedReplyCollector(
         var container: String? = null; var scrolls = 0; var pages = 0
         var previousPage: String? = null; var stableSince = start
         var lastScrolledText: String? = null; var movingForward = false
-        var unchanged = 0; var polls = 0
+        var unchanged = 0; var polls = 0; var lastAcceptedPage: String? = null
         fun result(reason: String, done: Boolean = false, cancelled: Boolean = false) = GeminiReplyCollection(
             if (done) "completed" else if (cancelled) "cancelled" else if (text.isNotBlank()) "partial" else "failed",
             reason, text.takeIf { it.isNotBlank() }, !done && text.isNotBlank(),
@@ -35,17 +35,22 @@ internal class GeminiPagedReplyCollector(
             if (frame.composerText.isNotBlank()) return result("input_changed")
             if (frame.submittedQuestion != null && frame.submittedQuestion != question &&
                 frame.submittedQuestion != baseline.submittedQuestion) return result("submitted_question_changed")
-            val page = frame.replyPage ?: return result("reply_scroll_region_lost")
+            val page = frame.replyPage
+            if (page == null) {
+                // A submitted turn can temporarily replace its scroll tree before any body arrives.
+                if (anchored || text.isNotBlank() || scrolls > 0) return result("reply_scroll_region_lost")
+                pause(pollMs); frame = ui.snapshot(); continue
+            }
             if (page.conflictingTurn) return result("submitted_question_changed")
-            if (container != null && container != page.containerKey) return result("reply_scroll_region_changed")
+            if (container != null && container != page.containerKey && (anchored || scrolls > 0)) return result("reply_scroll_region_changed")
             container = page.containerKey
             if (page.questionVisible) submission = true
             if (page.text != previousPage) { previousPage = page.text; stableSince = clockMillis(); unchanged = 0 }
             val stable = clockMillis() - stableSince >= stableMs
             if (frame.generating == true) {
                 // Generation can still replace the body. Never join snapshots across that boundary.
-                text = ""; anchored = false; lastScrolledText = null; pages = 0; stableSince = clockMillis()
-            } else if (stable) {
+                text = ""; anchored = false; lastScrolledText = null; pages = 0; lastAcceptedPage = null; stableSince = clockMillis()
+            } else if (stable && (page.text.isNotBlank() || !page.questionVisible)) {
                 if ((anchored || page.questionVisible) && page.textEvidence.any { it in baseline.observedTextEvidence })
                     return result("reply_prior_text_overlap")
                 if (anchored && lastScrolledText != null && page.text == lastScrolledText && page.endVisible && text.isNotBlank())
@@ -55,17 +60,21 @@ internal class GeminiPagedReplyCollector(
                     if (++unchanged >= 3) return result("reply_scroll_stalled")
                 } else {
                     if (!anchored && page.questionVisible) {
-                        anchored = true; text = page.text; pages = 1
+                        anchored = true; text = page.text; pages = 1; lastAcceptedPage = page.text
                     } else if (anchored && movingForward) {
                         val joined = joinOverlapping(text, page.text) ?: return result("reply_scroll_gap")
-                        text = joined; pages++
-                    } else if (anchored) text = page.text
+                        text = joined
+                        if (lastAcceptedPage != page.text) { pages++; lastAcceptedPage = page.text }
+                    } else if (anchored) { text = page.text; lastAcceptedPage = page.text }
                     lastScrolledText = null
                     if (text.length > maxChars) { text = text.take(maxChars); return result("reply_length_limit") }
                     if (anchored && page.endVisible && page.text.isNotBlank()) return result("reply_completed", done = true)
                     val forward = anchored
-                    if (!(if (forward) page.canForward else page.canBackward)) return result(
-                        if (anchored) "reply_end_unconfirmed" else "reply_start_unconfirmed")
+                    if (!(if (forward) page.canForward else page.canBackward)) {
+                        if (!anchored) return result("reply_start_unconfirmed")
+                        // No forward action is not an end marker: response/layout/footer can still arrive.
+                        pause(pollMs); frame = ui.snapshot(); continue
+                    }
                     if (scrolls >= maxScrolls) return result("reply_scroll_limit")
                     if (isCancelled()) return result("observer_cancelled", cancelled = true)
                     if (!allowed()) return result("gemini_question_disabled")
