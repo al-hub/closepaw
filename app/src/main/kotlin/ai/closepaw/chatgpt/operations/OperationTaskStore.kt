@@ -32,6 +32,12 @@ internal class OperationTaskStore(file: File) {
     }
 
     fun get(id: String): JsonObject? = transaction { it[id] }
+    /** A later confirmed question supersedes older ambiguous submissions; never replay the latest unknown send through another adapter. */
+    fun latestOutcomeUnknown(operationId: String): Boolean = transaction { tasks ->
+        tasks.values.filter { it["operation_id"]?.jsonPrimitive?.content == operationId }
+            .maxByOrNull { it["created_at_ms"]?.jsonPrimitive?.longOrNull ?: 0L }
+            ?.get("state")?.jsonPrimitive?.content == "outcome_unknown"
+    }
     fun byRequest(id: String): JsonObject? = transaction { tasks -> findRequest(tasks, id) }
 
     /** Atomic dedup and insertion, including competing dispatchers using different store instances. */

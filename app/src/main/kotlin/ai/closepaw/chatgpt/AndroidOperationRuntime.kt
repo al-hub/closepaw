@@ -1,5 +1,6 @@
 package ai.closepaw.chatgpt
 
+import ai.closepaw.chatgpt.control.*
 import ai.closepaw.update.AndroidSelfUpdater
 import ai.closepaw.update.SelfUpdateOperations
 import ai.closepaw.app.AgentService
@@ -36,6 +37,17 @@ internal class AndroidOperationRuntime(
     private val tailscaleDiagnostics = TailscaleDiagnostics(File(context.filesDir, "mcp/tailscale-recovery.json"))
     private val dispatcher: OperationDispatcher
     init {
+        val genericPort = AndroidControlPort(context, mutationBlock = { pkg ->
+            if (pkg in setOf(AndroidGeminiDraftUi.PACKAGE, AndroidGeminiDraftUi.GOOGLE_HOST) &&
+                store.latestOutcomeUnknown("gemini.question.ask")) "dedicated_submission_unresolved" else null
+        }) { settings.genericControlEnabled }
+        GenericControlOperations(GenericControl(genericPort, { settings.genericControlEnabled }), genericPort, screenMutex) {
+            when {
+                !settings.genericControlEnabled -> OperationReadiness(false, "generic_control_disabled")
+                AgentService.instance == null -> OperationReadiness(false, "accessibility_permission_missing")
+                else -> OperationReadiness()
+            }
+        }.register(registry)
         SelfUpdateOperations(AndroidSelfUpdater.get(context)).register(registry)
         TailscaleOperations(
             TailscaleRecovery(AndroidTailscalePlatform(context), { settings.tailscaleRecoveryEnabled }, record = tailscaleDiagnostics::record),
@@ -170,8 +182,9 @@ internal class AndroidOperationRuntime(
             }
         })
         dispatcher = OperationDispatcher(registry, store, scope,
-            executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled },
+            executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled || settings.genericControlEnabled },
             operationAllowed = { id -> when(id) {
+                GenericControlOperations.ACTION -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled

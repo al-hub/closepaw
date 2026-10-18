@@ -18,6 +18,9 @@ internal class McpExecutionSettings(context: Context) {
     var tailscaleRecoveryEnabled: Boolean
         get() = prefs.getBoolean("tailscale_recovery_enabled", false)
         set(value) { prefs.edit().putBoolean("tailscale_recovery_enabled", value).apply() }
+    var genericControlEnabled: Boolean
+        get() = prefs.getBoolean("generic_control_enabled", false)
+        set(value) { check(prefs.edit().putBoolean("generic_control_enabled", value).commit()) }
     var selfUpdateEnabled: Boolean
         get() = prefs.getBoolean("self_update_enabled", false)
         set(value) { check(prefs.edit().putBoolean("self_update_enabled", value).commit()) }

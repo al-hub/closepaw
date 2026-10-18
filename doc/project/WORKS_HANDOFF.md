@@ -1,5 +1,20 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## Generic Android controller — local implementation, not delivered (2026-10-18 KST)
+
+- User requested handoff implementation through signed release and remote update verification.
+- Local branch `feat/generic-android-control` adds common observe/apps/action operations, independent default-OFF consent,
+  fresh single-use node observations, shared UI locking and existing-policy checks. Candidate v0.1.57/code58 is unbuilt.
+- Python Termux55 + ChatGPT bridge8 tests passed.19 new Kotlin tests are written but NOT EXECUTED.
+  Local Gradle distribution download is network-blocked. No RED/GREEN Android result is claimed.
+- GitHub push was rejected by automatic approval review: explicit authorization to publish the new source/tests
+  to the external repository was considered insufficient. No connector/alternate push is used to bypass rejection.
+- PR/CI/main merge/signed release/public-download verification/new-version installation remain PENDING.
+  Existing installed v0.1.56/code57 and update consent/install-source permission were read-only confirmed.
+- Generic local consent, requested Gemini model selection, dedicated question/new response, second-app and Voice acceptance remain pending.
+  P2 stays ACTIVE. [Implementation and resumption notes](../dev/generic-android-control-v0157.md).
+
+
 ## v0.1.55/code56 remote self-update APK delivered — device acceptance pending
 
 - User explicitly approved public source publication and release delivery in this conversation. [PR #100](https://github.com/al-hub/closepaw/pull/100) merged; immutable APK source/tag target `19593ea0556be272a8eadffe5835de976539e031`.
