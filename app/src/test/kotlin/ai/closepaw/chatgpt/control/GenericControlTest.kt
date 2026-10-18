@@ -150,4 +150,14 @@ class GenericControlTest {
         assertEquals(JsonPrimitive(false), result.data["node_actions_allowed"])
     }
 
+    @Test fun outputNodeLimitKeepsNodeWritesBlockedButAllowsHome() = runBlocking {
+        val port = Port(); port.frame = port.frame.copy(nodes = (0..50).map { ControlNode(it, clickable = true) })
+        val control = GenericControl(port, { true }); val observed = control.observe()
+        assertEquals(JsonPrimitive(true), observed.data["truncated"])
+        assertEquals(JsonPrimitive(false), observed.data["node_actions_allowed"])
+        assertTrue(control.action(input(observed.data.getValue("observation_id").jsonPrimitive.content, "home")).success)
+        val next = observe(control)
+        assertFalse(control.action(input(next)).success); assertEquals(1, port.writes)
+    }
+
 }

@@ -1,6 +1,8 @@
 # 범용 Android 제어기 — 개발 착수용 Works 인계
 
-상태: **DELIVERED / GENERIC DEVICE ACCEPTANCE PENDING**.
+상태: **v0.1.57 DELIVERED / STARTUP CORRECTION v0.1.58 IN PROGRESS**.
+로컬 허용 ON 및 실제 관측/앱 검색을 확인했다. 불완전한 관측에서 Home/앱 열기도 막히는 시작 경로 결함을 발견해 PR #103에서 수정 중이다.
+[최신 시작 경로 수정 기록](../dev/generic-navigation-startup-v0158.md)을 먼저 읽는다.
 2026-10-18 사용자 개발 착수 요청에 따라 `feat/generic-android-control`에서 구현을 시작했다. PR #102 병합과 v0.1.57/code58 서명 발행·공개 다운로드 검증·원격 업데이트 및 재연결 확인을 완료했다.
 [현재 구현과 검증 제한](../dev/generic-android-control-v0157.md)을 우선 참조한다.
 아래 PREPARED 문구는 최초 인계 당시 기록이다. CI/발행/설치는 완료했다. 범용 로컬 허용은 기본 OFF이며, 사용자가 켠 뒤 Gemini 모델 변경·전용 질문 1회·두 번째 앱의 실기기 인수가 남아 있다.
