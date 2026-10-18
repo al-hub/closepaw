@@ -1,5 +1,12 @@
 # ClosePaw Progress
 
+## v0.1.52 device failure / v0.1.53 native response ownership in progress
+
+- v0.1.52/code53 installed and tested: one send, then 120-second collection timeout; zero pages and no answer returned. Long-answer acceptance remains **FAILED / OPEN**.
+- Read-only device metadata confirms the new native response exists offscreen while the old response/toolbar is visible. The later screen read exposed the old body and is not acceptance evidence.
+- [Diagnosis and native ownership correction](doc/dev/gemini-native-offscreen-v0153.md). CI/release/new installed-device acceptance pending. **P2 ACTIVE**.
+
+
 ## v0.1.51 device result / v0.1.52 signed correction delivered
 
 - Installed v0.1.51 verified. Short answer automatic round trip succeeded; completion evidence→collection was 585 ms, but full perceived latency is unverified.
