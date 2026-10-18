@@ -1,5 +1,22 @@
 # ClosePaw Progress
 
+## 실기기 자동 왕복 확인 — 2026-10-18 10:06 KST
+
+- **v0.1.50/code51 업데이트 설치 및 자동 질문→전송→이번 새 응답 수집 성공**.
+- task `748530f3-b610-4098-a4e3-accec89a6193`, request
+  `gemini-v0150-acceptance-20261018-1006-02`: `succeeded`, `reply_completed`,
+  `sent=true`, `send_action_invoked=true`, `outcome_unknown=false`, `partial=false`,
+  `completion_evidence=semantic_complete_and_stable`. 접수→완료 약 6.8초.
+- 첫 검사 task `d32984aa-4d83-4e8a-bd10-bd4334525b51`는 전송 동작 후
+  `target_changed`/`outcome_unknown`으로 중단됐다. 이후 READ에서 전송된 질문과 응답을 확인했고,
+  사용자는 검사 중 ChatGPT로 화면을 전환했다고 답했다. 기존 요청은 재전송하지 않았다.
+  화면을 유지한 두 번째 별도 요청은 자동 수집까지 성공했다.
+- **현재 접근성 경로는 잠금 해제 및 수집 완료까지 Gemini 전경 유지가 필요하다.**
+  이 결과는 백그라운드/잠금상태 실행, 긴 응답, 같은 Voice 대화 인수를 보장하지 않는다.
+- **P2 ACTIVE**: 텍스트 경로의 기본 자동 왕복은 확인했으며 같은 Voice 인수는 남아 있다.
+  APK/서명/태그는 변경하지 않았다. 실제 질문·응답 원문과 개인정보는 공개 기록에서 제외한다.
+- 이 절이 아래 발행 당시 설치·자동 왕복 대기 기록보다 최신이다.
+
 This is the live project milestone board for the ChatGPT Android control path.
 
 Progress work follows one rule: **implementation and this document move together**. A milestone is complete only when its real-device user experience has been verified.
