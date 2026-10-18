@@ -12,6 +12,11 @@ internal class SelfUpdateOperations(private val updater: AndroidSelfUpdater) {
             description = "Read durable self-update state and current installed version. installed confirms version/code only; a successful query is not proof of installation or tunnel health. After reconnect, query this before any retry. Security/install approvals may require the user."), object : OperationHandler {
             override suspend fun invoke(invocation: OperationInvocation) = result(updater.status())
         })
+        registry.register(OperationDescriptor(id = DIAGNOSTICS, inputSchema = empty,
+            description = "Read app-scoped device/install metadata and bounded remote installer callbacks. Does not install, launch screens, or change security settings. Null/unknown fields are not evidence of absence. Confirmation handler is not proof of warning ownership; no silent-install guarantee."), object : OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation) = OperationResult(
+                data = updater.diagnostics(), summary = "Update diagnostics captured. Security settings and warning ownership may remain unknown; unattended installation is not verified.")
+        })
         registry.register(OperationDescriptor(id = CHECK, inputSchema = empty,
             effects = listOf("github_release_read"), description = "Check the latest signed GitHub release. Use the returned available_version as expected_version for self-update. Does not download or install."), object : OperationHandler {
             override suspend fun invoke(invocation: OperationInvocation): OperationResult = when(val checked = AppUpdater.check()) {
@@ -36,6 +41,7 @@ internal class SelfUpdateOperations(private val updater: AndroidSelfUpdater) {
     private fun result(data: JsonObject) = OperationResult(data = data, success = data["state"]?.jsonPrimitive?.content !in setOf("failed", "install_outcome_unknown", "interrupted_before_install"), summary =
         "Self-update state: ${data["state"]?.jsonPrimitive?.content}. Check installed version after reconnection; handle required approval with the user.")
     companion object {
+        const val DIAGNOSTICS = "app.self_update.diagnostics"
         const val CHECK = "app.self_update.check"
         const val STATUS = "app.self_update.status"
         const val INSTALL = "app.self_update.install"

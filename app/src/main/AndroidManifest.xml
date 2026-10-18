@@ -17,6 +17,11 @@
 
     <!-- Package visibility: Allow querying launchable apps and Termux RUN_COMMAND (Android 11+) -->
     <queries>
+        <!-- Read-only resolution of the manual APK installer for update diagnostics. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
         <package android:name="com.termux" />
         <package android:name="com.tailscale.ipn" />
         <!-- Gemini is an explicit P2 READ-only target, even if not discoverable as a launcher. -->
