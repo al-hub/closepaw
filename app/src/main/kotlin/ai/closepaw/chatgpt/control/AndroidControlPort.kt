@@ -73,14 +73,19 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
         }
         var queried = 0
+        var protectedExcluded = 0
         // Discovery is not authorization. Return matching identities with separate capabilities.
         val matches = AndroidAppCatalog(context.packageManager, { pkg ->
-            queried++; pkg != context.packageName && pkg != "com.android.systemui" &&
+            queried++
+            val include = pkg != context.packageName && pkg != "com.android.systemui" &&
                 !pkg.contains("permissioncontroller") && !pkg.contains("packageinstaller")
+            if (!include) protectedExcluded++
+            include
         }).list(filter)
         catalogDiagnostics = buildJsonObject {
             put("catalog_candidates_examined", queried); put("matched_returned", matches.size)
-            put("policy_filtered_from_matches", false); put("os_visibility_diagnosis", "not_measured")
+            put("protected_candidates_excluded", protectedExcluded)
+            put("access_tier_filter_applied", false); put("os_visibility_diagnosis", "not_measured")
         }
         if (withContext(Dispatchers.Main) { reason(service) } != null) throw AppCatalogUnavailable("device_state_changed")
         listedPackages = matches.map { it.packageName }.toSet()
@@ -224,26 +229,52 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 }
                 for (i in 0 until node.childCount) {
                     if (visited >= nodeBudget) { truncated = true; truncationReasons.add("node_limit"); break }
-                    val child = node.getChild(i) ?: continue
+                    if (SystemClock.elapsedRealtime() - scanStarted > 2500) {
+                        truncated = true; truncationReasons.add("scan_time_limit"); break
+                    }
+                    val child = node.getChild(i)
+                    if (child == null) { truncated = true; truncationReasons.add("child_unavailable"); continue }
                     owned.add(child); visit(child, depth + 1, index, expose)
                 }
             }
-            for (id in selected.selection.members) {
-                val member = if (id == root.windowId) root else windows.single { it.id == id }.root
-                if (member == null || member.windowId != id || member.packageName?.toString() != pkg) {
-                    if (member != null && member !== root) member.recycleCompat()
-                    return@withContext block(denied("owned_window_root_changed", selected.diagnostics), emptyList())
+            var traversalFailure: String? = null
+            // Binder-backed node reads and fingerprint construction can be large on launchers.
+            // Keep traversal off Main; all native effects still execute on Main after revalidation.
+            val fingerprint = withContext(Dispatchers.Default) {
+                for (id in selected.selection.members) {
+                    val member = if (id == root.windowId) root else windows.single { it.id == id }.root
+                    if (member == null || member.windowId != id || member.packageName?.toString() != pkg) {
+                        if (member != null && member !== root) member.recycleCompat()
+                        traversalFailure = "owned_window_root_changed"; break
+                    }
+                    if (member !== root) owned.add(member)
+                    identity.append("window=").append(id).append('\n')
+                    visit(member, 0, -1, id == selected.selection.target)
                 }
-                if (member !== root) owned.add(member)
-                identity.append("window=").append(id).append('\n')
-                visit(member, 0, -1, id == selected.selection.target)
+                operationHash(identity.toString())
             }
+            traversalFailure?.let { return@withContext block(denied(it, selected.diagnostics), emptyList()) }
+            reason(service)?.let { return@withContext block(denied(it), emptyList()) }
+            if ((runtime?.snapshot()?.revision ?: 0) != revision)
+                return@withContext block(denied("configuration_revision_changed"), emptyList())
+            val currentRoot = service.rootInActiveWindow
+                ?: return@withContext block(denied("active_root_missing"), emptyList())
+            val currentWindows = service.windows.orEmpty()
+            val stable = try {
+                currentRoot.windowId == root.windowId && currentRoot.packageName?.toString() == pkg &&
+                    controlWindows(currentRoot.windowId, pkg, currentWindows).let {
+                        it.signature == selected.signature && it.selection == selected.selection
+                    }
+            } finally {
+                currentRoot.recycleCompat(); currentWindows.forEach { runCatching { it.recycle() } }
+            }
+            if (!stable) return@withContext block(denied("screen_changed", selected.diagnostics), emptyList())
             val code = GenericScreenPolicy.refusal(
                 blocked = classifier.classify(pkg) == AppTier.BLOCKED, sensitive = protected,
                 packageAllowed = packageAllowed(pkg), isGeminiHost = pkg == AndroidGeminiDraftUi.GOOGLE_HOST,
                 verifiedGemini = gemini || (!truncated && GeminiReadIdentity.nativeShell(pkg, shellIds)), readable = nodes.isNotEmpty(),
             ) ?: reason(service)
-            block(ControlFrame(pkg, window.id, operationHash(identity.toString()), nodes, code, truncated,
+            block(ControlFrame(pkg, window.id, fingerprint, nodes, code, truncated,
                 truncationReasons, visited, deepest, touchContext(service, window, windows), root.windowId,
                 selected.signature, selected.diagnostics, revision, outputLimit), native)
         } finally {

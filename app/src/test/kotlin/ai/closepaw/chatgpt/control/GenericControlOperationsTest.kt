@@ -26,6 +26,33 @@ class GenericControlOperationsTest {
     private fun registry(port: Port, mutex: Mutex = Mutex()) = OperationRegistry().also {
         GenericControlOperations(GenericControl(port, { true }), port, mutex) { OperationReadiness() }.register(it)
     }
+    @Test fun runtimeApplyRollbackInvalidatesObservationAndRejectsStaleRevision() = runBlocking {
+        var disk: String? = null
+        val runtime = RuntimeControlSettings({ disk }, { disk = it })
+        val port = Port(); val control = GenericControl(port, { true })
+        val registry = OperationRegistry()
+        GenericControlOperations(control, port, Mutex(), runtime) { OperationReadiness() }.register(registry)
+        registry.get(GenericControlOperations.CONFIGURE)!!.descriptor.inputSchema.let(OperationSchemaValidator::checkSchema)
+        val observed = control.observe()
+        val handler = registry.get(GenericControlOperations.CONFIGURE)!!.handler
+        val changed = handler.invoke(OperationInvocation("apply", buildJsonObject {
+            put("expected_revision", 0); put("action", "apply"); put("config", RuntimeControlSettings.defaults())
+        }))
+        assertTrue(changed.success)
+        assertEquals(JsonPrimitive(1L), changed.data["revision"])
+        assertFalse(control.action(buildJsonObject {
+            put("observation_id", observed.data.getValue("observation_id")); put("action", "home")
+        }).success)
+        assertEquals(0, port.writes)
+        val stale = handler.invoke(OperationInvocation("stale", buildJsonObject {
+            put("expected_revision", 0); put("action", "rollback")
+        }))
+        assertFalse(stale.success); assertEquals("configuration_revision_changed", stale.summary)
+        assertTrue(handler.invoke(OperationInvocation("rollback", buildJsonObject {
+            put("expected_revision", 1); put("action", "rollback")
+        })).success)
+        assertEquals(2L, runtime.snapshot().revision)
+    }
     @Test fun visibilityFlagIsNotAnInventedOsDiagnosis() = runBlocking {
         val result = registry(Port()).get(GenericControlOperations.APPS)!!.handler.invoke(
             OperationInvocation("apps", buildJsonObject { put("filter", "Calculator") }))

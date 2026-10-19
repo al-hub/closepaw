@@ -1,6 +1,8 @@
 package ai.closepaw.chatgpt.control
 
 import ai.closepaw.chatgpt.operations.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
@@ -61,13 +63,17 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                 }, required = listOf("expected_revision", "action")), readOnly = false,
             effects = listOf("runtime_control_configuration"), permissions = listOf("generic_android_control"), readiness = readiness), handler { invocation ->
                 if (!readiness().ready) appFailure("generic_control_unavailable") else try {
-                    val snapshot = runtime?.change(invocation.input.getValue("expected_revision").jsonPrimitive.long,
-                        invocation.input.getValue("action").jsonPrimitive.content, invocation.input["config"]?.jsonObject)
+                    val snapshot = withContext(Dispatchers.IO) {
+                        if (!readiness().ready) throw IllegalStateException("generic_control_unavailable")
+                        runtime?.change(invocation.input.getValue("expected_revision").jsonPrimitive.long,
+                            invocation.input.getValue("action").jsonPrimitive.content, invocation.input["config"]?.jsonObject)
+                    }
                     if (snapshot == null) appFailure("runtime_configuration_unavailable") else {
                         control.invalidate()
                         OperationResult(data = buildJsonObject { put("revision", snapshot.revision); put("config", snapshot.config) },
                             summary = "Runtime configuration applied; acquire a new app selection and observation.")
                     }
+                } catch (e: CancellationException) { throw e
                 } catch (e: IllegalArgumentException) { appFailure(if (e.message == "configuration_revision_changed") e.message!! else "configuration_invalid")
                 } catch (_: Exception) { appFailure("configuration_update_failed") }
             })

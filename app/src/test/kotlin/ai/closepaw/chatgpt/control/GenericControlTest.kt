@@ -22,6 +22,17 @@ class GenericControlTest {
         assertFalse(result.data.containsKey("nodes")); assertFalse(result.data.containsKey("observation_id"))
         assertFalse(control.action(input("old-host-observation")).success); assertEquals(0, port.writes)
     }
+    @Test fun transientPostActionWindowRaceReobservesWithoutRepeatingEffect() = runBlocking {
+        val port = Port().apply { transientPostReads = 1 }
+        val control = GenericControl(port, { true }); val result = control.action(input(observe(control)))
+        assertTrue(result.success); assertEquals(1, port.writes)
+    }
+    @Test fun unresolvedPostActionRaceStaysUnknownWithoutReplay() = runBlocking {
+        val port = Port().apply { transientPostReads = 10 }
+        val control = GenericControl(port, { true }); val result = control.action(input(observe(control)))
+        assertFalse(result.success); assertTrue(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+        assertEquals(1, port.writes)
+    }
     @Test fun explicitNodeTapIsSingleUseAndDoesNotClaimModelSelection() = runBlocking {
         val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
         val result = control.action(input(id, "tap"))
@@ -67,8 +78,14 @@ class GenericControlTest {
     private class Port : ControlPort {
         var frame = ControlFrame("example.app", 3, "screen-a", listOf(ControlNode(1, "Model", clickable = true)), touchContext = "window-a")
         var writes = 0
+        var transientPostReads = 0
         var effect = ControlEffect(true, true, "action_acknowledged")
-        override suspend fun capture() = frame
+        override suspend fun capture(): ControlFrame {
+            if (writes > 0 && transientPostReads > 0) {
+                transientPostReads--; return frame.copy(reason = "active_root_missing")
+            }
+            return frame
+        }
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect { writes++; return effect }
         override suspend fun apps(filter: String) = JsonArray(emptyList())
     }
