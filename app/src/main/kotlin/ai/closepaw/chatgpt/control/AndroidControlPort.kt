@@ -15,10 +15,16 @@ import ai.closepaw.protocol.SessionState
 import ai.closepaw.tool.AppClassifierHolder
 import ai.closepaw.util.recycleCompat
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
+import android.graphics.Path
+import android.graphics.Region
+import android.graphics.RegionIterator
+import android.hardware.display.DisplayManager
+import android.view.accessibility.AccessibilityManager
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -31,7 +37,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import kotlin.coroutines.resume
 
-/** Native adapter: no app-specific planner, coordinates, gesture fallback, screen logging or persistent node refs. */
+/** Native adapter: semantic targets only; explicit guarded node tap, never automatic gesture fallback. */
 internal class AndroidControlPort(context: Context, private val mutationBlock: (String) -> String? = { null },
     private val allowed: () -> Boolean) : ControlPort {
     private val context = context.applicationContext
@@ -189,11 +195,78 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 verifiedGemini = gemini || (!truncated && GeminiReadIdentity.nativeShell(pkg, shellIds)), readable = nodes.isNotEmpty(),
             ) ?: reason(service)
             block(ControlFrame(pkg, root.windowId, operationHash(identity.toString()), nodes, code, truncated,
-                truncationReasons, visited, deepest), native)
+                truncationReasons, visited, deepest, touchContext(service, window, windows)), native)
         } finally {
             owned.forEach { it.recycleCompat() }
             windows.forEach { runCatching { it.recycle() } }
         }
+    }
+    private fun bounds(rect: Rect) = TapBounds(rect.left, rect.top, rect.right, rect.bottom)
+    private fun windowBounds(window: AccessibilityWindowInfo): Rect = Rect().also { window.getBoundsInScreen(it) }
+
+    /** Includes IME, system and accessibility overlays, even when not in the active node tree. */
+    private fun touchContext(service: AgentService, window: AccessibilityWindowInfo, windows: List<AccessibilityWindowInfo>): String {
+        // Android applies magnification/exploration to injected gestures, so screen coordinates
+        // are not an identity-preserving target in those modes.
+        if (Build.VERSION.SDK_INT < 34) return ""
+        val magnification = service.magnificationController.magnificationConfig ?: return ""
+        if (context.getSystemService(AccessibilityManager::class.java).isTouchExplorationEnabled ||
+            magnification.isActivated) return ""
+        val display = context.getSystemService(DisplayManager::class.java).getDisplay(android.view.Display.DEFAULT_DISPLAY)
+            ?: return ""
+        if (window.displayId != android.view.Display.DEFAULT_DISPLAY || window.isInPictureInPictureMode || !bounds(windowBounds(window)).valid ||
+            windows.isEmpty() || windows.size > 64 || windows.map { it.id }.distinct().size != windows.size) return ""
+        val geometry = StringBuilder("rotation=${display.rotation}\n")
+        for (item in windows.sortedBy { it.id }) {
+            val region = Region(); item.getRegionInScreen(region)
+            val parts = mutableListOf<String>(); val iterator = RegionIterator(region); val part = Rect()
+            while (iterator.next(part)) {
+                if (parts.size >= 256) return ""
+                parts.add(part.flattenToString())
+            }
+            geometry.append("${item.id}:${item.displayId}:${item.type}:${item.layer}:${item.isActive}:${item.isFocused}:${item.isInPictureInPictureMode}:")
+                .append(windowBounds(item).flattenToString()).append(":").append(parts.joinToString(";")).append('\n')
+        }
+        return operationHash(geometry.toString())
+    }
+    private suspend fun tap(service: AgentService, frame: ControlFrame, targetBounds: Rect): ControlEffect {
+        // Reacquire windows immediately before dispatch, while still on Main. No suspension between
+        // these checks and dispatchGesture; the gesture has no caller-controlled coordinates.
+        val windows = service.windows.orEmpty()
+        try {
+            val root = service.rootInActiveWindow ?: return ControlEffect(false, false, "active_root_missing")
+            val rootMatches = try { root.windowId == frame.windowId && root.packageName?.toString() == frame.packageName }
+                finally { root.recycleCompat() }
+            if (!rootMatches) return ControlEffect(false, false, "screen_changed")
+            val window = windows.singleOrNull { it.id == frame.windowId }
+                ?: return ControlEffect(false, false, "touch_window_unavailable")
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION || !window.isActive || !window.isFocused ||
+                frame.touchContext.isEmpty() || touchContext(service, window, windows) != frame.touchContext)
+                return ControlEffect(false, false, "touch_window_changed")
+            val covering = windows.filter { it.id != window.id && it.displayId == window.displayId && it.layer >= window.layer }
+                .map { bounds(windowBounds(it)) }
+            val point = NodeTapPolicy.point(bounds(targetBounds), bounds(windowBounds(window)), covering)
+                ?: return ControlEffect(false, false, "touch_target_clipped_or_covered")
+            val region = Region(); window.getRegionInScreen(region)
+            if (!region.contains(point.first, point.second)) return ControlEffect(false, false, "touch_target_outside_region")
+            reason(service)?.let { return ControlEffect(false, false, it) }
+            mutationBlock(frame.packageName)?.let { return ControlEffect(false, false, it) }
+            val path = Path().apply { moveTo(point.first.toFloat(), point.second.toFloat()) }
+            val gesture = GestureDescription.Builder().setDisplayId(android.view.Display.DEFAULT_DISPLAY)
+                .addStroke(GestureDescription.StrokeDescription(path, 0, 50)).build()
+            return suspendCancellableCoroutine { continuation ->
+                val submitted = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) {
+                        if (continuation.isActive) continuation.resume(ControlEffect(true, true, "gesture_completed"))
+                    }
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        if (continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_cancelled"))
+                    }
+                }, null)
+                // Even a negative dispatch acknowledgement is conservatively not replayable.
+                if (!submitted && continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_unconfirmed"))
+            }
+        } finally { windows.forEach { runCatching { it.recycle() } } }
     }
     override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
         val service = AgentService.instance ?: return ControlEffect(false, false, "accessibility_permission_missing")
@@ -225,6 +298,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 target.viewIdResourceName.orEmpty().take(100) != expected.resourceId || rect.flattenToString() != expected.bounds ||
                 (Build.VERSION.SDK_INT >= 34 && target.isAccessibilityDataSensitive))
                 return@withTree ControlEffect(false, false, "target_changed")
+            if (action == "tap") {
+                if (!target.isClickable && target.actionList.none { it.id == AccessibilityNodeInfo.ACTION_CLICK })
+                    return@withTree ControlEffect(false, false, "target_not_clickable")
+                return@withTree tap(service, fresh, rect)
+            }
             // Atomic native node actions match the existing Gemini adapter; no focus/tap/retry fallback.
             val acknowledged = when (action) {
                 "click" -> target.performAction(AccessibilityNodeInfo.ACTION_CLICK)

@@ -1,5 +1,12 @@
 # ClosePaw Progress
 
+## v0.1.63 explicit observed-node tap in development (2026-10-19)
+
+- A physical touch proves the model picker exists; requested target is3.8 Flash. Native title click still acknowledged without visible change after dismissing IME; no selection success claimed.
+- [PR #108](https://github.com/al-hub/closepaw/pull/108) adds explicit tap(observation_id,node_id), never caller coordinates or automatic fallback. Complete screen/window identity, secure/lock/consent/unknown-send guards remain. Target must be current, clickable and fully inside the same foreground default-display application window, with center inside its touchable region and no covering window. Window/rotation changes and magnification/touch exploration refuse tap.
+- Cancelled/unconfirmed gestures are unknown and never replayed. Native click remains a native node action. Actual picker/model acceptance, signed delivery/update and P2/Voice remain pending. [Evidence and validation](doc/dev/observed-node-tap-v0163.md). Earlier checkpoints below are historical.
+
+
 ## v0.1.62 real sidebar/composer read accepted (2026-10-19 17:18 KST)
 
 - After user unlock, generic Gemini search/select/open_app succeeded. Generic sidebar open changed the actual screen; registered Gemini screen read succeeded while already foreground, untruncated and text_read_status=ok.
