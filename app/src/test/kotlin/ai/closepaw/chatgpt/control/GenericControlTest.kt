@@ -6,6 +6,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GenericControlTest {
+    @Test fun explicitNodeTapIsSingleUseAndDoesNotClaimModelSelection() = runBlocking {
+        val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
+        val result = control.action(input(id, "tap"))
+        assertTrue("An explicit observed-node tap must reach the guarded native adapter", result.success)
+        assertFalse(result.data.getValue("app_result_verified").jsonPrimitive.boolean)
+        assertFalse(control.action(input(id, "tap")).success)
+        assertEquals(1, port.writes)
+    }
+    @Test fun cancelledTapIsUnknownAndMustNeverReplay() = runBlocking {
+        val port = Port(); port.effect = ControlEffect(true, false, "gesture_cancelled")
+        val control = GenericControl(port, { true }); val id = observe(control)
+        val result = control.action(input(id, "tap"))
+        assertFalse(result.success)
+        assertTrue(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+        assertFalse(control.action(input(id, "tap")).success)
+        assertEquals(1, port.writes)
+    }
     private class Port : ControlPort {
         var frame = ControlFrame("example.app", 3, "screen-a", listOf(ControlNode(1, "Model", clickable = true)))
         var writes = 0
