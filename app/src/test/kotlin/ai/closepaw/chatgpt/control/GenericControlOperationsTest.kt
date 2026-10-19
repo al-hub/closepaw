@@ -11,9 +11,17 @@ import org.junit.Test
 class GenericControlOperationsTest {
     private class Port : ControlPort {
         var writes = 0
+        val activity = mutableListOf<Boolean>()
+        var captureWait = 0L
+        var captureFails = false
+        override suspend fun activity(active: Boolean) { activity.add(active) }
         var appsFail = false
         var appsWait = 0L
-        override suspend fun capture() = ControlFrame("example.app", 1, "stable", listOf(ControlNode(1, "Menu", clickable = true)))
+        override suspend fun capture(): ControlFrame {
+            delay(captureWait)
+            if (captureFails) error("capture failed")
+            return ControlFrame("example.app", 1, "stable", listOf(ControlNode(1, "Menu", clickable = true)))
+        }
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
             writes++; return ControlEffect(true, true, "acknowledged")
         }
@@ -25,6 +33,33 @@ class GenericControlOperationsTest {
     }
     private fun registry(port: Port, mutex: Mutex = Mutex()) = OperationRegistry().also {
         GenericControlOperations(GenericControl(port, { true }), port, mutex) { OperationReadiness() }.register(it)
+    }
+    @Test fun remoteObservationShowsActivityOnlyUntilTheOperationEnds() = runBlocking {
+        val port = Port(); val registry = registry(port)
+        assertTrue(registry.get(GenericControlOperations.OBSERVE)!!.handler.invoke(
+            OperationInvocation("observe", buildJsonObject { put("filter", "Menu") })).success)
+        assertEquals(listOf(true, false), port.activity)
+        port.activity.clear()
+        registry.get(GenericControlOperations.APPS)!!.handler.invoke(OperationInvocation("apps", buildJsonObject { put("filter", "Example") }))
+        assertTrue("App metadata lookup does not imply screen control", port.activity.isEmpty())
+    }
+    @Test fun activityAndMutexAreReleasedOnCaptureFailure() = runBlocking {
+        val port = Port().apply { captureFails = true }; val mutex = Mutex()
+        try {
+            registry(port, mutex).get(GenericControlOperations.OBSERVE)!!.handler.invoke(OperationInvocation("fail", buildJsonObject {}))
+            fail("Capture failure should propagate")
+        } catch (_: IllegalStateException) { }
+        assertEquals(listOf(true, false), port.activity)
+        assertFalse(mutex.isLocked)
+    }
+    @Test fun activityAndMutexAreReleasedOnTimeout() = kotlinx.coroutines.test.runTest {
+        val port = Port().apply { captureWait = 10_001 }; val mutex = Mutex()
+        try {
+            registry(port, mutex).get(GenericControlOperations.OBSERVE)!!.handler.invoke(OperationInvocation("timeout", buildJsonObject {}))
+            fail("Capture should time out")
+        } catch (_: TimeoutCancellationException) { }
+        assertEquals(listOf(true, false), port.activity)
+        assertFalse(mutex.isLocked)
     }
     @Test fun runtimeApplyRollbackInvalidatesObservationAndRejectsStaleRevision() = runBlocking {
         var disk: String? = null

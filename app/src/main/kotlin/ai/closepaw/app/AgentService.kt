@@ -86,6 +86,11 @@ class AgentService : AccessibilityService() {
     private var session: AgentSession? = null
     private var overlayController: ServiceOverlayController? = null
     private var actionVisualizer: ActionVisualizerManager? = null
+    internal val remoteControlChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
+    private val remoteControlIndicator by lazy { RemoteControlIndicator(this) }
+    internal fun showRemoteControlActivity() { remoteControlIndicator.show() }
+    internal fun hideRemoteControlActivity() { remoteControlIndicator.hide() }
+    internal fun ownsRemoteControlIndicatorWindow(id: Int) = remoteControlIndicator.ownsWindow(id)
     private var currentPlatformMode: PlatformMode = PlatformMode.ACCESSIBILITY
     @Volatile private var isServiceActive = false
     private val viewerBridge by lazy {
@@ -231,6 +236,13 @@ class AgentService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // No node reads or text copying in the callback; events only wake the bounded observer.
+        if (event != null && event.packageName?.toString() != packageName &&
+            event.eventType in setOf(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+                AccessibilityEvent.TYPE_WINDOWS_CHANGED, AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+                AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED, AccessibilityEvent.TYPE_VIEW_SCROLLED)) {
+            remoteControlChanges.changed()
+        }
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val eventDisplayId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 event.displayId
@@ -246,10 +258,14 @@ class AgentService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
+        hideRemoteControlActivity()
+        remoteControlChanges.changed()
         Log.w(TAG, "AgentService interrupted")
     }
 
     override fun onDestroy() {
+        hideRemoteControlActivity()
+        remoteControlChanges.changed()
         isServiceActive = false
         instance = null
 

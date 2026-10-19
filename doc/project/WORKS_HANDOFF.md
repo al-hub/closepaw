@@ -1,5 +1,11 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## 2026-10-20: device findings HOLD; remote indicator/latency candidate
+
+- v0.1.65 unlocked device checks: camera capture/save, calculator discount result, Kakao first screen, Maps station search and cross-app return passed. Notes input and complete Clock enumeration remain HOLD by user request.
+- Current task: generic remote-control border/badge, service event wakeups and removal of duplicate native validation capture. [Design, HOLD evidence and honest validation status](../dev/remote-control-feedback-latency.md).
+- Candidate is local only; Android compile/tests/lint, CI, release and new-version device acceptance have not passed. User explicitly approved code upload/CI/release at07:10 KST; candidate0.1.66/code67. No tag/APK delivery yet.
+
 ## v0.1.65/code66 delivered and installed — device UI acceptance blocked by lock (2026-10-19)
 
 - [PR #110](https://github.com/al-hub/closepaw/pull/110) merged as `78395dcdb0637a81224cf14836695fc67de37f19`. Runtime declarative app access/configuration, diagnostic app discovery, bounded complete security traversal and separate filtered presentation are implemented. No app-specific UI branches or coordinates.
