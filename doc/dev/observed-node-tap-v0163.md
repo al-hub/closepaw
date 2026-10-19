@@ -32,3 +32,17 @@ confirm installed version/reconnection, and only then perform actual model-picke
 Any separate popup must pass foreground/security/identity checks; do not assume same-package
 co-occurrence proves Gemini identity. Final acceptance requires observing the actual selected
 model after choosing the user's requested option. No private screen/account/reply is published.
+
+Implementation intentionally supports only the default display and rejects activated magnification
+or touch exploration because Android transforms injected gestures in those modes. Window context
+hash includes bounded window identities, types, layers, active/focus/PiP flags, bounds, touchable
+region rectangles and display rotation. It is rechecked both before effect admission and immediately
+at dispatch. Neither coordinates nor raw window context are returned to callers.
+
+Android API contracts consulted:
+- https://developer.android.com/reference/android/accessibilityservice/AccessibilityService.GestureResultCallback
+- https://developer.android.com/reference/android/accessibilityservice/GestureDescription.Builder
+- https://developer.android.com/reference/android/accessibilityservice/MagnificationConfig#isActivated()
+- https://developer.android.com/reference/android/view/accessibility/AccessibilityWindowInfo#getRegionInScreen(android.graphics.Region)
+
+RED: Security CI39224348380/job117966897973 compiled and ran2,550 tests with exactly2 expected assertion failures: explicitNodeTapIsSingleUseAndDoesNotClaimModelSelection and cancelledTapIsUnknownAndMustNeverReplay. No compilation failure. Runtime was unchanged for this test-only PR head912d44f686acbe2c60529f9ff4149d9160a8c124.

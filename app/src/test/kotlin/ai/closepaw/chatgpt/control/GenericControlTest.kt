@@ -23,8 +23,33 @@ class GenericControlTest {
         assertFalse(control.action(input(id, "tap")).success)
         assertEquals(1, port.writes)
     }
+    @Test fun tapCannotUseMissingOrChangedWindowContext() = runBlocking {
+        for (context in listOf("", "rotated-or-overlay-added")) {
+            val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
+            port.frame = port.frame.copy(touchContext = context)
+            val result = control.action(input(id, "tap"))
+            assertFalse(result.success); assertEquals(0, port.writes)
+            assertEquals(if (context.isEmpty()) "touch_window_unavailable" else "touch_window_changed",
+                result.data["reason_code"]?.jsonPrimitive?.content)
+        }
+    }
+    @Test fun tapRequiresAnExplicitClickableNodeAndCompleteUnchangedScreen() = runBlocking {
+        val cases = listOf<(ControlFrame) -> ControlFrame>(
+            { it.copy(nodes = listOf(ControlNode(1, clickable = false))) },
+            { it.copy(nodes = listOf(ControlNode(1, clickable = true, enabled = false))) },
+            { it.copy(nodes = listOf(ControlNode(1, clickable = true, password = true))) },
+            { it.copy(truncated = true) })
+        for (change in cases) {
+            val port = Port(); port.frame = change(port.frame)
+            val control = GenericControl(port, { true }); val id = observe(control)
+            assertFalse(control.action(input(id, "tap")).success); assertEquals(0, port.writes)
+        }
+        val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
+        port.frame = port.frame.copy(fingerprint = "changed-under-same-window")
+        assertFalse(control.action(input(id, "tap")).success); assertEquals(0, port.writes)
+    }
     private class Port : ControlPort {
-        var frame = ControlFrame("example.app", 3, "screen-a", listOf(ControlNode(1, "Model", clickable = true)))
+        var frame = ControlFrame("example.app", 3, "screen-a", listOf(ControlNode(1, "Model", clickable = true)), touchContext = "window-a")
         var writes = 0
         var effect = ControlEffect(true, true, "action_acknowledged")
         override suspend fun capture() = frame

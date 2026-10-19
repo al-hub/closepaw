@@ -10,6 +10,8 @@ internal object GenericControlActionPolicy {
         expected.packageName != fresh.packageName || expected.windowId != fresh.windowId -> "screen_changed"
         requiresCompleteTree(action) && expected.fingerprint != fresh.fingerprint -> "screen_changed"
         requiresCompleteTree(action) && (expected.truncated || fresh.truncated) -> "truncated_observation"
+        action == "tap" && (expected.touchContext.isEmpty() || fresh.touchContext.isEmpty()) -> "touch_window_unavailable"
+        action == "tap" && expected.touchContext != fresh.touchContext -> "touch_window_changed"
         else -> null
     }
 }

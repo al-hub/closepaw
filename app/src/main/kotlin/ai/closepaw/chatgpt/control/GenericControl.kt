@@ -17,7 +17,8 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
 }
 internal data class ControlFrame(val packageName: String, val windowId: Int, val fingerprint: String,
     val nodes: List<ControlNode>, val reason: String? = null, val truncated: Boolean = false,
-    val truncationReasons: Set<String> = emptySet(), val visitedNodes: Int = 0, val maxDepth: Int = 0)
+    val truncationReasons: Set<String> = emptySet(), val visitedNodes: Int = 0, val maxDepth: Int = 0,
+    val touchContext: String = "")
 internal data class ControlEffect(val attempted: Boolean, val acknowledged: Boolean, val reason: String)
 internal interface ControlPort {
     suspend fun capture(): ControlFrame
@@ -63,6 +64,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             put("package_name", frame.packageName); put("window_id", frame.windowId)
             put("truncated", bounded.truncated); put("actionable", !bounded.truncated)
             put("node_actions_allowed", !bounded.truncated)
+            put("node_tap_available", !bounded.truncated && bounded.touchContext.isNotEmpty())
             put("global_navigation_validation_scope", "foreground_app_window")
             put("node_and_back_validation_scope", "full_screen_fingerprint")
             put("navigation_actions", JsonArray((if (bounded.truncated) listOf("home", "open_app") else listOf("home", "back", "open_app")).map { JsonPrimitive(it) }))
@@ -83,15 +85,15 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (chainActions >= 20 || now() - chainStarted !in 0L..180_000L || noProgress >= 3)
             return failure("control_chain_limit_observe_again")
         val action = input["action"]?.jsonPrimitive?.content.orEmpty()
-        if (action !in setOf("click", "long_press", "type", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
+        if (action !in setOf("click", "tap", "long_press", "type", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
         val frame = observation.frame
         val fresh = port.capture()
         GenericControlActionPolicy.refusal(frame, fresh, action)?.let { return failure(it, GenericControlActionPolicy.validationScope(action)) }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
-        if (action in setOf("click", "long_press", "type", "scroll", "expand", "collapse")) {
+        if (action in setOf("click", "tap", "long_press", "type", "scroll", "expand", "collapse")) {
             if (node == null || !node.enabled || node.password) return failure("target_unavailable")
-            if ((action == "click" && !node.clickable) || (action == "long_press" && !node.longClickable)) return failure("target_not_clickable")
+            if ((action in setOf("click", "tap") && !node.clickable) || (action == "long_press" && !node.longClickable)) return failure("target_not_clickable")
             if ((action == "expand" && !node.expandable) || (action == "collapse" && !node.collapsible)) return failure("native_action_unavailable")
             if (action == "scroll" && (!node.scrollable || input["direction"]?.jsonPrimitive?.content !in setOf("up", "down"))) return failure("target_not_scrollable")
             if (action == "type" && (!node.editable || !node.empty || input["text"]?.jsonPrimitive?.content.isNullOrBlank())) return failure("draft_not_empty_or_not_editable")
