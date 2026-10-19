@@ -82,4 +82,13 @@ class HostedGeminiReadTest {
         assertThat(result.imageBase64).isNull()
         assertThat(result.structured["screenshot_attempts"]!!.jsonPrimitive.content).isEqualTo("1")
     }
+    @Test fun positivelyVerifiedActiveFocusedGeminiRootDoesNotDependOnLaggingPackageEvent() {
+        every { anyConstructed<AndroidGeminiDraftUi>().evidence() } returns DraftWindowEvidence(
+            observedPackage = "com.android.systemui", rootPackage = google, windowId = 7,
+            windowType = android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION,
+            active = true, focused = true,
+        )
+        val result = read().structured
+        assertThat(result["status"]!!.jsonPrimitive.content).isEqualTo("succeeded")
+    }
 }

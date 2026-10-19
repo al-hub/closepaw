@@ -11,11 +11,15 @@ import org.junit.Test
 class GenericControlOperationsTest {
     private class Port : ControlPort {
         var writes = 0
+        var appsFail = false
         override suspend fun capture() = ControlFrame("example.app", 1, "stable", listOf(ControlNode(1, "Menu", clickable = true)))
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
             writes++; return ControlEffect(true, true, "acknowledged")
         }
-        override suspend fun apps(filter: String) = JsonArray(emptyList())
+        override suspend fun apps(filter: String): JsonArray {
+            if (appsFail) error("private package lookup exception")
+            return JsonArray(emptyList())
+        }
     }
     private fun registry(port: Port, mutex: Mutex = Mutex()) = OperationRegistry().also {
         GenericControlOperations(GenericControl(port, { true }), port, mutex) { OperationReadiness() }.register(it)
@@ -70,5 +74,12 @@ class GenericControlOperationsTest {
             store.put(task("confirmed", 2, "succeeded"))
             assertFalse(store.latestOutcomeUnknown("gemini.question.ask"))
         } finally { file.delete() }
+    }
+    @Test fun appLookupFailureReturnsSafeReasonInsteadOfEscapingTheReadHandler() = runBlocking {
+        val port = Port().apply { appsFail = true }
+        val result = registry(port).get(GenericControlOperations.APPS)!!.handler.invoke(OperationInvocation("apps", buildJsonObject { put("filter", "Example") }))
+        assertFalse(result.success)
+        assertEquals("apps_query_failed", result.data["reason_code"]?.jsonPrimitive?.content)
+        assertFalse(result.toString().contains("private package"))
     }
 }

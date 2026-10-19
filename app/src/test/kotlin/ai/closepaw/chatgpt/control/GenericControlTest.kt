@@ -171,4 +171,11 @@ class GenericControlTest {
         }
     }
 
+    @Test fun unchangedAcknowledgementHasExplicitFeedbackAndTiming() = runBlocking {
+        val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
+        val result = control.action(input(id))
+        assertEquals("acknowledged_no_visible_change", result.data["feedback"]?.jsonPrimitive?.content)
+        assertNotNull(result.data["timing_ms"])
+        assertFalse(result.data.getValue("app_result_verified").jsonPrimitive.boolean)
+    }
 }
