@@ -13,7 +13,7 @@ Verified baseline on the same installed APK: camera single capture and new saved
 
 ## Candidate implementation
 
-- A service-owned cyan border and `ClosePaw 자동 제어` badge during generic remote observation/action. Nonfocusable, nontouchable; removed in finally (including timeout/cancellation), interrupt and service destruction. No claims about physical-touch attribution; the badge indicates ClosePaw operation ownership. Human touches are not blocked.
+- A service-owned cyan border and `ClosePaw 자동 제어` badge during generic remote observation/action and the shared UI lease used by registered app reads and dedicated Gemini operations. Nonfocusable, nontouchable; removed in finally (including timeout/cancellation), interrupt and service destruction. No claims about physical-touch attribution; the badge indicates ClosePaw operation ownership. Human touches are not blocked.
 - Only the exact attached indicator window ID, and only TYPE_ACCESSIBILITY_OVERLAY, is excluded from generic window identity/tap-occlusion accounting. Other overlays retain all guards. Removal/creation does not invalidate targets merely because this known noninteractive surface exists.
 - Native Android perform retains a NEW secure-window probe, complete security tree traversal and action-scoped freshness checks. Skip the duplicate engine-level capture only when the adapter explicitly owns that native validation. Other/fake adapters retain engine validation.
 - Service-owned text-free event generation for window/content/text/scroll changes; events from ClosePaw are ignored. StateFlow prevents missing an event between checking and suspending.

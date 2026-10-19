@@ -36,6 +36,17 @@ internal class AndroidOperationRuntime(
     private val roundTripDiagnostics = GeminiDraftDiagnostics(File(context.filesDir, "mcp/gemini-roundtrip-diagnostics.json"))
     private val tailscaleDiagnostics = TailscaleDiagnostics(File(context.filesDir, "mcp/tailscale-recovery.json"))
     private val dispatcher: OperationDispatcher
+
+    /** The same serialized UI lease drives indication for registered reads and dedicated Gemini paths. */
+    private suspend fun <T> Mutex.withRemoteActivity(block: suspend () -> T): T = withLock {
+        val service = AgentService.instance
+        try {
+            withContext(Dispatchers.Main) { service?.showRemoteControlActivity() }
+            block()
+        } finally {
+            withContext(NonCancellable + Dispatchers.Main) { service?.hideRemoteControlActivity() }
+        }
+    }
     init {
         val genericPort = AndroidControlPort(context, mutationBlock = { pkg ->
             if (pkg in setOf(AndroidGeminiDraftUi.PACKAGE, AndroidGeminiDraftUi.GOOGLE_HOST) &&
@@ -65,7 +76,7 @@ internal class AndroidOperationRuntime(
             permissions = listOf("accessibility"), effects = listOf("app_launch"),
             readiness = { OperationReadiness(AgentService.instance != null, if(AgentService.instance == null) "accessibility_permission_missing" else null) },
         ), object : OperationHandler {
-            override suspend fun invoke(invocation: OperationInvocation): OperationResult = screenMutex.withLock {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult = screenMutex.withRemoteActivity {
                 genericControl.invalidate()
                 val captured = withContext(Dispatchers.IO) { readApp.read(invocation.input.getValue("app").jsonPrimitive.content) }
                 OperationResult(data = captured.structured,
@@ -119,7 +130,7 @@ internal class AndroidOperationRuntime(
                 }
             },
         ), object : OperationHandler {
-            override suspend fun invoke(invocation: OperationInvocation): OperationResult = screenMutex.withLock {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult = screenMutex.withRemoteActivity {
                 genericControl.invalidate()
                 val service = AgentService.instance
                 if (service == null) OperationResult(success = false, summary = "Accessibility service is not connected.")
@@ -138,13 +149,13 @@ internal class AndroidOperationRuntime(
         }), object : OperationHandler {
             override suspend fun invoke(invocation: OperationInvocation): OperationResult {
                 try {
-                    return screenMutex.withLock {
+                    return screenMutex.withRemoteActivity {
                         genericControl.invalidate()
-                        if (stoppedQuestions.contains(invocation.taskId)) return@withLock OperationResult(
+                        if (stoppedQuestions.contains(invocation.taskId)) return@withRemoteActivity OperationResult(
                             success = false, summary = "Observation stopped before the question started. No send action was invoked.",
                             data = buildJsonObject { put("state", "interrupted"); put("sent", false); put("send_action_invoked", false); put("generation_cancelled", false) },
                         )
-                        val service = AgentService.instance ?: return@withLock OperationResult(success = false, summary = "Accessibility service is not connected.")
+                        val service = AgentService.instance ?: return@withRemoteActivity OperationResult(success = false, summary = "Accessibility service is not connected.")
                         val allowed = { settings.geminiQuestionEnabled && AgentService.instance === service && !stoppedQuestions.contains(invocation.taskId) }
                         val ui = AndroidGeminiRoundTripUi(service, allowed)
                         val started = android.os.SystemClock.elapsedRealtime()
@@ -175,7 +186,7 @@ internal class AndroidOperationRuntime(
             OperationReadiness(AgentService.instance != null,
                 if (AgentService.instance == null) "accessibility_permission_missing" else null)
         }), GeminiUiInspectionOperation {
-            screenMutex.withLock {
+            screenMutex.withRemoteActivity {
                 genericControl.invalidate()
                 val service = AgentService.instance
                 if (service == null) buildJsonObject { put("foreground", false); put("reason_code", "accessibility_permission_missing") }

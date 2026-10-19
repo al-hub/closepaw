@@ -88,7 +88,11 @@ class AgentService : AccessibilityService() {
     private var actionVisualizer: ActionVisualizerManager? = null
     internal val remoteControlChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
     private val remoteControlIndicator by lazy { RemoteControlIndicator(this) }
-    internal fun showRemoteControlActivity() { remoteControlIndicator.show() }
+    internal fun showRemoteControlActivity() {
+        if (getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked ||
+            !getSystemService(android.os.PowerManager::class.java).isInteractive) return
+        remoteControlIndicator.show()
+    }
     internal fun hideRemoteControlActivity() { remoteControlIndicator.hide() }
     internal fun ownsRemoteControlIndicatorWindow(id: Int) = remoteControlIndicator.ownsWindow(id)
     private var currentPlatformMode: PlatformMode = PlatformMode.ACCESSIBILITY
