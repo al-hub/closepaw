@@ -1,6 +1,6 @@
 # Composerless Gemini navigation host — v0.1.62 candidate
 
-Status: v0.1.62/code63 DELIVERED and REMOTELY INSTALLED; locked non-UI checks passed. New-version unlocked sidebar/model acceptance pending.
+Status: v0.1.62/code63 DELIVERED and INSTALLED; locked checks and actual unlocked sidebar/composer read ACCEPTED. Model selection and Voice/P2 remain pending.
 
 ## Direct device evidence (2026-10-19 KST)
 
@@ -34,7 +34,7 @@ GREEN: Security CI39209772706/job117920349523 succeeded. Downloaded report artif
 - Installation was requested while locked and installed-state/connection/Termux were confirmed between lock observations. Continuous physical lock state during every instant of package replacement was not separately instrumented.
 - No v0.1.62 UI action/read/model selection was attempted while locked. Do not claim real sidebar success from the fixture, signed APK or installed-state checks.
 
-## Next unlocked check — no build wait required
+## Pre-acceptance plan — completed portions recorded below
 
 1. Observe the unlocked ordinary screen, list Gemini again (package selection cache resets across update), and open the exact package.
 2. Open the sidebar semantically once; call registered app.screen.read once. Inspect read_identity.navigation_host_visible and the returned success/failure. Publish only boolean/count diagnostics, never screen/account/conversation contents.
@@ -42,3 +42,15 @@ GREEN: Security CI39209772706/job117920349523 succeeded. Downloaded report artif
 4. Retain already confirmed generic Gemini/Chrome search/select/launch and historical question/35-item reply coverage without rerunning unrelated tests. P2/Voice and matched end-to-end/speech latency remain open.
 
 Command submission and get_task can be issued sequentially within one orchestration call to avoid an unnecessary assistant turn. The confirmed task result still decides completion. This workflow adjustment is not a measured before/after latency claim.
+
+## Actual unlocked acceptance (2026-10-19 17:18 KST)
+
+The user unlocked the phone. Generic observation positively identified the ordinary chat client screen. Filtered app lookup returned the exact Gemini launch package; generic open_app succeeded and observed the hosted Gemini root (device total1,686ms). No registered-read launch fallback was needed.
+
+Generic sidebar open succeeded with an observed screen change (total1,141ms). The subsequent registered app.screen.read(app=gemini) SUCCEEDED with text_read_status=ok/reason_code=ok, app_was_already_foreground=true and truncated=false. Actual read_identity: activity_anchor_present=true, activity_anchor_visible=true, sidebar_pane_visible=false, navigation_host_visible=true, chat_pane_visible=false, traversal_complete=true, visited_nodes176, max_depth33, protected_input=false, identity_verified=true. This directly accepts the visible navigation-host correction on the real composerless sidebar; the prior target_not_foreground failure is resolved for this verified screen/version.
+
+A fresh generic observation selected the actual sidebar close control. Close succeeded with an observed change (total1,012ms), and a subsequent registered read SUCCEEDED on the normal104-node composer screen, text_read_status=ok, truncated=false and already foreground. Thus both sidebar and composer states were verified on v0.1.62.
+
+A final fresh observation confirmed the model-title label remains present with expandable=false/collapsible=false. No new model click, long press, coordinate action, draft edit or question send was attempted. The previous acknowledged-no-change title click is not silently converted into model-selection success.
+
+Next requires comparing a user's physical touch of the model title with the earlier native-action result. Establish whether the installed app offers a picker at all before further controller changes or requested-model selection. No additional build/release is needed for the accepted sidebar fix. Retain existing question/35-item reply and Chrome acceptance; actual model selection, matched end-to-end/speech latency and Voice/P2 remain open. These timings are device intervals, not a measured before/after user feedback improvement. No raw sidebar, account or conversation contents are published.

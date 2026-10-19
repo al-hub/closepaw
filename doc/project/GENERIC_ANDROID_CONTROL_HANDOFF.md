@@ -1,5 +1,14 @@
 # 범용 Android 제어기 — 개발 착수용 Works 인계
 
+## v0.1.62 real sidebar/composer read accepted (2026-10-19 17:18 KST)
+
+- After user unlock, generic Gemini search/select/open_app succeeded. Generic sidebar open changed the actual screen; registered Gemini screen read succeeded while already foreground, untruncated and text_read_status=ok.
+- Actual identity diagnostics: navigation_host_visible=true and identity_verified=true; complete176-node/depth33 traversal, no protected input. Content/chat pane flags remained false, confirming why their earlier-only gate rejected the sidebar.
+- Generic close succeeded; registered read on the normal104-node composer screen also succeeded. The prior sidebar target_not_foreground issue is accepted as resolved for this verified version/screen.
+- No new model-title click was replayed. Fresh metadata exposes no expand/collapse. Remaining model-menu step requires comparing a direct user touch with the earlier acknowledged-no-visible-change native click before selecting an actual requested model.
+- Device totals: launch1,686ms, sidebar open1,141ms/close1,012ms; no matched end-to-end/speech improvement claim. **P2/Voice and model selection remain open**. [Actual evidence and next step](../dev/generic-navigation-host-v0162.md). Earlier checkpoints below are historical.
+
+
 ## v0.1.62/code63 delivered, installed and checked while locked
 
 - [PR #107](https://github.com/al-hub/closepaw/pull/107) merged as efb4bb54ac3173c32bf49fa87feaf60dfe43a30e. The actual native navigation host is accepted only with the exact activity anchor/package and visible host; hidden-host/anchor-only/foreign-package fixtures remain rejected. navigation_host_visible diagnostic added.
