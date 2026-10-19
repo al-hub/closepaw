@@ -26,6 +26,11 @@ class GenericControlOperationsTest {
     private fun registry(port: Port, mutex: Mutex = Mutex()) = OperationRegistry().also {
         GenericControlOperations(GenericControl(port, { true }), port, mutex) { OperationReadiness() }.register(it)
     }
+    @Test fun visibilityFlagIsNotAnInventedOsDiagnosis() = runBlocking {
+        val result = registry(Port()).get(GenericControlOperations.APPS)!!.handler.invoke(
+            OperationInvocation("apps", buildJsonObject { put("filter", "Calculator") }))
+        assertFalse("A constant true is not measured visibility evidence", result.data.containsKey("visibility_limited"))
+    }
     @Test fun descriptorsKeepQueriesSeparateAndRejectCoordinates() {
         val registry = registry(Port())
         assertTrue(registry.get(GenericControlOperations.OBSERVE)!!.descriptor.readOnly)

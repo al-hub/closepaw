@@ -6,6 +6,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GenericControlTest {
+    @Test fun outputBudgetDoesNotInvalidateCompletedSecurityTraversal() = runBlocking {
+        val port = Port()
+        port.frame = port.frame.copy(nodes = (1..60).map { ControlNode(it, "Button $it", clickable = true) })
+        val control = GenericControl(port, { true })
+        val observed = control.observe()
+        assertTrue(observed.data.getValue("node_actions_allowed").jsonPrimitive.boolean)
+        assertTrue(control.action(input(observed.data.getValue("observation_id").jsonPrimitive.content)).success)
+    }
     @Test fun unverifiedPopupReturnsBoundedDiagnosticsWithoutUnderlyingTargets() = runBlocking {
         val port = Port(); val diagnostics = buildJsonObject { put("window_count", 3); put("selection_reason", "unlinked_application_window") }
         port.frame = port.frame.copy(reason = "unlinked_application_window", windowDiagnostics = diagnostics)
