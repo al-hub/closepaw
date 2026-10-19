@@ -1,5 +1,15 @@
 # 범용 Android 제어기 — 개발 착수용 Works 인계
 
+## v0.1.60 reliability/feedback work in progress (2026-10-19 KST)
+
+The user authorized continuing through signed delivery and locked-device acceptance.
+PR#105 tracks app lookup, composerless Gemini read identity, generic menu actions and
+feedback timing. See [latest baseline, scope and remaining acceptance](../dev/generic-control-feedback-v0160.md).
+v0.1.59 unlocked checks passed for Home, sidebar close, dedicated question/reply,
+a35-item long reply, Chrome read/menu/Back; generic app lookup and model change remain
+unaccepted. Earlier locked-only checkpoint below is historical. P2 remains ACTIVE.
+
+
 ## v0.1.59/code60 delivered and remotely installed — real UI acceptance blocked by device lock
 
 [PR #104](https://github.com/al-hub/closepaw/pull/104) merged as bf8bbeba6647495234a76be42130fb93078002c6. Home/exact selected app launch now validate foreground app/window identity; Back and node operations retain complete content hashing. RED reproduced2 failures; GREEN2,531 Android tests passed with0 failures/errors/skips, lint0 errors/108 warnings, Python55+8 passed. PR CI, signed probe, main CI39174209365 and Signed Release39174729253 all passed.

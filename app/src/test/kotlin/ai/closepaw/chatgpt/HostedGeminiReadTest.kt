@@ -32,6 +32,7 @@ class HostedGeminiReadTest {
         every { anyConstructed<AccessibilityPlatform>().getCurrentPackageName() } returns google
         coEvery { anyConstructed<AccessibilityPlatform>().launchApp(any()) } returns ActionResult.Success("launched")
         coEvery { anyConstructed<AndroidGeminiDraftUi>().isLocked() } returns false
+        coEvery { anyConstructed<AndroidGeminiDraftUi>().isReadScreen() } returns false
         coEvery { anyConstructed<AndroidGeminiDraftUi>().inspect() } answers { DraftComposerState(verified, if (verified) 1 else 0, "") }
         every { anyConstructed<AndroidGeminiDraftUi>().evidence() } answers {
             DraftWindowEvidence(observedPackage = google, rootPackage = google, windowId = 7)
@@ -90,5 +91,20 @@ class HostedGeminiReadTest {
         )
         val result = read().structured
         assertThat(result["status"]!!.jsonPrimitive.content).isEqualTo("succeeded")
+    }
+    @Test fun verifiedNativeSidebarCanBeReadWithoutAComposerButDoesNotWrite() {
+        verified = false
+        coEvery { anyConstructed<AndroidGeminiDraftUi>().isReadScreen() } returns true
+        val result = read().structured
+        assertThat(result["status"]!!.jsonPrimitive.content).isEqualTo("succeeded")
+        coVerify(exactly = 0) { anyConstructed<AndroidGeminiDraftUi>().setIfEmpty(any()) }
+    }
+    @Test fun unverifiedBackgroundRootCannotReplaceLaggingForegroundEvent() {
+        every { anyConstructed<AndroidGeminiDraftUi>().evidence() } returns DraftWindowEvidence(
+            observedPackage = "other.app", rootPackage = google, windowId = 7,
+            windowType = android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION,
+            active = false, focused = false,
+        )
+        assertThat(read().structured["reason_code"]!!.jsonPrimitive.content).isEqualTo("target_not_foreground")
     }
 }

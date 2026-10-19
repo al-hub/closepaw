@@ -178,4 +178,16 @@ class GenericControlTest {
         assertNotNull(result.data["timing_ms"])
         assertFalse(result.data.getValue("app_result_verified").jsonPrimitive.boolean)
     }
+    @Test fun expandRequiresExplicitNativeSupportAndCannotBypassPartialFrame() = runBlocking {
+        val port = Port(); val control = GenericControl(port, { true })
+        val unsupported = control.action(input(observe(control), "expand"))
+        assertEquals("native_action_unavailable", unsupported.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(0, port.writes)
+        port.frame = port.frame.copy(nodes = listOf(ControlNode(1, expandable = true)))
+        assertTrue(control.action(input(observe(control), "expand")).success)
+        assertEquals(1, port.writes)
+        port.frame = port.frame.copy(truncated = true)
+        assertFalse(control.action(input(observe(control), "expand")).success)
+        assertEquals(1, port.writes)
+    }
 }

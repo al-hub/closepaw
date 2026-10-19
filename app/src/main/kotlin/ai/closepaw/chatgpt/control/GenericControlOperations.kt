@@ -2,6 +2,8 @@ package ai.closepaw.chatgpt.control
 
 import ai.closepaw.chatgpt.operations.*
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.json.*
 
@@ -13,7 +15,10 @@ internal class GenericControlOperations(private val control: GenericControl, pri
             override suspend fun invoke(invocation: OperationInvocation): OperationResult {
                 if (!mutex.tryLock()) return OperationResult(success = false, summary = "ui_busy",
                     data = buildJsonObject { put("reason_code", "ui_busy"); put("action_attempted", false) })
-                return try { withTimeout(10_000) { block(invocation) } } finally { mutex.unlock() }
+                return try { withTimeout(10_000) { block(invocation) } }
+                catch (e: TimeoutCancellationException) {
+                    if (invocation.input.containsKey("filter")) appFailure("apps_query_timeout") else throw e
+                } finally { mutex.unlock() }
             }
         }
         registry.register(OperationDescriptor(OBSERVE,
@@ -26,19 +31,25 @@ internal class GenericControlOperations(private val control: GenericControl, pri
             permissions = listOf("generic_android_control"), readiness = readiness), handler {
                 val ready = readiness()
                 if (!ready.ready) OperationResult(success = false, summary = ready.reason ?: "not_ready")
-                else OperationResult(data = buildJsonObject { put("apps", port.apps(it.input.getValue("filter").jsonPrimitive.content))
-                    put("limit", 40); put("visibility_limited", true) }, summary = "Matching launchable apps returned; use exact package identity.")
+                else try {
+                    OperationResult(data = buildJsonObject { put("apps", port.apps(it.input.getValue("filter").jsonPrimitive.content))
+                        put("limit", 40); put("visibility_limited", true) }, summary = "Matching launchable apps returned; use exact package identity.")
+                } catch (e: AppCatalogUnavailable) { appFailure(e.reasonCode)
+                } catch (e: CancellationException) { throw e
+                } catch (_: Exception) { appFailure("apps_query_failed") }
             })
         registry.register(OperationDescriptor(ACTION,
-            "Perform exactly one guarded action from a fresh observation, then return a new observation. Requires observation_id for ALL actions and node_id for click/long_press/type/scroll. type only fills an empty field; never overwrites. open_app requires an exact package from android.apps.list. Partial observations allow only Home/exact app launch; Back and node actions require a complete tree. Home/open_app validate foreground app/window identity; Back/node actions additionally require the unchanged content fingerprint. Inspect validation_scope. Policy and consent are rechecked for every action. No coordinate fallback, no model-specific logic, no automatic resend. Native acknowledgement is not confirmation of the user's requested result. Inspect the new screen. Unknown outcomes require observation, never replay.",
+            "Perform exactly one guarded action from a fresh observation, then return a new observation. Requires observation_id for ALL actions and node_id for click/long_press/type/scroll/expand/collapse. type only fills an empty field; never overwrites. open_app requires an exact package from android.apps.list. Partial observations allow only Home/exact app launch; Back and node actions require a complete tree. Home/open_app validate foreground app/window identity; Back/node actions additionally require the unchanged content fingerprint. Inspect validation_scope. Policy and consent are rechecked for every action. expand/collapse require the corresponding advertised native node action. No coordinate fallback, no model-specific logic, no automatic resend. Native acknowledgement is not confirmation of the user's requested result. Inspect the new screen. Unknown outcomes require observation, never replay.",
             inputSchema = obj("observation_id" to str(128, 1), "action" to buildJsonObject {
-                put("type", "string"); put("enum", JsonArray(listOf("click", "long_press", "type", "scroll", "home", "back", "open_app").map { JsonPrimitive(it) }))
+                put("type", "string"); put("enum", JsonArray(listOf("click", "long_press", "type", "scroll", "expand", "collapse", "home", "back", "open_app").map { JsonPrimitive(it) }))
             }, "node_id" to buildJsonObject { put("type", "integer"); put("minimum", 0); put("maximum", 511) },
                 "text" to str(2000, 1), "direction" to buildJsonObject { put("type", "string"); put("enum", JsonArray(listOf(JsonPrimitive("up"), JsonPrimitive("down")))) },
                 "package_name" to str(256, 1), required = listOf("observation_id", "action")),
             readOnly = false, permissions = listOf("accessibility", "generic_android_control"),
             effects = listOf("foreground_ui_action"), readiness = readiness), handler { control.action(it.input) })
     }
+    private fun appFailure(reason: String) = OperationResult(success = false, summary = reason,
+        data = buildJsonObject { put("reason_code", reason); put("action_attempted", false) })
     companion object {
         const val OBSERVE = "android.screen.observe"
         const val APPS = "android.apps.list"

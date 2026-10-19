@@ -3,6 +3,7 @@ package ai.closepaw.chatgpt.control
 import ai.closepaw.app.AgentService
 import ai.closepaw.chatgpt.AndroidGeminiDraftUi
 import ai.closepaw.chatgpt.GeminiDraftComposerPolicy
+import ai.closepaw.chatgpt.GeminiReadIdentity
 import ai.closepaw.chatgpt.operations.operationHash
 import ai.closepaw.platform.AccessibilityPlatform
 import ai.closepaw.platform.ActionResult
@@ -21,10 +22,10 @@ import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
@@ -37,6 +38,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private val classifier = AppClassifierHolder.get(this.context)
     private var listedPackages = emptySet<String>()
     private var certifiedWindow = -1
+    private val probeThrottle = ScreenProbeThrottle({ SystemClock.elapsedRealtime() })
+    override fun invalidate() { probeThrottle.reset() }
     private fun reason(service: AgentService?): String? = when {
         !allowed() -> "generic_control_disabled"
         service == null -> "accessibility_permission_missing"
@@ -51,21 +54,26 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         isPackageBlocked = { classifier.classify(it) == AppTier.BLOCKED })
 
     override suspend fun apps(filter: String): JsonArray {
+        // Invalidate old selections before any failure or cancellation.
+        listedPackages = emptySet()
         val service = AgentService.instance
-        if (reason(service) != null || service == null) { listedPackages = emptySet(); return JsonArray(emptyList()) }
-        val matches = platform(service).getInstalledApps().filter {
-            (it.label.contains(filter, true) || it.packageName.contains(filter, true)) && packageAllowed(it.packageName)
-        }.sortedWith(compareBy({ it.label }, { it.packageName })).take(40)
-        if (reason(service) != null) { listedPackages = emptySet(); return JsonArray(emptyList()) }
+        val refusal = withContext(Dispatchers.Main) { reason(service) }
+        if (refusal != null || service == null) throw AppCatalogUnavailable(refusal ?: "accessibility_permission_missing")
+        val launcher = withContext(Dispatchers.IO) {
+            context.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+                android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+        }
+        val matches = AndroidAppCatalog(context.packageManager) { packageAllowed(it, launcher, resolveLauncher = false) }.list(filter)
+        if (withContext(Dispatchers.Main) { reason(service) } != null) throw AppCatalogUnavailable("device_state_changed")
         listedPackages = matches.map { it.packageName }.toSet()
         return JsonArray(matches.map { buildJsonObject { put("label", it.label.take(128)); put("package_name", it.packageName) } })
     }
-    private fun packageAllowed(pkg: String): Boolean {
+    private fun packageAllowed(pkg: String, knownLauncher: String? = null, resolveLauncher: Boolean = true): Boolean {
         if (pkg == context.packageName || pkg.contains("permissioncontroller") || pkg.contains("packageinstaller") ||
             pkg == "com.android.systemui") return false
         if (classifier.classify(pkg) == AppTier.BLOCKED) return false
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        val launcher = context.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+        val launcher = if (resolveLauncher) context.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName else knownLauncher
         return classifier.classify(pkg) == AppTier.NORMAL || pkg == launcher
     }
     override suspend fun capture(): ControlFrame {
@@ -80,7 +88,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private suspend fun secureWindow(service: AgentService): String? {
         certifiedWindow = -1
         if (Build.VERSION.SDK_INT < 34) return "secure_window_probe_requires_android14"
-        delay(400) // respect Android screenshot request interval; no fallback on a failed probe
+        probeThrottle.awaitSlot() // wait only for the remaining API interval, never skip the probe
         return withContext(Dispatchers.Main) {
             reason(service)?.let { return@withContext it }
             val root = service.rootInActiveWindow ?: return@withContext "active_root_missing"
@@ -123,6 +131,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             var truncated = false
             var protected = false
             var gemini = false
+            val shellIds = mutableSetOf<String>()
             var visited = 0
             var deepest = 0
             val truncationReasons = linkedSetOf<String>()
@@ -139,6 +148,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val description = node.contentDescription?.toString().orEmpty()
                 val resource = node.viewIdResourceName.orEmpty()
                 val hint = node.hintText?.toString().orEmpty()
+                if (node.isVisibleToUser && node.packageName?.toString() == pkg) shellIds.add(resource)
                 val sensitiveId = resource.substringAfterLast('/').lowercase()
                 if (node.isPassword || (Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive) ||
                     listOf("password", "credential", "biometric", "lock_settings", "pin_entry", "otp", "permission_allow").any { sensitiveId.contains(it) }) protected = true
@@ -149,17 +159,20 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     put("resource", resource); put("class", node.className?.toString().orEmpty()); put("bounds", rect.flattenToString())
                     put("visible", node.isVisibleToUser); put("enabled", node.isEnabled); put("clickable", node.isClickable)
                     put("long_clickable", node.isLongClickable); put("editable", node.isEditable); put("scrollable", node.isScrollable); put("password", node.isPassword)
-                    put("child_count", node.childCount); put("actions", node.actionList.joinToString { it.id.toString() })
+                    put("selected", node.isSelected); put("child_count", node.childCount); put("actions", node.actionList.joinToString { it.id.toString() })
                 }
                 identity.append(json.toString()).append('\n')
                 if (node.isVisibleToUser && !rect.isEmpty &&
                     (text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable ||
-                        node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })) {
+                        node.actionList.any { it.id in setOf(AccessibilityNodeInfo.ACTION_CLICK, AccessibilityNodeInfo.ACTION_EXPAND, AccessibilityNodeInfo.ACTION_COLLAPSE) })) {
                     if (nodes.size >= 50) { truncated = true; truncationReasons.add("output_node_limit") }
                     else {
                         nodes.add(ControlNode(index, if (node.isShowingHintText) "" else text.take(2001), description.take(100), resource.take(100),
                             node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, node.isEditable, node.isScrollable,
-                            node.isEnabled, node.isPassword, node.isShowingHintText || text.isEmpty(), rect.flattenToString(), parent, node.isLongClickable))
+                            node.isEnabled, node.isPassword, node.isShowingHintText || text.isEmpty(), rect.flattenToString(), parent, node.isLongClickable,
+                            node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_EXPAND },
+                            node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_COLLAPSE },
+                            node.className?.toString().orEmpty(), node.isSelected))
                         native.add(node)
                     }
                 }
@@ -173,7 +186,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val code = GenericScreenPolicy.refusal(
                 blocked = classifier.classify(pkg) == AppTier.BLOCKED, sensitive = protected,
                 packageAllowed = packageAllowed(pkg), isGeminiHost = pkg == AndroidGeminiDraftUi.GOOGLE_HOST,
-                verifiedGemini = gemini, readable = nodes.isNotEmpty(),
+                verifiedGemini = gemini || (!truncated && GeminiReadIdentity.nativeShell(pkg, shellIds)), readable = nodes.isNotEmpty(),
             ) ?: reason(service)
             block(ControlFrame(pkg, root.windowId, operationHash(identity.toString()), nodes, code, truncated,
                 truncationReasons, visited, deepest), native)
@@ -215,6 +228,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             // Atomic native node actions match the existing Gemini adapter; no focus/tap/retry fallback.
             val acknowledged = when (action) {
                 "click" -> target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                "expand", "collapse" -> {
+                    val nativeAction = if (action == "expand") AccessibilityNodeInfo.ACTION_EXPAND else AccessibilityNodeInfo.ACTION_COLLAPSE
+                    if (target.actionList.none { it.id == nativeAction }) return@withTree ControlEffect(false, false, "native_action_unavailable")
+                    target.performAction(nativeAction)
+                }
                 "long_press" -> target.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)
                 "scroll" -> target.performAction(if (input.getValue("direction").jsonPrimitive.content == "down")
                     AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
@@ -229,7 +247,6 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
             ControlEffect(true, acknowledged, if (acknowledged) "action_acknowledged" else "action_unconfirmed")
         }
-        if (effect.attempted) delay(350)
         return effect
     }
 }

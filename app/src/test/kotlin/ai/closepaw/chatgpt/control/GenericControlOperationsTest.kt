@@ -12,11 +12,13 @@ class GenericControlOperationsTest {
     private class Port : ControlPort {
         var writes = 0
         var appsFail = false
+        var appsWait = 0L
         override suspend fun capture() = ControlFrame("example.app", 1, "stable", listOf(ControlNode(1, "Menu", clickable = true)))
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
             writes++; return ControlEffect(true, true, "acknowledged")
         }
         override suspend fun apps(filter: String): JsonArray {
+            delay(appsWait)
             if (appsFail) error("private package lookup exception")
             return JsonArray(emptyList())
         }
@@ -81,5 +83,14 @@ class GenericControlOperationsTest {
         assertFalse(result.success)
         assertEquals("apps_query_failed", result.data["reason_code"]?.jsonPrimitive?.content)
         assertFalse(result.toString().contains("private package"))
+    }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun slowCatalogHasExplicitTimeoutAndReleasesUiMutex() = kotlinx.coroutines.test.runTest {
+        val port = Port().apply { appsWait = 10_001 }
+        val mutex = Mutex(); val registry = registry(port, mutex)
+        val result = registry.get(GenericControlOperations.APPS)!!.handler.invoke(OperationInvocation("slow-apps", buildJsonObject { put("filter", "Example") }))
+        assertFalse(result.success)
+        assertEquals("apps_query_timeout", result.data["reason_code"]?.jsonPrimitive?.content)
+        assertFalse(mutex.isLocked)
     }
 }

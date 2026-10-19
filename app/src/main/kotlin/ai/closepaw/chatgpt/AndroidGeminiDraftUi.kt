@@ -47,6 +47,35 @@ internal class AndroidGeminiDraftUi(private val service: AgentService, private v
     override suspend fun inspect(): DraftComposerState = withContext(Dispatchers.Main) {
         withComposers { nodes, foreground -> DraftComposerState(foreground, nodes.size, nodes.singleOrNull()?.let { if (it.isShowingHintText) "" else it.text?.toString().orEmpty() }.orEmpty()) }
     }
+    /** Positively identify a native Gemini shell even when a sidebar/menu hides the composer.
+     * This is read-only and cannot relax withComposers or the guarded send path. */
+    suspend fun isReadScreen(): Boolean = withContext(Dispatchers.Main) {
+        if (isLocked()) return@withContext false
+        val root = foregroundRoot() ?: return@withContext false
+        val owned = mutableListOf(root)
+        try {
+            val pkg = root.packageName?.toString()
+            val evidence = lastEvidence
+            if (evidence.windowType != AccessibilityWindowInfo.TYPE_APPLICATION || evidence.active != true || evidence.focused != true)
+                return@withContext false
+            val ids = mutableSetOf<String>()
+            var count = 0; var complete = true; var protected = false
+            fun visit(node: AccessibilityNodeInfo, depth: Int) {
+                if (count >= 512 || depth > 64) { complete = false; return }
+                count++
+                if (node.isPassword) protected = true
+                if (node.packageName?.toString() == pkg && node.isVisibleToUser) node.viewIdResourceName?.let(ids::add)
+                for (i in 0 until node.childCount.coerceAtMost(100)) {
+                    if (count >= 512) { complete = false; break }
+                    val child = node.getChild(i) ?: continue
+                    owned.add(child); visit(child, depth + 1)
+                }
+                if (node.childCount > 100) complete = false
+            }
+            visit(root, 0)
+            complete && !protected && GeminiReadIdentity.nativeShell(pkg, ids)
+        } finally { owned.forEach { it.recycleCompat() } }
+    }
     override suspend fun setIfEmpty(text: String): DraftWriteResult = withContext(Dispatchers.Main) {
         if (!allowed() || isLocked()) return@withContext DraftWriteResult.TARGET_CHANGED
         withComposers { nodes, foreground ->
