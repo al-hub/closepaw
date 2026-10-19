@@ -24,6 +24,18 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val windowDiagnostics: JsonObject? = null, val configurationRevision: Long = 0, val outputLimit: Int = 50)
 internal data class ControlEffect(val attempted: Boolean, val acknowledged: Boolean, val reason: String)
 internal interface ControlPort {
+    /** Only adapters that enforce the complete freshness policy inside perform may opt in. */
+    val validatesAtNativeBoundary: Boolean get() = false
+    suspend fun activity(active: Boolean) {}
+    suspend fun captureAfter(frame: ControlFrame, input: JsonObject): ControlFrame {
+        var post = capture()
+        repeat(2) {
+            if (post.reason !in setOf("active_root_missing", "foreground_application_required", "secure_window_changed")) return post
+            kotlinx.coroutines.yield()
+            post = capture()
+        }
+        return post
+    }
     suspend fun capture(): ControlFrame
     // Must recheck consent and action-scoped freshness/identity at the native action boundary.
     suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect
@@ -100,9 +112,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val action = input["action"]?.jsonPrimitive?.content.orEmpty()
         if (action !in setOf("click", "tap", "long_press", "type", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
         val frame = observation.frame
-        val fresh = port.capture()
-        GenericControlActionPolicy.refusal(frame, fresh, action)?.let {
-            return failure(it, GenericControlActionPolicy.validationScope(action), fresh.windowDiagnostics)
+        if (!port.validatesAtNativeBoundary) {
+            val fresh = port.capture()
+            GenericControlActionPolicy.refusal(frame, fresh, action)?.let {
+                return failure(it, GenericControlActionPolicy.validationScope(action), fresh.windowDiagnostics)
+            }
         }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
@@ -120,13 +134,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val effect = port.perform(frame, input, node)
         val performedAt = now()
         // After an attempted action even a negative native acknowledgement is not proof of no effect.
-        var post = if (effect.attempted) port.capture() else null
-        var settlingReads = 0
-        while (effect.attempted && post?.reason in setOf("active_root_missing", "foreground_application_required", "secure_window_changed") && settlingReads < 2) {
-            kotlinx.coroutines.delay(100)
-            if (!allowed()) break
-            post = port.capture(); settlingReads++
-        }
+        val post = if (effect.attempted) port.captureAfter(frame, input) else null
         val observed = if (post != null && allowed()) publish(post) else null
         val changed = post != null && post.reason == null &&
             (frame.fingerprint != post.fingerprint || frame.packageName != post.packageName || frame.windowId != post.windowId)
@@ -145,6 +153,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 put("app_result_verified", false)
                 put("feedback", when { !effect.attempted -> "not_attempted"; !verified -> "outcome_unconfirmed";
                     changed -> "screen_change_observed"; else -> "acknowledged_no_visible_change" })
+                put("validation_location", if (port.validatesAtNativeBoundary) "native_boundary" else "engine_and_native")
                 put("timing_ms", buildJsonObject {
                     put("validation", (validatedAt - started).coerceAtLeast(0))
                     put("native_action", (performedAt - validatedAt).coerceAtLeast(0))

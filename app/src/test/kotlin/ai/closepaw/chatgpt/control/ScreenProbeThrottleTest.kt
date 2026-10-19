@@ -10,15 +10,18 @@ class ScreenProbeThrottleTest {
         val waits = mutableListOf<Long>()
         val throttle = ScreenProbeThrottle({ time }, { waits.add(it); time += it })
         throttle.awaitSlot()
-        assertEquals(listOf(400L), waits)
+        assertTrue(waits.isEmpty())
         time += 550
         throttle.awaitSlot()
-        assertEquals(listOf(400L), waits)
+        assertTrue(waits.isEmpty())
         time += 125
         throttle.awaitSlot()
-        assertEquals(listOf(400L, 275L), waits)
+        assertEquals(listOf(275L), waits)
+        // Immediate second probe (including retry of an explicit Android rate-limit refusal).
+        throttle.awaitSlot()
+        assertEquals(listOf(275L, 400L), waits)
         throttle.reset()
         throttle.awaitSlot()
-        assertEquals(listOf(400L, 275L, 400L), waits)
+        assertEquals(listOf(275L, 400L), waits)
     }
 }

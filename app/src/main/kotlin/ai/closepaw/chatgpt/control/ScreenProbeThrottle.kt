@@ -7,8 +7,8 @@ internal class ScreenProbeThrottle(private val now: () -> Long, private val paus
     private var previous: Long? = null
     fun reset() { previous = null }
     suspend fun awaitSlot() {
-        // The first probe may follow a screenshot made by another adapter.
-        val remaining = previous?.let { 400L - (now() - it) } ?: 400L
+        // Probe immediately when no prior invocation is known. Android rate refusal is handled by the adapter.
+        val remaining = previous?.let { 400L - (now() - it) } ?: 0L
         if (remaining > 0) pause(remaining)
         previous = now()
     }

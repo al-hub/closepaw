@@ -75,12 +75,35 @@ class GenericControlTest {
         port.frame = port.frame.copy(fingerprint = "changed-under-same-window")
         assertFalse(control.action(input(id, "tap")).success); assertEquals(0, port.writes)
     }
+    @Test fun nativeBoundaryValidationAvoidsDuplicatePreActionCapture() = runBlocking {
+        val port = Port().apply { nativeValidation = true }
+        val control = GenericControl(port, { true })
+        val id = observe(control)
+        assertTrue(control.action(input(id)).success)
+        assertEquals("Observe + one post capture; native perform owns fresh validation", 2, port.captures)
+        assertEquals(1, port.writes)
+    }
+    @Test fun nativeBoundaryRefusalNeverProducesAnotherEffect() = runBlocking {
+        val port = Port().apply {
+            nativeValidation = true
+            effect = ControlEffect(false, false, "screen_changed")
+        }
+        val control = GenericControl(port, { true })
+        val result = control.action(input(observe(control)))
+        assertFalse(result.success)
+        assertFalse(result.data.getValue("action_attempted").jsonPrimitive.boolean)
+        assertEquals(1, port.captures)
+    }
     private class Port : ControlPort {
         var frame = ControlFrame("example.app", 3, "screen-a", listOf(ControlNode(1, "Model", clickable = true)), touchContext = "window-a")
         var writes = 0
+        var captures = 0
+        var nativeValidation = false
+        override val validatesAtNativeBoundary get() = nativeValidation
         var transientPostReads = 0
         var effect = ControlEffect(true, true, "action_acknowledged")
         override suspend fun capture(): ControlFrame {
+            captures++
             if (writes > 0 && transientPostReads > 0) {
                 transientPostReads--; return frame.copy(reason = "active_root_missing")
             }
