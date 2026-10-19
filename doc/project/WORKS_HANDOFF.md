@@ -1,5 +1,17 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## v0.1.65/code66 delivered and installed — device UI acceptance blocked by lock (2026-10-19)
+
+- [PR #110](https://github.com/al-hub/closepaw/pull/110) merged as `78395dcdb0637a81224cf14836695fc67de37f19`. Runtime declarative app access/configuration, diagnostic app discovery, bounded complete security traversal and separate filtered presentation are implemented. No app-specific UI branches or coordinates.
+- Final PR CI39266632595: 2,582 Android tests, zero failures/errors/skips; lint zero errors/109 warnings/4 info; Python55+8 and debug/native checks passed. Main CI39267769756 and Signed Release39268830338 succeeded. RED CI39264765498 reproduced two expected failures.
+- [Signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.65/closepaw-aa-bridge.apk): 116,454,881 bytes; SHA-256 `5af7920fed5c26a708b40744dd5b8a4c66e161b99553ec19fd74ef65ce131bd6`. Runner independently downloaded the public asset and verified manifest0.1.65/code66, original certificate `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`, both native runtimes, checksum and immutable tag/source. Verification artifact12195785243.
+- Exactly one update task `bdc61eb6-a286-496f-ad11-c42a1bd2a3fe`: durable status installed/current0.1.65/code66 after reconnection; connection/update permissions preserved, no re-registration. Latest update check up_to_date.
+- Same installed APK runtime acceptance PASSED: initial revision0/default4096/50; apply output_limit40 -> revision1 (task427f747e-675e-48f5-9bf4-9e5db4b684a0), independent readback, rollback -> revision2/default4096/50 (task6019e060-309f-475a-a557-f995e3489349), independent restored readback. App grants remain empty. No rebuild for these changes. Termux id task0f5de8c1-5d9e-4d55-b040-5dc68ab62043 succeeded exit0.
+- First new-version screen observation returned `device_locked`, action_attempted=false/outcome_unknown=false. No new-version app launch, UI write or camera capture was attempted. This confirms refusal while locked, not unlocked functionality.
+- Calculator/discount, Kakao first screen, enabled alarms, synthetic notes draft, public maps search, one camera capture/new-photo save verification, cross-app followups and current-version Gemini/Voice acceptance remain PENDING. Camera is authorized without scene-preparation requests; actual lock must first be released. Do not replay effects with unknown outcomes. P2/Voice and matched end-to-end latency remain OPEN.
+- This checkpoint supersedes earlier candidate/delivery notes; historical evidence remains below. Documentation-only followups do not change the immutable released APK source.
+
+
 ## v0.1.64/code65 popup/model/question acceptance completed (2026-10-19)
 
 - [PR #109](https://github.com/al-hub/closepaw/pull/109) merged as6703a873296a51c32985198e8dd63b6d8db9ff96. Observer now securely probes/scans OS parent/anchor-linked application windows and exposes only the topmost owned surface, with bounded text-free diagnostics. Same-package-only ownership is rejected; all prior consent/security/unknown-send guards retained.
