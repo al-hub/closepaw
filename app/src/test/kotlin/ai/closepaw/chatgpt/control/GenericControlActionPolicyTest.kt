@@ -36,5 +36,10 @@ class GenericControlActionPolicyTest {
         assertEquals("screen_changed", GenericControlActionPolicy.refusal(complete, complete.copy(windowId = 5), "tap"))
         assertEquals("screen_changed", GenericControlActionPolicy.refusal(complete, complete.copy(packageName = "foreign.app"), "tap"))
     }
+    @Test fun unchangedPopupCannotBeReusedAfterItsForegroundOwnerChanges() {
+        val popup = frame.copy(truncated = false, foregroundWindowId = 1, touchContext = "same")
+        for (action in listOf("click", "tap", "back", "home", "open_app"))
+            assertEquals("screen_changed", GenericControlActionPolicy.refusal(popup, popup.copy(foregroundWindowId = 2), action))
+    }
 
 }

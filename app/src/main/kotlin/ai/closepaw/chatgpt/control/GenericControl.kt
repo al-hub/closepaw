@@ -8,9 +8,11 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
     val clickable: Boolean = false, val editable: Boolean = false, val scrollable: Boolean = false,
     val enabled: Boolean = true, val password: Boolean = false, val empty: Boolean = true,
     val bounds: String = "", val parent: Int = -1, val longClickable: Boolean = false,
-    val expandable: Boolean = false, val collapsible: Boolean = false, val className: String = "", val selected: Boolean = false) {
+    val expandable: Boolean = false, val collapsible: Boolean = false, val className: String = "", val selected: Boolean = false,
+    val checkable: Boolean = false, val checked: Boolean = false) {
     fun json() = buildJsonObject {
         put("expandable", expandable); put("collapsible", collapsible); put("class_name", className.take(100)); put("selected", selected)
+        put("checkable", checkable); put("checked", checked)
         put("node_id", id); put("text", text.take(100)); put("description", description.take(100)); put("resource_id", resourceId.take(100))
         put("long_clickable", longClickable); put("bounds", bounds); put("parent", parent); put("clickable", clickable); put("editable", editable); put("scrollable", scrollable); put("enabled", enabled)
     }
@@ -18,7 +20,8 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
 internal data class ControlFrame(val packageName: String, val windowId: Int, val fingerprint: String,
     val nodes: List<ControlNode>, val reason: String? = null, val truncated: Boolean = false,
     val truncationReasons: Set<String> = emptySet(), val visitedNodes: Int = 0, val maxDepth: Int = 0,
-    val touchContext: String = "")
+    val touchContext: String = "", val foregroundWindowId: Int = windowId, val windowContext: String = "",
+    val windowDiagnostics: JsonObject? = null)
 internal data class ControlEffect(val attempted: Boolean, val acknowledged: Boolean, val reason: String)
 internal interface ControlPort {
     suspend fun capture(): ControlFrame
@@ -46,7 +49,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     }
     private fun publish(frame: ControlFrame): OperationResult {
         if (!allowed()) { current = null; return failure("generic_control_disabled") }
-        if (frame.reason != null) { current = null; return failure(frame.reason) }
+        if (frame.reason != null) { current = null; return failure(frame.reason, diagnostics = frame.windowDiagnostics) }
         val rendered = mutableListOf<JsonElement>()
         var size = 0
         for (node in frame.nodes.take(50)) {
@@ -62,6 +65,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         return OperationResult(data = buildJsonObject {
             put("observation_id", observation.id); put("observed_at_ms", observation.at); put("expires_in_ms", 60_000)
             put("package_name", frame.packageName); put("window_id", frame.windowId)
+            put("foreground_window_id", frame.foregroundWindowId)
+            frame.windowDiagnostics?.let { put("window_diagnostics", it) }
             put("truncated", bounded.truncated); put("actionable", !bounded.truncated)
             put("node_actions_allowed", !bounded.truncated)
             put("node_tap_available", !bounded.truncated && bounded.touchContext.isNotEmpty())
@@ -88,7 +93,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (action !in setOf("click", "tap", "long_press", "type", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
         val frame = observation.frame
         val fresh = port.capture()
-        GenericControlActionPolicy.refusal(frame, fresh, action)?.let { return failure(it, GenericControlActionPolicy.validationScope(action)) }
+        GenericControlActionPolicy.refusal(frame, fresh, action)?.let {
+            return failure(it, GenericControlActionPolicy.validationScope(action), fresh.windowDiagnostics)
+        }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
         if (action in setOf("click", "tap", "long_press", "type", "scroll", "expand", "collapse")) {
@@ -133,6 +140,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 observed?.let { put("observation", it.data) }
             })
     }
-    private fun failure(reason: String, validationScope: String? = null) = OperationResult(success = false, summary = reason,
-        data = buildJsonObject { put("reason_code", reason); put("action_attempted", false); put("outcome_unknown", false); validationScope?.let { put("validation_scope", it) } })
+    private fun failure(reason: String, validationScope: String? = null, diagnostics: JsonObject? = null) = OperationResult(success = false, summary = reason,
+        data = buildJsonObject { put("reason_code", reason); put("action_attempted", false); put("outcome_unknown", false); validationScope?.let { put("validation_scope", it) }
+            diagnostics?.let { put("window_diagnostics", it) } })
 }

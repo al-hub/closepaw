@@ -7,7 +7,8 @@ internal object GenericControlActionPolicy {
     fun refusal(expected: ControlFrame, fresh: ControlFrame, action: String): String? = when {
         expected.reason != null -> expected.reason
         fresh.reason != null -> fresh.reason
-        expected.packageName != fresh.packageName || expected.windowId != fresh.windowId -> "screen_changed"
+        expected.packageName != fresh.packageName || expected.windowId != fresh.windowId ||
+            expected.foregroundWindowId != fresh.foregroundWindowId -> "screen_changed"
         requiresCompleteTree(action) && expected.fingerprint != fresh.fingerprint -> "screen_changed"
         requiresCompleteTree(action) && (expected.truncated || fresh.truncated) -> "truncated_observation"
         action == "tap" && (expected.touchContext.isEmpty() || fresh.touchContext.isEmpty()) -> "touch_window_unavailable"

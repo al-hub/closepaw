@@ -13,7 +13,7 @@ still exposed only the original104-node composer tree and no model options.
 The supported bounded visual read then directly showed the model picker OPEN, with the user's
 requested3.8 Flash option visible and the prior model still selected. It reported the app already
 foreground and took one screenshot, while its accessibility content also omitted the popup.
-Therefore the explicit tap DID open the picker; the active-root-only observation missed it.
+Thus the picker is visibly open after the single tap, while the active-root-only observation misses it. The immediately preceding menu-closed state was not independently imaged; gesture completion and post-tap visibility do not by themselves prove that prior state.
 The earlier no-menu conclusion from accessibility alone is corrected. No tap was repeated,
 no model was selected and no question was sent. No private screenshot/account text is published.
 
@@ -38,3 +38,14 @@ maintenance results are retained. Model names remain outside the executor.
 Primary API contracts:
 - https://developer.android.com/reference/android/view/accessibility/AccessibilityWindowInfo
 - https://android.googlesource.com/platform/frameworks/base/+/android16-qpr2-release/services/core/java/com/android/server/wm/WindowState.java
+
+RED: Security CI39252774025/job118060417935 compiled2,562 tests with exactly1 expected assertion
+failure: aNonFocusedOwnedPopupMustReplaceTheUnderlyingActionSurface (expected popup11,
+actual underlying host10). No compilation failure. Test-only head6ae53a2e5d8816e7720a455f2a359f7ba14dabeb.
+
+Implementation includes up to4 OS-linked application roots within the existing single512-node/
+depth64/output50-node budget. It handles a nonfocused popup above a focused host AND a focused
+popup with an unfocused linked host. All included roots are freshly screenshot-security-probed,
+scanned/fingerprinted; only the topmost root exposes action nodes. Focus-owner/window-set changes
+invalidate observations. Missing/unlinked/foreign/ambiguous roots fail closed with bounded metadata
+(no titles, package names, account identifiers or screen text). Checkable/checked states are exposed.
