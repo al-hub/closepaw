@@ -1,5 +1,14 @@
 # ClosePaw Progress
 
+## v0.1.61 sidebar failure diagnosed / v0.1.62 navigation-host correction in progress
+
+- After unlock, generic Gemini search/select/open and sidebar open/close succeeded on v0.1.61/code62.
+- Registered sidebar read still failed: exact activity anchor present AND visible, both content/chat pane visibility flags false, complete176-node traversal/depth33, no protected input. This rules out the prior activity-anchor-visibility hypothesis for this sample; do not call v0.1.61 a proven sidebar fix.
+- Existing text-free native inspection after closing the sidebar verified the exact assistant_robin_side_nav_host_overlapping_v2 as a visible structural Gemini navigation host in the active/focused application root.
+- PR #107 adds that exact host as a visible identity witness, still requiring the exact activity anchor and Google package, with all root/traversal/protection and downstream action gates preserved. Open-sidebar host visibility and actual read success await delivery.
+- Model selection remains unaccepted; no repeated title click, coordinate fallback or question send. P2/Voice ACTIVE. [Evidence and v0.1.62/code63 correction](doc/dev/generic-navigation-host-v0162.md). Earlier checkpoints below are historical.
+
+
 ## v0.1.61/code62 delivered and remotely installed — unlocked acceptance checkpoint
 
 - [PR #106](https://github.com/al-hub/closepaw/pull/106) merged as e8c6a9da8f801887da0563269315a7bf2d7697e1. Read-only identity now separates a structural activity anchor from an exact visible Gemini pane and exposes bounded boolean/count diagnostics. Composer/write/send and generic action policies remain unchanged.

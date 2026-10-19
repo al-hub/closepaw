@@ -6,7 +6,8 @@ internal object GeminiReadIdentity {
         if (packageName != AndroidGeminiDraftUi.GOOGLE_HOST) return false
         val prefix = "$packageName:id/"
         return "${prefix}assistant_robin_main_activity" in resourceIds &&
-            listOf("assistant_robin_side_nav_host_content_container", "assistant_robin_chat_fragment_container")
+            listOf("assistant_robin_side_nav_host_content_container", "assistant_robin_chat_fragment_container",
+                "assistant_robin_side_nav_host_overlapping_v2")
                 .any { "$prefix$it" in visibleResourceIds }
     }
 }

@@ -90,6 +90,7 @@ internal class AndroidGeminiDraftUi(private val service: AgentService, private v
                 put("activity_anchor_present", "${prefix}assistant_robin_main_activity" in ids)
                 put("activity_anchor_visible", "${prefix}assistant_robin_main_activity" in visibleIds)
                 put("sidebar_pane_visible", "${prefix}assistant_robin_side_nav_host_content_container" in visibleIds)
+                put("navigation_host_visible", "${prefix}assistant_robin_side_nav_host_overlapping_v2" in visibleIds)
                 put("chat_pane_visible", "${prefix}assistant_robin_chat_fragment_container" in visibleIds)
                 put("traversal_complete", complete); put("visited_nodes", count); put("max_depth", maxDepth)
                 put("protected_input", protected); put("identity_verified", verified)
