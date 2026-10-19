@@ -208,14 +208,35 @@ class GenericControlTest {
         assertEquals(JsonPrimitive(false), result.data["node_actions_allowed"])
     }
 
-    @Test fun outputNodeLimitKeepsNodeWritesBlockedButAllowsHome() = runBlocking {
+    @Test fun outputLimitAllowsOnlyExposedIdsAfterCompleteSecurityTraversal() = runBlocking {
         val port = Port(); port.frame = port.frame.copy(nodes = (0..50).map { ControlNode(it, clickable = true) })
         val control = GenericControl(port, { true }); val observed = control.observe()
-        assertEquals(JsonPrimitive(true), observed.data["truncated"])
-        assertEquals(JsonPrimitive(false), observed.data["node_actions_allowed"])
-        assertTrue(control.action(input(observed.data.getValue("observation_id").jsonPrimitive.content, "home")).success)
+        assertEquals(JsonPrimitive(false), observed.data["truncated"])
+        assertEquals(JsonPrimitive(true), observed.data["output_truncated"])
+        assertEquals(JsonPrimitive(true), observed.data["security_scan_complete"])
+        assertTrue(control.action(input(observed.data.getValue("observation_id").jsonPrimitive.content)).success)
         val next = observe(control)
-        assertFalse(control.action(input(next)).success); assertEquals(1, port.writes)
+        assertFalse(control.action(input(next, extra = mapOf("node_id" to JsonPrimitive(50)))).success)
+        assertEquals(1, port.writes)
+    }
+    @Test fun filterCanFindLaterVisibleTargetsButCannotSkipSecurityFailure() = runBlocking {
+        val port = Port(); port.frame = port.frame.copy(nodes = (0..100).map { ControlNode(it, "Item $it", clickable = true) })
+        val control = GenericControl(port, { true }); val observed = control.observe("Item 100")
+        assertEquals(1, observed.data.getValue("nodes").jsonArray.size)
+        assertTrue(control.action(input(observed.data.getValue("observation_id").jsonPrimitive.content,
+            extra = mapOf("node_id" to JsonPrimitive(100)))).success)
+        port.frame = port.frame.copy(truncated = true)
+        val partial = control.observe("Item 100")
+        assertFalse(partial.data.getValue("node_actions_allowed").jsonPrimitive.boolean)
+    }
+    @Test fun configurationChangeInvalidatesEvenGlobalNavigation() = runBlocking {
+        for (action in listOf("home", "open_app", "click")) {
+            val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
+            port.frame = port.frame.copy(configurationRevision = 1)
+            val result = control.action(input(id, action, mapOf("package_name" to JsonPrimitive("example.target"))))
+            assertEquals("configuration_revision_changed", result.data["reason_code"]?.jsonPrimitive?.content)
+            assertEquals(0, port.writes)
+        }
     }
 
     @Test fun globalNavigationCanStartFromAnUpdatingClient() = runBlocking {

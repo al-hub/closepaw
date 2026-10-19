@@ -39,14 +39,16 @@ import kotlin.coroutines.resume
 
 /** Native adapter: semantic targets only; explicit guarded node tap, never automatic gesture fallback. */
 internal class AndroidControlPort(context: Context, private val mutationBlock: (String) -> String? = { null },
-    private val allowed: () -> Boolean) : ControlPort {
+    private val runtime: RuntimeControlSettings? = null, private val allowed: () -> Boolean) : ControlPort {
     private val context = context.applicationContext
     private val classifier = AppClassifierHolder.get(this.context)
     private var listedPackages = emptySet<String>()
+    private var catalogDiagnostics = buildJsonObject {}
+    override fun appDiagnostics() = catalogDiagnostics
     private var certifiedWindows: NativeControlWindows? = null
     private var windowDiagnostics: JsonObject? = null
     private val probeThrottle = ScreenProbeThrottle({ SystemClock.elapsedRealtime() })
-    override fun invalidate() { probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
+    override fun invalidate() { listedPackages = emptySet(); probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
     private fun reason(service: AgentService?): String? = when {
         !allowed() -> "generic_control_disabled"
         service == null -> "accessibility_permission_missing"
@@ -70,18 +72,35 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             context.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) },
                 android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
         }
-        val matches = AndroidAppCatalog(context.packageManager) { packageAllowed(it, launcher, resolveLauncher = false) }.list(filter)
+        var queried = 0
+        // Discovery is not authorization. Return matching identities with separate capabilities.
+        val matches = AndroidAppCatalog(context.packageManager, { pkg ->
+            queried++; pkg != context.packageName && pkg != "com.android.systemui" &&
+                !pkg.contains("permissioncontroller") && !pkg.contains("packageinstaller")
+        }).list(filter)
+        catalogDiagnostics = buildJsonObject {
+            put("catalog_candidates_examined", queried); put("matched_returned", matches.size)
+            put("policy_filtered_from_matches", false); put("os_visibility_diagnosis", "not_measured")
+        }
         if (withContext(Dispatchers.Main) { reason(service) } != null) throw AppCatalogUnavailable("device_state_changed")
         listedPackages = matches.map { it.packageName }.toSet()
-        return JsonArray(matches.map { buildJsonObject { put("label", it.label.take(128)); put("package_name", it.packageName) } })
+        return JsonArray(matches.map { buildJsonObject {
+            put("label", it.label.take(128)); put("package_name", it.packageName)
+            put("launch_allowed", packageAllowed(it.packageName, launcher, false, "launch"))
+            put("read_allowed", packageAllowed(it.packageName, launcher, false, "read"))
+            put("interaction_allowed", packageAllowed(it.packageName, launcher, false, "interact"))
+            put("access_reason", if (classifier.classify(it.packageName) == AppTier.BLOCKED) "blocked_app" else
+                if (!packageAllowed(it.packageName, launcher, false)) "runtime_access_required" else "available")
+        } })
     }
-    private fun packageAllowed(pkg: String, knownLauncher: String? = null, resolveLauncher: Boolean = true): Boolean {
+    private fun packageAllowed(pkg: String, knownLauncher: String? = null, resolveLauncher: Boolean = true, operation: String = "read"): Boolean {
         if (pkg == context.packageName || pkg.contains("permissioncontroller") || pkg.contains("packageinstaller") ||
             pkg == "com.android.systemui") return false
         if (classifier.classify(pkg) == AppTier.BLOCKED) return false
         val home = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
         val launcher = if (resolveLauncher) context.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName else knownLauncher
-        return classifier.classify(pkg) == AppTier.NORMAL || pkg == launcher
+        val normal = classifier.classify(pkg) == AppTier.NORMAL || pkg == launcher
+        return runtime?.access(pkg, normal, operation) ?: normal
     }
     override suspend fun capture(): ControlFrame {
         val service = AgentService.instance
@@ -147,9 +166,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             if (certified == null || certified.signature != selected.signature || certified.selection != selected.selection)
                 return@withContext block(denied("secure_window_changed", selected.diagnostics), emptyList())
             val window = windows.single { it.id == selected.selection.target }
+            val configuration = runtime?.snapshot()
+            val revision = configuration?.revision ?: 0
+            val nodeBudget = configuration?.config?.getValue("node_budget")?.jsonPrimitive?.int ?: 512
+            val outputLimit = configuration?.config?.getValue("output_limit")?.jsonPrimitive?.int ?: 50
+            val scanStarted = SystemClock.elapsedRealtime()
             val nodes = mutableListOf<ControlNode>()
             val native = mutableListOf<AccessibilityNodeInfo>()
-            val identity = StringBuilder(selected.signature).append('\n')
+            val identity = StringBuilder("configuration=$revision\n").append(selected.signature).append('\n')
             var truncated = false
             var protected = false
             var gemini = false
@@ -159,9 +183,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val truncationReasons = linkedSetOf<String>()
             fun visit(node: AccessibilityNodeInfo, depth: Int, parent: Int, expose: Boolean) {
                 deepest = maxOf(deepest, depth)
-                if (depth > 64 || visited >= 512) {
+                if (depth > 64 || visited >= nodeBudget || SystemClock.elapsedRealtime() - scanStarted > 2500) {
                     truncated = true
-                    truncationReasons.add(if (depth > 64) "depth_limit" else "node_limit")
+                    truncationReasons.add(if (depth > 64) "depth_limit" else if (visited >= nodeBudget) "node_limit" else "scan_time_limit")
                     return
                 }
                 val index = visited++
@@ -188,8 +212,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (expose && node.isVisibleToUser && !rect.isEmpty &&
                     (text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable ||
                         node.actionList.any { it.id in setOf(AccessibilityNodeInfo.ACTION_CLICK, AccessibilityNodeInfo.ACTION_EXPAND, AccessibilityNodeInfo.ACTION_COLLAPSE) })) {
-                    if (nodes.size >= 50) { truncated = true; truncationReasons.add("output_node_limit") }
-                    else {
+                    run {
                         nodes.add(ControlNode(index, if (node.isShowingHintText) "" else text.take(2001), description.take(100), resource.take(100),
                             node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, node.isEditable, node.isScrollable,
                             node.isEnabled, node.isPassword, node.isShowingHintText || text.isEmpty(), rect.flattenToString(), parent, node.isLongClickable,
@@ -200,7 +223,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     }
                 }
                 for (i in 0 until node.childCount) {
-                    if (visited >= 512) { truncated = true; truncationReasons.add("node_limit"); break }
+                    if (visited >= nodeBudget) { truncated = true; truncationReasons.add("node_limit"); break }
                     val child = node.getChild(i) ?: continue
                     owned.add(child); visit(child, depth + 1, index, expose)
                 }
@@ -222,7 +245,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             ) ?: reason(service)
             block(ControlFrame(pkg, window.id, operationHash(identity.toString()), nodes, code, truncated,
                 truncationReasons, visited, deepest, touchContext(service, window, windows), root.windowId,
-                selected.signature, selected.diagnostics), native)
+                selected.signature, selected.diagnostics, revision, outputLimit), native)
         } finally {
             owned.forEach { it.recycleCompat() }
             windows.forEach { runCatching { it.recycle() } }
@@ -312,10 +335,17 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
             if (action == "open_app") {
                 val pkg = input["package_name"]?.jsonPrimitive?.content.orEmpty()
-                if (pkg !in listedPackages || !packageAllowed(pkg)) return@withTree ControlEffect(false, false, "app_not_selected_or_blocked")
-                val result = platform(service).launchApp(pkg)
-                return@withTree ControlEffect(true, result is ActionResult.Success, "app_launch_acknowledged")
+                if (pkg !in listedPackages || !packageAllowed(pkg, operation = "launch")) return@withTree ControlEffect(false, false, "app_not_selected_or_blocked")
+                val result = if (Build.VERSION.SDK_INT >= 33) {
+                    try {
+                        context.packageManager.getLaunchIntentSenderForPackage(pkg).sendIntent(service, 0, null, null, null)
+                        true
+                    } catch (_: Exception) { false }
+                } else platform(service).launchApp(pkg) is ActionResult.Success
+                return@withTree ControlEffect(true, result, "app_launch_acknowledged")
             }
+            if (!packageAllowed(fresh.packageName, operation = "interact"))
+                return@withTree ControlEffect(false, false, "runtime_interaction_not_allowed")
             val at = fresh.nodes.indexOfFirst { it.id == node?.id }
             val target = native.getOrNull(at) ?: return@withTree ControlEffect(false, false, "target_unavailable")
             if (!target.refresh() || !target.isVisibleToUser || !target.isEnabled || target.isPassword || target.windowId != fresh.windowId || target.packageName?.toString() != fresh.packageName)

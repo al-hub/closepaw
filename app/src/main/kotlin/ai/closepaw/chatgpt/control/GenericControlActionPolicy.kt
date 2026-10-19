@@ -5,6 +5,7 @@ internal object GenericControlActionPolicy {
     fun requiresCompleteTree(action: String): Boolean = action !in setOf("home", "open_app")
     fun validationScope(action: String): String = if (requiresCompleteTree(action)) "full_screen_fingerprint" else "foreground_app_window"
     fun refusal(expected: ControlFrame, fresh: ControlFrame, action: String): String? = when {
+        expected.configurationRevision != fresh.configurationRevision -> "configuration_revision_changed"
         expected.reason != null -> expected.reason
         fresh.reason != null -> fresh.reason
         expected.packageName != fresh.packageName || expected.windowId != fresh.windowId ||

@@ -24,6 +24,11 @@ internal class McpExecutionSettings(context: Context) {
     var selfUpdateEnabled: Boolean
         get() = prefs.getBoolean("self_update_enabled", false)
         set(value) { check(prefs.edit().putBoolean("self_update_enabled", value).commit()) }
+    val runtimeControl by lazy {
+        ai.closepaw.chatgpt.control.RuntimeControlSettings(
+            { prefs.getString("runtime_control_v1", null) },
+            { value -> check(prefs.edit().putString("runtime_control_v1", value).commit()) })
+    }
     @Synchronized fun endpointPath(): String {
         val existing = prefs.getString("endpoint_secret", null)
         val secret = existing ?: ByteArray(32).also { SecureRandom().nextBytes(it) }
