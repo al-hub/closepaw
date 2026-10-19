@@ -22,4 +22,14 @@ class GeminiReadIdentityTest {
         assertFalse(GeminiReadIdentity.nativeShell(pkg, all, ids("search_box")))
         assertFalse(GeminiReadIdentity.nativeShell(pkg, ids("search_box"), ids("assistant_robin_side_nav_host_content_container")))
     }
+    @Test fun actualNavigationHostCanIdentifyTheComposerlessSidebar() {
+        val all = ids("assistant_robin_main_activity", "assistant_robin_side_nav_host_overlapping_v2")
+        assertTrue(GeminiReadIdentity.nativeShell(pkg, all, all))
+    }
+    @Test fun navigationHostStillRequiresTheExactAnchorPackageAndVisibility() {
+        val all = ids("assistant_robin_main_activity", "assistant_robin_side_nav_host_overlapping_v2")
+        assertFalse(GeminiReadIdentity.nativeShell(pkg, all, ids("assistant_robin_main_activity")))
+        assertFalse(GeminiReadIdentity.nativeShell(pkg, ids("assistant_robin_side_nav_host_overlapping_v2")))
+        assertFalse(GeminiReadIdentity.nativeShell("other.app", all, all))
+    }
 }
