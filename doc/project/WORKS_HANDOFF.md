@@ -1,5 +1,15 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## v0.1.64/code65 popup/model/question acceptance completed (2026-10-19)
+
+- [PR #109](https://github.com/al-hub/closepaw/pull/109) merged as6703a873296a51c32985198e8dd63b6d8db9ff96. Observer now securely probes/scans OS parent/anchor-linked application windows and exposes only the topmost owned surface, with bounded text-free diagnostics. Same-package-only ownership is rejected; all prior consent/security/unknown-send guards retained.
+- Actual device acceptance: nonfocused popup linked by Android parent_id to the active/focused Gemini host, complete129-node/depth33 traversal, real model options exposed. Generic selection of requested3.8 Flash verified by fresh Gemini Flash title AND actual checkmark in the reopened picker. One dedicated synthetic question then completed with sent=true/reply_completed/coverage=complete/outcome_unknown=false; final generic105-node observation confirmed model title and new reply.
+- RED2,562 tests/1 expected assertion; GREEN2,571 tests/0 failures/errors/skips, lint0 errors/108 warnings, Python55+8 and native/debug passed. Main CI39254537754 and Signed Release39255478075 succeeded.
+- [Signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.64/closepaw-aa-bridge.apk):116,443,909 bytes; SHA-25674345d0fb264dda6380443891f5247e2572163f53de025562fdbff0ab0da2d9f. Independent anonymous public download, original signer, manifest/code65, both native runtimes and immutable source/tag verified.
+- One automatic update confirmed installed/current0.1.64/code65 and reconnection, permissions preserved, no re-registration. Termux id exit0 and latest check up_to_date. v0.1.63 locked-maintenance evidence retained; this version's pre-install sample was secure_window_changed, not a new known-locked acceptance.
+- Immediate post-action window snapshots can race platform updates; uncertain results were resolved with fresh observations, not blind write replay. Back on a nonfocused popup can dismiss IME/background the app; selected/checked flags were unavailable, so visual checkmark verification was used. **P2/Voice and matched end-to-end/speech latency remain open.** [Full evidence and limits](../dev/owned-popup-observation-v0164.md). Earlier checkpoints below are historical.
+
+
 ## v0.1.63/code64 delivered and installed — unlocked model acceptance pending
 
 - [PR #108](https://github.com/al-hub/closepaw/pull/108) merged as d9bb229398f4121a14fe668d9ecf5f7d5666b900. Explicit tap(observation_id,node_id) derives a point only from a revalidated clickable node; no caller coordinates or automatic click fallback. Complete tree, current window/rotation/region/occlusion, consent/security/unknown-send guards retained; clipped/covered targets, PiP, magnification and touch exploration refuse tap. Cancellation remains unknown and never replays.

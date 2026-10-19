@@ -109,3 +109,12 @@ end-to-end/speech latency remain open;78ms shell duration is not a UI/Voice benc
 4. Only after selection is confirmed, transfer the shared UI lock to the dedicated Gemini
    question path, preserve drafts and send one benign synthetic acceptance question. Observe
    the new reply; unknown send outcomes are never replayed. No new question was sent here.
+
+## Superseding unlocked result
+
+The later v0.1.63 unlocked sample showed the picker visibly open after one explicit tap while
+its accessibility observation still omitted the popup. v0.1.64 corrects the active-root-only
+observer, verifies the actual Android parent-linked popup, selects the requested3.8 Flash and
+completes one subsequent dedicated question/new-reply collection. See
+[verified v0.1.64 acceptance and remaining limitations](owned-popup-observation-v0164.md).
+The earlier locked checkpoint above remains historical; do not treat it as the latest blocker.
