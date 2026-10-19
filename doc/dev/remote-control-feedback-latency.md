@@ -23,11 +23,13 @@ Verified baseline on the same installed APK: camera single capture and new saved
 
 ## Validation status
 
-Local Python bridge tests also cannot run because pytest is not installed. `git diff --check` and XML parsing pass; these are static checks only.
+User explicitly approved GitHub code upload, CI and signed APK release on2026-10-20 at07:10 KST after the initial automatic-review refusal.
 
-Local Gradle execution is blocked before compilation: the Gradle distribution is not installed and services.gradle.org is unreachable. Added deterministic JVM tests for immediate event wake, check/subscribe race, timeout/cancellation, exact-package launch, incomplete trees, security refusal, event storms and native-validation capture counts. They are **not run** yet. Full Android compile/lint/JVM CI and device checks remain required before any merge, version bump or release.
+[PR #111](https://github.com/al-hub/closepaw/pull/111) merged as16bdfb19885f5f548cfe511a25643f9eba4904b9. Final candidate source9999a7c98f7a5666a27d99c6c78416e624e29002 passed [PR Security CI39333648884](https://github.com/al-hub/closepaw/actions/runs/39333648884). Parsed artifact12226386374: **2,596 Android tests, zero failures/errors/skips**; lint zero errors/112 warnings/4 info. Python55+8, native and debug APK passed. Main CI39334583679 and Signed Release39335426773 both succeeded. Published v0.1.66/code67 APK is116,468,069 bytes, SHA-256 `d5cfebc81f0faf857ad26353ca50aece8a7abb7762c0cec682125382cc307d58`. Anonymous public download matched the build; manifest, original certificate `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`, both native runtimes and immutable tag/source16bdfb19885f5f548cfe511a25643f9eba4904b9 were verified by the release runner. Public verification artifact12225624162. [APK](https://github.com/al-hub/closepaw/releases/download/v0.1.66/closepaw-aa-bridge.apk).
 
-User explicitly approved GitHub code upload, CI and signed APK release on2026-10-20 at07:10 KST after the initial automatic-review refusal. Upload and CI can now proceed. Candidate version0.1.66/code67 is not delivered until CI/release evidence is recorded.
+The first CI39333143109 found an inaccessible View property at compilation. It was corrected to the public accessibility-node API; subsequent CI compiled and passed. No failed candidate APK was published. Local Gradle/pytest were unavailable; CI is the executed test evidence.
+
+Pre-update matched calculator timing was not obtained: apps_query_timeout, followed by app_not_selected_or_blocked/action_attempted=false. No native calculator operation occurred. Record this as an observation, not an OS visibility diagnosis or a speedup measurement; no app-catalog fix is included in this scope.
 
 ## Acceptance after CI
 
@@ -37,3 +39,7 @@ Use the existing same-device calculator and Maps-to-calculator flows. Compare th
 
 - https://developer.android.com/reference/android/accessibilityservice/AccessibilityService (event callbacks, TYPE_ACCESSIBILITY_OVERLAY/window screenshots)
 - https://developer.android.com/reference/android/accessibilityservice/AccessibilityServiceInfo#notificationTimeout (event coalescing)
+
+## Device delivery
+
+Exactly one self-update was submitted: task13ec4ee2-bf75-4341-b335-fee952185a9a. The first durable response was installing/target0.1.66/code67 while current remained0.1.65/code66. A later independent status confirmed installed/current0.1.66/code67 after reconnection; remote update/install-source permissions remain enabled. The first new-version screen query returned `blocked_or_cautious_app`, action_attempted=false/outcome_unknown=false. This is an unapproved-foreground refusal, not a device_locked observation. No calculator click, new photograph, note input or alarm change was attempted on0.1.66. Visual border, touch pass-through, tap regression and matched latency acceptance remain PENDING until an ordinary unlocked Home/ChatGPT/approved-app screen is foreground. No speedup percentage is claimed.

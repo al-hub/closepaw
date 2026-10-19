@@ -1,10 +1,14 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
-## 2026-10-20: device findings HOLD; remote indicator/latency candidate
+## v0.1.66/code67 delivered and installed — indicator/latency UI acceptance pending (2026-10-20)
 
-- v0.1.65 unlocked device checks: camera capture/save, calculator discount result, Kakao first screen, Maps station search and cross-app return passed. Notes input and complete Clock enumeration remain HOLD by user request.
-- Current task: generic remote-control border/badge, service event wakeups and removal of duplicate native validation capture. [Design, HOLD evidence and honest validation status](../dev/remote-control-feedback-latency.md).
-- Candidate is local only; Android compile/tests/lint, CI, release and new-version device acceptance have not passed. User explicitly approved code upload/CI/release at07:10 KST; candidate0.1.66/code67. No tag/APK delivery yet.
+- User put existing Samsung Notes input and complete Clock alarm enumeration findings on **HOLD**. Prior0.1.65 camera save, calculator discount, Kakao first screen, Maps search and cross-app return evidence is retained; do not replay the camera or re-open HOLD work.
+- [PR #111](https://github.com/al-hub/closepaw/pull/111) merged as16bdfb19885f5f548cfe511a25643f9eba4904b9. Adds a noninteractive cyan border/ClosePaw activity badge for generic remote UI and registered/Gemini paths, service event wakeups, single native validation, and immediate first screenshot probing with bounded explicit rate-limit retry. Security/consent/freshness/unknown-outcome protections remain.
+- PR CI39333648884, main CI39334583679 and Signed Release39335426773 succeeded. Parsed PR artifact12226386374:2,596 Android tests, zero failures/errors/skips; lint zero errors/112 warnings/4 info. Python55+8, native/debug and signed builds passed. Initial compile-only hidden View property failure was corrected before publication.
+- [Signed APK v0.1.66](https://github.com/al-hub/closepaw/releases/download/v0.1.66/closepaw-aa-bridge.apk):116,468,069 bytes; SHA-256 `d5cfebc81f0faf857ad26353ca50aece8a7abb7762c0cec682125382cc307d58`. Runner independently downloaded the public asset and verified original certificate, manifest0.1.66/code67, both native runtimes, checksum and immutable tag/source. Public evidence artifact12225624162.
+- Exactly one remote update task13ec4ee2-bf75-4341-b335-fee952185a9a. Durable status independently confirms installed/current0.1.66/code67 after reconnection; update/install-source permissions preserved; no re-registration or data reset.
+- First installed-version screen observation refused `blocked_or_cautious_app`, action_attempted=false/outcome_unknown=false. This is **not** a known-locked test. No new-version app click/capture/typing occurred. Ordinary unlocked Home/ChatGPT/approved-app foreground is needed to continue visual indicator/touch/tap and same calculator latency checks. No measured speedup or full acceptance claim.
+- Old-version matched calculator baseline was not obtained due apps_query_timeout and a refused launch (action_attempted=false). Do not misclassify it as OS visibility or claim a percentage improvement. [Implementation, HOLD evidence and validation limits](../dev/remote-control-feedback-latency.md).
 
 ## v0.1.65/code66 delivered and installed — device UI acceptance blocked by lock (2026-10-19)
 
