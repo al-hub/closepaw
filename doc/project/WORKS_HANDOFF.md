@@ -1,5 +1,15 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## v0.1.62/code63 delivered, installed and checked while locked
+
+- [PR #107](https://github.com/al-hub/closepaw/pull/107) merged as efb4bb54ac3173c32bf49fa87feaf60dfe43a30e. The actual native navigation host is accepted only with the exact activity anchor/package and visible host; hidden-host/anchor-only/foreign-package fixtures remain rejected. navigation_host_visible diagnostic added.
+- RED2,548 tests/1 expected failure; GREEN2,548 tests/0 failures/errors/skips, lint0 errors/108 warnings, Python55+8 and signed probe passed. Main CI39211074900 and Signed Release39211675610 succeeded.
+- [Signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.62/closepaw-aa-bridge.apk):116,425,705 bytes; SHA-256 37f17d786b468273d9a7c908368ac0e638b184f7d5702c7c3bcf291f8d48eaf9. Anonymous public download, original signer, manifest/code63, both native runtimes and immutable source/tag verified.
+- Exactly one remote update requested after device_locked observation. Installed/current0.1.62/code63, connection and update permissions confirmed. Further lock observations bracketed a successful Termux id task (exit0); latest check up_to_date. No UI bypass or repeated install.
+- Actual v0.1.61 sidebar read failure ruled out the prior activity-visibility hypothesis: activity anchor visible, complete176-node traversal/depth33, no protected input, but content/chat pane visibility flags false. Existing native metadata verified the exact shared navigation host after closing the sidebar; the new-version open-sidebar read is still PENDING because the phone is locked.
+- Generic Gemini/Chrome search/select/launch was accepted earlier. Model title produced no visible picker through native click; do not replay or claim selection. **P2/Voice ACTIVE**. [Evidence and immediate unlocked entry point](../dev/generic-navigation-host-v0162.md). Earlier status sections below are historical checkpoints.
+
+
 ## v0.1.61/code62 delivered and remotely installed — unlocked acceptance checkpoint
 
 - [PR #106](https://github.com/al-hub/closepaw/pull/106) merged as e8c6a9da8f801887da0563269315a7bf2d7697e1. Read-only identity now separates a structural activity anchor from an exact visible Gemini pane and exposes bounded boolean/count diagnostics. Composer/write/send and generic action policies remain unchanged.
