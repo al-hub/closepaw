@@ -14,6 +14,9 @@ import android.view.accessibility.AccessibilityWindowInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /** Main-thread, native Gemini-only ACTION_SET_TEXT adapter. Never falls back to coordinate taps. */
 internal class AndroidGeminiDraftUi(private val service: AgentService, private val allowed: () -> Boolean) : GeminiDraftUi {
@@ -47,9 +50,12 @@ internal class AndroidGeminiDraftUi(private val service: AgentService, private v
     override suspend fun inspect(): DraftComposerState = withContext(Dispatchers.Main) {
         withComposers { nodes, foreground -> DraftComposerState(foreground, nodes.size, nodes.singleOrNull()?.let { if (it.isShowingHintText) "" else it.text?.toString().orEmpty() }.orEmpty()) }
     }
+    internal var readIdentityDiagnostics: JsonObject? = null
+        private set
     /** Positively identify a native Gemini shell even when a sidebar/menu hides the composer.
      * This is read-only and cannot relax withComposers or the guarded send path. */
     suspend fun isReadScreen(): Boolean = withContext(Dispatchers.Main) {
+        readIdentityDiagnostics = null
         if (isLocked()) return@withContext false
         val root = foregroundRoot() ?: return@withContext false
         val owned = mutableListOf(root)
@@ -59,12 +65,17 @@ internal class AndroidGeminiDraftUi(private val service: AgentService, private v
             if (evidence.windowType != AccessibilityWindowInfo.TYPE_APPLICATION || evidence.active != true || evidence.focused != true)
                 return@withContext false
             val ids = mutableSetOf<String>()
+            val visibleIds = mutableSetOf<String>()
+            var maxDepth = 0
             var count = 0; var complete = true; var protected = false
             fun visit(node: AccessibilityNodeInfo, depth: Int) {
                 if (count >= 512 || depth > 64) { complete = false; return }
-                count++
+                count++; maxDepth = maxOf(maxDepth, depth)
                 if (node.isPassword) protected = true
-                if (node.packageName?.toString() == pkg && node.isVisibleToUser) node.viewIdResourceName?.let(ids::add)
+                if (node.packageName?.toString() == pkg) node.viewIdResourceName?.let {
+                    ids.add(it)
+                    if (node.isVisibleToUser) visibleIds.add(it)
+                }
                 for (i in 0 until node.childCount.coerceAtMost(100)) {
                     if (count >= 512) { complete = false; break }
                     val child = node.getChild(i) ?: continue
@@ -73,7 +84,17 @@ internal class AndroidGeminiDraftUi(private val service: AgentService, private v
                 if (node.childCount > 100) complete = false
             }
             visit(root, 0)
-            complete && !protected && GeminiReadIdentity.nativeShell(pkg, ids)
+            val verified = complete && !protected && GeminiReadIdentity.nativeShell(pkg, ids, visibleIds)
+            val prefix = "$pkg:id/"
+            readIdentityDiagnostics = buildJsonObject {
+                put("activity_anchor_present", "${prefix}assistant_robin_main_activity" in ids)
+                put("activity_anchor_visible", "${prefix}assistant_robin_main_activity" in visibleIds)
+                put("sidebar_pane_visible", "${prefix}assistant_robin_side_nav_host_content_container" in visibleIds)
+                put("chat_pane_visible", "${prefix}assistant_robin_chat_fragment_container" in visibleIds)
+                put("traversal_complete", complete); put("visited_nodes", count); put("max_depth", maxDepth)
+                put("protected_input", protected); put("identity_verified", verified)
+            }
+            verified
         } finally { owned.forEach { it.recycleCompat() } }
     }
     override suspend fun setIfEmpty(text: String): DraftWriteResult = withContext(Dispatchers.Main) {

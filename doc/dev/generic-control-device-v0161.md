@@ -18,3 +18,5 @@ The read adapter currently requires the activity marker and pane marker to both 
 The exact real-device cause is not yet exposed. Add bounded boolean/count identity diagnostics without raw text or arbitrary identifiers, so the next real read can distinguish missing activity/pane markers, incomplete traversal and protected input. Do not label the visibility hypothesis proven before device validation.
 
 Regression tests first exercise a visible pane with a structural nonvisible activity marker and reject hidden-pane/search fixtures. Preserve existing default two-argument policy behavior for the generic adapter. Then run full CI/lint, signed delivery, public download verification and one remote update. Actual model-menu selection, known-locked new-version checks and Voice/P2 remain open.
+
+RED evidence: Security CI39202253195/job117897527141 compiled and ran2,546 tests with exactly1 assertion failure in visibleSidebarDoesNotRequireItsStructuralActivityMarkerToBeVisible. The hidden-pane/Search rejection regression passed. This reproduces the policy limitation; the actual device cause remains unconfirmed.

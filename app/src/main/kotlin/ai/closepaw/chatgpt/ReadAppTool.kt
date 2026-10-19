@@ -110,6 +110,7 @@ internal class AndroidReadAppTool(
             code = "target_not_foreground",
             summary = "${target.displayName} foreground identity could not be verified.",
             packageName = platform.getCurrentPackageName(),
+            identityDiagnostics = geminiUi?.readIdentityDiagnostics,
         )
 
         val accessibility = withContext(Dispatchers.Main) {
@@ -192,6 +193,7 @@ internal class AndroidReadAppTool(
             screenshotAttempts = 1,
         )
         val structured = buildJsonObject {
+            geminiUi?.readIdentityDiagnostics?.let { put("read_identity", it) }
             put("status", if (readQuality == "empty") "empty" else "succeeded")
             put(
                 "summary",
@@ -355,6 +357,7 @@ internal class AndroidReadAppTool(
         summary: String,
         packageName: String? = null,
         screenshotAttempts: Int = 0,
+        identityDiagnostics: kotlinx.serialization.json.JsonObject? = null,
     ): ReadAppToolResult = ReadAppToolResult(
         structured = buildJsonObject {
             put("request_id", BrowserReadDiagnostics.record("unknown", code, 0, false,
@@ -365,6 +368,7 @@ internal class AndroidReadAppTool(
             put("summary", summary)
             put("screenshot_attempts", screenshotAttempts)
             packageName?.let { put("package_name", it) }
+            identityDiagnostics?.let { put("read_identity", it) }
         }
     )
 
