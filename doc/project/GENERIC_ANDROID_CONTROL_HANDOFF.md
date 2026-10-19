@@ -1,10 +1,12 @@
 # 범용 Android 제어기 — 개발 착수용 Works 인계
 
-## v0.1.63 explicit observed-node tap in development (2026-10-19)
+## v0.1.63/code64 delivered and installed — unlocked model acceptance pending
 
-- A physical touch proves the model picker exists; requested target is3.8 Flash. Native title click still acknowledged without visible change after dismissing IME; no selection success claimed.
-- [PR #108](https://github.com/al-hub/closepaw/pull/108) adds explicit tap(observation_id,node_id), never caller coordinates or automatic fallback. Complete screen/window identity, secure/lock/consent/unknown-send guards remain. Target must be current, clickable and fully inside the same foreground default-display application window, with center inside its touchable region and no covering window. Window/rotation changes and magnification/touch exploration refuse tap.
-- Cancelled/unconfirmed gestures are unknown and never replayed. Native click remains a native node action. Actual picker/model acceptance, signed delivery/update and P2/Voice remain pending. [Evidence and validation](../dev/observed-node-tap-v0163.md). Earlier checkpoints below are historical.
+- [PR #108](https://github.com/al-hub/closepaw/pull/108) merged as d9bb229398f4121a14fe668d9ecf5f7d5666b900. Explicit tap(observation_id,node_id) derives a point only from a revalidated clickable node; no caller coordinates or automatic click fallback. Complete tree, current window/rotation/region/occlusion, consent/security/unknown-send guards retained; clipped/covered targets, PiP, magnification and touch exploration refuse tap. Cancellation remains unknown and never replays.
+- RED2,550 tests/2 expected assertions; GREEN2,559 tests/0 failures/errors/skips, lint0 errors/108 warnings, Python55+8, debug/native and signed probe passed. Main CI39226838487 and Signed Release39227790943 succeeded.
+- [Signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.63/closepaw-aa-bridge.apk):116,431,913 bytes; SHA-256844c71c3157b09384ed0675860e9ea44cf83c7e826789f4df827f927c3d676dd. Anonymous public download, original signer, manifest/code64, both native runtimes and immutable source/tag verified.
+- Exactly one remote update: confirmed installed/current0.1.63/code64 after reconnect, permissions retained. New tap schema rediscovered. Termux id succeeded exit0 between post-install device_locked observations; latest check up_to_date. No repeated install or UI action while locked.
+- The user's physical touch proved the picker exists; requested target3.8 Flash. Native title click still showed no menu after IME dismissal. New-version tap/model selection and the subsequent question remain UNVERIFIED because the device is locked. P2/Voice remains open. [Evidence and immediate unlocked steps](../dev/observed-node-tap-v0163.md). Earlier checkpoints below are historical.
 
 
 ## v0.1.62 real sidebar/composer read accepted (2026-10-19 17:18 KST)
