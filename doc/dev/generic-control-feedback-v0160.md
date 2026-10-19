@@ -56,9 +56,52 @@ PR#105 first adds regression tests against unchanged implementation. Local JVM e
 is unavailable because the Gradle distribution download is network-blocked and this host
 has no Android SDK. Use actual GitHub CI logs/reports; do not call this a passing local build.
 
-Pending: RED result, GREEN suite/lint, signed probe, main CI, immutable signed release,
-public-download signer/hash/manifest validation, remote installation, reconnect and locked
-maintenance checks. Record each actual result below as it becomes available.
+PR#105 merged as `841c183d08589054072f2e31f1605f1b8b57fff9`.
+
+- RED run39191805021 compiled and ran2,535 tests; exactly the four new regressions failed
+  (bounded generic task waiting, active-root identity, safe lookup failure, explicit feedback).
+- Intermediate run39192219570 ran2,544 tests with3 failures caused by Android JVM stubs
+  returning null from fluent Intent.addCategory. Preserve the constructed Intent using apply;
+  fix commit `df18e65039f7a7db2c5c2550d0f289db176b7f6a`.
+- GREEN PR run39192676926 succeeded. Downloaded report artifact12160856119 independently
+  parsed:2,544 tests,0 failures/errors/skips; lint0 errors,108 warnings,4 information notices.
+  Python Termux55 and ChatGPT bridge8 checks, native cloudflared build and debug APK passed.
+- Main CI39193365124 and Signed Release39193963265 succeeded. Anonymous public APK download,
+  SHA-256 equality with the built APK/checksum, ai.closepaw/0.1.60/code61 manifest, original
+  signer and both native runtimes were verified by the release job.
+- Published APK:116,424,773 bytes, SHA-256
+  `6f30df8b758e7e5c63279b2a01a0586a0fa1f2f982df7e497eca27045c9fc31c`.
+  Original certificate SHA-256 remains
+  `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`.
+  Public verification artifact12160864624 records manifest/signature/download evidence.
+- Exactly one remote installation request was submitted, task
+  `70201e6e-dd32-43a0-8899-d09910ff8226`. Initial durable state was installing/code60;
+  a status query across replacement did not yield usable confirmation. A subsequent
+  successful query confirmed installed/current0.1.60/code61, with remote-update consent
+  and install-source permission still true. No repeat installation, re-pairing or plugin
+  re-registration. Installed discovery returned all14 operations ready, including the
+  new generic action schema hash5a3328997e102ebc277c20d60256478cfd49aa1194edc2d732e231e351b95b40.
+- Background/non-UI device checks passed: previously failing Gemini label lookup now
+  returns exactly its installed launchable package; latest-update check is up_to_date;
+  registered browser/Gemini targets are ready. Termux id task
+  `7377b2c0-2c7b-4816-b518-4e62248910c1` succeeded, exit0, no timeout/unknown outcome.
+  Task start/completion timestamps are present; shell executor duration103ms is not a UI
+  or speech-feedback latency measurement.
+- Tailscale diagnosis returned overlay_link_observed, VPN/overlay address present,
+  no connection change requested. VPN owner/login and private target reachability were
+  NOT established (no target supplied/probed); do not claim SSH/PC acceptance.
+- IMPORTANT: before and after installation, screen observe returned
+  blocked_or_cautious_app, action_attempted=false, rather than device_locked.
+  No app launch, model change or UI mutation was performed in this delivery check.
+  These results do NOT prove installation or maintenance while locked on v0.1.60.
+  Known-locked v0.1.60 acceptance remains PENDING; the historical v0.1.59 locked check
+  above is not silently carried forward to this version.
+
+The device action result timings measure validation/native action/post-observation. Task
+start/completion timestamps expose the device executor interval; they do not establish
+network, assistant reasoning, speech-generation or the user's perceived feedback latency.
+The first secure-window probe after adapter handoff retains a conservative400ms gap; later
+probes wait only for the unelapsed API interval and never reuse a security verdict.
 
 Unlocked acceptance remaining: label search + exact selected launch, Gemini picker and
 requested-model selection, foreground read across sidebar/composer, and before/after

@@ -1,5 +1,27 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## v0.1.60/code61 delivered and installed — non-UI checks passed; locked/UI acceptance pending
+
+[PR #105](https://github.com/al-hub/closepaw/pull/105) merged as
+`841c183d08589054072f2e31f1605f1b8b57fff9`. PR CI39192676926, main CI39193365124
+and Signed Release39193963265 succeeded. Parsed PR report:2,544 tests,0 failures/errors/skips;
+lint0 errors/108 warnings. App discovery, native Gemini read identity, advertised generic
+expand/collapse and explicit feedback/timing are implemented with existing guards preserved.
+
+[Signed APK v0.1.60](https://github.com/al-hub/closepaw/releases/download/v0.1.60/closepaw-aa-bridge.apk)
+was anonymously downloaded and checked for signer/hash/manifest/native runtime/source identity.
+One remote update confirmed installed/current0.1.60/code61 after reconnect, without plugin
+re-registration. Formerly failing Gemini label lookup, latest check and Termux id exit0 now pass.
+
+**Not a locked acceptance pass:** installation-time observations returned blocked_or_cautious_app,
+not device_locked. No UI action was attempted. Known-locked installation/maintenance, selected
+app launch, actual Gemini model change, composerless read and before/after Voice latency still
+need device acceptance. Long Doze/reboot/force-stop recovery are also unverified. **P2 ACTIVE**.
+Earlier headings below are historical checkpoints.
+
+[Detailed verification and next steps](../dev/generic-control-feedback-v0160.md).
+
+
 ## v0.1.59/code60 delivered and remotely installed — real UI acceptance blocked by device lock
 
 [PR #104](https://github.com/al-hub/closepaw/pull/104) merged as bf8bbeba6647495234a76be42130fb93078002c6. Home/exact selected app launch now validate foreground app/window identity; Back and node operations retain complete content hashing. RED reproduced2 failures; GREEN2,531 Android tests passed with0 failures/errors/skips, lint0 errors/108 warnings, Python55+8 passed. PR CI, signed probe, main CI39174209365 and Signed Release39174729253 all passed.

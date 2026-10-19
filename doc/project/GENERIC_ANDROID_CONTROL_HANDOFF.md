@@ -1,14 +1,25 @@
 # 범용 Android 제어기 — 개발 착수용 Works 인계
 
-## v0.1.60 reliability/feedback work in progress (2026-10-19 KST)
+## v0.1.60/code61 delivered and installed — non-UI checks passed; locked/UI acceptance pending
 
-The user authorized continuing through signed delivery and locked-device acceptance.
-PR#105 tracks app lookup, composerless Gemini read identity, generic menu actions and
-feedback timing. See [latest baseline, scope and remaining acceptance](../dev/generic-control-feedback-v0160.md).
-v0.1.59 unlocked checks passed for Home, sidebar close, dedicated question/reply,
-a35-item long reply, Chrome read/menu/Back; generic app lookup and model change remain
-unaccepted. Earlier locked-only checkpoint below is historical. P2 remains ACTIVE.
+[PR #105](https://github.com/al-hub/closepaw/pull/105) merged as
+`841c183d08589054072f2e31f1605f1b8b57fff9`. PR CI39192676926, main CI39193365124
+and Signed Release39193963265 succeeded. Parsed PR report:2,544 tests,0 failures/errors/skips;
+lint0 errors/108 warnings. App discovery, native Gemini read identity, advertised generic
+expand/collapse and explicit feedback/timing are implemented with existing guards preserved.
 
+[Signed APK v0.1.60](https://github.com/al-hub/closepaw/releases/download/v0.1.60/closepaw-aa-bridge.apk)
+was anonymously downloaded and checked for signer/hash/manifest/native runtime/source identity.
+One remote update confirmed installed/current0.1.60/code61 after reconnect, without plugin
+re-registration. Formerly failing Gemini label lookup, latest check and Termux id exit0 now pass.
+
+**Not a locked acceptance pass:** installation-time observations returned blocked_or_cautious_app,
+not device_locked. No UI action was attempted. Known-locked installation/maintenance, selected
+app launch, actual Gemini model change, composerless read and before/after Voice latency still
+need device acceptance. Long Doze/reboot/force-stop recovery are also unverified. **P2 ACTIVE**.
+Earlier headings below are historical checkpoints.
+
+[Detailed verification and next steps](../dev/generic-control-feedback-v0160.md).
 
 ## v0.1.59/code60 delivered and remotely installed — real UI acceptance blocked by device lock
 
