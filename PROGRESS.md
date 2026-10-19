@@ -1,5 +1,14 @@
 # ClosePaw Progress
 
+## v0.1.60 unlocked acceptance / v0.1.61 read identity correction in progress
+
+- Actual generic label search, exact package selection and open_app succeeded for Gemini and Chrome. Hosted Gemini/Chrome were observed after launch; no registered-read fallback was used.
+- Registered Gemini read succeeds on the composer screen but still refuses the open sidebar. PR #106 separates a structural native activity anchor from an exact visible pane; hidden-pane Search fixtures remain rejected. Read-only bounded identity diagnostics expose booleans/counts, no raw screen content. Runtime cause is not yet established.
+- Model-title click was acknowledged once without visible change; no expand/collapse advertised. Model change remains unaccepted. No repeated click or coordinate fallback.
+- Current device UI totals933–1,876ms are separate from RPC/user feedback timing; matched end-to-end improvement is not established. P2/Voice and known-locked new-version checks remain open.
+- [Actual device evidence and candidate v0.1.61/code62](doc/dev/generic-control-device-v0161.md). Earlier status sections below are historical checkpoints.
+
+
 ## v0.1.60/code61 delivered and installed — non-UI checks passed; locked/UI acceptance pending
 
 [PR #105](https://github.com/al-hub/closepaw/pull/105) merged as
