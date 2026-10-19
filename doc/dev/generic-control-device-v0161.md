@@ -42,3 +42,8 @@ The phone relocked while CI/build ran. New-version sidebar read diagnosis must w
 Model selection remains unaccepted: the v0.1.60 model-title click produced no visible picker and advertised no native expand/collapse. Do not replay it automatically. A physical user check of whether that same title opens a picker can distinguish an app/UI availability problem from an accessibility-action problem; only after actual choices exist obtain the requested model. No model-specific handler or coordinate fallback was added.
 
 Keep historical question/35-item reply and Chrome-menu acceptance without rerunning unrelated tests. A matched before/after end-to-end latency comparison, actual requested model selection, new-version sidebar read, long Doze/reboot recovery and Voice/P2 acceptance remain open. Only release/test metadata and bounded action timings are recorded; no private screen text, account data, app inventory or shell identity output is published.
+
+
+## Subsequent unlocked v0.1.61 check
+
+The user unlocked the phone again. Generic Gemini launch and sidebar open/close succeeded. Registered sidebar read still failed. Actual read_identity reported activity_anchor_present=true/visible=true, sidebar_pane_visible=false, chat_pane_visible=false, traversal_complete=true, visited_nodes176, max_depth33, protected_input=false and identity_verified=false. The proposed activity-anchor visibility cause is ruled out for this sample. Existing verified, text-free composer-screen metadata exposes the actual visible navigation host assistant_robin_side_nav_host_overlapping_v2; [v0.1.62 correction](generic-navigation-host-v0162.md) records the next narrow change. Do not describe the v0.1.61 runtime sidebar fix as accepted.
