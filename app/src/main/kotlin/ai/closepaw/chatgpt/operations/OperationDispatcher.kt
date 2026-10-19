@@ -71,7 +71,7 @@ internal class OperationDispatcher(
             try {
                 val shouldStart = synchronized(this@OperationDispatcher) {
                     if (store.get(taskId)?.get("state")?.jsonPrimitive?.content == "cancelled") false
-                    else { store.update(taskId, mapOf("state" to JsonPrimitive("running"))); true }
+                    else { store.update(taskId, mapOf("state" to JsonPrimitive("running"), "started_at_ms" to JsonPrimitive(System.currentTimeMillis()))); true }
                 }
                 if (!shouldStart) return@launch
                 // Recheck after queuing: local permission may have been revoked.
@@ -88,7 +88,7 @@ internal class OperationDispatcher(
                         "result" to invalid, "summary" to invalid.getValue("summary"),
                     ))
                 } else {
-                    store.updateActive(taskId, mapOf("state" to JsonPrimitive(terminalState(result)), "result" to bounded, "summary" to bounded.getValue("summary")))
+                    store.updateActive(taskId, mapOf("state" to JsonPrimitive(terminalState(result)), "result" to bounded, "summary" to bounded.getValue("summary"), "completed_at_ms" to JsonPrimitive(System.currentTimeMillis())))
                 }
             } catch (_: CancellationException) {
                 store.updateActive(taskId, mapOf("state" to JsonPrimitive("outcome_unknown"), "summary" to JsonPrimitive("Execution observer stopped; command termination is not confirmed.")))

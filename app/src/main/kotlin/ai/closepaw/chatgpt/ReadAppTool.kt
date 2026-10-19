@@ -76,11 +76,14 @@ internal class AndroidReadAppTool(
             }
             if (geminiUi.isLocked()) return null
             val state = geminiUi.inspect()
+            val verifiedGemini = state.foreground || geminiUi.isReadScreen()
             val evidence = geminiUi.evidence()
             val pkg = evidence.rootPackage
             // Never infer identity from a background window or a generic Google Search box.
-            if (pkg != evidence.observedPackage || !ReadAppForegroundPolicy.accepts(
-                    target, pkg, state.foreground && pkg == AndroidGeminiDraftUi.GOOGLE_HOST,
+            val authoritativeRoot = pkg == evidence.observedPackage ||
+                (evidence.windowType == AccessibilityWindowInfo.TYPE_APPLICATION && evidence.active == true && evidence.focused == true)
+            if (!authoritativeRoot || !ReadAppForegroundPolicy.accepts(
+                    target, pkg, verifiedGemini && pkg == AndroidGeminiDraftUi.GOOGLE_HOST,
                 )) return null
             return ReadForeground(pkg!!, evidence.windowId)
         }

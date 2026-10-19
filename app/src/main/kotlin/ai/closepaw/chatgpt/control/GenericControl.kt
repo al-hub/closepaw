@@ -7,8 +7,10 @@ import kotlinx.serialization.json.*
 internal data class ControlNode(val id: Int, val text: String = "", val description: String = "", val resourceId: String = "",
     val clickable: Boolean = false, val editable: Boolean = false, val scrollable: Boolean = false,
     val enabled: Boolean = true, val password: Boolean = false, val empty: Boolean = true,
-    val bounds: String = "", val parent: Int = -1, val longClickable: Boolean = false) {
+    val bounds: String = "", val parent: Int = -1, val longClickable: Boolean = false,
+    val expandable: Boolean = false, val collapsible: Boolean = false, val className: String = "", val selected: Boolean = false) {
     fun json() = buildJsonObject {
+        put("expandable", expandable); put("collapsible", collapsible); put("class_name", className.take(100)); put("selected", selected)
         put("node_id", id); put("text", text.take(100)); put("description", description.take(100)); put("resource_id", resourceId.take(100))
         put("long_clickable", longClickable); put("bounds", bounds); put("parent", parent); put("clickable", clickable); put("editable", editable); put("scrollable", scrollable); put("enabled", enabled)
     }
@@ -22,6 +24,7 @@ internal interface ControlPort {
     // Must recheck consent and action-scoped freshness/identity at the native action boundary.
     suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect
     suspend fun apps(filter: String): JsonArray
+    fun invalidate() {}
 }
 
 /** One current, expiring, single-use observation. No planner or model names in the executor. */
@@ -32,7 +35,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     private var chainStarted = 0L
     private var chainActions = 0
     private var noProgress = 0
-    fun invalidate() { current = null }
+    fun invalidate() { current = null; port.invalidate() }
 
     suspend fun observe(): OperationResult {
         current = null
@@ -70,6 +73,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }, summary = "Current accessibility screen observed; node IDs belong only to this observation.")
     }
     suspend fun action(input: JsonObject): OperationResult {
+        val started = now()
         if (!allowed()) { current = null; return failure("generic_control_disabled") }
         val observation = current ?: return failure("observation_required")
         if (input["observation_id"]?.jsonPrimitive?.content != observation.id) return failure("stale_observation")
@@ -79,22 +83,25 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (chainActions >= 20 || now() - chainStarted !in 0L..180_000L || noProgress >= 3)
             return failure("control_chain_limit_observe_again")
         val action = input["action"]?.jsonPrimitive?.content.orEmpty()
-        if (action !in setOf("click", "long_press", "type", "scroll", "home", "back", "open_app")) return failure("unsupported_action")
+        if (action !in setOf("click", "long_press", "type", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
         val frame = observation.frame
         val fresh = port.capture()
         GenericControlActionPolicy.refusal(frame, fresh, action)?.let { return failure(it, GenericControlActionPolicy.validationScope(action)) }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
-        if (action in setOf("click", "long_press", "type", "scroll")) {
+        if (action in setOf("click", "long_press", "type", "scroll", "expand", "collapse")) {
             if (node == null || !node.enabled || node.password) return failure("target_unavailable")
             if ((action == "click" && !node.clickable) || (action == "long_press" && !node.longClickable)) return failure("target_not_clickable")
+            if ((action == "expand" && !node.expandable) || (action == "collapse" && !node.collapsible)) return failure("native_action_unavailable")
             if (action == "scroll" && (!node.scrollable || input["direction"]?.jsonPrimitive?.content !in setOf("up", "down"))) return failure("target_not_scrollable")
             if (action == "type" && (!node.editable || !node.empty || input["text"]?.jsonPrimitive?.content.isNullOrBlank())) return failure("draft_not_empty_or_not_editable")
         }
         if (action == "open_app" && input["package_name"]?.jsonPrimitive?.content.isNullOrBlank()) return failure("package_required")
         if (!allowed()) return failure("generic_control_disabled")
         chainActions++
+        val validatedAt = now()
         val effect = port.perform(frame, input, node)
+        val performedAt = now()
         // After an attempted action even a negative native acknowledgement is not proof of no effect.
         val post = if (effect.attempted) port.capture() else null
         val observed = if (post != null && allowed()) publish(post) else null
@@ -113,6 +120,14 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 put("action_attempted", effect.attempted); put("action_acknowledged", effect.acknowledged)
                 put("outcome_unknown", effect.attempted && !verified); put("screen_changed", changed)
                 put("app_result_verified", false)
+                put("feedback", when { !effect.attempted -> "not_attempted"; !verified -> "outcome_unconfirmed";
+                    changed -> "screen_change_observed"; else -> "acknowledged_no_visible_change" })
+                put("timing_ms", buildJsonObject {
+                    put("validation", (validatedAt - started).coerceAtLeast(0))
+                    put("native_action", (performedAt - validatedAt).coerceAtLeast(0))
+                    put("post_observation", (now() - performedAt).coerceAtLeast(0))
+                    put("total", (now() - started).coerceAtLeast(0))
+                })
                 observed?.let { put("observation", it.data) }
             })
     }

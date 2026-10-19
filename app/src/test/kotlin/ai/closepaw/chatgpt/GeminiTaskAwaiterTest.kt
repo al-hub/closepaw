@@ -27,4 +27,10 @@ class GeminiTaskAwaiterTest {
         GeminiTaskAwaiter({ assertEquals(args, it); task("running") }, { waits++ }).get(args)
         assertEquals(80, waits)
     }
+    @Test fun genericActionReadAlsoReturnsCompletionWithoutAnotherRoundTrip() = runBlocking {
+        var reads = 0; var waited = 0L
+        val result = GeminiTaskAwaiter({ if (++reads < 3) task("running", "android.ui.action") else task("succeeded", "android.ui.action") }, { waited += it }).get(buildJsonObject {})
+        assertEquals("succeeded", result.getValue("state").jsonPrimitive.content)
+        assertEquals(200L, waited)
+    }
 }
