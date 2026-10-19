@@ -6,6 +6,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GenericControlTest {
+    @Test fun outputBudgetDoesNotInvalidateCompletedSecurityTraversal() = runBlocking {
+        val port = Port()
+        port.frame = port.frame.copy(nodes = (1..60).map { ControlNode(it, "Button $it", clickable = true) })
+        val control = GenericControl(port, { true })
+        val observed = control.observe()
+        assertTrue(observed.data.getValue("node_actions_allowed").jsonPrimitive.boolean)
+        assertTrue(control.action(input(observed.data.getValue("observation_id").jsonPrimitive.content)).success)
+    }
     @Test fun unverifiedPopupReturnsBoundedDiagnosticsWithoutUnderlyingTargets() = runBlocking {
         val port = Port(); val diagnostics = buildJsonObject { put("window_count", 3); put("selection_reason", "unlinked_application_window") }
         port.frame = port.frame.copy(reason = "unlinked_application_window", windowDiagnostics = diagnostics)
@@ -13,6 +21,17 @@ class GenericControlTest {
         assertFalse(result.success); assertEquals(diagnostics, result.data["window_diagnostics"])
         assertFalse(result.data.containsKey("nodes")); assertFalse(result.data.containsKey("observation_id"))
         assertFalse(control.action(input("old-host-observation")).success); assertEquals(0, port.writes)
+    }
+    @Test fun transientPostActionWindowRaceReobservesWithoutRepeatingEffect() = runBlocking {
+        val port = Port().apply { transientPostReads = 1 }
+        val control = GenericControl(port, { true }); val result = control.action(input(observe(control)))
+        assertTrue(result.success); assertEquals(1, port.writes)
+    }
+    @Test fun unresolvedPostActionRaceStaysUnknownWithoutReplay() = runBlocking {
+        val port = Port().apply { transientPostReads = 10 }
+        val control = GenericControl(port, { true }); val result = control.action(input(observe(control)))
+        assertFalse(result.success); assertTrue(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+        assertEquals(1, port.writes)
     }
     @Test fun explicitNodeTapIsSingleUseAndDoesNotClaimModelSelection() = runBlocking {
         val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
@@ -59,8 +78,14 @@ class GenericControlTest {
     private class Port : ControlPort {
         var frame = ControlFrame("example.app", 3, "screen-a", listOf(ControlNode(1, "Model", clickable = true)), touchContext = "window-a")
         var writes = 0
+        var transientPostReads = 0
         var effect = ControlEffect(true, true, "action_acknowledged")
-        override suspend fun capture() = frame
+        override suspend fun capture(): ControlFrame {
+            if (writes > 0 && transientPostReads > 0) {
+                transientPostReads--; return frame.copy(reason = "active_root_missing")
+            }
+            return frame
+        }
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect { writes++; return effect }
         override suspend fun apps(filter: String) = JsonArray(emptyList())
     }
@@ -200,14 +225,35 @@ class GenericControlTest {
         assertEquals(JsonPrimitive(false), result.data["node_actions_allowed"])
     }
 
-    @Test fun outputNodeLimitKeepsNodeWritesBlockedButAllowsHome() = runBlocking {
+    @Test fun outputLimitAllowsOnlyExposedIdsAfterCompleteSecurityTraversal() = runBlocking {
         val port = Port(); port.frame = port.frame.copy(nodes = (0..50).map { ControlNode(it, clickable = true) })
         val control = GenericControl(port, { true }); val observed = control.observe()
-        assertEquals(JsonPrimitive(true), observed.data["truncated"])
-        assertEquals(JsonPrimitive(false), observed.data["node_actions_allowed"])
-        assertTrue(control.action(input(observed.data.getValue("observation_id").jsonPrimitive.content, "home")).success)
+        assertEquals(JsonPrimitive(false), observed.data["truncated"])
+        assertEquals(JsonPrimitive(true), observed.data["output_truncated"])
+        assertEquals(JsonPrimitive(true), observed.data["security_scan_complete"])
+        assertTrue(control.action(input(observed.data.getValue("observation_id").jsonPrimitive.content)).success)
         val next = observe(control)
-        assertFalse(control.action(input(next)).success); assertEquals(1, port.writes)
+        assertFalse(control.action(input(next, extra = mapOf("node_id" to JsonPrimitive(50)))).success)
+        assertEquals(1, port.writes)
+    }
+    @Test fun filterCanFindLaterVisibleTargetsButCannotSkipSecurityFailure() = runBlocking {
+        val port = Port(); port.frame = port.frame.copy(nodes = (0..100).map { ControlNode(it, "Item $it", clickable = true) })
+        val control = GenericControl(port, { true }); val observed = control.observe("Item 100")
+        assertEquals(1, observed.data.getValue("nodes").jsonArray.size)
+        assertTrue(control.action(input(observed.data.getValue("observation_id").jsonPrimitive.content,
+            extra = mapOf("node_id" to JsonPrimitive(100)))).success)
+        port.frame = port.frame.copy(truncated = true)
+        val partial = control.observe("Item 100")
+        assertFalse(partial.data.getValue("node_actions_allowed").jsonPrimitive.boolean)
+    }
+    @Test fun configurationChangeInvalidatesEvenGlobalNavigation() = runBlocking {
+        for (action in listOf("home", "open_app", "click")) {
+            val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
+            port.frame = port.frame.copy(configurationRevision = 1)
+            val result = control.action(input(id, action, mapOf("package_name" to JsonPrimitive("example.target"))))
+            assertEquals("configuration_revision_changed", result.data["reason_code"]?.jsonPrimitive?.content)
+            assertEquals(0, port.writes)
+        }
     }
 
     @Test fun globalNavigationCanStartFromAnUpdatingClient() = runBlocking {

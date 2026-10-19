@@ -40,9 +40,9 @@ internal class AndroidOperationRuntime(
         val genericPort = AndroidControlPort(context, mutationBlock = { pkg ->
             if (pkg in setOf(AndroidGeminiDraftUi.PACKAGE, AndroidGeminiDraftUi.GOOGLE_HOST) &&
                 store.latestOutcomeUnknown("gemini.question.ask")) "dedicated_submission_unresolved" else null
-        }) { settings.genericControlEnabled }
+        }, runtime = settings.runtimeControl) { settings.genericControlEnabled }
         val genericControl = GenericControl(genericPort, { settings.genericControlEnabled })
-        GenericControlOperations(genericControl, genericPort, screenMutex) {
+        GenericControlOperations(genericControl, genericPort, screenMutex, settings.runtimeControl) {
             when {
                 !settings.genericControlEnabled -> OperationReadiness(false, "generic_control_disabled")
                 AgentService.instance == null -> OperationReadiness(false, "accessibility_permission_missing")
@@ -189,7 +189,7 @@ internal class AndroidOperationRuntime(
         dispatcher = OperationDispatcher(registry, store, scope,
             executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled || settings.genericControlEnabled },
             operationAllowed = { id -> when(id) {
-                GenericControlOperations.ACTION -> settings.genericControlEnabled
+                GenericControlOperations.ACTION, GenericControlOperations.CONFIGURE -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled

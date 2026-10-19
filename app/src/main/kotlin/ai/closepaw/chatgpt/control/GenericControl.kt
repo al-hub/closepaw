@@ -21,13 +21,14 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val nodes: List<ControlNode>, val reason: String? = null, val truncated: Boolean = false,
     val truncationReasons: Set<String> = emptySet(), val visitedNodes: Int = 0, val maxDepth: Int = 0,
     val touchContext: String = "", val foregroundWindowId: Int = windowId, val windowContext: String = "",
-    val windowDiagnostics: JsonObject? = null)
+    val windowDiagnostics: JsonObject? = null, val configurationRevision: Long = 0, val outputLimit: Int = 50)
 internal data class ControlEffect(val attempted: Boolean, val acknowledged: Boolean, val reason: String)
 internal interface ControlPort {
     suspend fun capture(): ControlFrame
     // Must recheck consent and action-scoped freshness/identity at the native action boundary.
     suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect
     suspend fun apps(filter: String): JsonArray
+    fun appDiagnostics(): JsonObject = buildJsonObject {}
     fun invalidate() {}
 }
 
@@ -41,25 +42,29 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     private var noProgress = 0
     fun invalidate() { current = null; port.invalidate() }
 
-    suspend fun observe(): OperationResult {
+    suspend fun observe(filter: String = ""): OperationResult {
         current = null
         chainStarted = now(); chainActions = 0; noProgress = 0
         if (!allowed()) return failure("generic_control_disabled")
-        return publish(port.capture())
+        return publish(port.capture(), filter)
     }
-    private fun publish(frame: ControlFrame): OperationResult {
+    private fun publish(frame: ControlFrame, filter: String = ""): OperationResult {
         if (!allowed()) { current = null; return failure("generic_control_disabled") }
         if (frame.reason != null) { current = null; return failure(frame.reason, diagnostics = frame.windowDiagnostics) }
         val rendered = mutableListOf<JsonElement>()
         var size = 0
-        for (node in frame.nodes.take(50)) {
+        val candidates = frame.nodes.filter { filter.isEmpty() || it.text.contains(filter, true) ||
+            it.description.contains(filter, true) || it.resourceId.contains(filter, true) }
+        val exposed = mutableListOf<ControlNode>()
+        for (node in candidates.take(frame.outputLimit)) {
             val json = node.json()
             if (size + json.toString().length > 24_000) break
-            rendered.add(json); size += json.toString().length
+            rendered.add(json); exposed.add(node); size += json.toString().length
         }
-        val outputLimited = rendered.size < frame.nodes.size
-        val bounded = frame.copy(truncated = frame.truncated || outputLimited,
-            truncationReasons = frame.truncationReasons + if (outputLimited) setOf("output_budget") else emptySet())
+        val outputLimited = rendered.size < candidates.size
+        // Full security/fingerprint traversal is independent of bounded presentation.
+        // Only IDs actually disclosed in this observation may be acted on.
+        val bounded = frame.copy(nodes = exposed)
         val observation = Observation(UUID.randomUUID().toString(), now(), bounded)
         current = observation
         return OperationResult(data = buildJsonObject {
@@ -67,6 +72,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             put("package_name", frame.packageName); put("window_id", frame.windowId)
             put("foreground_window_id", frame.foregroundWindowId)
             frame.windowDiagnostics?.let { put("window_diagnostics", it) }
+            put("configuration_revision", frame.configurationRevision)
+            put("security_scan_complete", !frame.truncated); put("output_truncated", outputLimited)
+            put("matched_node_count", candidates.size)
             put("truncated", bounded.truncated); put("actionable", !bounded.truncated)
             put("node_actions_allowed", !bounded.truncated)
             put("node_tap_available", !bounded.truncated && bounded.touchContext.isNotEmpty())
@@ -112,7 +120,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val effect = port.perform(frame, input, node)
         val performedAt = now()
         // After an attempted action even a negative native acknowledgement is not proof of no effect.
-        val post = if (effect.attempted) port.capture() else null
+        var post = if (effect.attempted) port.capture() else null
+        var settlingReads = 0
+        while (effect.attempted && post?.reason in setOf("active_root_missing", "foreground_application_required", "secure_window_changed") && settlingReads < 2) {
+            kotlinx.coroutines.delay(100)
+            if (!allowed()) break
+            post = port.capture(); settlingReads++
+        }
         val observed = if (post != null && allowed()) publish(post) else null
         val changed = post != null && post.reason == null &&
             (frame.fingerprint != post.fingerprint || frame.packageName != post.packageName || frame.windowId != post.windowId)
