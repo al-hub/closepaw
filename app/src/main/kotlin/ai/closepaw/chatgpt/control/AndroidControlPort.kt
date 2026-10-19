@@ -43,9 +43,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private val context = context.applicationContext
     private val classifier = AppClassifierHolder.get(this.context)
     private var listedPackages = emptySet<String>()
-    private var certifiedWindow = -1
+    private var certifiedWindows: NativeControlWindows? = null
+    private var windowDiagnostics: JsonObject? = null
     private val probeThrottle = ScreenProbeThrottle({ SystemClock.elapsedRealtime() })
-    override fun invalidate() { probeThrottle.reset() }
+    override fun invalidate() { probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
     private fun reason(service: AgentService?): String? = when {
         !allowed() -> "generic_control_disabled"
         service == null -> "accessibility_permission_missing"
@@ -55,7 +56,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         service.getActiveSession()?.state?.value in setOf(SessionState.Running, SessionState.TakeoverPending) -> "local_agent_busy"
         else -> null
     }
-    private fun denied(code: String) = ControlFrame("", -1, "", emptyList(), reason = code)
+    private fun denied(code: String, diagnostics: JsonObject? = null) = ControlFrame("", -1, "", emptyList(), reason = code, windowDiagnostics = diagnostics)
     private fun platform(service: AgentService) = AccessibilityPlatform(service, SessionConfig(),
         isPackageBlocked = { classifier.classify(it) == AppTier.BLOCKED })
 
@@ -88,35 +89,48 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         service ?: return denied("accessibility_permission_missing")
         // Unlike a general accessibility tree, this signal can reject FLAG_SECURE windows.
         // On older Android the adapter declines to claim a secure-window check it cannot perform.
-        secureWindow(service)?.let { return denied(it) }
+        secureWindow(service)?.let { return denied(it, windowDiagnostics) }
         return withTree(service) { frame, _ -> frame }
     }
     private suspend fun secureWindow(service: AgentService): String? {
-        certifiedWindow = -1
+        certifiedWindows = null
+        windowDiagnostics = null
         if (Build.VERSION.SDK_INT < 34) return "secure_window_probe_requires_android14"
-        probeThrottle.awaitSlot() // wait only for the remaining API interval, never skip the probe
-        return withContext(Dispatchers.Main) {
-            reason(service)?.let { return@withContext it }
-            val root = service.rootInActiveWindow ?: return@withContext "active_root_missing"
-            val id = root.windowId
-            root.recycleCompat()
-            suspendCancellableCoroutine<String?> { continuation ->
-                try {
-                    service.takeScreenshotOfWindow(id, service.mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
-                        override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
-                            screenshot.hardwareBuffer.close()
-                            if (continuation.isActive) { certifiedWindow = id; continuation.resume(null) }
-                        }
-                        override fun onFailure(errorCode: Int) {
-                            if (continuation.isActive) continuation.resume(if (errorCode == AccessibilityService.ERROR_TAKE_SCREENSHOT_SECURE_WINDOW)
-                                "secure_window" else "secure_window_probe_failed")
-                        }
-                    })
-                } catch (_: Exception) {
-                    if (continuation.isActive) continuation.resume("secure_window_probe_failed")
+        val selected = withContext(Dispatchers.Main) {
+            reason(service)?.let { return@withContext null }
+            val root = service.rootInActiveWindow ?: return@withContext null
+            val windows = service.windows.orEmpty()
+            try { controlWindows(root.windowId, root.packageName?.toString().orEmpty(), windows) }
+            finally { root.recycleCompat(); windows.forEach { runCatching { it.recycle() } } }
+        } ?: return reason(service) ?: "active_root_missing"
+        windowDiagnostics = selected.diagnostics
+        selected.selection.reason?.let { return it }
+        // Every included root gets a NEW security verdict; no previous capture's verdict is reused.
+        for (id in selected.selection.members) {
+            probeThrottle.awaitSlot()
+            val failure = withContext(Dispatchers.Main) {
+                reason(service)?.let { return@withContext it }
+                suspendCancellableCoroutine<String?> { continuation ->
+                    try {
+                        service.takeScreenshotOfWindow(id, service.mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
+                            override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                                screenshot.hardwareBuffer.close()
+                                if (continuation.isActive) continuation.resume(null)
+                            }
+                            override fun onFailure(errorCode: Int) {
+                                if (continuation.isActive) continuation.resume(if (errorCode == AccessibilityService.ERROR_TAKE_SCREENSHOT_SECURE_WINDOW)
+                                    "secure_window" else "secure_window_probe_failed")
+                            }
+                        })
+                    } catch (_: Exception) {
+                        if (continuation.isActive) continuation.resume("secure_window_probe_failed")
+                    }
                 }
             }
+            if (failure != null) return failure
         }
+        certifiedWindows = selected
+        return null
     }
     private suspend fun <T> withTree(service: AgentService,
         block: suspend (ControlFrame, List<AccessibilityNodeInfo>) -> T): T = withContext(Dispatchers.Main) {
@@ -125,15 +139,17 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val owned = mutableListOf(root)
         val windows = service.windows.orEmpty()
         try {
-            if (root.windowId != certifiedWindow) return@withContext block(denied("secure_window_changed"), emptyList())
-            val window = windows.singleOrNull { it.id == root.windowId }
-            if (window == null || window.type != AccessibilityWindowInfo.TYPE_APPLICATION || !window.isActive || !window.isFocused)
-                return@withContext block(denied("foreground_application_required"), emptyList())
             val pkg = root.packageName?.toString().orEmpty()
             if (pkg.isBlank()) return@withContext block(denied("package_unknown"), emptyList())
+            val selected = controlWindows(root.windowId, pkg, windows)
+            selected.selection.reason?.let { return@withContext block(denied(it, selected.diagnostics), emptyList()) }
+            val certified = certifiedWindows
+            if (certified == null || certified.signature != selected.signature || certified.selection != selected.selection)
+                return@withContext block(denied("secure_window_changed", selected.diagnostics), emptyList())
+            val window = windows.single { it.id == selected.selection.target }
             val nodes = mutableListOf<ControlNode>()
             val native = mutableListOf<AccessibilityNodeInfo>()
-            val identity = StringBuilder()
+            val identity = StringBuilder(selected.signature).append('\n')
             var truncated = false
             var protected = false
             var gemini = false
@@ -141,7 +157,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             var visited = 0
             var deepest = 0
             val truncationReasons = linkedSetOf<String>()
-            fun visit(node: AccessibilityNodeInfo, depth: Int, parent: Int) {
+            fun visit(node: AccessibilityNodeInfo, depth: Int, parent: Int, expose: Boolean) {
                 deepest = maxOf(deepest, depth)
                 if (depth > 64 || visited >= 512) {
                     truncated = true
@@ -165,10 +181,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     put("resource", resource); put("class", node.className?.toString().orEmpty()); put("bounds", rect.flattenToString())
                     put("visible", node.isVisibleToUser); put("enabled", node.isEnabled); put("clickable", node.isClickable)
                     put("long_clickable", node.isLongClickable); put("editable", node.isEditable); put("scrollable", node.isScrollable); put("password", node.isPassword)
-                    put("selected", node.isSelected); put("child_count", node.childCount); put("actions", node.actionList.joinToString { it.id.toString() })
+                    put("selected", node.isSelected); put("checkable", node.isCheckable); put("checked", node.isChecked)
+                    put("child_count", node.childCount); put("actions", node.actionList.joinToString { it.id.toString() })
                 }
                 identity.append(json.toString()).append('\n')
-                if (node.isVisibleToUser && !rect.isEmpty &&
+                if (expose && node.isVisibleToUser && !rect.isEmpty &&
                     (text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable ||
                         node.actionList.any { it.id in setOf(AccessibilityNodeInfo.ACTION_CLICK, AccessibilityNodeInfo.ACTION_EXPAND, AccessibilityNodeInfo.ACTION_COLLAPSE) })) {
                     if (nodes.size >= 50) { truncated = true; truncationReasons.add("output_node_limit") }
@@ -178,24 +195,34 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                             node.isEnabled, node.isPassword, node.isShowingHintText || text.isEmpty(), rect.flattenToString(), parent, node.isLongClickable,
                             node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_EXPAND },
                             node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_COLLAPSE },
-                            node.className?.toString().orEmpty(), node.isSelected))
+                            node.className?.toString().orEmpty(), node.isSelected, node.isCheckable, node.isChecked))
                         native.add(node)
                     }
                 }
                 for (i in 0 until node.childCount) {
                     if (visited >= 512) { truncated = true; truncationReasons.add("node_limit"); break }
                     val child = node.getChild(i) ?: continue
-                    owned.add(child); visit(child, depth + 1, index)
+                    owned.add(child); visit(child, depth + 1, index, expose)
                 }
             }
-            visit(root, 0, -1)
+            for (id in selected.selection.members) {
+                val member = if (id == root.windowId) root else windows.single { it.id == id }.root
+                if (member == null || member.windowId != id || member.packageName?.toString() != pkg) {
+                    if (member != null && member !== root) member.recycleCompat()
+                    return@withContext block(denied("owned_window_root_changed", selected.diagnostics), emptyList())
+                }
+                if (member !== root) owned.add(member)
+                identity.append("window=").append(id).append('\n')
+                visit(member, 0, -1, id == selected.selection.target)
+            }
             val code = GenericScreenPolicy.refusal(
                 blocked = classifier.classify(pkg) == AppTier.BLOCKED, sensitive = protected,
                 packageAllowed = packageAllowed(pkg), isGeminiHost = pkg == AndroidGeminiDraftUi.GOOGLE_HOST,
                 verifiedGemini = gemini || (!truncated && GeminiReadIdentity.nativeShell(pkg, shellIds)), readable = nodes.isNotEmpty(),
             ) ?: reason(service)
-            block(ControlFrame(pkg, root.windowId, operationHash(identity.toString()), nodes, code, truncated,
-                truncationReasons, visited, deepest, touchContext(service, window, windows)), native)
+            block(ControlFrame(pkg, window.id, operationHash(identity.toString()), nodes, code, truncated,
+                truncationReasons, visited, deepest, touchContext(service, window, windows), root.windowId,
+                selected.signature, selected.diagnostics), native)
         } finally {
             owned.forEach { it.recycleCompat() }
             windows.forEach { runCatching { it.recycle() } }
@@ -235,13 +262,15 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val windows = service.windows.orEmpty()
         try {
             val root = service.rootInActiveWindow ?: return ControlEffect(false, false, "active_root_missing")
-            val rootMatches = try { root.windowId == frame.windowId && root.packageName?.toString() == frame.packageName }
+            val rootMatches = try { root.windowId == frame.foregroundWindowId && root.packageName?.toString() == frame.packageName }
                 finally { root.recycleCompat() }
             if (!rootMatches) return ControlEffect(false, false, "screen_changed")
             val window = windows.singleOrNull { it.id == frame.windowId }
                 ?: return ControlEffect(false, false, "touch_window_unavailable")
-            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION || !window.isActive || !window.isFocused ||
-                frame.touchContext.isEmpty() || touchContext(service, window, windows) != frame.touchContext)
+            val selected = controlWindows(frame.foregroundWindowId, frame.packageName, windows)
+            if (selected.selection.reason != null || selected.selection.target != frame.windowId ||
+                selected.signature != frame.windowContext || frame.touchContext.isEmpty() ||
+                touchContext(service, window, windows) != frame.touchContext)
                 return ControlEffect(false, false, "touch_window_changed")
             val covering = windows.filter { it.id != window.id && it.displayId == window.displayId && it.layer >= window.layer }
                 .map { bounds(windowBounds(it)) }
@@ -289,7 +318,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
             val at = fresh.nodes.indexOfFirst { it.id == node?.id }
             val target = native.getOrNull(at) ?: return@withTree ControlEffect(false, false, "target_unavailable")
-            if (!target.refresh() || !target.isVisibleToUser || !target.isEnabled || target.isPassword || target.packageName?.toString() != fresh.packageName)
+            if (!target.refresh() || !target.isVisibleToUser || !target.isEnabled || target.isPassword || target.windowId != fresh.windowId || target.packageName?.toString() != fresh.packageName)
                 return@withTree ControlEffect(false, false, "target_changed")
             val expected = fresh.nodes[at]
             val rect = Rect(); target.getBoundsInScreen(rect)

@@ -6,6 +6,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GenericControlTest {
+    @Test fun unverifiedPopupReturnsBoundedDiagnosticsWithoutUnderlyingTargets() = runBlocking {
+        val port = Port(); val diagnostics = buildJsonObject { put("window_count", 3); put("selection_reason", "unlinked_application_window") }
+        port.frame = port.frame.copy(reason = "unlinked_application_window", windowDiagnostics = diagnostics)
+        val control = GenericControl(port, { true }); val result = control.observe()
+        assertFalse(result.success); assertEquals(diagnostics, result.data["window_diagnostics"])
+        assertFalse(result.data.containsKey("nodes")); assertFalse(result.data.containsKey("observation_id"))
+        assertFalse(control.action(input("old-host-observation")).success); assertEquals(0, port.writes)
+    }
     @Test fun explicitNodeTapIsSingleUseAndDoesNotClaimModelSelection() = runBlocking {
         val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
         val result = control.action(input(id, "tap"))
