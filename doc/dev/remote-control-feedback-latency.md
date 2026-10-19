@@ -18,7 +18,7 @@ Verified baseline on the same installed APK: camera single capture and new saved
 - Native Android perform retains a NEW secure-window probe, complete security tree traversal and action-scoped freshness checks. Skip the duplicate engine-level capture only when the adapter explicitly owns that native validation. Other/fake adapters retain engine validation.
 - Service-owned text-free event generation for window/content/text/scroll changes; events from ClosePaw are ignored. StateFlow prevents missing an event between checking and suspending.
 - Post-action capture runs immediately. On an incomplete/transient/unchanged screen or pending exact-package launch, wait for a new event, then recapture. Maximum four reads and 1,600ms observation scheduling budget; unchanged nonlaunch acknowledgement waits at most250ms for a missing event. The overall existing10s operation timeout still bounds slow Binder/probe work. No event proves success, no action is replayed. No security verdict is cached.
-- Existing screenshot API throttle is retained. It is a platform-probe spacing guard, not a task-completion timer.
+- Screenshot probes start immediately when no preceding probe is known; known rapid probes retain400ms API spacing. Only an explicit Android screenshot-rate-limit refusal is retried once with a new verdict. Secure-window refusals are never retried. This removes the unconditional first400ms dwell without caching security results.
 - Android event coalescing reduced100→25ms. No node or screenshot reads in the event callback.
 
 ## Validation status

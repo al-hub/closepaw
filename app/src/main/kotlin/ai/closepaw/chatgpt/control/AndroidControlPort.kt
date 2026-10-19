@@ -156,33 +156,41 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         selected.selection.reason?.let { return it }
         // Every included root gets a NEW security verdict; no previous capture's verdict is reused.
         for (id in selected.selection.members) {
-            probeThrottle.awaitSlot()
-            val failure = withContext(Dispatchers.Main) {
-                reason(service)?.let { return@withContext it }
-                suspendCancellableCoroutine<String?> { continuation ->
-                    try {
-                        service.takeScreenshotOfWindow(id, service.mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
-                            override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
-                                screenshot.hardwareBuffer.close()
-                                if (continuation.isActive) continuation.resume(null)
-                            }
-                            override fun onFailure(errorCode: Int) {
-                                if (continuation.isActive) continuation.resume(when (errorCode) {
-                                    AccessibilityService.ERROR_TAKE_SCREENSHOT_SECURE_WINDOW -> "secure_window"
-                                    AccessibilityService.ERROR_TAKE_SCREENSHOT_INVALID_WINDOW -> "secure_window_changed"
-                                    else -> "secure_window_probe_failed"
-                                })
-                            }
-                        })
-                    } catch (_: Exception) {
-                        if (continuation.isActive) continuation.resume("secure_window_probe_failed")
-                    }
-                }
-            }
+            var failure = probeWindow(service, id)
+            // A read-only API rate-limit refusal can follow another adapter's screenshot.
+            // Retry only that explicit refusal, once, with API spacing and a NEW verdict.
+            if (failure == "secure_window_probe_throttled") failure = probeWindow(service, id)
             if (failure != null) return failure
         }
         certifiedWindows = selected
         return null
+    }
+    private suspend fun probeWindow(service: AgentService, id: Int): String? {
+        if (Build.VERSION.SDK_INT < 34) return "secure_window_probe_requires_android14"
+        probeThrottle.awaitSlot()
+        return withContext(Dispatchers.Main) {
+            reason(service)?.let { return@withContext it }
+            suspendCancellableCoroutine<String?> { continuation ->
+                try {
+                    service.takeScreenshotOfWindow(id, service.mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
+                        override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                            screenshot.hardwareBuffer.close()
+                            if (continuation.isActive) continuation.resume(null)
+                        }
+                        override fun onFailure(errorCode: Int) {
+                            if (continuation.isActive) continuation.resume(when (errorCode) {
+                                AccessibilityService.ERROR_TAKE_SCREENSHOT_SECURE_WINDOW -> "secure_window"
+                                AccessibilityService.ERROR_TAKE_SCREENSHOT_INVALID_WINDOW -> "secure_window_changed"
+                                AccessibilityService.ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT -> "secure_window_probe_throttled"
+                                else -> "secure_window_probe_failed"
+                            })
+                        }
+                    })
+                } catch (_: Exception) {
+                    if (continuation.isActive) continuation.resume("secure_window_probe_failed")
+                }
+            }
+        }
     }
     private suspend fun <T> withTree(service: AgentService,
         block: suspend (ControlFrame, List<AccessibilityNodeInfo>) -> T): T = withContext(Dispatchers.Main) {
