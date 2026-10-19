@@ -12,7 +12,7 @@ internal class AppCatalogUnavailable(val reasonCode: String) : IllegalStateExcep
 /** Query once, enforce policy before expensive label loads, and deduplicate before loading resources. */
 internal class AndroidAppCatalog(private val pm: PackageManager, private val packageAllowed: (String) -> Boolean) {
     suspend fun list(filter: String): List<AppInfo> = withContext(Dispatchers.IO) {
-        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val launcher = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
         pm.queryIntentActivities(launcher, PackageManager.MATCH_ALL)
             .filter { it.activityInfo?.packageName?.let(packageAllowed) == true }
             .distinctBy { it.activityInfo.packageName }

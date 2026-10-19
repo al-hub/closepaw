@@ -60,7 +60,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val refusal = withContext(Dispatchers.Main) { reason(service) }
         if (refusal != null || service == null) throw AppCatalogUnavailable(refusal ?: "accessibility_permission_missing")
         val launcher = withContext(Dispatchers.IO) {
-            context.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+            context.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) },
                 android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
         }
         val matches = AndroidAppCatalog(context.packageManager) { packageAllowed(it, launcher, resolveLauncher = false) }.list(filter)
@@ -72,7 +72,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         if (pkg == context.packageName || pkg.contains("permissioncontroller") || pkg.contains("packageinstaller") ||
             pkg == "com.android.systemui") return false
         if (classifier.classify(pkg) == AppTier.BLOCKED) return false
-        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val home = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
         val launcher = if (resolveLauncher) context.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName else knownLauncher
         return classifier.classify(pkg) == AppTier.NORMAL || pkg == launcher
     }
