@@ -1,5 +1,15 @@
 # 범용 Android 제어기 — 개발 착수용 Works 인계
 
+## v0.1.61/code62 delivered and remotely installed — unlocked acceptance checkpoint
+
+- [PR #106](https://github.com/al-hub/closepaw/pull/106) merged as e8c6a9da8f801887da0563269315a7bf2d7697e1. Read-only identity now separates a structural activity anchor from an exact visible Gemini pane and exposes bounded boolean/count diagnostics. Composer/write/send and generic action policies remain unchanged.
+- RED2,546 tests/1 expected failure; GREEN2,546 tests with0 failures/errors/skips; lint0 errors/108 warnings; Python55+8 and signed probe passed. Main CI39203887423 and Signed Release39204521059 succeeded.
+- [Signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.61/closepaw-aa-bridge.apk):116,425,565 bytes; SHA-256 7111665c9bc35931fa8b9effa97dac63d97ca095d84323a997337a2c9ee0405e. Anonymous public download, original signer, code62, both native runtimes and immutable tag/source verified.
+- One automatic update requested after device_locked observation; installed/current0.1.61/code62 and reconnection confirmed, with device_locked observed again. A Termux id task succeeded exit0 between further lock observations; latest check up_to_date. No repeated installation/wake/unlock.
+- Earlier unlocked v0.1.60 generic label search/exact selection/open_app succeeded for Gemini AND Chrome. Registered read works on composer but refused sidebar; model-title native click showed no visible change. Current device UI totals933–1,876ms do not establish end-to-end/speech latency improvement.
+- New-version sidebar read and model selection remain unverified because the phone relocked during CI. Runtime identity-cause hypothesis remains unproved; **P2/Voice ACTIVE**. [Evidence and next entry point](../dev/generic-control-device-v0161.md). Earlier status sections below are historical checkpoints.
+
+
 ## v0.1.60/code61 delivered and installed — non-UI checks passed; locked/UI acceptance pending
 
 [PR #105](https://github.com/al-hub/closepaw/pull/105) merged as
