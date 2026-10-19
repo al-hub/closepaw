@@ -1,5 +1,6 @@
 package ai.closepaw.app
 
+import ai.closepaw.util.recycleCompat
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Canvas
 import android.graphics.Color
@@ -14,7 +15,13 @@ import android.view.WindowManager
 internal class RemoteControlIndicator(private val service: AccessibilityService) {
     private val manager = service.getSystemService(WindowManager::class.java)
     private var view: View? = null
-    fun ownsWindow(id: Int): Boolean = id >= 0 && view?.accessibilityWindowId == id
+    fun ownsWindow(id: Int): Boolean {
+        if (id < 0) return false
+        val attached = view ?: return false
+        // View's direct accessibilityWindowId accessor is hidden; use the public node API.
+        val node = attached.createAccessibilityNodeInfo() ?: return false
+        return try { node.windowId == id } finally { node.recycleCompat() }
+    }
 
     fun show() {
         if (view != null) return
