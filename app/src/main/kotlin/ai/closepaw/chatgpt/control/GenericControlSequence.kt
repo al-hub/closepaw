@@ -21,7 +21,7 @@ internal class GenericControlSequence(
                 put("reason_code", reason); put("completed_steps", completed)
                 put("outcome_unknown", uncertain); put("goal_verified", false)
             })
-        if (labels.size !in 2..9 || labels.any { it.isBlank() || it.length > 32 }) {
+        if (labels.size !in 2..9 || labels.any { it.length != 1 || it[0] !in '0'..'9' }) {
             return failure("invalid_sequence", 0)
         }
         val initialSession = session() ?: return failure("control_session_required", 0)
@@ -39,6 +39,13 @@ internal class GenericControlSequence(
         var observed = first.data
         val expectedPackage = observed["package_name"]?.jsonPrimitive?.content
             ?: return failure("foreground_unverified", 0)
+        // First version is intentionally limited to calculator digit entry, not
+        // arbitrary UI clicks (including payments, dialogs, authentication or send).
+        if (expectedPackage !in setOf(
+                "com.sec.android.app.popupcalculator",
+                "com.google.android.calculator",
+                "com.android.calculator2"
+            )) return failure("calculator_only", 0)
         val expectedWindow = observed["window_id"]?.jsonPrimitive?.intOrNull
             ?: return failure("foreground_unverified", 0)
         var completed = 0
