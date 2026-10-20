@@ -99,6 +99,8 @@ class GenericControlTest {
         var writes = 0
         var changeOnWrite = true
         var captures = 0
+        var controlSession: ControlSession? = null
+        override fun session() = controlSession
         var nativeValidation = false
         override val validatesAtNativeBoundary get() = nativeValidation
         var transientPostReads = 0
@@ -121,6 +123,17 @@ class GenericControlTest {
     private fun input(id: String, action: String = "click", extra: Map<String, JsonElement> = emptyMap()) =
         JsonObject(mapOf("observation_id" to JsonPrimitive(id), "action" to JsonPrimitive(action), "node_id" to JsonPrimitive(1)) + extra)
     private suspend fun observe(control: GenericControl) = control.observe().data.getValue("observation_id").jsonPrimitive.content
+    @Test fun resumedSessionCannotReplayAnOldObservation() = runBlocking {
+        val session = ControlSession().apply { activateLegacy() }
+        val port = Port().apply { controlSession = session }
+        val control = GenericControl(port, { true }); val old = observe(control)
+        session.pause(); session.beginResume(); session.finishResume(session.epoch, true)
+        val result = control.action(input(old))
+        assertFalse(result.success); assertEquals(0, port.writes)
+        assertEquals("control_session_changed_observe_again", result.summary)
+        assertTrue(control.action(input(observe(control))).success)
+        assertEquals(1, port.writes)
+    }
     @Test fun changedScreenDoesNotClick() = runBlocking {
         val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
         port.frame = port.frame.copy(fingerprint = "screen-b")

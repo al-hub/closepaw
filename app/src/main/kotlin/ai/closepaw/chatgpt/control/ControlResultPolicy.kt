@@ -6,9 +6,10 @@ import kotlinx.serialization.json.*
 internal object ControlResultPolicy {
     data class Verdict(val confirmed: Boolean, val reason: String, val goalVerified: Boolean = false)
     fun verify(action: String, before: ControlFrame, after: ControlFrame?, node: ControlNode?, input: JsonObject): Verdict {
-        if (after == null || after.reason != null || after.truncated) return Verdict(false, "post_observation_unavailable")
+        if (after == null || after.reason != null) return Verdict(false, "post_observation_unavailable")
         if (action == "open_app") return Verdict(after.packageName == input["package_name"]?.jsonPrimitive?.content,
             "target_app_not_observed", true)
+        if (after.truncated && action != "home") return Verdict(false, "post_observation_incomplete")
         val matching = after.nodes.filter { it.resourceId == node?.resourceId && it.bounds == node?.bounds &&
             it.className == node?.className }
         val target = matching.singleOrNull()

@@ -38,13 +38,24 @@ internal class AndroidOperationRuntime(
     private val dispatcher: OperationDispatcher
 
     /** The same serialized UI lease drives indication for registered reads and dedicated Gemini paths. */
-    private suspend fun <T> Mutex.withRemoteActivity(block: suspend () -> T): T = withLock {
-        val service = AgentService.instance
-        try {
-            withContext(Dispatchers.Main) { service?.showRemoteControlActivity() }
-            block()
-        } finally {
-            withContext(NonCancellable + Dispatchers.Main) { service?.hideRemoteControlActivity() }
+    private suspend fun <T> Mutex.withRemoteActivity(sessionId: String? = null, block: suspend () -> T): T {
+        val admitted = AgentService.instance?.remoteControlSession
+        val epoch = admitted?.epoch
+        return withLock {
+            val service = AgentService.instance ?: error("accessibility_permission_missing")
+            val session = service.remoteControlSession
+            check(session === admitted && session.epoch == epoch) { "control_session_changed" }
+            session.refusal(sessionId)?.let { error(it) }
+            session.activateLegacy()
+            val job = currentCoroutineContext()[Job]
+            session.interrupt = { job?.cancel(CancellationException("user_control_interrupt")) }
+            try {
+                withContext(Dispatchers.Main) { service.showRemoteControlActivity() }
+                block()
+            } finally {
+                session.interrupt = {}
+                withContext(NonCancellable + Dispatchers.Main) { service.hideRemoteControlActivity() }
+            }
         }
     }
     init {
@@ -53,6 +64,13 @@ internal class AndroidOperationRuntime(
                 store.latestOutcomeUnknown("gemini.question.ask")) "dedicated_submission_unresolved" else null
         }, runtime = settings.runtimeControl) { settings.genericControlEnabled }
         val genericControl = GenericControl(genericPort, { settings.genericControlEnabled })
+        fun bindResume() {
+            AgentService.instance?.remoteResumeCheck = {
+                genericControl.invalidate()
+                screenMutex.withLock { genericPort.capture().let { it.reason == null && !it.truncated } }
+            }
+        }
+        bindResume()
         GenericControlOperations(genericControl, genericPort, screenMutex, settings.runtimeControl) {
             when {
                 !settings.genericControlEnabled -> OperationReadiness(false, "generic_control_disabled")
@@ -76,7 +94,7 @@ internal class AndroidOperationRuntime(
             permissions = listOf("accessibility"), effects = listOf("app_launch"),
             readiness = { OperationReadiness(AgentService.instance != null, if(AgentService.instance == null) "accessibility_permission_missing" else null) },
         ), object : OperationHandler {
-            override suspend fun invoke(invocation: OperationInvocation): OperationResult = screenMutex.withRemoteActivity {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult = screenMutex.withRemoteActivity(invocation.input["session_id"]?.jsonPrimitive?.content) {
                 genericControl.invalidate()
                 val captured = withContext(Dispatchers.IO) { readApp.read(invocation.input.getValue("app").jsonPrimitive.content) }
                 OperationResult(data = captured.structured,
@@ -130,11 +148,11 @@ internal class AndroidOperationRuntime(
                 }
             },
         ), object : OperationHandler {
-            override suspend fun invoke(invocation: OperationInvocation): OperationResult = screenMutex.withRemoteActivity {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult = screenMutex.withRemoteActivity(invocation.input["session_id"]?.jsonPrimitive?.content) {
                 genericControl.invalidate()
                 val service = AgentService.instance
                 if (service == null) OperationResult(success = false, summary = "Accessibility service is not connected.")
-                else withTimeout(10_000) { GeminiDraftOperation(AndroidGeminiDraftUi(service) { settings.geminiDraftEnabled }, { settings.geminiDraftEnabled }, draftDiagnostics::record).invoke(invocation) }
+                else withTimeout(10_000) { GeminiDraftOperation(AndroidGeminiDraftUi(service) { settings.geminiDraftEnabled && service.remoteControlSession.refusal(service.remoteControlSession.id, true) == null }, { settings.geminiDraftEnabled && service.remoteControlSession.refusal(service.remoteControlSession.id, true) == null }, draftDiagnostics::record).invoke(invocation) }
             }
         })
         val activeQuestions = ConcurrentHashMap<String, GeminiRoundTripOperation>()
@@ -149,14 +167,15 @@ internal class AndroidOperationRuntime(
         }), object : OperationHandler {
             override suspend fun invoke(invocation: OperationInvocation): OperationResult {
                 try {
-                    return screenMutex.withRemoteActivity {
+                    return screenMutex.withRemoteActivity(invocation.input["session_id"]?.jsonPrimitive?.content) {
                         genericControl.invalidate()
                         if (stoppedQuestions.contains(invocation.taskId)) return@withRemoteActivity OperationResult(
                             success = false, summary = "Observation stopped before the question started. No send action was invoked.",
                             data = buildJsonObject { put("state", "interrupted"); put("sent", false); put("send_action_invoked", false); put("generation_cancelled", false) },
                         )
                         val service = AgentService.instance ?: return@withRemoteActivity OperationResult(success = false, summary = "Accessibility service is not connected.")
-                        val allowed = { settings.geminiQuestionEnabled && AgentService.instance === service && !stoppedQuestions.contains(invocation.taskId) }
+                        val executionEpoch = service.remoteControlSession.epoch
+                        val allowed = { settings.geminiQuestionEnabled && AgentService.instance === service && !stoppedQuestions.contains(invocation.taskId) && service.remoteControlSession.epoch == executionEpoch && service.remoteControlSession.refusal(service.remoteControlSession.id, true) == null }
                         val ui = AndroidGeminiRoundTripUi(service, allowed)
                         val started = android.os.SystemClock.elapsedRealtime()
                         val operation = GeminiRoundTripOperation(ui, allowed, { taskId, stage, reason ->
@@ -200,7 +219,8 @@ internal class AndroidOperationRuntime(
         dispatcher = OperationDispatcher(registry, store, scope,
             executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled || settings.genericControlEnabled },
             operationAllowed = { id -> when(id) {
-                GenericControlOperations.ACTION, GenericControlOperations.CONFIGURE, GenericControlOperations.FEEDBACK_TEST -> settings.genericControlEnabled
+                GenericControlOperations.ACTION, GenericControlOperations.CONFIGURE, GenericControlOperations.FEEDBACK_TEST,
+                "android.control.session.start", "android.control.session.wait", "android.control.session.end" -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled
@@ -242,7 +262,7 @@ internal class AndroidOperationRuntime(
     }
     private fun stringSchema(max: Int, min: Int=0) = buildJsonObject { put("type", "string"); put("minLength", min); put("maxLength", max) }
     private fun schema(vararg fields: Pair<String, JsonObject>, required: List<String> = emptyList()) = buildJsonObject {
-        put("type", "object"); put("properties", JsonObject(fields.toMap())); put("additionalProperties", false)
+        put("type", "object"); put("properties", JsonObject(fields.toMap() + ("session_id" to stringSchema(128, 1)))); put("additionalProperties", false)
         put("required", JsonArray(required.map { JsonPrimitive(it) }))
     }
 }

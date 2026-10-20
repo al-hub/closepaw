@@ -41,6 +41,8 @@ import kotlin.coroutines.resume
 internal class AndroidControlPort(context: Context, private val mutationBlock: (String) -> String? = { null },
     private val runtime: RuntimeControlSettings? = null, private val allowed: () -> Boolean) : ControlPort {
     override val validatesAtNativeBoundary = true
+    override fun session() = AgentService.instance?.remoteControlSession
+    override suspend fun feedback(label: String) { withContext(Dispatchers.Main) { session()?.feedback(label) } }
     private var activityService: AgentService? = null
     private var actionChangeVersion = 0L
     override suspend fun activity(active: Boolean) {
@@ -48,6 +50,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             if (active) {
                 val service = AgentService.instance
                 if (reason(service) == null && service != null) {
+                    service.remoteResumeCheck = {
+                        invalidate()
+                        capture().let { it.reason == null && !it.truncated }
+                    }
                     activityService = service
                     service.showRemoteControlActivity()
                 }
@@ -91,9 +97,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private var certifiedWindows: NativeControlWindows? = null
     private var windowDiagnostics: JsonObject? = null
     private val probeThrottle = ScreenProbeThrottle({ SystemClock.elapsedRealtime() })
-    override fun invalidate() { appSelections.clear(); probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
+    override fun clearSelections() { appSelections.clear() }
+    override fun invalidate() { probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
     private fun reason(service: AgentService?): String? = when {
         !allowed() -> "generic_control_disabled"
+        session()?.refusal(session()?.id) != null -> session()?.refusal(session()?.id)
         service == null -> "accessibility_permission_missing"
         AgentService.instance !== service -> "accessibility_service_changed"
         context.getSystemService(KeyguardManager::class.java).isKeyguardLocked ||
@@ -146,11 +154,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         service ?: return denied("accessibility_permission_missing")
         // Unlike a general accessibility tree, this signal can reject FLAG_SECURE windows.
         // On older Android the adapter declines to claim a secure-window check it cannot perform.
+        feedback("화면 보안 확인 중")
         val started = SystemClock.elapsedRealtime()
         secureWindow(service)?.let {
             ControlDiagnostics.record("capture_probe", it, SystemClock.elapsedRealtime() - started)
             return denied(it, windowDiagnostics)
         }
+        feedback("접근성 정보 읽는 중")
         val probedAt = SystemClock.elapsedRealtime()
         return withTree(service) { frame, _ -> frame }.also { frame ->
             ControlDiagnostics.record("capture", frame.reason ?: "completed", SystemClock.elapsedRealtime() - started,
@@ -191,6 +201,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             reason(service)?.let { return@withContext it }
             suspendCancellableCoroutine<String?> { continuation ->
                 try {
+                    service.remoteControlSession.feedback("보안 확인용 화면 캡처 중")
                     service.takeScreenshotOfWindow(id, service.mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
                         override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
                             screenshot.hardwareBuffer.close()
@@ -390,6 +401,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 ?: return ControlEffect(false, false, "touch_target_clipped_or_covered")
             val region = Region(); window.getRegionInScreen(region)
             if (!region.contains(point.first, point.second)) return ControlEffect(false, false, "touch_target_outside_region")
+            if (service.remoteControlCovers(targetBounds)) return ControlEffect(false, false, "control_button_covers_target")
+            session()?.refusal(session()?.id, mutation = true)?.let { return ControlEffect(false, false, it) }
             reason(service)?.let { return ControlEffect(false, false, it) }
             mutationBlock(frame.packageName)?.let { return ControlEffect(false, false, it) }
             val path = Path().apply { moveTo(point.first.toFloat(), point.second.toFloat()) }
@@ -428,6 +441,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
             reason(service)?.let { return@withTree ControlEffect(false, false, it) }
             mutationBlock(fresh.packageName)?.let { return@withTree ControlEffect(false, false, it) }
+            session()?.refusal(session()?.id, mutation = true)?.let { return@withTree ControlEffect(false, false, it) }
             actionChangeVersion = service.remoteControlChanges.version()
             if (action == "home" || action == "back") {
                 val result = platform(service).performAction(UIAction.SystemButton(if (action == "home") SystemButtonType.HOME else SystemButtonType.BACK))
@@ -459,6 +473,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 target.viewIdResourceName.orEmpty().take(100) != expected.resourceId || rect.flattenToString() != expected.bounds ||
                 (Build.VERSION.SDK_INT >= 34 && target.isAccessibilityDataSensitive))
                 return@withTree ControlEffect(false, false, "target_changed")
+            if (service.remoteControlCovers(rect)) return@withTree ControlEffect(false, false, "control_button_covers_target")
+            service.showRemoteControlTarget(rect)
+            session()?.feedback(if (action == "scroll") "스크롤 · 화면 탐색 중" else "AI 대상 조작 중")
             if (action == "tap") {
                 if (!target.isClickable && target.actionList.none { it.id == AccessibilityNodeInfo.ACTION_CLICK })
                     return@withTree ControlEffect(false, false, "target_not_clickable")

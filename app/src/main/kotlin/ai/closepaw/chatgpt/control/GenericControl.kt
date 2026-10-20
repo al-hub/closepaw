@@ -26,6 +26,8 @@ internal data class ControlEffect(val attempted: Boolean, val acknowledged: Bool
 internal interface ControlPort {
     /** Only adapters that enforce the complete freshness policy inside perform may opt in. */
     val validatesAtNativeBoundary: Boolean get() = false
+    fun session(): ControlSession? = null
+    suspend fun feedback(label: String) {}
     suspend fun activity(active: Boolean) {}
     suspend fun feedbackTest(durationMs: Long): OperationResult = OperationResult(success = false, summary = "feedback_test_unavailable")
     suspend fun captureAfter(frame: ControlFrame, input: JsonObject): ControlFrame {
@@ -43,17 +45,18 @@ internal interface ControlPort {
     suspend fun apps(filter: String): JsonArray
     fun appDiagnostics(): JsonObject = buildJsonObject {}
     fun invalidate() {}
+    fun clearSelections() {}
 }
 
 /** One current, expiring, single-use observation. No planner or model names in the executor. */
 internal class GenericControl(private val port: ControlPort, private val allowed: () -> Boolean,
     private val now: () -> Long = System::currentTimeMillis) {
-    private data class Observation(val id: String, val at: Long, val frame: ControlFrame)
+    private data class Observation(val id: String, val at: Long, val frame: ControlFrame, val epoch: Long)
     private var current: Observation? = null
     private var chainStarted = 0L
     private var chainActions = 0
     private var noProgress = 0
-    fun invalidate() { current = null; port.invalidate() }
+    fun invalidate(clearSelections: Boolean = false) { current = null; port.invalidate(); if (clearSelections) port.clearSelections() }
 
     suspend fun observe(filter: String = ""): OperationResult {
         current = null
@@ -78,7 +81,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         // Full security/fingerprint traversal is independent of bounded presentation.
         // Only IDs actually disclosed in this observation may be acted on.
         val bounded = frame.copy(nodes = exposed)
-        val observation = Observation(UUID.randomUUID().toString(), now(), bounded)
+        val observation = Observation(UUID.randomUUID().toString(), now(), bounded, port.session()?.epoch ?: 0)
         current = observation
         return OperationResult(data = buildJsonObject {
             put("observation_id", observation.id); put("observed_at_ms", observation.at); put("expires_in_ms", 60_000)
@@ -107,6 +110,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (input["observation_id"]?.jsonPrimitive?.content != observation.id) return failure("stale_observation")
         // Consume before any native side effect, including failure, cancellation and lost transport.
         current = null
+        if (observation.epoch != (port.session()?.epoch ?: 0)) return failure("control_session_changed_observe_again")
         if (now() - observation.at !in 0L..60_000L) return failure("observation_expired")
         if (chainActions >= 20 || now() - chainStarted !in 0L..180_000L || noProgress >= 3)
             return failure("control_chain_limit_observe_again")
@@ -143,6 +147,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val verdict = ControlResultPolicy.verify(action, frame, post, node, input)
         val verified = effect.acknowledged && observed?.success == true && verdict.confirmed
         val resultReason = if (effect.attempted && effect.acknowledged && !verdict.confirmed) verdict.reason else effect.reason
+        port.feedback(if (verified) "화면 변화 확인 · 다음 단계 대기" else "결과 미확인 · 재관찰 필요")
         return OperationResult(success = verified, summary = if (verified)
             "Observed action postcondition confirmed; inspect observation for the wider task result." else resultReason,
             data = buildJsonObject {
