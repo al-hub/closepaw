@@ -29,6 +29,13 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
         Rect.intersects(Rect(point[0], point[1], point[0] + it.width, point[1] + it.height), rect)
     }
     fun isAttached() = border?.isAttachedToWindow == true
+    /** Rebuild a missing control panel without changing the user-owned session state. */
+    fun restorePanel() {
+        if (session.state == ControlSession.State.PAUSED && unlocked()) {
+            if (border == null || !isAttached()) hide()
+            show()
+        }
+    }
     private fun unlocked() = !service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
         service.getSystemService(android.os.PowerManager::class.java).isInteractive
     private val guard = object : Runnable {
