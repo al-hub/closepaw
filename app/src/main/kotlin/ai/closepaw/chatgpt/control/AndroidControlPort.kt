@@ -440,6 +440,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     }
     override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
         val service = AgentService.instance ?: return ControlEffect(false, false, "accessibility_permission_missing")
+        val admittedEpoch = service.remoteControlSession.epoch
         secureWindow(service)?.let { return ControlEffect(false, false, it) }
         val action = input.getValue("action").jsonPrimitive.content
         // This is an explicitly planned region from the consumed observation, never a touch.
@@ -457,6 +458,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             if (previewed) kotlinx.coroutines.delay(96)
         }
         val effect = withTree(service) { fresh, native ->
+            if (service.remoteControlSession.epoch != admittedEpoch)
+                return@withTree ControlEffect(false, false, "control_session_changed_observe_again")
             val failure = GenericControlActionPolicy.refusal(frame, fresh, action)
             if (failure != null) {
                 ControlDiagnostics.record("native_validation", failure, metrics = buildJsonObject {
