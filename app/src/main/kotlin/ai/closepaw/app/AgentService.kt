@@ -152,7 +152,7 @@ class AgentService : AccessibilityService() {
                 false
             }
             remoteControlSession.finishResume(epoch, safe)
-            if (!safe) remoteControlIndicator.restorePanel()
+            if (!safe) restorePausedControlPanel()
         }
     } }
     internal fun showRemoteControlAction(rect: android.graphics.Rect, kind: String, acknowledged: Boolean? = null) {
