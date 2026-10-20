@@ -124,7 +124,7 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                 } catch (_: Exception) { appFailure("configuration_update_failed") }
             })
         registry.register(OperationDescriptor(SEQUENCE,
-            "Run a bounded sequence of 2 to 9 exact-label native clicks only within one explicitly started control session. Requires session_id and an already authorized foreground app. Every step reobserves and revalidates foreground app/window, consent, epoch and fresh semantic node identity; ambiguous nodes and unconfirmed effects stop the sequence without retry. Never use for purchases, sending, deletion, authentication or other sensitive/irreversible operations. Returns observed step count, not a claim that the overall user goal was achieved. X stop cancels remaining steps.",
+            "Run 2 to 9 calculator digit clicks (0-9) in a single local request. Only known Samsung/Google/AOSP calculator package identities are accepted, and an explicit started control session and session_id are required. Each step verifies fresh semantic node identity, consent, epoch, app/window and observation. No coordinates, no automatic retries, and no arbitrary app interactions. X stop cancels remaining work. This reports guarded clicks, not verification of the displayed calculation.",
             inputSchema = obj("labels" to buildJsonObject {
                 put("type", "array"); put("minItems", 2); put("maxItems", 9)
                 put("items", str(32, 1))
