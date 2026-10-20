@@ -108,6 +108,7 @@ class AgentService : AccessibilityService() {
             !getSystemService(android.os.PowerManager::class.java).isInteractive) return
         remoteControlIndicator.show()
     }
+    internal fun showRemoteControlFeedbackTest() { remoteControlIndicator.show(testOnly = true) }
     internal fun hideRemoteControlActivity(force: Boolean = false) {
         if (force || remoteControlSession.state in setOf(ai.closepaw.chatgpt.control.ControlSession.State.IDLE,
                 ai.closepaw.chatgpt.control.ControlSession.State.ENDED)) remoteControlIndicator.hide()

@@ -37,14 +37,15 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
             placePause(); border?.postDelayed(this, 500)
         }
     }
-    fun show() {
-        if (!unlocked() || session.state in setOf(ControlSession.State.IDLE, ControlSession.State.ENDED)) { hide(); return }
+    fun show(testOnly: Boolean = false) {
+        if (!unlocked() || (!testOnly && session.state in setOf(ControlSession.State.IDLE, ControlSession.State.ENDED))) { hide(); return }
         if (border == null) {
             try {
                 val decoration = Border()
                 add(decoration, WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
                     Gravity.TOP or Gravity.START, 0, 0, touchable = false)
                 border = decoration
+                if (!testOnly) {
                 add(button("✕", "AI 제어 완전 종료") { session.end() }, dp(48), dp(48), Gravity.TOP or Gravity.RIGHT, dp(12), dp(38))
                 pause = button("⏸", "AI 제어 일시정지") {
                     when (session.state) {
@@ -53,6 +54,7 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
                         else -> session.pause()
                     }
                 }.also { add(it, dp(56), dp(56), Gravity.BOTTOM or Gravity.RIGHT, dp(12), dp(80)) }
+                }
                 decoration.post(guard)
             } catch (error: Exception) { hide(); session.pause(); throw error }
         }

@@ -68,9 +68,16 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val initialFrame = capture()
         if (initialFrame.reason != null) return ai.closepaw.chatgpt.operations.OperationResult(success = false,
             summary = initialFrame.reason, data = buildJsonObject { put("reason_code", initialFrame.reason) })
-        return ControlFeedbackTest({ SystemClock.elapsedRealtime() },
-            { withContext(Dispatchers.Main) { reason(service) } }, ::activity,
-            { withContext(Dispatchers.Main) { service.isRemoteControlActivityAttached() } }).run(durationMs)
+        return try {
+            ControlFeedbackTest({ SystemClock.elapsedRealtime() },
+                { withContext(Dispatchers.Main) { reason(service) } },
+                { active -> withContext(Dispatchers.Main) {
+                    if (active) service.showRemoteControlFeedbackTest() else service.hideRemoteControlActivity(force = true)
+                } },
+                { withContext(Dispatchers.Main) { service.isRemoteControlActivityAttached() } }).run(durationMs)
+        } finally {
+            withContext(kotlinx.coroutines.NonCancellable + Dispatchers.Main) { service.showRemoteControlActivity() }
+        }
     }
 
     override suspend fun captureAfter(frame: ControlFrame, input: JsonObject): ControlFrame {
