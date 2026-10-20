@@ -13,6 +13,10 @@ import kotlinx.serialization.json.*
 /** The same screen mutex spans observation, generic effects and Gemini collection. */
 internal class GenericControlOperations(private val control: GenericControl, private val port: ControlPort,
     private val mutex: Mutex, private val runtime: RuntimeControlSettings? = null, private val readiness: () -> OperationReadiness) {
+    // Main operation mutex serializes these timestamps. This measures only time
+    // *between local operation handlers*, not AI thinking or network latency.
+    private var previousReleaseNs: Long? = null
+
     fun register(registry: OperationRegistry) {
         fun session(): ControlSession? {
             port.bindResume {
@@ -30,7 +34,14 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                 if (!mutex.tryLock()) return OperationResult(success = false, summary = "ui_busy",
                     data = buildJsonObject { put("reason_code", "ui_busy"); put("action_attempted", false) })
                 val started = System.nanoTime()
-                ControlDiagnostics.record(operation, "started", taskId = invocation.taskId)
+                val priorRelease = previousReleaseNs
+                ControlDiagnostics.record(operation, "started", taskId = invocation.taskId,
+                    metrics = buildJsonObject {
+                        put("clock_domain", "monotonic_process")
+                        priorRelease?.let {
+                            put("inter_operation_idle_ms", ((started - it) / 1_000_000L).coerceAtLeast(0L))
+                        }
+                    })
                 return try { withTimeout(if (operation == SEQUENCE) 25_000L else 10_000L) {
                     if (showActivity) {
                         session?.activateLegacy()
@@ -55,7 +66,10 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                     if (showActivity) session?.interrupt = {}
                     try { if (showActivity) withContext(kotlinx.coroutines.NonCancellable) { port.activity(false) } }
                     finally {
-                        ControlDiagnostics.record(operation, "released", (System.nanoTime() - started) / 1_000_000, invocation.taskId)
+                        val releasedNs = System.nanoTime()
+                        ControlDiagnostics.record(operation, "released", (releasedNs - started) / 1_000_000,
+                            invocation.taskId, metrics = buildJsonObject { put("clock_domain", "monotonic_process") })
+                        previousReleaseNs = releasedNs
                         mutex.unlock()
                     }
                 }
