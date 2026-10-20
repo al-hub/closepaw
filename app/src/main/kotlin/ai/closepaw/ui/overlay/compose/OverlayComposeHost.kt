@@ -31,8 +31,8 @@ class OverlayComposeHost(
 
     fun show(
         layoutParams: WindowManager.LayoutParams,
-        content: @Composable () -> Unit,
         onTouch: ((View, MotionEvent) -> Boolean)? = null,
+        content: @Composable () -> Unit,
     ) {
         if (composeView != null) return
         try {
