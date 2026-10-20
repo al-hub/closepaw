@@ -16,10 +16,13 @@ internal class GenericControlSequence(
     private val ready: () -> Boolean,
 ) {
     suspend fun run(labels: List<String>, sessionId: String?): OperationResult {
+        val startedNs = System.nanoTime()
+        fun elapsedMs() = ((System.nanoTime() - startedNs) / 1_000_000L).coerceAtLeast(0L)
         fun failure(reason: String, completed: Int, uncertain: Boolean = false) =
             OperationResult(success = false, summary = reason, data = buildJsonObject {
                 put("reason_code", reason); put("completed_steps", completed)
                 put("outcome_unknown", uncertain); put("goal_verified", false)
+                put("elapsed_ms", elapsedMs()); put("clock_domain", "monotonic_process")
             })
         if (labels.size !in 2..9 || labels.any { it.length != 1 || it[0] !in '0'..'9' }) {
             return failure("invalid_sequence", 0)
@@ -90,6 +93,7 @@ internal class GenericControlSequence(
             data = buildJsonObject {
                 put("completed_steps", completed); put("outcome_unknown", false)
                 put("goal_verified", false); put("observation", observed)
+                put("elapsed_ms", elapsedMs()); put("clock_domain", "monotonic_process")
             })
     }
 }
