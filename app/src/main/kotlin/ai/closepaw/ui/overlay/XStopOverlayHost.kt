@@ -91,6 +91,18 @@ internal class XStopOverlayHost(
                 }
                 MotionEvent.ACTION_UP -> {
                     val result = policy.onUp(event.rawX, event.rawY, event.eventTime)
+                    // Final UP may be the first event after the long-press threshold:
+                    // keep that displacement even without a later MOVE callback.
+                    if (result != XHandleGesturePolicy.Result.TERMINATE &&
+                        event.eventTime - downAt >= 450L) {
+                        lp.x = windowX + (event.rawX - touchX).toInt()
+                        lp.y = windowY + (event.rawY - touchY).toInt()
+                        clamp(lp)
+                        if (view === button) {
+                            try { manager.updateViewLayout(button, lp) }
+                            catch (_: IllegalArgumentException) { /* Window detached. */ }
+                        }
+                    }
                     if (result == XHandleGesturePolicy.Result.TERMINATE) {
                         onStop()
                     } else {
