@@ -87,7 +87,7 @@ class AgentService : AccessibilityService() {
     private var overlayController: ServiceOverlayController? = null
     private var actionVisualizer: ActionVisualizerManager? = null
     internal val remoteControlChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
-    internal val remoteControlSession by lazy {
+    internal val remoteControlSession: ai.closepaw.chatgpt.control.ControlSession by lazy {
         val prefs = getSharedPreferences("remote-control-session", MODE_PRIVATE)
         ai.closepaw.chatgpt.control.ControlSession(prefs.getString("state", "idle") ?: "idle") {
             prefs.edit().putString("state", it).apply()
