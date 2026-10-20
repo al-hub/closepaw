@@ -98,11 +98,33 @@ class AgentService : AccessibilityService() {
         } } }
     }
     internal var remoteResumeCheck: (suspend () -> Boolean)? = null
+    private val resumeDiagnostics = ArrayDeque<String>()
+    private fun recordResumeDiagnostic(code: String, elapsedMs: Long) {
+        val entry = "resume=$code elapsed_ms=$elapsedMs state=${remoteControlSession.state.name}"
+        if (resumeDiagnostics.size >= 16) resumeDiagnostics.removeFirst()
+        resumeDiagnostics.addLast(entry)
+        Log.i(TAG, entry)
+    }
+    internal fun recentResumeDiagnostics(): List<String> = resumeDiagnostics.toList()
     private val remoteControlIndicator by lazy { RemoteControlIndicator(this, remoteControlSession) {
         if (remoteControlSession.beginResume()) serviceScope.launch {
             val epoch = remoteControlSession.epoch
-            val safe = try { remoteResumeCheck?.invoke() == true } catch (_: Exception) { false }
+            val started = android.os.SystemClock.elapsedRealtime()
+            val safe = try {
+                val result = remoteResumeCheck?.invoke() == true
+                recordResumeDiagnostic(if (result) "safe" else "screen_check_failed",
+                    android.os.SystemClock.elapsedRealtime() - started)
+                result
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                recordResumeDiagnostic("cancelled", android.os.SystemClock.elapsedRealtime() - started)
+                throw e
+            } catch (e: Exception) {
+                recordResumeDiagnostic("exception_" + e.javaClass.simpleName.take(32),
+                    android.os.SystemClock.elapsedRealtime() - started)
+                false
+            }
             remoteControlSession.finishResume(epoch, safe)
+            if (!safe) remoteControlIndicator.restorePanel()
         }
     } }
     internal fun showRemoteControlAction(rect: android.graphics.Rect, kind: String, acknowledged: Boolean? = null) {
@@ -117,6 +139,8 @@ class AgentService : AccessibilityService() {
         if (getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked ||
             !getSystemService(android.os.PowerManager::class.java).isInteractive) return
         remoteControlIndicator.show()
+        if (remoteControlSession.state == ai.closepaw.chatgpt.control.ControlSession.State.PAUSED)
+            remoteControlIndicator.restorePanel()
     }
     internal fun showRemoteControlFeedbackTest() { remoteControlIndicator.show(testOnly = true) }
     internal fun hideRemoteControlActivity(force: Boolean = false) {
