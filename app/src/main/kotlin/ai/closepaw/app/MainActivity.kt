@@ -302,6 +302,11 @@ class MainActivity : ComponentActivity() {
                     memoryStore = settingsMemoryStore,
                     memoryEditGate = memoryEditGate,
                 )
+                androidx.compose.material3.TextButton(onClick = {
+                    recoveryReport = AgentService.instance?.controlRecoveryReport()
+                        ?: "접근성 서비스가 연결되지 않았습니다. Android 접근성 설정을 확인하세요."
+                    showControlRecovery = true
+                }) { Text("연결 및 제어 진단") }
                 if (showControlRecovery) {
                     AlertDialog(
                         onDismissRequest = { showControlRecovery = false },
@@ -313,7 +318,7 @@ class MainActivity : ComponentActivity() {
                                 val restored = service?.restorePausedControlPanel() == true
                                 recoveryReport = (service?.controlRecoveryReport()
                                     ?: "접근성 서비스가 연결되지 않았습니다. Android 접근성 설정을 확인하세요.") +
-                                    if (restored) "\\n제어 패널 복원 요청 성공" else "\\n복원 불가: 서비스/화면/일시정지 상태 확인 필요"
+                                    if (restored) "\n제어 패널 복원 요청 성공" else "\n복원 불가: 서비스/화면/일시정지 상태 확인 필요"
                             }) { Text("패널 복원") }
                         },
                         dismissButton = {
