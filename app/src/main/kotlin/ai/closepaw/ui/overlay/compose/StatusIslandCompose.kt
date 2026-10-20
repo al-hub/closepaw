@@ -33,7 +33,7 @@ fun StatusIslandCompose(
     text: String,
     dotColor: Color,
     pulsing: Boolean,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val shape = MaterialTheme.shapes.large
@@ -43,11 +43,11 @@ fun StatusIslandCompose(
         modifier = modifier
             .minimumInteractiveComponentSize()
             .clip(shape)
-            .clickable(
+            .then(if (onClick != null) Modifier.clickable(
                 role = Role.Button,
                 onClickLabel = "Open current app",
                 onClick = onClick,
-            )
+            ) else Modifier)
             .semantics {
                 contentDescription = "Status: $text"
             },

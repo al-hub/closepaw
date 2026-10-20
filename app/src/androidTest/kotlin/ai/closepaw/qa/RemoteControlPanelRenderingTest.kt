@@ -43,14 +43,12 @@ class RemoteControlPanelRenderingTest {
                     View.MeasureSpec.makeMeasureSpec((1600 * density).toInt(), View.MeasureSpec.AT_MOST))
                 panel.layout(0, 0, panel.measuredWidth, panel.measuredHeight)
                 assertTrue(panel.measuredHeight > 0)
-                buttons(panel).filter { it.visibility == View.VISIBLE }.forEach {
-                    assertTrue("Touch height for ${it.text}", it.height >= (56 * density).toInt())
-                    assertTrue("Touch width for ${it.text}", it.width >= (48 * density).toInt())
-                    val textLayout = it.layout
-                    assertNotNull("Visible button has text layout", textLayout)
-                    for (line in 0 until textLayout.lineCount)
-                        assertEquals("Critical button label must not truncate: ${it.text}", 0, textLayout.getEllipsisCount(line))
-                }
+                assertTrue("Status island must not contain any pause/stop/expand buttons",
+                    buttons(panel).isEmpty())
+                assertEquals("Only one read-only status label", 1, panel.childCount)
+                val statusLabel = panel.getChildAt(0) as android.widget.TextView
+                assertTrue(statusLabel.text.toString().isNotBlank())
+                assertFalse(statusLabel.isClickable)
                 val bitmap = Bitmap.createBitmap(panel.width, panel.height, Bitmap.Config.ARGB_8888)
                 panel.draw(Canvas(bitmap))
                 val folder = File(base.getExternalFilesDir(null), "premium-ux-qa").apply { mkdirs() }

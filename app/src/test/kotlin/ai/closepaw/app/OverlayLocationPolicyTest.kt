@@ -555,4 +555,52 @@ class OverlayLocationPolicyTest {
         assertThat(shouldShowSingleX(holder.hasActiveTask, OverlayUserLocation.OTHER_APP, holder.mode.value))
             .isTrue()
     }
+    @Test
+    fun `running other app renders only island and X not capsule or glow`() {
+        for (platform in listOf(PlatformMode.ACCESSIBILITY, PlatformMode.VIRTUAL_DISPLAY)) {
+            for (preference in listOf(ShowPreference.CAPSULE, ShowPreference.ISLAND)) {
+                val mode = CapsuleMode.Running("Checking calculator")
+                val fallback = deriveOverlayVisibility(
+                    platform, OverlayUserLocation.OTHER_APP, mode, true, preference,
+                )
+                val result = activeTaskOverlayDecision(
+                    true, OverlayUserLocation.OTHER_APP, mode, fallback,
+                )
+                assertThat(result.showX).isTrue()
+                assertThat(result.showStatusIsland).isTrue()
+                assertThat(result.showCapsule).isFalse()
+                assertThat(result.showGlow).isFalse()
+            }
+        }
+    }
+
+    @Test
+    fun `waiting for approval keeps required capsule and removes active X`() {
+        val mode = CapsuleMode.WaitingForApproval("id", "desc", "App", "pkg", "reason")
+        val fallback = deriveOverlayVisibility(
+            PlatformMode.ACCESSIBILITY, OverlayUserLocation.OTHER_APP,
+            mode, true, ShowPreference.ISLAND,
+        )
+        val result = activeTaskOverlayDecision(
+            true, OverlayUserLocation.OTHER_APP, mode, fallback,
+        )
+        assertThat(result.showX).isFalse()
+        assertThat(result.showCapsule).isTrue()
+        assertThat(result.showStatusIsland).isFalse()
+    }
+
+    @Test
+    fun `no active task never shows emergency X`() {
+        val mode = CapsuleMode.Hidden
+        val fallback = deriveOverlayVisibility(
+            PlatformMode.ACCESSIBILITY, OverlayUserLocation.OTHER_APP,
+            mode, false, ShowPreference.ISLAND,
+        )
+        val result = activeTaskOverlayDecision(
+            false, OverlayUserLocation.OTHER_APP, mode, fallback,
+        )
+        assertThat(result.showX).isFalse()
+        assertThat(result.showStatusIsland).isFalse()
+    }
+
 }

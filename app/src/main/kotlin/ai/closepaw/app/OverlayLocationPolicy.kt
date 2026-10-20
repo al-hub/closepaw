@@ -133,6 +133,32 @@ internal fun shouldShowSingleX(
         mode is CapsuleMode.TakeoverPending ||
         mode is CapsuleMode.Takeover)
 
+/**
+ * Exactly two passive active-task surfaces: movable emergency X and read-only
+ * island. Keep required approval/user-input UI on its existing separate path.
+ */
+internal data class ActiveTaskOverlayDecision(
+    val showX: Boolean,
+    val showStatusIsland: Boolean,
+    val showCapsule: Boolean,
+    val showGlow: Boolean,
+)
+
+internal fun activeTaskOverlayDecision(
+    hasActiveTask: Boolean,
+    location: OverlayUserLocation,
+    mode: CapsuleMode,
+    fallback: OverlayVisibilityDecision,
+): ActiveTaskOverlayDecision {
+    val x = shouldShowSingleX(hasActiveTask, location, mode)
+    return ActiveTaskOverlayDecision(
+        showX = x,
+        showStatusIsland = x || fallback.showIsland,
+        showCapsule = !x && fallback.showCapsule,
+        showGlow = !x && fallback.showGlow,
+    )
+}
+
 internal fun deriveOverlayVisibility(
     platformMode: PlatformMode,
     location: OverlayUserLocation,
