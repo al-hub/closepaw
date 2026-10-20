@@ -1,5 +1,7 @@
 package ai.closepaw.tool.impl
 
+import android.util.Log
+import java.util.concurrent.atomic.AtomicLong
 import ai.closepaw.model.ScreenSnapshot
 import ai.closepaw.platform.AndroidPlatform
 import ai.closepaw.tool.AppClassifier
@@ -22,6 +24,11 @@ class MobileActionInvocation(
 ) : ToolInvocation {
     override val toolName = "mobile_action"
 
+    private companion object {
+        const val METRIC_TAG = "ClosePawActionLatency"
+        val nextLocalSpan = AtomicLong()
+    }
+
     override fun getDescription(): String {
         val thought = params.optString("agent_thought", "").trim()
         return if (thought.isNotEmpty()) "$description ($thought)" else description
@@ -29,8 +36,29 @@ class MobileActionInvocation(
 
     override suspend fun execute(context: ToolExecutionContext): ToolExecutionResult {
         if (context.isCancelled()) return ToolExecutionResult.Cancelled()
-        val outcome = executeAction(context.platform, context.currentSnapshot, context::isCancelled, context.appClassifier)
-        return mapOutcome(outcome)
+        // Local correlation and monotonic timing for the execution segment only.
+        // Never log user input, screen content or accessibility node data.
+        val localSpan = nextLocalSpan.incrementAndGet()
+        val startedNs = System.nanoTime()
+        var outcomeClass = "exception"
+        try {
+            val outcome = executeAction(
+                context.platform, context.currentSnapshot, context::isCancelled, context.appClassifier
+            )
+            outcomeClass = when (outcome) {
+                is ActionOutcome.Success -> "success"
+                is ActionOutcome.Failed -> "failed"
+                is ActionOutcome.Cancelled -> "cancelled"
+            }
+            return mapOutcome(outcome)
+        } finally {
+            val elapsedMs = ((System.nanoTime() - startedNs) / 1_000_000L).coerceAtLeast(0L)
+            // Failure to record a metric must never affect an action.
+            runCatching {
+                Log.i(METRIC_TAG, "local_span=$localSpan clock=monotonic " +
+                    "segment=mobile_action_execute action_execute_ms=$elapsedMs outcome=$outcomeClass")
+            }
+        }
     }
 
     private fun mapOutcome(outcome: ActionOutcome): ToolExecutionResult = when (outcome) {
