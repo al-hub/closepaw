@@ -44,6 +44,12 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     override fun session() = AgentService.instance?.remoteControlSession
     override fun bindResume(check: suspend () -> Boolean) { AgentService.instance?.remoteResumeCheck = check }
     override suspend fun feedback(label: String) { withContext(Dispatchers.Main) { session()?.feedback(label) } }
+    override suspend fun feedbackAtEpoch(label: String, expectedEpoch: Long?) {
+        withContext(Dispatchers.Main) { session()?.feedback(label, expectedEpoch) }
+    }
+    override suspend fun presentation(phase: ControlSession.VisualPhase, expectedEpoch: Long?) {
+        withContext(Dispatchers.Main) { session()?.present(phase, expectedEpoch) }
+    }
     private var activityService: AgentService? = null
     private var actionChangeVersion = 0L
     override suspend fun activity(active: Boolean) {
@@ -408,13 +414,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 ?: return ControlEffect(false, false, "touch_target_clipped_or_covered")
             val region = Region(); window.getRegionInScreen(region)
             if (!region.contains(point.first, point.second)) return ControlEffect(false, false, "touch_target_outside_region")
-            if (service.remoteControlCovers(targetBounds)) return ControlEffect(false, false, "control_button_covers_target")
+            if (service.remoteControlCovers(Rect(point.first, point.second, point.first + 1, point.second + 1))) return ControlEffect(false, false, "control_button_covers_target")
             session()?.refusal(session()?.id, mutation = true)?.let { return ControlEffect(false, false, it) }
             reason(service)?.let { return ControlEffect(false, false, it) }
             mutationBlock(frame.packageName)?.let { return ControlEffect(false, false, it) }
             val path = Path().apply { moveTo(point.first.toFloat(), point.second.toFloat()) }
             val gesture = GestureDescription.Builder().setDisplayId(android.view.Display.DEFAULT_DISPLAY)
                 .addStroke(GestureDescription.StrokeDescription(path, 0, 50)).build()
+            val eventEpoch = service.remoteControlSession.epoch
             return suspendCancellableCoroutine { continuation ->
                 val submitted = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
                     override fun onCompleted(gestureDescription: GestureDescription?) {
@@ -424,6 +431,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         if (continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_cancelled"))
                     }
                 }, null)
+                if (submitted && service.remoteControlSession.epoch == eventEpoch)
+                    service.showRemoteControlTap(targetBounds, point.first.toFloat(), point.second.toFloat())
                 // Even a negative dispatch acknowledgement is conservatively not replayable.
                 if (!submitted && continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_unconfirmed"))
             }
@@ -431,9 +440,31 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     }
     override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
         val service = AgentService.instance ?: return ControlEffect(false, false, "accessibility_permission_missing")
+        val admittedEpoch = service.remoteControlSession.epoch
         secureWindow(service)?.let { return ControlEffect(false, false, it) }
         val action = input.getValue("action").jsonPrimitive.content
+        // This is an explicitly planned region from the consumed observation, never a touch.
+        // Yield a few frames for the intent cue, then run the full native validation below.
+        // No node/effect is retained across this delay and no security check is bypassed.
+        if (node != null && !node.password && frame.reason == null) {
+            val previewed = withContext(Dispatchers.Main) {
+                val rect = Rect.unflattenFromString(node.bounds)
+                if (rect != null && reason(service) == null &&
+                    session()?.refusal(session()?.id, mutation = true) == null &&
+                    packageAllowed(frame.packageName, operation = "interact")) {
+                    service.showRemoteControlTarget(rect); true
+                } else false
+            }
+            if (previewed) {
+                kotlinx.coroutines.delay(96)
+                // FLAG_SECURE may change without tree/geometry changes during the cue.
+                // Obtain a NEW screenshot security verdict before the final native boundary.
+                secureWindow(service)?.let { return ControlEffect(false, false, it) }
+            }
+        }
         val effect = withTree(service) { fresh, native ->
+            if (service.remoteControlSession.epoch != admittedEpoch)
+                return@withTree ControlEffect(false, false, "control_session_changed_observe_again")
             val failure = GenericControlActionPolicy.refusal(frame, fresh, action)
             if (failure != null) {
                 ControlDiagnostics.record("native_validation", failure, metrics = buildJsonObject {
@@ -451,6 +482,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             session()?.refusal(session()?.id, mutation = true)?.let { return@withTree ControlEffect(false, false, it) }
             actionChangeVersion = service.remoteControlChanges.version()
             if (action == "home" || action == "back") {
+                session()?.feedback(if (action == "home") "홈 화면으로 이동하고 있습니다" else "이전 화면으로 이동하고 있습니다", admittedEpoch)
                 val result = platform(service).performAction(UIAction.SystemButton(if (action == "home") SystemButtonType.HOME else SystemButtonType.BACK))
                 return@withTree ControlEffect(true, result is ActionResult.Success, "system_button_acknowledged")
             }
@@ -459,6 +491,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 appSelections.refusal(pkg, packageAllowed(pkg, operation = "launch"))?.let {
                     return@withTree ControlEffect(false, false, it)
                 }
+                session()?.feedback("앱을 실행하고 있습니다", admittedEpoch)
                 val result = if (Build.VERSION.SDK_INT >= 33) {
                     try {
                         context.packageManager.getLaunchIntentSenderForPackage(pkg).sendIntent(service, 0, null, null, null)
@@ -480,9 +513,17 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 target.viewIdResourceName.orEmpty().take(100) != expected.resourceId || rect.flattenToString() != expected.bounds ||
                 (Build.VERSION.SDK_INT >= 34 && target.isAccessibilityDataSensitive))
                 return@withTree ControlEffect(false, false, "target_changed")
-            if (service.remoteControlCovers(rect)) return@withTree ControlEffect(false, false, "control_button_covers_target")
+            // Semantic accessibility actions do not inject a point. Large scroll containers
+            // may overlap the panel; only the actual injected tap point is occlusion-gated.
             service.showRemoteControlTarget(rect)
-            session()?.feedback(if (action == "scroll") "스크롤 · 화면 탐색 중" else "AI 대상 조작 중")
+            session()?.feedback(when (action) {
+                "scroll" -> "화면을 스크롤하고 있습니다"
+                "type" -> "입력란에 글자를 입력하고 있습니다"
+                "expand" -> "선택한 내용을 펼치고 있습니다"
+                "collapse" -> "선택한 내용을 접고 있습니다"
+                "long_press" -> "선택한 항목의 길게 누르기 기능을 실행합니다"
+                else -> "선택한 항목을 누르고 있습니다"
+            }, admittedEpoch)
             if (action == "tap") {
                 if (!target.isClickable && target.actionList.none { it.id == AccessibilityNodeInfo.ACTION_CLICK })
                     return@withTree ControlEffect(false, false, "target_not_clickable")
@@ -508,6 +549,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 }
                 else -> return@withTree ControlEffect(false, false, "unsupported_action")
             }
+            service.showRemoteControlAction(rect,
+                if (action == "scroll") "scroll_${input.getValue("direction").jsonPrimitive.content}" else action,
+                acknowledged)
             ControlEffect(true, acknowledged, if (acknowledged) "action_acknowledged" else "action_unconfirmed")
         }
         return effect

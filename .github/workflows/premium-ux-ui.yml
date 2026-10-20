@@ -1,0 +1,60 @@
+name: Premium UX UI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, 'security/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  panel-instrumentation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile app and instrumented UI tests
+        # View-only QA: arm64 tunnel/cloudflared production binaries are not needed or exercised.
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -Pandroid.injected.build.abi=x86_64 --stacktrace
+      - name: Enable hardware acceleration
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Run native panel behavior and rendered-layout checks
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest --stacktrace
+            mkdir -p ui-render-evidence
+            adb pull /sdcard/Download/closepaw-premium-ux-qa ui-render-evidence
+            test "$(find ui-render-evidence -name '*.png' | wc -l)" -eq 4
+      - name: Upload UI test and rendered-layout evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: premium-ux-ui-${{ github.run_id }}
+          path: |
+            app/build/reports/androidTests/connected
+            app/build/outputs/androidTest-results/connected
+            ui-render-evidence
+          if-no-files-found: warn
+          retention-days: 14

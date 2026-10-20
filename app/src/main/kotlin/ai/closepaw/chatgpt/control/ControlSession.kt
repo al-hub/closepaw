@@ -5,6 +5,13 @@ import java.util.UUID
 /** User priority state machine. No Context, screen content, command queue or automatic replay. */
 internal class ControlSession(initial: String = "idle", private val persist: (String) -> Unit = {}) {
     enum class State { IDLE, ACTIVE, WAITING, PAUSED, REOBSERVING, ENDED }
+    enum class VisualPhase { PREPARING, OBSERVING, EXECUTING, WAITING, COMPLETED, FAILED }
+    @Volatile var visualPhase = VisualPhase.PREPARING
+        private set
+    @Synchronized fun present(phase: VisualPhase, expectedEpoch: Long?) {
+        if (state != State.ACTIVE || (expectedEpoch != null && epoch != expectedEpoch)) return
+        visualPhase = phase; changed()
+    }
     @Volatile var state = when (initial) { "paused" -> State.PAUSED; "ended", "active", "waiting", "reobserving" -> State.ENDED; else -> State.IDLE }
         private set
     @Volatile var epoch = 0L
@@ -29,6 +36,10 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     @Synchronized fun pause() {
         if (state !in setOf(State.ACTIVE, State.WAITING, State.REOBSERVING)) return
         transition(State.PAUSED, "사용자 제어 중 · 일시정지"); interrupt()
+    }
+    @Synchronized fun manualTakeover() {
+        if (state !in setOf(State.ACTIVE, State.WAITING, State.REOBSERVING, State.PAUSED)) return
+        transition(State.PAUSED, "직접 조작 중 · AI 일시정지"); interrupt()
     }
     @Synchronized fun end() {
         transition(State.ENDED, "AI 제어 종료"); interrupt()
@@ -58,12 +69,13 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         explicit && sessionId != id -> "control_session_id_required"
         else -> null
     }
-    @Synchronized fun feedback(text: String) {
-        if (state != State.ACTIVE) return
+    @Synchronized fun feedback(text: String, expectedEpoch: Long? = null) {
+        if (state != State.ACTIVE || (expectedEpoch != null && epoch != expectedEpoch)) return
         label = text; changed()
     }
     private fun transition(next: State, text: String) {
         state = next; epoch++; label = text
+        if (next == State.ACTIVE) visualPhase = VisualPhase.PREPARING
         persist(next.name.lowercase()); changed()
     }
 }

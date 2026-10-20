@@ -76,7 +76,7 @@ import ai.closepaw.ui.settings.AlertTone
 import ai.closepaw.ui.settings.SettingsAlertCard
 import ai.closepaw.ui.theme.ClosePawMotion
 import ai.closepaw.ui.theme.closePaw
-import ai.closepaw.ui.theme.paperGrain
+import ai.closepaw.ui.theme.calmAmbientSurface
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -197,7 +197,7 @@ fun ChatScreen(
             // Draw one continuous grain pass behind every Scaffold slot so the
             // masthead, page body, dock, and capsule shell share the same paper
             // without placing grain over text or controls.
-            Box(modifier = Modifier.matchParentSize().paperGrain())
+            Box(modifier = Modifier.matchParentSize().calmAmbientSurface())
 
             // Empty-state paw mark — hoisted out of EmptyState so its TOP can
             // bleed up through the masthead band (Scaffold renders ON TOP, so
@@ -209,11 +209,11 @@ fun ChatScreen(
                 Icon(
                     painter = painterResource(R.drawable.ic_paw_hero),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .offset(x = 48.dp, y = 35.dp)
-                        .size(300.dp),
+                        .size(240.dp),
                 )
             }
             Scaffold(

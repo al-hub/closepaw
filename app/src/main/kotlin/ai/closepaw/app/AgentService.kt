@@ -87,11 +87,15 @@ class AgentService : AccessibilityService() {
     private var overlayController: ServiceOverlayController? = null
     private var actionVisualizer: ActionVisualizerManager? = null
     internal val remoteControlChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
-    internal val remoteControlSession by lazy {
+    internal val remoteControlSession: ai.closepaw.chatgpt.control.ControlSession by lazy {
         val prefs = getSharedPreferences("remote-control-session", MODE_PRIVATE)
         ai.closepaw.chatgpt.control.ControlSession(prefs.getString("state", "idle") ?: "idle") {
             prefs.edit().putString("state", it).apply()
-        }.apply { changed = { serviceScope.launch { showRemoteControlActivity() } } }
+        }.apply { changed = { serviceScope.launch {
+            if (remoteControlSession.state !in setOf(ai.closepaw.chatgpt.control.ControlSession.State.ACTIVE,
+                    ai.closepaw.chatgpt.control.ControlSession.State.IDLE)) actionVisualizer?.clear()
+            showRemoteControlActivity()
+        } } }
     }
     internal var remoteResumeCheck: (suspend () -> Boolean)? = null
     private val remoteControlIndicator by lazy { RemoteControlIndicator(this, remoteControlSession) {
@@ -101,7 +105,13 @@ class AgentService : AccessibilityService() {
             remoteControlSession.finishResume(epoch, safe)
         }
     } }
-    internal fun showRemoteControlTarget(rect: android.graphics.Rect) { remoteControlIndicator.target(rect) }
+    internal fun showRemoteControlAction(rect: android.graphics.Rect, kind: String, acknowledged: Boolean? = null) {
+        runCatching { remoteControlIndicator.action(rect, kind, acknowledged) }
+    }
+    internal fun showRemoteControlTap(rect: android.graphics.Rect, x: Float, y: Float) {
+        runCatching { remoteControlIndicator.tap(rect, x, y) }
+    }
+    internal fun showRemoteControlTarget(rect: android.graphics.Rect) { runCatching { remoteControlIndicator.target(rect) } }
     internal fun remoteControlCovers(rect: android.graphics.Rect) = remoteControlIndicator.controlCovers(rect)
     internal fun showRemoteControlActivity() {
         if (getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked ||
@@ -251,6 +261,9 @@ class AgentService : AccessibilityService() {
                 lifecycleOwner = serviceLifecycleOwner,
                 savedStateRegistryOwner = serviceLifecycleOwner,
                 renderContext = controller.stateHolder.context,
+                renderAllowed = { remoteControlSession.state in setOf(
+                    ai.closepaw.chatgpt.control.ControlSession.State.ACTIVE,
+                    ai.closepaw.chatgpt.control.ControlSession.State.IDLE) },
         )
         Log.i(TAG, "ActionVisualizerManager initialized")
 

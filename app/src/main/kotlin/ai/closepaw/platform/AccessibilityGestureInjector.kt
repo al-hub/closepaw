@@ -36,14 +36,12 @@ class AccessibilityGestureInjector(
 
     suspend fun injectTap(x: Int, y: Int): ActionResult {
         return withContext(Dispatchers.Main) {
-            visualizer?.showClick(x.toFloat(), y.toFloat())
-
             val path = Path().apply { moveTo(x.toFloat(), y.toFloat()) }
             val tapDuration = ViewConfiguration.getTapTimeout().toLong()
             val stroke = GestureDescription.StrokeDescription(path, 0, tapDuration)
             val gesture = buildGesture(stroke)
 
-            dispatchGesture(gesture)
+            dispatchGesture(gesture) { visualizer?.showClick(x.toFloat(), y.toFloat()) }
         }
     }
 
@@ -55,8 +53,6 @@ class AccessibilityGestureInjector(
             durationMs: Long
     ): ActionResult {
         return withContext(Dispatchers.Main) {
-            visualizer?.showSwipe(startX, startY, endX, endY, durationMs)
-
             val path =
                     Path().apply {
                         moveTo(startX, startY)
@@ -64,18 +60,16 @@ class AccessibilityGestureInjector(
                     }
             val stroke = GestureDescription.StrokeDescription(path, 0, durationMs)
             val gesture = buildGesture(stroke)
-            dispatchGesture(gesture)
+            dispatchGesture(gesture) { visualizer?.showSwipe(startX, startY, endX, endY, durationMs) }
         }
     }
 
     suspend fun injectLongPress(x: Float, y: Float, durationMs: Long): ActionResult {
         return withContext(Dispatchers.Main) {
-            visualizer?.showClick(x, y, longPress = true)
-
             val path = Path().apply { moveTo(x, y) }
             val stroke = GestureDescription.StrokeDescription(path, 0, durationMs)
             val gesture = buildGesture(stroke)
-            dispatchGesture(gesture)
+            dispatchGesture(gesture) { visualizer?.showClick(x, y, longPress = true, holdDurationMs = durationMs) }
         }
     }
 
@@ -101,18 +95,21 @@ class AccessibilityGestureInjector(
         }
     }
 
-    private suspend fun dispatchGesture(gesture: GestureDescription): ActionResult {
+    private suspend fun dispatchGesture(gesture: GestureDescription, onSubmitted: () -> Unit): ActionResult {
         val gate = overlayTouchGate
         val token = gate?.beginGesturePassThrough()
-        if (token != null) {
-            Log.d(TAG, "Touch gate active — FLAG_NOT_TOUCHABLE set, waiting ${FLAG_SETTLE_MS}ms")
-            delay(FLAG_SETTLE_MS)
-        } else if (gate == null) {
-            Log.w(TAG, "overlayTouchGate is NULL — gestures may be consumed by overlay")
-        }
         try {
+            if (token != null) {
+                Log.d(TAG, "Touch gate active — FLAG_NOT_TOUCHABLE set, waiting ${FLAG_SETTLE_MS}ms")
+                delay(FLAG_SETTLE_MS)
+            } else if (gate == null) {
+                Log.w(TAG, "overlayTouchGate is NULL — gestures may be consumed by overlay")
+            }
             return withTimeoutOrNull(GESTURE_TIMEOUT_MS) {
                 suspendCancellableCoroutine { continuation ->
+                    continuation.invokeOnCancellation {
+                        service.mainExecutor.execute { runCatching { visualizer?.clear() } }
+                    }
                     val callback =
                             object : AccessibilityService.GestureResultCallback() {
                                 override fun onCompleted(gestureDescription: GestureDescription?) {
@@ -125,12 +122,16 @@ class AccessibilityGestureInjector(
                                 override fun onCancelled(gestureDescription: GestureDescription?) {
                                     Log.w(TAG, "dispatchGesture cancelled")
                                     if (continuation.isActive) {
+                                        runCatching { visualizer?.clear() }
                                         continuation.resume(ActionResult.Cancelled("Gesture cancelled"))
                                     }
                                 }
                             }
 
                     val dispatched = service.dispatchGesture(gesture, callback, null)
+                    // Show only an acknowledged submission, after pass-through settling. Decoration failure
+                    // cannot turn an already submitted gesture into a retryable execution failure.
+                    if (dispatched) runCatching { onSubmitted() }
                     Log.d(TAG, "dispatchGesture dispatched=$dispatched, ${describeGesture(gesture)}")
                     if (!dispatched && continuation.isActive) {
                         continuation.resume(ActionResult.Failure("Failed to dispatch gesture"))
@@ -138,6 +139,7 @@ class AccessibilityGestureInjector(
                 }
             }
                     ?: run {
+                        runCatching { visualizer?.clear() }
                         Log.w(TAG, "Gesture timed out after ${GESTURE_TIMEOUT_MS}ms")
                         ActionResult.Failure("Gesture timed out after ${GESTURE_TIMEOUT_MS}ms")
                     }

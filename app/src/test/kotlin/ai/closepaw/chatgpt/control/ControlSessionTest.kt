@@ -33,9 +33,42 @@ class ControlSessionTest {
         assertTrue(s.userResponded()); assertTrue(s.beginResume())
         s.finishResume(s.epoch, true); assertEquals(ControlSession.State.ACTIVE, s.state)
     }
+    @Test fun manualTakeoverInvalidatesInFlightWorkAndCannotBeOverriddenByFeedback() {
+        val s = ControlSession(); s.start(); val before = s.epoch
+        var interrupts = 0; s.interrupt = { interrupts++ }
+        s.manualTakeover()
+        assertEquals(ControlSession.State.PAUSED, s.state)
+        assertNotEquals(before, s.epoch); assertEquals(1, interrupts)
+        assertEquals("직접 조작 중 · AI 일시정지", s.label)
+        s.feedback("AI command")
+        assertEquals("직접 조작 중 · AI 일시정지", s.label)
+        assertEquals("control_session_paused", s.refusal(s.id, true))
+        s.end(); s.manualTakeover()
+        assertEquals(ControlSession.State.ENDED, s.state)
+    }
+    @Test fun waitingCanAlwaysPauseWithoutAcknowledgingTheUserResponse() {
+        val s = ControlSession(); s.start(); s.waitForUser(); s.pause()
+        assertEquals(ControlSession.State.PAUSED, s.state)
+        assertFalse(s.userResponded())
+        assertEquals("control_session_paused", s.refusal(s.id, true))
+    }
     @Test fun persistedSessionNeverResumesOnRestart() {
         for (state in listOf("active", "waiting", "reobserving", "ended"))
             assertEquals(ControlSession.State.ENDED, ControlSession(state).state)
         assertEquals(ControlSession.State.PAUSED, ControlSession("paused").state)
+    }
+    @org.junit.Test fun lateVisualEventsCannotOverrideUserControlOrNewSession() {
+        val session = ControlSession(); session.start()
+        val epoch = session.epoch
+        session.present(ControlSession.VisualPhase.EXECUTING, epoch)
+        org.junit.Assert.assertEquals(ControlSession.VisualPhase.EXECUTING, session.visualPhase)
+        session.pause()
+        session.present(ControlSession.VisualPhase.COMPLETED, epoch)
+        org.junit.Assert.assertEquals(ControlSession.VisualPhase.EXECUTING, session.visualPhase)
+        session.end(); session.start()
+        session.present(ControlSession.VisualPhase.FAILED, epoch)
+        session.feedback("old result", epoch)
+        org.junit.Assert.assertEquals("AI 제어 중", session.label)
+        org.junit.Assert.assertEquals(ControlSession.VisualPhase.PREPARING, session.visualPhase)
     }
 }
