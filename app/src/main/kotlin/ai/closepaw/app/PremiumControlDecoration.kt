@@ -57,6 +57,7 @@ internal open class PremiumControlDecoration(
         if (!interactive || session.state == ControlSession.State.ENDED) { target = null; effect = null; return }
         val userControlled = session.state != ControlSession.State.ACTIVE
         if (userControlled) { target = null; effect = null }
+        if (session.visualPhase == ControlSession.VisualPhase.FAILED) target = null
         val animate = PremiumMotionPolicy.animate(interactive, isAttachedToWindow,
             ValueAnimator.areAnimatorsEnabled(),
             service.getSystemService(AccessibilityManager::class.java).isTouchExplorationEnabled,

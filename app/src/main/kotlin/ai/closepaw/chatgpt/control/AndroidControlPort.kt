@@ -442,6 +442,20 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val service = AgentService.instance ?: return ControlEffect(false, false, "accessibility_permission_missing")
         secureWindow(service)?.let { return ControlEffect(false, false, it) }
         val action = input.getValue("action").jsonPrimitive.content
+        // This is an explicitly planned region from the consumed observation, never a touch.
+        // Yield a few frames for the intent cue, then run the full native validation below.
+        // No node/effect is retained across this delay and no security check is bypassed.
+        if (node != null && !node.password && frame.reason == null) {
+            val previewed = withContext(Dispatchers.Main) {
+                val rect = Rect.unflattenFromString(node.bounds)
+                if (rect != null && reason(service) == null &&
+                    session()?.refusal(session()?.id, mutation = true) == null &&
+                    packageAllowed(frame.packageName, operation = "interact")) {
+                    service.showRemoteControlTarget(rect); true
+                } else false
+            }
+            if (previewed) kotlinx.coroutines.delay(96)
+        }
         val effect = withTree(service) { fresh, native ->
             val failure = GenericControlActionPolicy.refusal(frame, fresh, action)
             if (failure != null) {

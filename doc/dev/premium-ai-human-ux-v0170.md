@@ -50,7 +50,7 @@ Presentation phases are structured engine events (`PREPARING`, `OBSERVING`, `EXE
 
 ## Motion and autonomous touch specification
 
-`PremiumMotionPolicy` bounds target900ms/action720ms at33ms rendering intervals. Low-alpha layered strokes create edge depth without a fullscreen blur. Planned regions use a dashed contour, native acknowledgements a solid contour, point ripple only the actual admitted `NodeTapPolicy` point after dispatch submission. No raw screen text or input content is retained in these effects.
+`PremiumMotionPolicy` bounds target900ms/action720ms at33ms rendering intervals. Low-alpha layered strokes create edge depth without a fullscreen blur. A96ms intent-only cue yields frames before the final full native freshness/security validation; no native node or effect is held across the delay. Planned regions use a dashed contour, native acknowledgements a solid contour, point ripple only the actual admitted `NodeTapPolicy` point after dispatch submission. No raw screen text or input content is retained in these effects.
 
 `VisualizationTiming` separates actual gesture duration from400ms afterglow. At most six concurrent injected-gesture effects; no coordinate clamping or curve invention. Semantic scroll directions remain static. Actual injected gestures retain their straight path because changing a drawn curve would misrepresent the real path. Double tap and drag have no new generic MCP operation in this release; a caller cannot infer support from the renderer. No new MCP schema or plugin registration is required.
 
