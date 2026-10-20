@@ -534,4 +534,25 @@ class OverlayLocationPolicyTest {
             assertThat(shouldShowSingleX(true, OverlayUserLocation.OTHER_APP, state)).isFalse()
         }
     }
+
+    @Test
+    fun `approval and answer resolve back to X-only visibility`() {
+        val scope = kotlinx.coroutines.test.TestScope()
+        val holder = ai.closepaw.ui.overlay.CapsuleStateHolder(scope)
+        holder.onTaskStarted("task", "open app")
+        holder.onApprovalRequired("approval", "desc", "App", "example.app", "policy")
+
+        assertThat(shouldShowSingleX(holder.hasActiveTask, OverlayUserLocation.OTHER_APP, holder.mode.value))
+            .isFalse()
+        assertThat(holder.onApprovalResolved("approval")).isTrue()
+        assertThat(shouldShowSingleX(holder.hasActiveTask, OverlayUserLocation.OTHER_APP, holder.mode.value))
+            .isTrue()
+
+        holder.onAskUser(ai.closepaw.protocol.AskUserType.QUESTION, "Next?", "question")
+        assertThat(shouldShowSingleX(holder.hasActiveTask, OverlayUserLocation.OTHER_APP, holder.mode.value))
+            .isFalse()
+        assertThat(holder.onUserResponseSent("question")).isTrue()
+        assertThat(shouldShowSingleX(holder.hasActiveTask, OverlayUserLocation.OTHER_APP, holder.mode.value))
+            .isTrue()
+    }
 }
