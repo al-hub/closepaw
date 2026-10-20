@@ -56,6 +56,20 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
         }
     }
+    override suspend fun feedbackTest(durationMs: Long): ai.closepaw.chatgpt.operations.OperationResult {
+        val service = AgentService.instance
+        val initial = withContext(Dispatchers.Main) { reason(service) }
+        if (initial != null || service == null) return ai.closepaw.chatgpt.operations.OperationResult(
+            success = false, summary = initial ?: "accessibility_permission_missing")
+        // Use the same guarded screen capture before showing anything; protected surfaces remain refused.
+        val initialFrame = capture()
+        if (initialFrame.reason != null) return ai.closepaw.chatgpt.operations.OperationResult(success = false,
+            summary = initialFrame.reason, data = buildJsonObject { put("reason_code", initialFrame.reason) })
+        return ControlFeedbackTest({ SystemClock.elapsedRealtime() },
+            { withContext(Dispatchers.Main) { reason(service) } }, ::activity,
+            { withContext(Dispatchers.Main) { service.isRemoteControlActivityAttached() } }).run(durationMs)
+    }
+
     override suspend fun captureAfter(frame: ControlFrame, input: JsonObject): ControlFrame {
         val service = AgentService.instance ?: return capture()
         return ControlPostObserver({ SystemClock.elapsedRealtime() }, service.remoteControlChanges::version,
@@ -67,6 +81,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         })
     private val context = context.applicationContext
     private val classifier = AppClassifierHolder.get(this.context)
+    private val appCatalog = AndroidAppCatalog(this.context.packageManager) { pkg ->
+        pkg != this.context.packageName && pkg != "com.android.systemui" &&
+            !pkg.contains("permissioncontroller") && !pkg.contains("packageinstaller")
+    }
     private var listedPackages = emptySet<String>()
     private var catalogDiagnostics = buildJsonObject {}
     override fun appDiagnostics() = catalogDiagnostics
@@ -97,19 +115,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             context.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) },
                 android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
         }
-        var queried = 0
-        var protectedExcluded = 0
         // Discovery is not authorization. Return matching identities with separate capabilities.
-        val matches = AndroidAppCatalog(context.packageManager, { pkg ->
-            queried++
-            val include = pkg != context.packageName && pkg != "com.android.systemui" &&
-                !pkg.contains("permissioncontroller") && !pkg.contains("packageinstaller")
-            if (!include) protectedExcluded++
-            include
-        }).list(filter)
+        val matches = appCatalog.list(filter)
         catalogDiagnostics = buildJsonObject {
-            put("catalog_candidates_examined", queried); put("matched_returned", matches.size)
-            put("protected_candidates_excluded", protectedExcluded)
+            put("matched_returned", matches.size)
             put("access_tier_filter_applied", false); put("os_visibility_diagnosis", "not_measured")
         }
         if (withContext(Dispatchers.Main) { reason(service) } != null) throw AppCatalogUnavailable("device_state_changed")
@@ -138,8 +147,19 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         service ?: return denied("accessibility_permission_missing")
         // Unlike a general accessibility tree, this signal can reject FLAG_SECURE windows.
         // On older Android the adapter declines to claim a secure-window check it cannot perform.
-        secureWindow(service)?.let { return denied(it, windowDiagnostics) }
-        return withTree(service) { frame, _ -> frame }
+        val started = SystemClock.elapsedRealtime()
+        secureWindow(service)?.let {
+            ControlDiagnostics.record("capture_probe", it, SystemClock.elapsedRealtime() - started)
+            return denied(it, windowDiagnostics)
+        }
+        val probedAt = SystemClock.elapsedRealtime()
+        return withTree(service) { frame, _ -> frame }.also { frame ->
+            ControlDiagnostics.record("capture", frame.reason ?: "completed", SystemClock.elapsedRealtime() - started,
+                metrics = buildJsonObject {
+                    put("probe_ms", probedAt - started); put("tree_ms", SystemClock.elapsedRealtime() - probedAt)
+                    put("visited_nodes", frame.visitedNodes); put("truncated", frame.truncated)
+                })
+        }
     }
     private suspend fun secureWindow(service: AgentService): String? {
         certifiedWindows = null
@@ -396,7 +416,17 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val action = input.getValue("action").jsonPrimitive.content
         val effect = withTree(service) { fresh, native ->
             val failure = GenericControlActionPolicy.refusal(frame, fresh, action)
-            if (failure != null) return@withTree ControlEffect(false, false, failure)
+            if (failure != null) {
+                ControlDiagnostics.record("native_validation", failure, metrics = buildJsonObject {
+                    put("configuration_changed", frame.configurationRevision != fresh.configurationRevision)
+                    put("package_changed", frame.packageName != fresh.packageName)
+                    put("window_changed", frame.windowId != fresh.windowId || frame.foregroundWindowId != fresh.foregroundWindowId)
+                    put("content_changed", frame.fingerprint != fresh.fingerprint)
+                    put("geometry_changed", frame.touchContext != fresh.touchContext)
+                    put("truncated", fresh.truncated)
+                })
+                return@withTree ControlEffect(false, false, failure)
+            }
             reason(service)?.let { return@withTree ControlEffect(false, false, it) }
             mutationBlock(fresh.packageName)?.let { return@withTree ControlEffect(false, false, it) }
             actionChangeVersion = service.remoteControlChanges.version()

@@ -29,7 +29,8 @@ internal class ControlPostObserver(
             val remaining = (deadline - now()).coerceAtLeast(1)
             // A no-change acknowledgement must not add the entire transition deadline.
             val eventBudget = if (unchanged && !launchPending && !transient) minOf(remaining, 250L) else remaining
-            if (!awaitChange(seen, eventBudget)) return post
+            val woke = awaitChange(seen, if (transient) minOf(eventBudget, 100L) else eventBudget)
+            if (!woke && !(transient && reads == 1 && now() < deadline)) return post
             seen = version()
             post = capture(); reads++
         }
