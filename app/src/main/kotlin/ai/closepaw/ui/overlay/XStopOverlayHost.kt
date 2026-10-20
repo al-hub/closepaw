@@ -3,6 +3,8 @@ package ai.closepaw.ui.overlay
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Rect
+import ai.closepaw.util.recycleCompat
 import android.graphics.drawable.GradientDrawable
 import android.util.Log
 import android.util.TypedValue
@@ -28,6 +30,26 @@ internal class XStopOverlayHost(
     private var params: WindowManager.LayoutParams? = null
     private val sizePx get() = dp(56)
     private val marginPx get() = dp(12)
+
+    /** Identify the safety control window so it cannot be mistaken for app content. */
+    fun ownsWindow(windowId: Int): Boolean {
+        val button = view ?: return false
+        if (windowId < 0) return false
+        val node = button.createAccessibilityNodeInfo() ?: return false
+        return try { node.windowId == windowId } finally { node.recycleCompat() }
+    }
+
+    /** Prevent agent gestures on top of the emergency stop surface. */
+    fun covers(rect: Rect): Boolean {
+        val button = view ?: return false
+        if (!button.isAttachedToWindow) return false
+        val xy = IntArray(2)
+        button.getLocationOnScreen(xy)
+        return Rect.intersects(
+            Rect(xy[0], xy[1], xy[0] + sizePx, xy[1] + sizePx),
+            rect,
+        )
+    }
 
     fun isShowing(): Boolean = view != null
 
