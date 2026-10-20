@@ -1,6 +1,7 @@
 package ai.closepaw.session
 
 import android.util.Log
+import android.os.SystemClock
 import ai.closepaw.history.model.SessionInfo
 import ai.closepaw.protocol.Op
 import ai.closepaw.protocol.SessionState
@@ -34,6 +35,8 @@ class SessionCoordinator(private val scope: CoroutineScope) {
 
     private val mutex = Mutex()
     private val pendingInputs = mutableListOf<String>()
+    /** Monotonic enqueue times, kept in lockstep with pendingInputs. */
+    private val pendingEnqueueElapsedMs = mutableListOf<Long>()
     private var stateObserverJob: Job? = null
 
     var currentSession: AgentSession? = null
@@ -77,6 +80,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
                 }
                 SessionState.Running, SessionState.Paused, SessionState.TakeoverPending -> {
                     pendingInputs.add(text)
+                    pendingEnqueueElapsedMs.add(SystemClock.elapsedRealtime())
                     SubmitResult.QUEUED
                 }
                 else -> {
@@ -126,11 +130,13 @@ class SessionCoordinator(private val scope: CoroutineScope) {
                 // Creation threw — no session exists, so the gate must unlock.
                 _currentSessionState.value = null
                 pendingInputs.clear()
+                pendingEnqueueElapsedMs.clear()
                 throw t
             }
             if (session == null) {
                 _currentSessionState.value = null
                 pendingInputs.clear()
+                pendingEnqueueElapsedMs.clear()
                 return CreateResult.Aborted
             }
             currentSession = session
@@ -154,6 +160,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
      */
     fun enqueue(text: String) {
         pendingInputs.add(text)
+        pendingEnqueueElapsedMs.add(SystemClock.elapsedRealtime())
     }
 
     /**
@@ -190,6 +197,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
     fun detachSession() {
         currentSession = null
         pendingInputs.clear()
+                pendingEnqueueElapsedMs.clear()
         lastDeadSessionFileName = null
     }
 
@@ -230,6 +238,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
         stateObserverJob = null
         currentSession = null
         pendingInputs.clear()
+                pendingEnqueueElapsedMs.clear()
         _currentSessionState.value = null
     }
 
@@ -259,7 +268,11 @@ class SessionCoordinator(private val scope: CoroutineScope) {
         while (pendingInputs.isNotEmpty()) {
             val state = session.state.value
             if (state != SessionState.Idle && state != SessionState.Created) break
-            session.submit(Op.UserInput(pendingInputs.removeAt(0)))
+            val queuedAt = pendingEnqueueElapsedMs.removeAt(0)
+            val input = pendingInputs.removeAt(0)
+            val idleMs = (SystemClock.elapsedRealtime() - queuedAt).coerceAtLeast(0L)
+            Log.i(TAG, "queued_input_wait_ms=$idleMs queue_remaining=${pendingInputs.size}")
+            session.submit(Op.UserInput(input))
         }
     }
 }
