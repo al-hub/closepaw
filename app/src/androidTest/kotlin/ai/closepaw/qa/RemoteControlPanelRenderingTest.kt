@@ -50,15 +50,21 @@ class RemoteControlPanelRenderingTest {
                 val bitmap = Bitmap.createBitmap(panel.width, panel.height, Bitmap.Config.ARGB_8888)
                 panel.draw(Canvas(bitmap))
                 val folder = File(base.getExternalFilesDir(null), "premium-ux-qa").apply { mkdirs() }
-                File(folder, "panel-${if (night) "dark" else "light"}-font-$scale.png").outputStream().use {
+                val renderFile = File(folder, "panel-${if (night) "dark" else "light"}-font-$scale.png")
+                renderFile.outputStream().use {
                     assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
                 }
                 bitmap.recycle()
                 // UTP uninstalls the target after execution. Export only synthetic render evidence
                 // to a shell-owned public folder before that cleanup removes app-specific files.
-                val command = "mkdir -p /sdcard/Download/closepaw-premium-ux-qa && cp ${folder.absolutePath}/*.png /sdcard/Download/closepaw-premium-ux-qa/"
-                android.os.ParcelFileDescriptor.AutoCloseInputStream(
-                    instrumentation.uiAutomation.executeShellCommand(command)).use { it.readBytes() }
+                fun shell(command: String) = android.os.ParcelFileDescriptor.AutoCloseInputStream(
+                    instrumentation.uiAutomation.executeShellCommand(command)).use { it.bufferedReader().readText() }
+                val destination = "/sdcard/Download/closepaw-premium-ux-qa/${renderFile.name}"
+                // UiAutomation executes argv directly: do not use shell && or wildcard expansion.
+                shell("mkdir -p /sdcard/Download/closepaw-premium-ux-qa")
+                shell("cp ${renderFile.absolutePath} $destination")
+                assertTrue("Synthetic render exported before UTP cleanup",
+                    (shell("stat -c %s $destination").trim().toLongOrNull() ?: 0L) > 0L)
             }
         }
     }
