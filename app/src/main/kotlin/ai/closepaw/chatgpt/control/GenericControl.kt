@@ -119,6 +119,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     }
     suspend fun action(input: JsonObject): OperationResult {
         val started = now()
+        val startedNs = System.nanoTime()
         if (!allowed()) { current = null; return failure("generic_control_disabled") }
         val observation = current ?: return failure("observation_required")
         if (input["observation_id"]?.jsonPrimitive?.content != observation.id) return failure("stale_observation")
@@ -150,10 +151,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (!allowed()) return failure("generic_control_disabled")
         chainActions++
         val validatedAt = now()
+        val validatedAtNs = System.nanoTime()
         val visualEpoch = port.session()?.epoch
         port.presentation(ControlSession.VisualPhase.EXECUTING, visualEpoch)
         val effect = port.perform(frame, input, node)
         val performedAt = now()
+        val performedAtNs = System.nanoTime()
         // After an attempted action even a negative native acknowledgement is not proof of no effect.
         val post = if (effect.attempted) port.captureAfter(frame, input) else null
         val observed = if (post != null && allowed()) publish(post) else null
@@ -165,6 +168,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val resultReason = if (effect.attempted && effect.acknowledged && !verdict.confirmed) verdict.reason else effect.reason
         port.presentation(if (verified) ControlSession.VisualPhase.COMPLETED else ControlSession.VisualPhase.FAILED, visualEpoch)
         port.feedbackAtEpoch(if (verified) "화면 변화 확인 · 다음 단계 대기" else "결과 미확인 · 재관찰 필요", visualEpoch)
+        val completedNs = System.nanoTime()
+        fun durationMs(startNs: Long, endNs: Long) = ((endNs - startNs) / 1_000_000L).coerceAtLeast(0L)
         return OperationResult(success = verified, summary = if (verified)
             if (verdict.goalVerified) "Observed action postcondition confirmed." else
                 "Screen transition observed; the wider task result remains unverified." else resultReason,
@@ -178,11 +183,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 put("feedback", when { !effect.attempted -> "not_attempted"; !verified -> "outcome_unconfirmed";
                     changed -> "screen_change_observed"; else -> "postcondition_confirmed" })
                 put("validation_location", if (port.validatesAtNativeBoundary) "native_boundary" else "engine_and_native")
+                put("timing_clock_domain", "monotonic_process")
                 put("timing_ms", buildJsonObject {
-                    put("validation", (validatedAt - started).coerceAtLeast(0))
-                    put("native_action", (performedAt - validatedAt).coerceAtLeast(0))
-                    put("post_observation", (now() - performedAt).coerceAtLeast(0))
-                    put("total", (now() - started).coerceAtLeast(0))
+                    put("validation", durationMs(startedNs, validatedAtNs))
+                    put("native_action", durationMs(validatedAtNs, performedAtNs))
+                    put("post_observation", durationMs(performedAtNs, completedNs))
+                    put("total", durationMs(startedNs, completedNs))
                 })
                 observed?.let { put("observation", it.data) }
             })
