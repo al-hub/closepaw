@@ -46,6 +46,10 @@ class RemoteControlPanelRenderingTest {
                 buttons(panel).filter { it.visibility == View.VISIBLE }.forEach {
                     assertTrue("Touch height for ${it.text}", it.height >= (56 * density).toInt())
                     assertTrue("Touch width for ${it.text}", it.width >= (48 * density).toInt())
+                    val textLayout = it.layout
+                    assertNotNull("Visible button has text layout", textLayout)
+                    for (line in 0 until textLayout.lineCount)
+                        assertEquals("Critical button label must not truncate: ${it.text}", 0, textLayout.getEllipsisCount(line))
                 }
                 val bitmap = Bitmap.createBitmap(panel.width, panel.height, Bitmap.Config.ARGB_8888)
                 panel.draw(Canvas(bitmap))

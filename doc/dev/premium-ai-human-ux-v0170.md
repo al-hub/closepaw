@@ -78,7 +78,9 @@ Effects clear on user control, rotation/size changes, detach and screen-off. Sys
 - [HCI/control review](premium-ux-hci-review.md)
 - [Android engineering/QA review](premium-ux-android-review.md)
 
-Two initial cross-review findings were fixed before acceptance: preserve Pause during WAITING instead of replacing it with response✓; distinguish semantic scroll bounds from the actual injected tap point for panel occlusion. Small-height/large-font placement and stable TalkBack button identity are also explicitly reviewed. Human appearance and physical routing remain separate acceptance items.
+Rendered four Light/Dark and font1/2 native View images from CI39392695807 (artifact12251030496). All6 behavior/render tests passed, but independent visual review found font2 Pause text truncation. Corrected large-text critical controls to a two-line icon/Korean label with14sp base/4dp padding; added a no-ellipsis assertion. This is an actual visual QA failure/fix, not a falsely claimed successful layout. Final re-render results remain pending.
+
+Initial cross-review findings were fixed before acceptance: preserve Pause during WAITING instead of replacing it with response✓; distinguish semantic scroll bounds from the actual injected tap point for panel occlusion. Small-height/large-font placement and stable TalkBack button identity are also explicitly reviewed. Human appearance and physical routing remain separate acceptance items.
 
 ## Test strategy and evidence status
 

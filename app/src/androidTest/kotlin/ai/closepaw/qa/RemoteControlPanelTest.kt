@@ -59,8 +59,8 @@ class RemoteControlPanelTest {
             panel.measure(View.MeasureSpec.makeMeasureSpec((288 * density).toInt(), View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
             assertTrue("Emergency row must fit a 100dp available viewport", panel.measuredHeight <= 100 * density)
-            assertTrue(buttons(panel).any { it.text.toString() == "Ⅱ 일시정지" && it.visibility == View.VISIBLE })
-            assertTrue(buttons(panel).any { it.text.toString() == "■ 중단" && it.visibility == View.VISIBLE })
+            assertTrue(buttons(panel).any { it.text.toString().replace('\n', ' ') == "Ⅱ 일시정지" && it.visibility == View.VISIBLE })
+            assertTrue(buttons(panel).any { it.text.toString().replace('\n', ' ') == "■ 중단" && it.visibility == View.VISIBLE })
         }
     }
     @Test fun statusUpdateRetainsAccessibleControlInstances() {

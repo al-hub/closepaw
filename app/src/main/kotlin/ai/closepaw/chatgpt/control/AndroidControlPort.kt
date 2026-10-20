@@ -482,6 +482,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             session()?.refusal(session()?.id, mutation = true)?.let { return@withTree ControlEffect(false, false, it) }
             actionChangeVersion = service.remoteControlChanges.version()
             if (action == "home" || action == "back") {
+                session()?.feedback(if (action == "home") "홈 화면으로 이동하고 있습니다" else "이전 화면으로 이동하고 있습니다", admittedEpoch)
                 val result = platform(service).performAction(UIAction.SystemButton(if (action == "home") SystemButtonType.HOME else SystemButtonType.BACK))
                 return@withTree ControlEffect(true, result is ActionResult.Success, "system_button_acknowledged")
             }
@@ -490,6 +491,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 appSelections.refusal(pkg, packageAllowed(pkg, operation = "launch"))?.let {
                     return@withTree ControlEffect(false, false, it)
                 }
+                session()?.feedback("앱을 실행하고 있습니다", admittedEpoch)
                 val result = if (Build.VERSION.SDK_INT >= 33) {
                     try {
                         context.packageManager.getLaunchIntentSenderForPackage(pkg).sendIntent(service, 0, null, null, null)
@@ -514,7 +516,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             // Semantic accessibility actions do not inject a point. Large scroll containers
             // may overlap the panel; only the actual injected tap point is occlusion-gated.
             service.showRemoteControlTarget(rect)
-            session()?.feedback(if (action == "scroll") "스크롤 · 화면 탐색 중" else "AI 대상 조작 중")
+            session()?.feedback(when (action) {
+                "scroll" -> "화면을 스크롤하고 있습니다"
+                "type" -> "입력란에 글자를 입력하고 있습니다"
+                "expand" -> "선택한 내용을 펼치고 있습니다"
+                "collapse" -> "선택한 내용을 접고 있습니다"
+                "long_press" -> "선택한 항목의 길게 누르기 기능을 실행합니다"
+                else -> "선택한 항목을 누르고 있습니다"
+            }, admittedEpoch)
             if (action == "tap") {
                 if (!target.isClickable && target.actionList.none { it.id == AccessibilityNodeInfo.ACTION_CLICK })
                     return@withTree ControlEffect(false, false, "target_not_clickable")

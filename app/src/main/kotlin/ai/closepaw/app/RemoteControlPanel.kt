@@ -27,6 +27,8 @@ internal class RemoteControlPanel(context: Context, private val session: Control
     private val fill = if (dark) Color.rgb(20, 43, 60) else Color.rgb(223, 242, 250)
     private val status = TextView(context)
     private val primary = Button(context)
+    private val stopButton = Button(context)
+    private val largeText = resources.configuration.fontScale >= 1.5f
     private val secondary = LinearLayout(context)
     private val header = LinearLayout(context)
     private val manual = Button(context)
@@ -76,7 +78,6 @@ internal class RemoteControlPanel(context: Context, private val session: Control
             if (session.state == ControlSession.State.PAUSED) resume() else session.pause()
         }
         actions.addView(primary, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(8) })
-        val stopButton = Button(context)
         configure(stopButton, "■ 중단", "작업 중단, 자동 조작 차단") { stop() }
         actions.addView(stopButton, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         actions.tag = "actions"
@@ -121,7 +122,15 @@ internal class RemoteControlPanel(context: Context, private val session: Control
         if (status.text.toString() != nextStatus) status.text = nextStatus
         status.contentDescription = "${status.text} · 패널 이동 손잡이"
         fold.text = if (folded) "⌄ 펼치기" else "⌃ 접기"
-        primary.text = if (session.state == ControlSession.State.PAUSED) "▶ 재개" else "Ⅱ 일시정지"
+        val divider = if (largeText) "\n" else " "
+        primary.text = if (session.state == ControlSession.State.PAUSED) "▶${divider}재개" else "Ⅱ${divider}일시정지"
+        stopButton.text = "■${divider}중단"
+        if (largeText) {
+            for (button in listOf(primary, stopButton)) {
+                button.maxLines = 2; button.textSize = 14f
+                button.setPadding(dp(4), dp(4), dp(4), dp(4))
+            }
+        }
         primary.contentDescription = if (session.state == ControlSession.State.PAUSED) "화면 확인 후 AI 제어 재개 · ${session.label}" else "AI 제어 일시정지 · ${session.label}"
         primary.isEnabled = session.state != ControlSession.State.REOBSERVING
         findViewWithTag<View>("actions").visibility = if (stopped) GONE else VISIBLE
