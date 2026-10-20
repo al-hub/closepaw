@@ -197,7 +197,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
     fun detachSession() {
         currentSession = null
         pendingInputs.clear()
-                pendingEnqueueElapsedMs.clear()
+        pendingEnqueueElapsedMs.clear()
         lastDeadSessionFileName = null
     }
 
@@ -238,7 +238,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
         stateObserverJob = null
         currentSession = null
         pendingInputs.clear()
-                pendingEnqueueElapsedMs.clear()
+        pendingEnqueueElapsedMs.clear()
         _currentSessionState.value = null
     }
 
