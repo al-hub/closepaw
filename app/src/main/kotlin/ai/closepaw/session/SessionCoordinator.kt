@@ -1,7 +1,6 @@
 package ai.closepaw.session
 
 import android.util.Log
-import android.os.SystemClock
 import ai.closepaw.history.model.SessionInfo
 import ai.closepaw.protocol.Op
 import ai.closepaw.protocol.SessionState
@@ -80,7 +79,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
                 }
                 SessionState.Running, SessionState.Paused, SessionState.TakeoverPending -> {
                     pendingInputs.add(text)
-                    pendingEnqueueElapsedMs.add(SystemClock.elapsedRealtime())
+                    pendingEnqueueElapsedMs.add(System.nanoTime() / 1_000_000L)
                     SubmitResult.QUEUED
                 }
                 else -> {
@@ -160,7 +159,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
      */
     fun enqueue(text: String) {
         pendingInputs.add(text)
-        pendingEnqueueElapsedMs.add(SystemClock.elapsedRealtime())
+        pendingEnqueueElapsedMs.add(System.nanoTime() / 1_000_000L)
     }
 
     /**
@@ -270,7 +269,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
             if (state != SessionState.Idle && state != SessionState.Created) break
             val queuedAt = pendingEnqueueElapsedMs.removeAt(0)
             val input = pendingInputs.removeAt(0)
-            val idleMs = (SystemClock.elapsedRealtime() - queuedAt).coerceAtLeast(0L)
+            val idleMs = (System.nanoTime() / 1_000_000L - queuedAt).coerceAtLeast(0L)
             Log.i(TAG, "queued_input_wait_ms=$idleMs queue_remaining=${pendingInputs.size}")
             session.submit(Op.UserInput(input))
         }
