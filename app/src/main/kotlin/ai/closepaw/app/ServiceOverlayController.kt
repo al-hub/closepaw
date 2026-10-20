@@ -18,6 +18,7 @@ import ai.closepaw.ui.overlay.compose.CapsuleOverlayHost
 import ai.closepaw.ui.overlay.compose.GlowOverlayHost
 import ai.closepaw.ui.overlay.compose.IslandOverlayHost
 import ai.closepaw.ui.overlay.model.CapsuleMode
+import ai.closepaw.ui.overlay.XStopOverlayHost
 import ai.closepaw.platform.OverlayTouchGate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -116,6 +117,10 @@ class ServiceOverlayController(
         this.onOpenViewer = { this@ServiceOverlayController.onOpenViewer?.invoke() }
     }
 
+    private val xStopOverlay = XStopOverlayHost(context) {
+        if (stateHolder.onStopRequested()) onStop()
+    }
+
     // ── Window-level state ──
 
     private var platformMode: PlatformMode = PlatformMode.ACCESSIBILITY
@@ -183,15 +188,22 @@ class ServiceOverlayController(
             mode = mode,
         )
         showPreference = decision.normalizedShowPreference
-        capsuleManager.setInteractionLocked(lockInteraction)
+        // Ordinary active screen control uses one small X overlay, not a touch-blocking
+        // expanded capsule. Approval/input states keep the existing required controls.
+        val singleXMode = mode is CapsuleMode.Running ||
+            mode is CapsuleMode.TakeoverPending || mode is CapsuleMode.Takeover
+        val showSingleX = stateHolder.hasActiveTask &&
+            userLocation != OverlayUserLocation.MAIN_APP && singleXMode
+        capsuleManager.setInteractionLocked(if (showSingleX) false else lockInteraction)
+        if (showSingleX) xStopOverlay.show() else xStopOverlay.hide()
 
-        if (decision.showCapsule) {
+        if (decision.showCapsule && !showSingleX) {
             if (!capsuleManager.isShowing()) capsuleManager.show()
         } else {
             capsuleManager.hide()
         }
 
-        if (decision.showIsland) {
+        if (decision.showIsland && !showSingleX) {
             if (statusIslandManager?.isShowing() != true) statusIslandManager?.show()
         } else {
             statusIslandManager?.hide()
@@ -276,12 +288,14 @@ class ServiceOverlayController(
     }
 
     fun hideAll() {
+        xStopOverlay.hide()
         capsuleManager.hide()
         edgeGlowManager.hideImmediately()
         statusIslandManager?.hide()
     }
 
     fun dispose() {
+        xStopOverlay.dispose()
         edgeGlowManager.dispose()
         capsuleManager.dispose()
         statusIslandManager?.dispose()
