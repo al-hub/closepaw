@@ -80,9 +80,22 @@ internal class GeminiPagedReplyCollector(
                     if (!anchored && page.questionVisible) {
                         anchored = true; nativeWholeBody = page.nativeWholeBody; text = page.text; pages = 1; lastAcceptedPage = page.text
                     } else if (anchored && movingForward) {
-                        val joined = joinOverlapping(text, page.text) ?: return result("reply_scroll_gap")
+                        // Exact native ownership may expose the *entire* response across
+                        // viewports. If it grows, replacing the earlier whole body is
+                        // correct; viewport suffix-overlap is not applicable here.
+                        // Never allow a shortened or unrelated replacement as completion.
+                        val growingNativeBody = nativeWholeBody && page.nativeWholeBody &&
+                            page.text.startsWith(text)
+                        val joined = if (growingNativeBody) page.text
+                            else joinOverlapping(text, page.text) ?: return result("reply_scroll_gap")
                         text = joined
-                        if (lastAcceptedPage != page.text) { pages++; lastAcceptedPage = page.text }
+                        if (growingNativeBody) {
+                            // One whole native response, not an additional physical page.
+                            lastAcceptedPage = page.text
+                        } else if (lastAcceptedPage != page.text) {
+                            pages++
+                            lastAcceptedPage = page.text
+                        }
                     } else if (anchored) { text = page.text; lastAcceptedPage = page.text }
                     lastScrolledText = null
                     if (text.length > maxChars) { text = text.take(maxChars); return result("reply_length_limit") }
