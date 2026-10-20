@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -20,6 +21,7 @@ internal class XStopOverlayHost(
     private val onStop: () -> Unit,
 ) {
     private val manager = service.getSystemService(WindowManager::class.java)
+    private val logTag = "ClosePawXOverlay"
     private val preferences = service.getSharedPreferences("x_stop_overlay", 0)
     private var view: View? = null
     private var params: WindowManager.LayoutParams? = null
@@ -65,6 +67,31 @@ internal class XStopOverlayHost(
         var windowX = 0
         var windowY = 0
         var downAt = 0L
+        var hasMoved = false
+        fun updatePosition(rawX: Float, rawY: Float): Boolean {
+            val targetX = windowX + (rawX - touchX).toInt()
+            val targetY = windowY + (rawY - touchY).toInt()
+            val oldX = lp.x
+            val oldY = lp.y
+            lp.x = targetX
+            lp.y = targetY
+            clamp(lp)
+            if (oldX == lp.x && oldY == lp.y) return false
+            if (view !== button) return false
+            return try {
+                manager.updateViewLayout(button, lp)
+                // Some OEMs send ACTION_CANCEL on overlay reposition. Persist on each
+                // acknowledged move, not only ACTION_UP, so the last position survives.
+                preferences.edit().putInt("x", lp.x).putInt("y", lp.y).apply()
+                hasMoved = true
+                true
+            } catch (error: RuntimeException) {
+                lp.x = oldX
+                lp.y = oldY
+                Log.w(logTag, "x_drag_update_failed", error)
+                false
+            }
+        }
         button.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -73,45 +100,35 @@ internal class XStopOverlayHost(
                     windowX = lp.x
                     windowY = lp.y
                     downAt = event.eventTime
+                    hasMoved = false
                     policy.onDown(event.rawX, event.rawY, downAt)
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     policy.onMove(event.rawX, event.rawY)
-                    if (event.eventTime - downAt >= 450L) {
-                        lp.x = windowX + (event.rawX - touchX).toInt()
-                        lp.y = windowY + (event.rawY - touchY).toInt()
-                        clamp(lp)
-                        if (view === button) {
-                            try { manager.updateViewLayout(button, lp) }
-                            catch (_: IllegalArgumentException) { /* Window detached mid-drag. */ }
-                        }
+                    if (event.pointerCount == 1 && event.eventTime - downAt >= 450L) {
+                        updatePosition(event.rawX, event.rawY)
                     }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
                     val result = policy.onUp(event.rawX, event.rawY, event.eventTime)
-                    // Final UP may be the first event after the long-press threshold:
-                    // keep that displacement even without a later MOVE callback.
-                    if (result != XHandleGesturePolicy.Result.TERMINATE &&
-                        event.eventTime - downAt >= 450L) {
-                        lp.x = windowX + (event.rawX - touchX).toInt()
-                        lp.y = windowY + (event.rawY - touchY).toInt()
-                        clamp(lp)
-                        if (view === button) {
-                            try { manager.updateViewLayout(button, lp) }
-                            catch (_: IllegalArgumentException) { /* Window detached. */ }
-                        }
-                    }
                     if (result == XHandleGesturePolicy.Result.TERMINATE) {
                         onStop()
                     } else {
-                        preferences.edit().putInt("x", lp.x).putInt("y", lp.y).apply()
+                        if (event.eventTime - downAt >= 450L && event.pointerCount == 1) {
+                            updatePosition(event.rawX, event.rawY)
+                        }
+                        // Only a successful movement stores coordinates.
+                        // A cancelled/failed drag cannot corrupt the saved position.
+                        if (hasMoved) Log.i(logTag, "x_drag_persisted")
                     }
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     policy.onCancel()
+                    // ACTION_CANCEL can follow OEM window reposition; successful
+                    // moves are already durable and must not trigger stop.
                     true
                 }
                 else -> false
