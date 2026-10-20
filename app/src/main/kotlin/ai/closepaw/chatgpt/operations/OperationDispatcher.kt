@@ -10,6 +10,7 @@ internal class OperationDispatcher(
     private val store: OperationTaskStore,
     private val scope: CoroutineScope,
     private val operationAllowed: (String) -> Boolean = { true },
+    private val operationEpoch: (String) -> Long = { 0L },
     private val executeAllowed: () -> Boolean = { true },
 ) {
     fun discover(arguments: JsonObject = JsonObject(emptyMap())): JsonObject {
@@ -58,6 +59,7 @@ internal class OperationDispatcher(
             return if (it["fingerprint"]?.jsonPrimitive?.content == fingerprint) page(it, 0, DEFAULT_PAGE)
                 else error("request_id_conflict", "request_id was already used with different input or operation schema.")
         }
+        val admittedEpoch = operationEpoch(operation.descriptor.id)
         val taskId = UUID.randomUUID().toString()
         val task = buildJsonObject {
             put("task_id", taskId); put("request_id", request); put("fingerprint", fingerprint)
@@ -77,6 +79,13 @@ internal class OperationDispatcher(
                 // Recheck after queuing: local permission may have been revoked.
                 if (!executeAllowed() || !operationAllowed(operation.descriptor.id)) {
                     store.updateActive(taskId, mapOf("state" to JsonPrimitive("failed"), "summary" to JsonPrimitive("Remote execution permission revoked before start.")))
+                    return@launch
+                }
+                if (operationEpoch(operation.descriptor.id) != admittedEpoch) {
+                    val refused = resultJson(OperationResult(success = false, summary = "control_session_changed_before_start",
+                        data = buildJsonObject { put("action_attempted", false); put("outcome_unknown", false) }))
+                    store.updateActive(taskId, mapOf("state" to JsonPrimitive("failed"), "result" to refused,
+                        "summary" to JsonPrimitive("control_session_changed_before_start")))
                     return@launch
                 }
                 val result = operation.handler.invoke(OperationInvocation(taskId, arguments.getValue("input").jsonObject))

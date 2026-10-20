@@ -10,6 +10,8 @@ import org.junit.Test
 
 class GenericControlOperationsTest {
     private class Port : ControlPort {
+        var controlSession: ControlSession? = null
+        override fun session() = controlSession
         var writes = 0
         val activity = mutableListOf<Boolean>()
         var captureWait = 0L
@@ -27,7 +29,7 @@ class GenericControlOperationsTest {
         override suspend fun capture(): ControlFrame {
             delay(captureWait)
             if (captureFails) error("capture failed")
-            return ControlFrame("example.app", 1, "stable", listOf(ControlNode(1, "Menu", clickable = true)))
+            return ControlFrame("example.app", 1, "stable-$writes", listOf(ControlNode(1, "Menu", clickable = true)))
         }
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
             writes++; return ControlEffect(true, true, "acknowledged")
@@ -40,6 +42,33 @@ class GenericControlOperationsTest {
     }
     private fun registry(port: Port, mutex: Mutex = Mutex()) = OperationRegistry().also {
         GenericControlOperations(GenericControl(port, { true }), port, mutex) { OperationReadiness() }.register(it)
+    }
+    @Test fun pauseAndStopBlockEvenNewObservationsAndActions() = runBlocking {
+        val session = ControlSession().apply { activateLegacy() }
+        val port = Port().apply { controlSession = session }; val registry = registry(port)
+        for (stop in listOf(false, true)) {
+            if (stop) session.end() else session.pause()
+            for (operation in listOf(GenericControlOperations.OBSERVE, GenericControlOperations.ACTION)) {
+                val result = registry.get(operation)!!.handler.invoke(OperationInvocation("blocked", buildJsonObject {}))
+                assertFalse(result.success)
+                assertEquals(if (stop) "control_session_ended" else "control_session_paused", result.summary)
+            }
+        }
+        assertEquals(0, port.writes); assertTrue(port.activity.isEmpty())
+    }
+    @Test fun physicalPauseCancelsCurrentCaptureAndReleasesMutex() = runBlocking {
+        val session = ControlSession().apply { activateLegacy() }
+        val port = Port().apply { controlSession = session; captureWait = 60_000 }
+        val mutex = Mutex(); val registry = registry(port, mutex)
+        val job = launch { registry.get(GenericControlOperations.OBSERVE)!!.handler.invoke(OperationInvocation("slow", buildJsonObject {})) }
+        yield(); session.pause(); job.join()
+        assertTrue(job.isCancelled); assertFalse(mutex.isLocked); assertEquals(0, port.writes)
+    }
+    @Test fun sessionDescriptorsValidateAndNoAiResumeExists() {
+        val registry = registry(Port())
+        for (command in listOf("start", "status", "wait", "end"))
+            OperationSchemaValidator.checkSchema(registry.get("android.control.session.$command")!!.descriptor.inputSchema)
+        assertNull(registry.get("android.control.session.resume"))
     }
     @Test fun remoteObservationShowsActivityOnlyUntilTheOperationEnds() = runBlocking {
         val port = Port(); val registry = registry(port)

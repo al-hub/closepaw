@@ -97,7 +97,10 @@ class GenericControlTest {
     private class Port : ControlPort {
         var frame = ControlFrame("example.app", 3, "screen-a", listOf(ControlNode(1, "Model", clickable = true)), touchContext = "window-a")
         var writes = 0
+        var changeOnWrite = true
         var captures = 0
+        var controlSession: ControlSession? = null
+        override fun session() = controlSession
         var nativeValidation = false
         override val validatesAtNativeBoundary get() = nativeValidation
         var transientPostReads = 0
@@ -109,12 +112,28 @@ class GenericControlTest {
             }
             return frame
         }
-        override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect { writes++; return effect }
+        override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
+            writes++
+            if (changeOnWrite) this.frame = this.frame.copy(fingerprint = "post-$writes",
+                packageName = if (input["action"]?.jsonPrimitive?.content == "open_app") input.getValue("package_name").jsonPrimitive.content else frame.packageName)
+            return effect
+        }
         override suspend fun apps(filter: String) = JsonArray(emptyList())
     }
     private fun input(id: String, action: String = "click", extra: Map<String, JsonElement> = emptyMap()) =
         JsonObject(mapOf("observation_id" to JsonPrimitive(id), "action" to JsonPrimitive(action), "node_id" to JsonPrimitive(1)) + extra)
     private suspend fun observe(control: GenericControl) = control.observe().data.getValue("observation_id").jsonPrimitive.content
+    @Test fun resumedSessionCannotReplayAnOldObservation() = runBlocking {
+        val session = ControlSession().apply { activateLegacy() }
+        val port = Port().apply { controlSession = session }
+        val control = GenericControl(port, { true }); val old = observe(control)
+        session.pause(); session.beginResume(); session.finishResume(session.epoch, true)
+        val result = control.action(input(old))
+        assertFalse(result.success); assertEquals(0, port.writes)
+        assertEquals("control_session_changed_observe_again", result.summary)
+        assertTrue(control.action(input(observe(control))).success)
+        assertEquals(1, port.writes)
+    }
     @Test fun changedScreenDoesNotClick() = runBlocking {
         val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
         port.frame = port.frame.copy(fingerprint = "screen-b")
@@ -177,9 +196,9 @@ class GenericControlTest {
         assertFalse(control.action(input(old)).success); assertEquals(0, port.writes)
     }
     @Test fun acknowledgementDoesNotClaimRequestedModelWasSelected() = runBlocking {
-        val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
+        val port = Port().apply { changeOnWrite = false }; val control = GenericControl(port, { true }); val id = observe(control)
         val result = control.action(input(id))
-        assertTrue(result.success); assertFalse(result.data.getValue("app_result_verified").jsonPrimitive.boolean)
+        assertFalse(result.success); assertFalse(result.data.getValue("app_result_verified").jsonPrimitive.boolean)
         assertFalse(result.data.getValue("screen_changed").jsonPrimitive.boolean)
         assertTrue(result.data.getValue("observation").jsonObject.containsKey("observation_id"))
     }
@@ -208,9 +227,9 @@ class GenericControlTest {
         assertFalse(control.action(input(id)).success); assertEquals(0, port.writes)
     }
     @Test fun noProgressLimitStopsRepeatedActions() = runBlocking {
-        val port = Port(); val control = GenericControl(port, { true }); var id = observe(control)
+        val port = Port().apply { changeOnWrite = false }; val control = GenericControl(port, { true }); var id = observe(control)
         repeat(3) {
-            val result = control.action(input(id)); assertTrue(result.success)
+            val result = control.action(input(id)); assertFalse(result.success)
             id = result.data.getValue("observation").jsonObject.getValue("observation_id").jsonPrimitive.content
         }
         assertFalse(control.action(input(id)).success); assertEquals(3, port.writes)
@@ -291,9 +310,9 @@ class GenericControlTest {
     }
 
     @Test fun unchangedAcknowledgementHasExplicitFeedbackAndTiming() = runBlocking {
-        val port = Port(); val control = GenericControl(port, { true }); val id = observe(control)
+        val port = Port().apply { changeOnWrite = false }; val control = GenericControl(port, { true }); val id = observe(control)
         val result = control.action(input(id))
-        assertEquals("acknowledged_no_visible_change", result.data["feedback"]?.jsonPrimitive?.content)
+        assertEquals("outcome_unconfirmed", result.data["feedback"]?.jsonPrimitive?.content)
         assertNotNull(result.data["timing_ms"])
         assertFalse(result.data.getValue("app_result_verified").jsonPrimitive.boolean)
     }

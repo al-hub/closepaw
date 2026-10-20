@@ -87,13 +87,32 @@ class AgentService : AccessibilityService() {
     private var overlayController: ServiceOverlayController? = null
     private var actionVisualizer: ActionVisualizerManager? = null
     internal val remoteControlChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
-    private val remoteControlIndicator by lazy { RemoteControlIndicator(this) }
+    internal val remoteControlSession by lazy {
+        val prefs = getSharedPreferences("remote-control-session", MODE_PRIVATE)
+        ai.closepaw.chatgpt.control.ControlSession(prefs.getString("state", "idle") ?: "idle") {
+            prefs.edit().putString("state", it).apply()
+        }.apply { changed = { serviceScope.launch { showRemoteControlActivity() } } }
+    }
+    internal var remoteResumeCheck: (suspend () -> Boolean)? = null
+    private val remoteControlIndicator by lazy { RemoteControlIndicator(this, remoteControlSession) {
+        if (remoteControlSession.beginResume()) serviceScope.launch {
+            val epoch = remoteControlSession.epoch
+            val safe = try { remoteResumeCheck?.invoke() == true } catch (_: Exception) { false }
+            remoteControlSession.finishResume(epoch, safe)
+        }
+    } }
+    internal fun showRemoteControlTarget(rect: android.graphics.Rect) { remoteControlIndicator.target(rect) }
+    internal fun remoteControlCovers(rect: android.graphics.Rect) = remoteControlIndicator.controlCovers(rect)
     internal fun showRemoteControlActivity() {
         if (getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked ||
             !getSystemService(android.os.PowerManager::class.java).isInteractive) return
         remoteControlIndicator.show()
     }
-    internal fun hideRemoteControlActivity() { remoteControlIndicator.hide() }
+    internal fun showRemoteControlFeedbackTest() { remoteControlIndicator.show(testOnly = true) }
+    internal fun hideRemoteControlActivity(force: Boolean = false) {
+        if (force || remoteControlSession.state in setOf(ai.closepaw.chatgpt.control.ControlSession.State.IDLE,
+                ai.closepaw.chatgpt.control.ControlSession.State.ENDED)) remoteControlIndicator.hide()
+    }
     internal fun isRemoteControlActivityAttached() = remoteControlIndicator.isAttached()
     internal fun ownsRemoteControlIndicatorWindow(id: Int) = remoteControlIndicator.ownsWindow(id)
     private var currentPlatformMode: PlatformMode = PlatformMode.ACCESSIBILITY
@@ -238,6 +257,7 @@ class AgentService : AccessibilityService() {
         registerDebugStopReceiverIfNeeded(this, stopReceiver)
         registerDebugExecReceiverIfNeeded(this, debugExecReceiver)
         registerDebugMobileActionReceiverIfNeeded(this, debugMobileActionReceiver)
+        showRemoteControlActivity()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -263,13 +283,15 @@ class AgentService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        hideRemoteControlActivity()
+        remoteControlSession.end()
+        hideRemoteControlActivity(force = true)
         remoteControlChanges.changed()
         Log.w(TAG, "AgentService interrupted")
     }
 
     override fun onDestroy() {
-        hideRemoteControlActivity()
+        remoteControlSession.end()
+        hideRemoteControlActivity(force = true)
         remoteControlChanges.changed()
         isServiceActive = false
         instance = null

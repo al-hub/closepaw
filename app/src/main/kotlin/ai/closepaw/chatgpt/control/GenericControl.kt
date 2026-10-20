@@ -26,6 +26,9 @@ internal data class ControlEffect(val attempted: Boolean, val acknowledged: Bool
 internal interface ControlPort {
     /** Only adapters that enforce the complete freshness policy inside perform may opt in. */
     val validatesAtNativeBoundary: Boolean get() = false
+    fun session(): ControlSession? = null
+    fun bindResume(check: suspend () -> Boolean) {}
+    suspend fun feedback(label: String) {}
     suspend fun activity(active: Boolean) {}
     suspend fun feedbackTest(durationMs: Long): OperationResult = OperationResult(success = false, summary = "feedback_test_unavailable")
     suspend fun captureAfter(frame: ControlFrame, input: JsonObject): ControlFrame {
@@ -43,23 +46,26 @@ internal interface ControlPort {
     suspend fun apps(filter: String): JsonArray
     fun appDiagnostics(): JsonObject = buildJsonObject {}
     fun invalidate() {}
+    fun clearSelections() {}
 }
 
 /** One current, expiring, single-use observation. No planner or model names in the executor. */
 internal class GenericControl(private val port: ControlPort, private val allowed: () -> Boolean,
     private val now: () -> Long = System::currentTimeMillis) {
-    private data class Observation(val id: String, val at: Long, val frame: ControlFrame)
+    private data class Observation(val id: String, val at: Long, val frame: ControlFrame, val epoch: Long)
     private var current: Observation? = null
     private var chainStarted = 0L
     private var chainActions = 0
     private var noProgress = 0
-    fun invalidate() { current = null; port.invalidate() }
+    fun invalidate(clearSelections: Boolean = false) { current = null; port.invalidate(); if (clearSelections) port.clearSelections() }
 
     suspend fun observe(filter: String = ""): OperationResult {
         current = null
         chainStarted = now(); chainActions = 0; noProgress = 0
         if (!allowed()) return failure("generic_control_disabled")
-        return publish(port.capture(), filter)
+        val result = publish(port.capture(), filter)
+        port.feedback(if (result.success) "접근성 확인 완료 · 다음 명령 대기" else "화면 확인 실패 · 재관찰 필요")
+        return result
     }
     private fun publish(frame: ControlFrame, filter: String = ""): OperationResult {
         if (!allowed()) { current = null; return failure("generic_control_disabled") }
@@ -78,7 +84,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         // Full security/fingerprint traversal is independent of bounded presentation.
         // Only IDs actually disclosed in this observation may be acted on.
         val bounded = frame.copy(nodes = exposed)
-        val observation = Observation(UUID.randomUUID().toString(), now(), bounded)
+        val observation = Observation(UUID.randomUUID().toString(), now(), bounded, port.session()?.epoch ?: 0L)
         current = observation
         return OperationResult(data = buildJsonObject {
             put("observation_id", observation.id); put("observed_at_ms", observation.at); put("expires_in_ms", 60_000)
@@ -107,6 +113,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (input["observation_id"]?.jsonPrimitive?.content != observation.id) return failure("stale_observation")
         // Consume before any native side effect, including failure, cancellation and lost transport.
         current = null
+        if (observation.epoch != (port.session()?.epoch ?: 0L)) return failure("control_session_changed_observe_again")
         if (now() - observation.at !in 0L..60_000L) return failure("observation_expired")
         if (chainActions >= 20 || now() - chainStarted !in 0L..180_000L || noProgress >= 3)
             return failure("control_chain_limit_observe_again")
@@ -140,21 +147,22 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val changed = post != null && post.reason == null &&
             (frame.fingerprint != post.fingerprint || frame.packageName != post.packageName || frame.windowId != post.windowId)
         noProgress = if (changed) 0 else noProgress + 1
-        val inputVerified = action != "type" || post?.nodes?.singleOrNull {
-            it.editable && it.resourceId == node?.resourceId && it.bounds == node?.bounds
-        }?.text == input["text"]?.jsonPrimitive?.content
-        val verified = effect.acknowledged && observed?.success == true && inputVerified
+        val verdict = ControlResultPolicy.verify(action, frame, post, node, input)
+        val verified = effect.acknowledged && observed?.success == true && verdict.confirmed
+        val resultReason = if (effect.attempted && effect.acknowledged && !verdict.confirmed) verdict.reason else effect.reason
+        port.feedback(if (verified) "화면 변화 확인 · 다음 단계 대기" else "결과 미확인 · 재관찰 필요")
         return OperationResult(success = verified, summary = if (verified)
-            "Action acknowledged; inspect the returned observation to confirm the requested app result." else effect.reason,
+            if (verdict.goalVerified) "Observed action postcondition confirmed." else
+                "Screen transition observed; the wider task result remains unverified." else resultReason,
             data = buildJsonObject {
                 put("observation_age_ms", (started - observation.at).coerceAtLeast(0))
                 put("validation_scope", GenericControlActionPolicy.validationScope(action))
-                put("reason_code", if (!inputVerified) "input_unconfirmed" else effect.reason)
+                put("reason_code", resultReason)
                 put("action_attempted", effect.attempted); put("action_acknowledged", effect.acknowledged)
                 put("outcome_unknown", effect.attempted && !verified); put("screen_changed", changed)
-                put("app_result_verified", false)
+                put("app_result_verified", verified && verdict.goalVerified)
                 put("feedback", when { !effect.attempted -> "not_attempted"; !verified -> "outcome_unconfirmed";
-                    changed -> "screen_change_observed"; else -> "acknowledged_no_visible_change" })
+                    changed -> "screen_change_observed"; else -> "postcondition_confirmed" })
                 put("validation_location", if (port.validatesAtNativeBoundary) "native_boundary" else "engine_and_native")
                 put("timing_ms", buildJsonObject {
                     put("validation", (validatedAt - started).coerceAtLeast(0))

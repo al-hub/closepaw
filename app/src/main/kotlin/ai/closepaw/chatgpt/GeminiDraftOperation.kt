@@ -53,7 +53,9 @@ internal class GeminiDraftOperation(
             description = "Insert text into one empty native Gemini composer and verify it. Never sends or overwrites an existing draft. Requires an unlocked, interactive phone and local Gemini draft permission. Failure after a write may have changed the draft: inspect before retrying. Diagnostics are returned by get_task and get_diagnostics.",
             inputSchema = buildJsonObject {
                 put("type", "object"); put("additionalProperties", false)
-                put("properties", buildJsonObject { put("text", buildJsonObject {
+                put("properties", buildJsonObject {
+                    put("session_id", buildJsonObject { put("type", "string"); put("minLength", 1); put("maxLength", 128) })
+                    put("text", buildJsonObject {
                     put("type", "string"); put("minLength", 1); put("maxLength", 8000)
                 }) })
                 put("required", buildJsonArray { add(JsonPrimitive("text")) })

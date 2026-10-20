@@ -24,6 +24,7 @@ internal class GeminiRoundTripOperation(
             inputSchema = buildJsonObject {
                 put("type", "object"); put("additionalProperties", false)
                 put("properties", buildJsonObject {
+                    put("session_id", buildJsonObject { put("type", "string"); put("minLength", 1); put("maxLength", 128) })
                     put("text", buildJsonObject { put("type", "string"); put("minLength", 1); put("maxLength", 8000) })
                     put("timeout_ms", buildJsonObject { put("type", "integer"); put("minimum", 1000); put("maximum", 120000) })
                     put("conversation", buildJsonObject { put("type", "string"); put("enum", buildJsonArray { add("current") }) })

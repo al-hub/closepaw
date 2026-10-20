@@ -55,6 +55,17 @@ internal class AndroidReadAppTool(
                 summary = "ClosePaw Accessibility service is not connected.",
             )
 
+        val controlSession = service.remoteControlSession
+        controlSession.refusal(controlSession.id, true)?.let {
+            return@runBlocking failure(code = it, summary = "User control has priority.")
+        }
+        controlSession.activateLegacy()
+        val controlEpoch = controlSession.epoch
+        fun controlAllowed() = controlSession.epoch == controlEpoch && controlSession.refusal(controlSession.id, true) == null
+        if (!controlAllowed()) return@runBlocking failure(code = "control_session_blocked", summary = "User control has priority.")
+
+        try {
+        withContext(Dispatchers.Main) { service.showRemoteControlActivity() }
         val platform = AccessibilityPlatform(
             service = service,
             config = SessionConfig(),
@@ -70,6 +81,7 @@ internal class AndroidReadAppTool(
         // Inspection only: reuse the native/Google-host Gemini identity guard, never its write path.
         val geminiUi = if (target.id == "gemini") AndroidGeminiDraftUi(service) { false } else null
         suspend fun foreground(): ReadForeground? {
+            if (!controlAllowed()) return null
             if (geminiUi == null) {
                 val pkg = platform.getCurrentPackageName()
                 return if (ReadAppForegroundPolicy.accepts(target, pkg, false)) ReadForeground(pkg!!) else null
@@ -91,7 +103,9 @@ internal class AndroidReadAppTool(
         var verifiedForeground = foreground()
         val alreadyForeground = verifiedForeground != null
         if (!alreadyForeground) {
-            when (val launch = platform.launchApp(target.packageName)) {
+            when (val launch = withContext(Dispatchers.Main) {
+                if (!controlAllowed()) ActionResult.Failure("control_session_changed") else platform.launchApp(target.packageName)
+            }) {
                 is ActionResult.Failure -> {
                     return@runBlocking failure(code = "launch_failed", summary = launch.reason)
                 }
@@ -113,6 +127,8 @@ internal class AndroidReadAppTool(
             identityDiagnostics = geminiUi?.readIdentityDiagnostics,
         )
 
+        if (!controlAllowed()) return@runBlocking failure(code = "control_session_blocked", summary = "User control has priority.")
+        controlSession.feedback("접근성 정보 읽는 중")
         val accessibility = withContext(Dispatchers.Main) {
             readTargetApplicationText(service, readForeground.packageName, readForeground.windowId)
         }
@@ -144,6 +160,7 @@ internal class AndroidReadAppTool(
             config = screenshotConfig,
             traceRecorder = NoopTraceRecorder,
         )
+        controlSession.feedback("화면 캡처 중")
         val screenshot = screenshotCapturer.captureIfEnabled(
             windowId = null,
             enabled = true,
@@ -279,6 +296,9 @@ internal class AndroidReadAppTool(
             },
             imageMimeType = image?.mimeType,
         )
+        } finally {
+            controlSession.feedback("화면 읽기 종료 · 결과 확인")
+        }
     }
 
     private data class ReadForeground(val packageName: String, val windowId: Int? = null)
