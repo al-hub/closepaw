@@ -247,4 +247,21 @@ class GenericControlOperationsTest {
         assertFalse(result.success)
         assertEquals(0, port.writes)
     }
+
+    @Test fun localInterOperationIdleMetricUsesMonotonicClockWithoutScreenText() = runBlocking {
+        val port = Port()
+        val registry = registry(port)
+        val handler = registry.get(GenericControlOperations.OBSERVE)!!.handler
+        assertTrue(handler.invoke(OperationInvocation("gap-first-test", buildJsonObject {})).success)
+        assertTrue(handler.invoke(OperationInvocation("gap-second-test", buildJsonObject {})).success)
+        val events = ControlDiagnostics.snapshot().getValue("events").jsonArray
+        val entry = events.map { it.jsonObject }.last {
+            it["task_id"]?.jsonPrimitive?.content == "gap-second-test" &&
+                it["reason_code"]?.jsonPrimitive?.content == "started"
+        }
+        val metrics = entry.getValue("metrics").jsonObject
+        assertEquals("monotonic_process", metrics["clock_domain"]?.jsonPrimitive?.content)
+        assertTrue(metrics.getValue("inter_operation_idle_ms").jsonPrimitive.long >= 0L)
+        assertFalse(entry.toString().contains("stable-"))
+    }
 }
