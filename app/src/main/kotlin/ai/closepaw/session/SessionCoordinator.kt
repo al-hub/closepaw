@@ -217,7 +217,13 @@ class SessionCoordinator(private val scope: CoroutineScope) {
     suspend fun clearSession() {
         mutex.lock()
         try {
-            val session = currentSession ?: return
+            val session = currentSession ?: run {
+                // An input may have been queued while session creation was busy. A clear
+                // must discard it even if there is no currently attached session.
+                pendingInputs.clear()
+                pendingEnqueueElapsedMs.clear()
+                return
+            }
             try {
                 session.submit(Op.Shutdown)
                 delay(SHUTDOWN_GRACE_DELAY_MS)
