@@ -190,4 +190,24 @@ class GeminiPagedReplyCollectorTest {
             "first\nrepeat paragraph", "repeat paragraph\nrepeat paragraph\nlast"))
         assertNull(GeminiPagedReplyCollector.joinOverlapping("first a", "another page"))
     }
+
+    @Test fun growingNativeWholeBodyReplacesPrefixInsteadOfReportingScrollGap() = runBlocking {
+        val first = nativeFrame("101 first item", start = true)
+        val grown = nativeFrame("101 first item\\n102 second item", end = true)
+        val ui = Ui(listOf(first, grown))
+        val result = collect(ui)
+        assertEquals("completed", result.state)
+        assertEquals("101 first item\\n102 second item", result.answer)
+        assertEquals(1, result.pagesCollected)
+        assertEquals(listOf(true), ui.scrolls)
+    }
+
+    @Test fun unrelatedNativeWholeBodyReplacementNeverClaimsCoverage() = runBlocking {
+        val first = nativeFrame("101 first item", start = true)
+        val replaced = nativeFrame("new unrelated answer", end = true)
+        val result = collect(Ui(listOf(first, replaced)))
+        assertEquals("reply_scroll_gap", result.reason)
+        assertTrue(result.partial)
+        assertNull(result.completionEvidence)
+    }
 }
