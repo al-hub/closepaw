@@ -455,7 +455,12 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     service.showRemoteControlTarget(rect); true
                 } else false
             }
-            if (previewed) kotlinx.coroutines.delay(96)
+            if (previewed) {
+                kotlinx.coroutines.delay(96)
+                // FLAG_SECURE may change without tree/geometry changes during the cue.
+                // Obtain a NEW screenshot security verdict before the final native boundary.
+                secureWindow(service)?.let { return ControlEffect(false, false, it) }
+            }
         }
         val effect = withTree(service) { fresh, native ->
             if (service.remoteControlSession.epoch != admittedEpoch)
