@@ -106,6 +106,27 @@ class AgentService : AccessibilityService() {
         Log.i(TAG, entry)
     }
     internal fun recentResumeDiagnostics(): List<String> = resumeDiagnostics.toList()
+
+    /** Read-only, content-free diagnostics; never resumes an AI session. */
+    fun controlRecoveryReport(): String {
+        val unlocked = !getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
+            getSystemService(android.os.PowerManager::class.java).isInteractive
+        return buildString {
+            append("접근성: ").append(if (isServiceActive) "연결됨" else "확인 필요").append('\n')
+            append("화면: ").append(if (unlocked) "켜짐/잠금 해제" else "잠금 또는 꺼짐").append('\n')
+            append("제어: ").append(remoteControlSession.state.name).append('\n')
+            append("패널: ").append(if (remoteControlIndicator.isAttached()) "표시됨" else "표시되지 않음").append('\n')
+            append("최근 진단: ").append(resumeDiagnostics.lastOrNull() ?: "없음")
+        }
+    }
+    /** User-triggered panel recovery; PAUSED remains PAUSED. */
+    fun restorePausedControlPanel(): Boolean {
+        if (!isServiceActive ||
+            remoteControlSession.state != ai.closepaw.chatgpt.control.ControlSession.State.PAUSED) return false
+        remoteControlIndicator.restorePanel()
+        return remoteControlIndicator.isAttached()
+    }
+
     private val remoteControlIndicator by lazy { RemoteControlIndicator(this, remoteControlSession) {
         if (remoteControlSession.beginResume()) serviceScope.launch {
             val epoch = remoteControlSession.epoch
