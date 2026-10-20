@@ -505,4 +505,33 @@ class OverlayLocationPolicyTest {
             )
         ).isFalse()
     }
+
+    @Test
+    fun `single X is visible only for ordinary active control outside main app`() {
+        for (mode in listOf(
+            CapsuleMode.Running("working"),
+            CapsuleMode.TakeoverPending("pausing"),
+            CapsuleMode.Takeover("paused"),
+        )) {
+            assertThat(shouldShowSingleX(true, OverlayUserLocation.OTHER_APP, mode)).isTrue()
+            assertThat(shouldShowSingleX(true, OverlayUserLocation.VD_VIEWER, mode)).isTrue()
+            assertThat(shouldShowSingleX(true, OverlayUserLocation.MAIN_APP, mode)).isFalse()
+            assertThat(shouldShowSingleX(false, OverlayUserLocation.OTHER_APP, mode)).isFalse()
+        }
+    }
+
+    @Test
+    fun `single X does not replace required approval or input interactions`() {
+        val states = listOf<CapsuleMode>(
+            CapsuleMode.WaitingForInput("question", "id"),
+            CapsuleMode.WaitingForAction("action", "id"),
+            CapsuleMode.WaitingForApproval("id", "desc", "app", "pkg", "reason"),
+            CapsuleMode.Error("error"),
+            CapsuleMode.Done("done"),
+            CapsuleMode.Hidden,
+        )
+        for (state in states) {
+            assertThat(shouldShowSingleX(true, OverlayUserLocation.OTHER_APP, state)).isFalse()
+        }
+    }
 }
