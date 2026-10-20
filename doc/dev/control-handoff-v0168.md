@@ -29,3 +29,14 @@ Cancel is cooperative: already-completed external work is not undone. Resume rem
 Local `git diff --check` passes. Queued UI effects also carry an admission epoch and are refused after pause/end/new-session transitions, even if the user has since resumed. Local Gradle cannot bootstrap: distribution download denied by network policy; use repository Security CI. Added JVM state-machine, checked-result, destination-package, app-selection retention and interruption/epoch tests. CI, signed release, installation and physical visual acceptance must be recorded separately after execution.
 
 Physical acceptance: breathing border; actual pause/new-action refusal; physical play/fresh capture/old-observation rejection; X/removal/no resume; unrelated app body touch, keyboard, rotation and TalkBack. These are not proven by JVM tests. #117 retains long-run reliability, network/reboot and Gemini collection latency work.
+
+
+## v0.1.68 executed delivery and v0.1.69 follow-up
+
+v0.1.68/code69 was published and automatically installed. PR #120 merged as 989de3e5bc03cbe12810cc10253812fe3312a1e1. PR CI39368968244, main CI39369410361 and Signed Release39370074414 passed; Python55+8, Android unit/lint, native/debug/signed builds and anonymous APK verification succeeded. APK116,505,245 bytes, SHA-256 7a2999171a392766a7a1483da6bc578fb72394918e06fc2ac75643b0886f4765; original signer and manifest0.1.68/code69 verified. Exactly one update task ed6867d9-ccbe-4b9a-af42-92165a5a19f5; durable status installed/current0.1.68/code69, permissions retained.
+
+Actual device: session start17f55a67-ba89-4c33-8b8b-bf300ea16b60 and guarded current-screen observation succeeded. Discover Gemini, then Notes; launch Notes(task1d92c1b4-cb77-40a8-af36-04cd26230c08) verified exact package. Without Home or re-discovering Gemini, launch Gemini(task5f3cfdb5-30bd-43e2-ba95-08aa0977a390) reached the positively identified Google-hosted Gemini surface. No app_not_selected_or_blocked, no input/send or settings changes. Strict APK-package comparison returned target_app_not_observed/unknown. This is a conservative false negative, not success misreporting.
+
+v0.1.69/code70 adds an optional native-attested logical application package to ControlFrame, reusing the existing complete Gemini identity/security guard. Generic result and post-observation policies match exact OS package OR this verified logical identity; generic Google Search, partial scans, secure windows and unrelated packages remain rejected. No planner-supplied alias and no launch retry. Adds positive/negative identity and zero-extra-wait tests. Follow-up CI/release/device verification pending.
+
+Session end60abbd0a-4dbb-498e-901c-bb1d757214df confirmed ended; a subsequent observe refused control_session_ended/action_attempted=false. Physical pulse, pause/play/X, placement/IME/rotation/TalkBack acceptance still needs user confirmation. Previous baseline retained; no camera or locked UI test.

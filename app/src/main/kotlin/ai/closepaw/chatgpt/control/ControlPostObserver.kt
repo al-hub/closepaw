@@ -22,7 +22,7 @@ internal class ControlPostObserver(
             val unchanged = post.reason == null && post.fingerprint == before.fingerprint &&
                 post.packageName == before.packageName && post.windowId == before.windowId
             val launchPending = input["action"]?.jsonPrimitive?.content == "open_app" &&
-                post.reason == null && post.packageName != input["package_name"]?.jsonPrimitive?.content
+                post.reason == null && !post.matchesApplication(input["package_name"]?.jsonPrimitive?.content)
             if (!transient && !unchanged && !launchPending) return post
             // Protected/locked/unavailable-policy states stop immediately, even if an event follows.
             if (post.reason != null && !transient) return post

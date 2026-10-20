@@ -7,6 +7,16 @@ import org.junit.Test
 class ControlResultPolicyTest {
     private val node = ControlNode(1, resourceId = "switch", bounds = "0 0 50 50", checkable = true)
     private val before = ControlFrame("settings", 1, "before", listOf(node))
+    @Test fun hostedLaunchNeedsPositiveCompleteApplicationIdentity() {
+        val input = buildJsonObject { put("package_name", "gemini.app") }
+        val host = before.copy(packageName = "google.host", fingerprint = "host")
+        assertFalse(ControlResultPolicy.verify("open_app", before, host, null, input).confirmed)
+        val verified = host.copy(verifiedApplicationPackage = "gemini.app")
+        assertTrue(ControlResultPolicy.verify("open_app", before, verified, null, input).confirmed)
+        assertFalse(ControlResultPolicy.verify("open_app", before, verified.copy(truncated = true), null, input).confirmed)
+        assertFalse(ControlResultPolicy.verify("open_app", before, verified.copy(reason = "secure_window"), null, input).confirmed)
+        assertFalse(verified.matchesApplication("another.app"))
+    }
     @Test fun unrelatedScreenChangeDoesNotProveToggle() {
         val result = ControlResultPolicy.verify("click", before, before.copy(fingerprint = "clock tick"), node, buildJsonObject {})
         assertFalse(result.confirmed)
