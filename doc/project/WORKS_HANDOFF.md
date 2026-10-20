@@ -1,5 +1,16 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## v0.1.69/code70 delivered and installed — #118 fixed, #119 physical acceptance OPEN (2026-10-20)
+
+- [PR #120](https://github.com/al-hub/closepaw/pull/120) adds visible postcondition verification, retained exact app selections and user-priority GUI/session control. [PR #121](https://github.com/al-hub/closepaw/pull/121) reuses the complete Gemini identity guard to verify a canonical app hosted by Google; no caller alias or automatic effect replay. Final immutable APK source `81451f026ed2d2748c035c97f1f6ee245423dff8`.
+- Final PR CI39371629561, main CI39372119884 and Signed Release39372744855 succeeded. Python55+8, Android tests/lint, native/debug/signed builds and anonymous public APK verification passed. Original signer and manifest0.1.69/code70 confirmed.
+- [Signed APK v0.1.69](https://github.com/al-hub/closepaw/releases/download/v0.1.69/closepaw-aa-bridge.apk):116,508,665 bytes; SHA-256 `c67d8e8122ff4a5dbc64939f585e97e1700dab7dd17c8afbe13848d82a6393c9`. One update task `dae5b18e-a05f-4e17-b56a-ae290895b700`; durable installed/current0.1.69/code70, connection and permissions retained.
+- Actual installed-version Home observation, Notes launch and direct Notes→Gemini transition succeeded. Gemini was discovered BEFORE Notes, yet remained launchable without re-discovery/Home. Exact/native-attested destination verification returned app_result_verified=true/outcome_unknown=false. No input/send, settings or camera changes.
+- GUI implements breathing user-wait, bottom-right pause/physical play, top-right permanent session stop, fresh serialized reobservation and invalidation of queued/old commands. Dedicated Gemini and direct read_app honor the user gate. Screenshot security probes and accessibility reads are labelled separately; target/scroll/result feedback is present.
+- **#119 is not fully accepted yet:** human pulse appearance, physical pause/play/X, app-body touch, IME/rotation/TalkBack/reduced motion need direct confirmation. Session end→new-observe refusal was verified on v0.1.68. Do not claim physical button tests passed or silently restart/resume a user-stopped session.
+- [Executed evidence/design/remaining steps](../dev/control-handoff-v0168.md). #118 closed; #119 remains open; #117 is long-run backlog. v0.1.67 baseline #114–#117 success is retained; no repeated Wi-Fi/SSH, locked Termux, basic calculator/browser/Q&A tests. Camera and locked UI excluded.
+
+
 ## v0.1.66 expanded camera-excluded acceptance — logs secured, residuals HOLD (2026-10-20)
 
 - Installed0.1.66/code67 confirmed. Camera excluded by corporate policy; Notes/Clock fixes remain HOLD.
