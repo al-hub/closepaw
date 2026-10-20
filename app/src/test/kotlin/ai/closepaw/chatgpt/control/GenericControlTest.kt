@@ -328,4 +328,18 @@ class GenericControlTest {
         assertFalse(control.action(input(observe(control), "expand")).success)
         assertEquals(1, port.writes)
     }
+
+    @Test fun guardedActionReportsPrivacySafeMonotonicSegments() = runBlocking {
+        val port = Port()
+        val control = GenericControl(port, { true })
+        val result = control.action(input(observe(control)))
+        assertTrue(result.success)
+        assertEquals("monotonic_process", result.data.getValue("timing_clock_domain").jsonPrimitive.content)
+        val timing = result.data.getValue("timing_ms").jsonObject
+        for (segment in listOf("validation", "native_action", "post_observation", "total")) {
+            assertTrue("$segment must not be negative", timing.getValue(segment).jsonPrimitive.long >= 0L)
+        }
+        assertFalse(result.data.toString().contains("screen-a"))
+        assertEquals(1, port.writes)
+    }
 }

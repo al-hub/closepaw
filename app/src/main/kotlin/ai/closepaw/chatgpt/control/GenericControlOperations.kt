@@ -13,6 +13,10 @@ import kotlinx.serialization.json.*
 /** The same screen mutex spans observation, generic effects and Gemini collection. */
 internal class GenericControlOperations(private val control: GenericControl, private val port: ControlPort,
     private val mutex: Mutex, private val runtime: RuntimeControlSettings? = null, private val readiness: () -> OperationReadiness) {
+    // Main operation mutex serializes these timestamps. This measures only time
+    // *between local operation handlers*, not AI thinking or network latency.
+    private var previousReleaseNs: Long? = null
+
     fun register(registry: OperationRegistry) {
         fun session(): ControlSession? {
             port.bindResume {
@@ -30,10 +34,19 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                 if (!mutex.tryLock()) return OperationResult(success = false, summary = "ui_busy",
                     data = buildJsonObject { put("reason_code", "ui_busy"); put("action_attempted", false) })
                 val started = System.nanoTime()
-                ControlDiagnostics.record(operation, "started", taskId = invocation.taskId)
-                return try { withTimeout(10_000) {
+                val priorRelease = previousReleaseNs
+                ControlDiagnostics.record(operation, "started", taskId = invocation.taskId,
+                    metrics = buildJsonObject {
+                        put("clock_domain", "monotonic_process")
+                        priorRelease?.let {
+                            put("inter_operation_idle_ms", ((started - it) / 1_000_000L).coerceAtLeast(0L))
+                        }
+                    })
+                return try { withTimeout(if (operation == SEQUENCE) 25_000L else 10_000L) {
                     if (showActivity) {
-                        session?.activateLegacy()
+                        // A batch must never implicitly activate an idle control session.
+                        // Only explicit android.control.session.start may authorize it.
+                        if (operation != SEQUENCE) session?.activateLegacy()
                         val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
                         session?.interrupt = { job?.cancel(kotlinx.coroutines.CancellationException("user_control_interrupt")) }
                         port.activity(true)
@@ -55,7 +68,10 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                     if (showActivity) session?.interrupt = {}
                     try { if (showActivity) withContext(kotlinx.coroutines.NonCancellable) { port.activity(false) } }
                     finally {
-                        ControlDiagnostics.record(operation, "released", (System.nanoTime() - started) / 1_000_000, invocation.taskId)
+                        val releasedNs = System.nanoTime()
+                        ControlDiagnostics.record(operation, "released", (releasedNs - started) / 1_000_000,
+                            invocation.taskId, metrics = buildJsonObject { put("clock_domain", "monotonic_process") })
+                        previousReleaseNs = releasedNs
                         mutex.unlock()
                     }
                 }
@@ -123,6 +139,21 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                 } catch (e: IllegalArgumentException) { appFailure(if (e.message == "configuration_revision_changed") e.message!! else "configuration_invalid")
                 } catch (_: Exception) { appFailure("configuration_update_failed") }
             })
+        registry.register(OperationDescriptor(SEQUENCE,
+            "Run 2 to 9 calculator digit clicks (0-9) in a single local request. Only known Samsung/Google/AOSP calculator package identities are accepted, and an explicit started control session and session_id are required. Each step verifies fresh semantic node identity, consent, epoch, app/window and observation. No coordinates, no automatic retries, and no arbitrary app interactions. X stop cancels remaining work. This reports guarded clicks, not verification of the displayed calculation.",
+            inputSchema = obj("labels" to buildJsonObject {
+                put("type", "array"); put("minItems", 2); put("maxItems", 9)
+                put("items", str(32, 1))
+            }, required = listOf("session_id", "labels")),
+            readOnly = false, permissions = listOf("accessibility", "generic_android_control"),
+            effects = listOf("bounded_foreground_click_sequence"), readiness = readiness),
+            handler(SEQUENCE, showActivity = true) { invocation ->
+                val labels = invocation.input["labels"]?.jsonArray?.map { it.jsonPrimitive.content }
+                    ?: emptyList()
+                GenericControlSequence(control, { session() }, { readiness().ready }).run(
+                    labels, invocation.input["session_id"]?.jsonPrimitive?.content
+                )
+            })
         registry.register(OperationDescriptor(ACTION,
             "Perform exactly one guarded action from a fresh observation, then return a new observation. Requires observation_id for ALL actions and node_id for click/tap/long_press/type/scroll/expand/collapse. click uses the native accessibility action. tap explicitly touches the center of the freshly revalidated clickable node, only on the default display with unchanged window geometry and no covering window; requires node_tap_available=true. No caller coordinates. type only fills an empty field; never overwrites. open_app requires an exact package from android.apps.list. Partial observations allow only Home/exact app launch; Back and node actions require a complete tree. Home/open_app validate foreground app/window identity; Back/node actions additionally require the unchanged content fingerprint. Inspect validation_scope. Policy, foreground owner, owned window set and consent are rechecked for every action. expand/collapse require the corresponding advertised native node action. No automatic fallback from click to tap, no model-specific logic, no automatic resend. Cancelled or unconfirmed gestures are unknown outcomes, not permission to retry. Native acknowledgement is not confirmation of the user's requested result. Inspect the new screen. Unknown outcomes require observation, never replay.",
             inputSchema = obj("observation_id" to str(128, 1), "action" to buildJsonObject {
@@ -141,6 +172,7 @@ internal class GenericControlOperations(private val control: GenericControl, pri
         const val SETTINGS = "android.control.settings"
         const val CONFIGURE = "android.control.configure"
         const val ACTION = "android.ui.action"
+        const val SEQUENCE = "android.ui.sequence"
         const val FEEDBACK_TEST = "android.control.feedback_test"
         private fun str(max: Int, min: Int = 0) = buildJsonObject { put("type", "string"); put("minLength", min); put("maxLength", max) }
         private fun obj(vararg fields: Pair<String, JsonObject>, required: List<String> = emptyList()) = buildJsonObject {

@@ -34,6 +34,8 @@ class SessionCoordinator(private val scope: CoroutineScope) {
 
     private val mutex = Mutex()
     private val pendingInputs = mutableListOf<String>()
+    /** Monotonic enqueue times, kept in lockstep with pendingInputs. */
+    private val pendingEnqueueElapsedMs = mutableListOf<Long>()
     private var stateObserverJob: Job? = null
 
     var currentSession: AgentSession? = null
@@ -77,6 +79,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
                 }
                 SessionState.Running, SessionState.Paused, SessionState.TakeoverPending -> {
                     pendingInputs.add(text)
+                    pendingEnqueueElapsedMs.add(System.nanoTime() / 1_000_000L)
                     SubmitResult.QUEUED
                 }
                 else -> {
@@ -126,11 +129,13 @@ class SessionCoordinator(private val scope: CoroutineScope) {
                 // Creation threw — no session exists, so the gate must unlock.
                 _currentSessionState.value = null
                 pendingInputs.clear()
+                pendingEnqueueElapsedMs.clear()
                 throw t
             }
             if (session == null) {
                 _currentSessionState.value = null
                 pendingInputs.clear()
+                pendingEnqueueElapsedMs.clear()
                 return CreateResult.Aborted
             }
             currentSession = session
@@ -154,6 +159,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
      */
     fun enqueue(text: String) {
         pendingInputs.add(text)
+        pendingEnqueueElapsedMs.add(System.nanoTime() / 1_000_000L)
     }
 
     /**
@@ -190,6 +196,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
     fun detachSession() {
         currentSession = null
         pendingInputs.clear()
+        pendingEnqueueElapsedMs.clear()
         lastDeadSessionFileName = null
     }
 
@@ -210,7 +217,13 @@ class SessionCoordinator(private val scope: CoroutineScope) {
     suspend fun clearSession() {
         mutex.lock()
         try {
-            val session = currentSession ?: return
+            val session = currentSession ?: run {
+                // An input may have been queued while session creation was busy. A clear
+                // must discard it even if there is no currently attached session.
+                pendingInputs.clear()
+                pendingEnqueueElapsedMs.clear()
+                return
+            }
             try {
                 session.submit(Op.Shutdown)
                 delay(SHUTDOWN_GRACE_DELAY_MS)
@@ -230,6 +243,7 @@ class SessionCoordinator(private val scope: CoroutineScope) {
         stateObserverJob = null
         currentSession = null
         pendingInputs.clear()
+        pendingEnqueueElapsedMs.clear()
         _currentSessionState.value = null
     }
 
@@ -259,7 +273,11 @@ class SessionCoordinator(private val scope: CoroutineScope) {
         while (pendingInputs.isNotEmpty()) {
             val state = session.state.value
             if (state != SessionState.Idle && state != SessionState.Created) break
-            session.submit(Op.UserInput(pendingInputs.removeAt(0)))
+            val queuedAt = pendingEnqueueElapsedMs.removeAt(0)
+            val input = pendingInputs.removeAt(0)
+            val idleMs = (System.nanoTime() / 1_000_000L - queuedAt).coerceAtLeast(0L)
+            Log.i(TAG, "queued_input_wait_ms=$idleMs queue_remaining=${pendingInputs.size}")
+            session.submit(Op.UserInput(input))
         }
     }
 }

@@ -122,6 +122,17 @@ internal fun shouldFinishViewerOnIdle(
     !hasActiveTask &&
     mode is CapsuleMode.Hidden
 
+/** Only ordinary active cross-app sessions use the persistent X-only window. */
+internal fun shouldShowSingleX(
+    hasActiveTask: Boolean,
+    location: OverlayUserLocation,
+    mode: CapsuleMode,
+): Boolean = hasActiveTask &&
+    location != OverlayUserLocation.MAIN_APP &&
+    (mode is CapsuleMode.Running ||
+        mode is CapsuleMode.TakeoverPending ||
+        mode is CapsuleMode.Takeover)
+
 internal fun deriveOverlayVisibility(
     platformMode: PlatformMode,
     location: OverlayUserLocation,

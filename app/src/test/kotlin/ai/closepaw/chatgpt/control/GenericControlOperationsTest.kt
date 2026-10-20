@@ -228,4 +228,57 @@ class GenericControlOperationsTest {
         assertEquals(listOf(true, false), port.activity); assertFalse(mutex.isLocked)
     }
 
+
+    @Test fun batchWithoutExplicitStartMustNotActivateIdleSession() = runBlocking {
+        val session = ControlSession()
+        val port = Port().apply { controlSession = session }
+        val registry = registry(port)
+        val result = registry.get(GenericControlOperations.SEQUENCE)!!.handler.invoke(
+            OperationInvocation("unauthorized-batch", buildJsonObject {
+                put("session_id", "arbitrary")
+                put("labels", JsonArray(listOf(JsonPrimitive("1"), JsonPrimitive("2"))))
+            })
+        )
+        assertFalse(result.success)
+        assertEquals(ControlSession.State.IDLE, session.state)
+        assertFalse(session.explicit)
+        assertEquals(0, port.writes)
+        assertTrue("A denied batch must not block a later authorized start", session.start())
+    }
+
+    @Test fun calculatorSequenceRequiresExplicitSessionAndHasBoundedSchema() = runBlocking {
+        val port = Port()
+        val registry = registry(port)
+        val descriptor = registry.get(GenericControlOperations.SEQUENCE)!!.descriptor
+        OperationSchemaValidator.checkSchema(descriptor.inputSchema)
+        assertFalse(descriptor.readOnly)
+        assertNotNull(OperationSchemaValidator.validate(descriptor.inputSchema, buildJsonObject {
+            put("labels", JsonArray(listOf(JsonPrimitive("1"), JsonPrimitive("2"))))
+        }))
+        val result = registry.get(GenericControlOperations.SEQUENCE)!!.handler.invoke(
+            OperationInvocation("no-session", buildJsonObject {
+                put("labels", JsonArray(listOf(JsonPrimitive("1"), JsonPrimitive("2"))))
+                put("session_id", "arbitrary")
+            })
+        )
+        assertFalse(result.success)
+        assertEquals(0, port.writes)
+    }
+
+    @Test fun localInterOperationIdleMetricUsesMonotonicClockWithoutScreenText() = runBlocking {
+        val port = Port()
+        val registry = registry(port)
+        val handler = registry.get(GenericControlOperations.OBSERVE)!!.handler
+        assertTrue(handler.invoke(OperationInvocation("gap-first-test", buildJsonObject {})).success)
+        assertTrue(handler.invoke(OperationInvocation("gap-second-test", buildJsonObject {})).success)
+        val events = ControlDiagnostics.snapshot().getValue("events").jsonArray
+        val entry = events.map { it.jsonObject }.last {
+            it["task_id"]?.jsonPrimitive?.content == "gap-second-test" &&
+                it["reason_code"]?.jsonPrimitive?.content == "started"
+        }
+        val metrics = entry.getValue("metrics").jsonObject
+        assertEquals("monotonic_process", metrics["clock_domain"]?.jsonPrimitive?.content)
+        assertTrue(metrics.getValue("inter_operation_idle_ms").jsonPrimitive.long >= 0L)
+        assertFalse(entry.toString().contains("stable-"))
+    }
 }
