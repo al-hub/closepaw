@@ -14,6 +14,7 @@ class GenericControlSequenceTest {
         var endAfterFirst = false
         var duplicateDigit = false
         var unknownEffect = false
+        var changeAppAfterFirst = false
 
         override suspend fun capture(): ControlFrame {
             val digits = (0..9).map { ControlNode(it, it.toString(), clickable = true) }
@@ -22,6 +23,7 @@ class GenericControlSequenceTest {
         }
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
             writes++
+            if (changeAppAfterFirst) packageName = "example.other.app"
             if (endAfterFirst) sessionValue.end()
             return if (unknownEffect) ControlEffect(true, false, "unknown")
                 else ControlEffect(true, true, "acknowledged")
@@ -82,5 +84,21 @@ class GenericControlSequenceTest {
         assertEquals("control_session_changed",
             execute(port, ready = { false }).data["reason_code"]?.jsonPrimitive?.content)
         assertEquals(0, port.writes)
+    }
+
+    @Test fun foregroundSwitchStopsAfterFirstAction() = runBlocking {
+        val port = CalculatorPort().apply { changeAppAfterFirst = true }
+        val result = execute(port)
+        assertFalse(result.success)
+        assertEquals("foreground_changed", result.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(1, port.writes)
+    }
+
+    @Test fun consentRevocationStopsRemainingClicks() = runBlocking {
+        val port = CalculatorPort()
+        val result = execute(port, ready = { port.writes == 0 })
+        assertFalse(result.success)
+        assertEquals("control_session_changed", result.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(1, port.writes)
     }
 }
