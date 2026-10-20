@@ -193,11 +193,11 @@ class GeminiPagedReplyCollectorTest {
 
     @Test fun growingNativeWholeBodyReplacesPrefixInsteadOfReportingScrollGap() = runBlocking {
         val first = nativeFrame("101 first item", start = true)
-        val grown = nativeFrame("101 first item\\n102 second item", end = true)
+        val grown = nativeFrame("101 first item\n102 second item", end = true)
         val ui = Ui(listOf(first, grown))
         val result = collect(ui)
         assertEquals("completed", result.state)
-        assertEquals("101 first item\\n102 second item", result.answer)
+        assertEquals("101 first item\n102 second item", result.answer)
         assertEquals(1, result.pagesCollected)
         assertEquals(listOf(true), ui.scrolls)
     }
