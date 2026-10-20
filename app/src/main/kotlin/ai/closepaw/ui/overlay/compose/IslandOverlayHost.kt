@@ -39,6 +39,17 @@ class IslandOverlayHost(
     )
 
     private var stateHolder: CapsuleStateHolder? = null
+    private var readOnly = false
+
+    /** The active control island is status-only: never intercept screen touches. */
+    fun setReadOnly(enabled: Boolean) {
+        if (readOnly == enabled) return
+        readOnly = enabled
+        if (composeHost.isShowing()) {
+            hide()
+            show()
+        }
+    }
 
     fun show() {
         if (composeHost.isShowing()) return
@@ -49,7 +60,7 @@ class IslandOverlayHost(
                     text = "Working...",
                     dotColor = MaterialTheme.colorScheme.primary,
                     pulsing = true,
-                    onClick = onExpandCapsule,
+                    onClick = if (readOnly) null else onExpandCapsule,
                 )
             } else {
                 val mode by holder.mode.collectAsState(initial = CapsuleMode.Hidden)
@@ -60,7 +71,7 @@ class IslandOverlayHost(
                     text = if (text.isBlank()) "Working..." else text,
                     dotColor = glowState.toStatusColor(),
                     pulsing = mode is CapsuleMode.Running,
-                    onClick = onExpandCapsule,
+                    onClick = if (readOnly) null else onExpandCapsule,
                 )
             }
         }
@@ -106,7 +117,8 @@ class IslandOverlayHost(
                 WindowManager.LayoutParams.TYPE_PHONE
             },
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                (if (readOnly) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0),
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
