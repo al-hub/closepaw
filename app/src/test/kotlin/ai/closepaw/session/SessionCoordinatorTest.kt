@@ -723,4 +723,22 @@ class SessionCoordinatorTest {
 
         assertThat(coordinator.currentSessionState.value).isEqualTo(SessionState.Running)
     }
+
+    @Test
+    fun `detach clears old queue before a new session drains`() = runTest {
+        val coordinator = SessionCoordinator(TestScope(StandardTestDispatcher(testScheduler)))
+        val blocked = fakeSession(MutableStateFlow(SessionState.Running))
+        coordinator.attachSession(blocked)
+        advanceUntilIdle()
+        coordinator.submit("stale")
+        coordinator.detachSession()
+
+        val fresh = fakeSession(MutableStateFlow(SessionState.Idle))
+        coordinator.attachSession(fresh)
+        coordinator.enqueue("fresh")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { fresh.submit(Op.UserInput("stale")) }
+        coVerify(exactly = 1) { fresh.submit(Op.UserInput("fresh")) }
+    }
 }
