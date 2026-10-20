@@ -57,7 +57,6 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         }
     }
     override suspend fun feedbackTest(durationMs: Long): ai.closepaw.chatgpt.operations.OperationResult {
-        val started = SystemClock.elapsedRealtime()
         val service = AgentService.instance
         val initial = withContext(Dispatchers.Main) { reason(service) }
         if (initial != null || service == null) return ai.closepaw.chatgpt.operations.OperationResult(
@@ -66,32 +65,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val initialFrame = capture()
         if (initialFrame.reason != null) return ai.closepaw.chatgpt.operations.OperationResult(success = false,
             summary = initialFrame.reason, data = buildJsonObject { put("reason_code", initialFrame.reason) })
-        var stop = "duration_completed"
-        try {
-            activity(true)
-            val attached = withContext(Dispatchers.Main) { service.isRemoteControlActivityAttached() }
-            if (!attached) stop = "indicator_not_attached"
-            else {
-                val until = SystemClock.elapsedRealtime() + durationMs.coerceIn(1, 5_000)
-                while (SystemClock.elapsedRealtime() < until) {
-                    val refusal = withContext(Dispatchers.Main) { reason(service) }
-                    if (refusal != null) { stop = refusal; break }
-                    kotlinx.coroutines.delay(100)
-                }
-            }
-        } finally {
-            withContext(kotlinx.coroutines.NonCancellable) { activity(false) }
-        }
-        val removed = withContext(Dispatchers.Main) { !service.isRemoteControlActivityAttached() }
-        return ai.closepaw.chatgpt.operations.OperationResult(success = stop == "duration_completed",
-            summary = "Indicator test ended: $stop; human touch and appearance require independent confirmation.",
-            data = buildJsonObject {
-                put("reason_code", stop); put("state", if (stop == "duration_completed") "completed" else "interrupted")
-                put("elapsed_ms", SystemClock.elapsedRealtime() - started)
-                put("indicator_removed", removed)
-                put("action_attempted", false); put("human_touch_verified", false)
-            })
+        return ControlFeedbackTest({ SystemClock.elapsedRealtime() },
+            { withContext(Dispatchers.Main) { reason(service) } }, ::activity,
+            { withContext(Dispatchers.Main) { service.isRemoteControlActivityAttached() } }).run(durationMs)
     }
+
     override suspend fun captureAfter(frame: ControlFrame, input: JsonObject): ControlFrame {
         val service = AgentService.instance ?: return capture()
         return ControlPostObserver({ SystemClock.elapsedRealtime() }, service.remoteControlChanges::version,

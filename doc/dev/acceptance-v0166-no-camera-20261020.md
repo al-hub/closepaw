@@ -72,3 +72,19 @@ Maps launch unknown outcome was resolved only by a fresh observation. Calculator
 Build/test evidence remains the released version's CI:2,596 Android tests/0 failures/errors/skips; no rebuild needed for documentation/log capture. [Earlier implementation/release evidence](remote-control-feedback-latency.md).
 
 No camera, note input, alarm mutation, message send, VPN reconfiguration, reconnect registration or APK install occurred. Only the synthetic Gemini test question was sent; runtime app access was temporarily expanded and exactly restored.
+
+
+## Follow-up human-assisted acceptance, 10:22–10:28 KST
+
+No camera was used. User confirmed the cyan border and “ClosePaw 자동 제어” text both appeared; later only calculator0/cursor remained, confirming removal. User locked the phone: a fresh `android.screen.observe` returned `device_locked`, `action_attempted=false`. No locked-device mutation was submitted, so this verifies read refusal only, not action-boundary refusal. After user unlock a fresh observation succeeded on `com.sec.android.app.popupcalculator`, input0, without reconnection. User manually pressed2 and a fresh observation independently showed2.
+
+A human touch during indication could not be synchronized: the user saw only a brief flash and automatic1. Calculator input21 confirmed the automatic click; this does not establish overlay touch pass-through. A later Home action completed normally; no lock overlapped it. Execution interruption remains unverified. No cancellation or service-stop test was performed. User ended this acceptance session and then authorized a follow-up improvement, signed release, installation and test-readiness check.
+
+| Task | Outcome | Device total ms |
+| --- | --- | ---: |
+| `58c4f545-e3c2-4896-871a-bbe0d90d2d26` Home | launcher observed | 1369 |
+| `1b66897b-6993-4736-9208-920ac8557706` calculator launch | native acknowledged, post-read secure_window_changed; fresh observation independently resolved calculator, no replay | 2079 |
+| `6d1e0d09-5d7e-4fb5-885e-f2480b5ca892` calculator1 | input21 observed | 548 |
+| `bb9f2849-b3af-4418-8f24-09ce6ea65be6` Home | launcher observed; interruption NOT exercised | 1635 |
+
+Updated acceptance: appearance/removal PASS by user report; idle human input PASS by report plus observation; locked read refusal/unlocked recovery PASS; touch while indicator visible and deliberate execution interruption UNVERIFIED. Camera EXCLUDED; Notes/Clock HOLD. Earlier matrix entries remain a record of their original session, not the latest verdict.
