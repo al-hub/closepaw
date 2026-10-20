@@ -107,6 +107,9 @@ class AccessibilityGestureInjector(
         try {
             return withTimeoutOrNull(GESTURE_TIMEOUT_MS) {
                 suspendCancellableCoroutine { continuation ->
+                    continuation.invokeOnCancellation {
+                        service.mainExecutor.execute { runCatching { visualizer?.clear() } }
+                    }
                     val callback =
                             object : AccessibilityService.GestureResultCallback() {
                                 override fun onCompleted(gestureDescription: GestureDescription?) {
@@ -136,6 +139,7 @@ class AccessibilityGestureInjector(
                 }
             }
                     ?: run {
+                        runCatching { visualizer?.clear() }
                         Log.w(TAG, "Gesture timed out after ${GESTURE_TIMEOUT_MS}ms")
                         ActionResult.Failure("Gesture timed out after ${GESTURE_TIMEOUT_MS}ms")
                     }
