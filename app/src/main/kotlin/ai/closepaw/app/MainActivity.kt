@@ -285,7 +285,11 @@ class MainActivity : ComponentActivity() {
                     },
                     isAccessibilityEnabled = AgentService.instance != null,
                     isOverlayEnabled = Settings.canDrawOverlays(this@MainActivity),
-                    onAccessibilityClick = { openAccessibilitySettings(this@MainActivity) },
+                    onAccessibilityClick = {
+                        recoveryReport = AgentService.instance?.controlRecoveryReport()
+                            ?: "접근성 서비스가 연결되지 않았습니다. 접근성 설정에서 ClosePaw를 켜세요."
+                        showControlRecovery = true
+                    },
                     onOverlayClick = { openOverlaySettings(this@MainActivity) },
                     repairModel = repairModel,
                     onFixBattery = {
@@ -302,11 +306,6 @@ class MainActivity : ComponentActivity() {
                     memoryStore = settingsMemoryStore,
                     memoryEditGate = memoryEditGate,
                 )
-                androidx.compose.material3.TextButton(onClick = {
-                    recoveryReport = AgentService.instance?.controlRecoveryReport()
-                        ?: "접근성 서비스가 연결되지 않았습니다. Android 접근성 설정을 확인하세요."
-                    showControlRecovery = true
-                }) { Text("연결 및 제어 진단") }
                 if (showControlRecovery) {
                     AlertDialog(
                         onDismissRequest = { showControlRecovery = false },
