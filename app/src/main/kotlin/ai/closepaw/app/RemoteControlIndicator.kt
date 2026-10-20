@@ -45,18 +45,19 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
                 add(decoration, WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
                     Gravity.TOP or Gravity.START, 0, 0, touchable = false)
                 border = decoration
-                if (!testOnly) {
-                add(button("✕", "AI 제어 완전 종료") { session.end() }, dp(48), dp(48), Gravity.TOP or Gravity.RIGHT, dp(12), dp(38))
-                pause = button("⏸", "AI 제어 일시정지") {
-                    when (session.state) {
-                        ControlSession.State.PAUSED -> resume()
-                        ControlSession.State.WAITING -> { session.userResponded(); resume() }
-                        else -> session.pause()
-                    }
-                }.also { add(it, dp(56), dp(56), Gravity.BOTTOM or Gravity.RIGHT, dp(12), dp(80)) }
-                }
+                if (!testOnly) add(button("✕", "AI 제어 완전 종료") { session.end() },
+                    dp(48), dp(48), Gravity.TOP or Gravity.RIGHT, dp(12), dp(38))
                 decoration.post(guard)
             } catch (error: Exception) { hide(); session.pause(); throw error }
+        }
+        if (!testOnly && session.state != ControlSession.State.REOBSERVING && pause == null) {
+            pause = button("⏸", "AI 제어 일시정지") {
+                when (session.state) {
+                    ControlSession.State.PAUSED -> { removePause(); resume() }
+                    ControlSession.State.WAITING -> { removePause(); session.userResponded(); resume() }
+                    else -> session.pause()
+                }
+            }.also { add(it, dp(56), dp(56), Gravity.BOTTOM or Gravity.RIGHT, dp(12), dp(80)) }
         }
         pause?.apply {
             text = when (session.state) { ControlSession.State.PAUSED -> "▶"; ControlSession.State.WAITING -> "✓"; else -> "⏸" }
@@ -67,6 +68,11 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
             }
         }
         border?.invalidate()
+    }
+    /** Release the touched overlay window before observing the app; the emergency X stays available. */
+    private fun removePause() {
+        val attached = pause ?: return
+        manager.removeViewImmediate(attached); windows.remove(attached); pause = null
     }
     private fun placePause() {
         val button = pause ?: return

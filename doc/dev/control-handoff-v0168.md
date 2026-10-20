@@ -22,7 +22,7 @@ The launch refusal combined policy denial with a volatile `listedPackages` set: 
 
 Overlay uses a non-touchable, non-focusable full-screen decoration plus two small touchable, non-focusable windows. Controls are 48/56dp with TalkBack labels; target actions whose center falls on them are refused. Pause position moves above an observed IME. Actual screenshot security probes are labelled separately from accessibility tree reads; no images/text are persisted. Target rings show native action coordinates; scroll and result feedback use fixed metadata-only labels. Waiting animation is ~4 seconds/cycle, disabled by system animator scale or touch exploration. Screen-off/lock hides GUI and pauses; locked UI remains unsupported.
 
-Cancel is cooperative: already-completed external work is not undone. Resume performs a fresh security/identity capture, returns to waiting for a NEW command, and never continues/replays the interrupted command.
+Cancel is cooperative: already-completed external work is not undone. Resume removes the touched play/confirm window during its serialized fresh capture, keeping emergency X available, so the control window cannot itself become the observation target. Resume performs a fresh security/identity capture, returns to waiting for a NEW command, and never continues/replays the interrupted command.
 
 ## Validation status
 
