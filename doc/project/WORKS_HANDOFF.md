@@ -1,5 +1,16 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## v0.1.66 expanded camera-excluded acceptance — logs secured, residuals HOLD (2026-10-20)
+
+- Installed0.1.66/code67 confirmed. Camera excluded by corporate policy; Notes/Clock fixes remain HOLD.
+- Executed: Chrome visible-screen read; Kakao first-screen read; Maps empty-field input/public station result selection; one Gemini synthetic24-line question with all numbered lines/end marker collected and bottom screenshot verified; generic Gemini scroll after temporary grant; Termux exit0. Earlier same-version calculator click/tap result7 reused.
+- Persisted Gemini stages completed10,285ms, reply collection4,235ms. Generic scroll547ms. Home/app transitions and connector wall time remain slower; no matched speedup percentage.
+- Residuals: Samsung Internet content_missing; earlier app-list timeout; two model-popup taps and final calculator-return refused screen_changed before effect; Maps launch post-observation secure_window_changed/unknown resolved by observation without replay; two transient transport timeouts recovered without re-registration.
+- Temporary app access revision5 rolled back to revision6; independent readback exactly matches original configuration. No camera/notes/alarm/message action.
+- User did not directly observe the indicator. Visual appearance/removal, physical-touch, foreign-overlay, cancellation/interrupt and deliberate lock/secure-window device acceptance remain UNVERIFIED. Do not mark the whole acceptance suite passed.
+- [Executed matrix, exact task IDs/timings and future instrumentation plan](../dev/acceptance-v0166-no-camera-20261020.md) and [redacted structured logs](../dev/evidence/v0166-no-camera-20261020.json). No raw private screen strings/images or app-private logcat published; source/release unchanged.
+
+
 ## v0.1.66/code67 delivered and installed — camera-excluded calculator/tap accepted; residuals HOLD (2026-10-20)
 
 - User put existing Samsung Notes input and complete Clock alarm enumeration findings on **HOLD**. Prior0.1.65 camera save, calculator discount, Kakao first screen, Maps search and cross-app return evidence is retained; do not replay the camera or re-open HOLD work.
