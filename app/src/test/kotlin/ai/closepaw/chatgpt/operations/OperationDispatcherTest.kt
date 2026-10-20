@@ -12,6 +12,23 @@ class OperationDispatcherTest {
         put("operation_id", id); put("request_id", request); put("operation_version", 1); put("schema_hash", operationHash(canonicalJson(schema)))
         put("input", buildJsonObject { put("command", command) })
     }
+    @Test fun queuedCommandCannotRunAfterUserPauseOrNewSession() = kotlinx.coroutines.test.runTest {
+        var epoch = 1L; var effects = 0
+        val registry = OperationRegistry()
+        registry.register(OperationDescriptor("ui", "UI", inputSchema = schema, readOnly = false), object : OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult { effects++; return OperationResult() }
+        })
+        val file = File.createTempFile("queued-control", ".json").apply { delete() }
+        try {
+            val dispatcher = OperationDispatcher(registry, OperationTaskStore(file), this, operationEpoch = { epoch })
+            val accepted = dispatcher.execute(args("ui")); epoch++
+            testScheduler.runCurrent()
+            val result = dispatcher.getTask(buildJsonObject { put("task_id", accepted.getValue("task_id")) })
+            assertEquals("failed", result["state"]?.jsonPrimitive?.content)
+            assertEquals("control_session_changed_before_start", result["summary"]?.jsonPrimitive?.content)
+            assertEquals(0, effects)
+        } finally { file.delete() }
+    }
     @Test fun queryCannotInvokeWrites() {
         val registry = OperationRegistry()
         registry.register(OperationDescriptor("shell", "Shell", inputSchema = schema, readOnly = false), object: OperationHandler {

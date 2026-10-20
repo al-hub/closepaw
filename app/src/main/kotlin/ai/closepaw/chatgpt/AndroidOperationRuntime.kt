@@ -217,6 +217,9 @@ internal class AndroidOperationRuntime(
             }
         })
         dispatcher = OperationDispatcher(registry, store, scope,
+            operationEpoch = { id -> if (id in setOf("android.ui.action", "android.control.feedback_test",
+                    "app.screen.read", "gemini.draft.insert", "gemini.question.ask"))
+                AgentService.instance?.remoteControlSession?.epoch ?: -1L else 0L },
             executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled || settings.genericControlEnabled },
             operationAllowed = { id -> when(id) {
                 GenericControlOperations.ACTION, GenericControlOperations.CONFIGURE, GenericControlOperations.FEEDBACK_TEST,
