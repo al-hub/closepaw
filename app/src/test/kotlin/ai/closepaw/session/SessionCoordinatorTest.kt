@@ -741,4 +741,17 @@ class SessionCoordinatorTest {
         coVerify(exactly = 0) { fresh.submit(Op.UserInput("stale")) }
         coVerify(exactly = 1) { fresh.submit(Op.UserInput("fresh")) }
     }
+
+    @Test
+    fun `clearSession without attached session discards queued input`() = runTest {
+        val coordinator = SessionCoordinator(TestScope(StandardTestDispatcher(testScheduler)))
+        coordinator.enqueue("must-not-replay")
+        coordinator.clearSession()
+
+        val fresh = fakeSession(MutableStateFlow(SessionState.Idle))
+        coordinator.attachSession(fresh)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { fresh.submit(Op.UserInput("must-not-replay")) }
+    }
 }
