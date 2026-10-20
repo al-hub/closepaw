@@ -54,6 +54,11 @@ class RemoteControlPanelRenderingTest {
                     assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
                 }
                 bitmap.recycle()
+                // UTP uninstalls the target after execution. Export only synthetic render evidence
+                // to a shell-owned public folder before that cleanup removes app-specific files.
+                val command = "mkdir -p /sdcard/Download/closepaw-premium-ux-qa && cp ${folder.absolutePath}/*.png /sdcard/Download/closepaw-premium-ux-qa/"
+                android.os.ParcelFileDescriptor.AutoCloseInputStream(
+                    instrumentation.uiAutomation.executeShellCommand(command)).use { it.readBytes() }
             }
         }
     }

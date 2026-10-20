@@ -45,7 +45,7 @@ jobs:
           script: |
             ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest --stacktrace
             mkdir -p ui-render-evidence
-            adb pull /sdcard/Android/data/ai.closepaw/files/premium-ux-qa ui-render-evidence
+            adb pull /sdcard/Download/closepaw-premium-ux-qa ui-render-evidence
       - name: Upload UI test and rendered-layout evidence
         if: always()
         uses: actions/upload-artifact@v4
