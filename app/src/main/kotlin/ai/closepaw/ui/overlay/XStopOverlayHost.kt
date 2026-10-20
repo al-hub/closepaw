@@ -4,7 +4,6 @@ import android.accessibilityservice.AccessibilityService
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
-import android.os.SystemClock
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -73,22 +72,25 @@ internal class XStopOverlayHost(
                     touchY = event.rawY
                     windowX = lp.x
                     windowY = lp.y
-                    downAt = SystemClock.uptimeMillis()
+                    downAt = event.eventTime
                     policy.onDown(event.rawX, event.rawY, downAt)
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     policy.onMove(event.rawX, event.rawY)
-                    if (SystemClock.uptimeMillis() - downAt >= 450L) {
+                    if (event.eventTime - downAt >= 450L) {
                         lp.x = windowX + (event.rawX - touchX).toInt()
                         lp.y = windowY + (event.rawY - touchY).toInt()
                         clamp(lp)
-                        if (view === button) manager.updateViewLayout(button, lp)
+                        if (view === button) {
+                            try { manager.updateViewLayout(button, lp) }
+                            catch (_: IllegalArgumentException) { /* Window detached mid-drag. */ }
+                        }
                     }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    val result = policy.onUp(event.rawX, event.rawY, SystemClock.uptimeMillis())
+                    val result = policy.onUp(event.rawX, event.rawY, event.eventTime)
                     if (result == XHandleGesturePolicy.Result.TERMINATE) {
                         onStop()
                     } else {
