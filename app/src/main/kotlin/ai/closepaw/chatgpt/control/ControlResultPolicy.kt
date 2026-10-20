@@ -13,7 +13,7 @@ internal object ControlResultPolicy {
         val matching = after.nodes.filter { it.resourceId == node?.resourceId && it.bounds == node?.bounds &&
             it.className == node?.className }
         val target = matching.singleOrNull()
-        if (action == "type") return Verdict(target?.text == input["text"]?.jsonPrimitive?.content, "input_unconfirmed", true)
+        if (action == "type") return Verdict(after.packageName == before.packageName && target?.text == input["text"]?.jsonPrimitive?.content, "input_unconfirmed", true)
         if (action in setOf("click", "tap") && node?.checkable == true) return Verdict(
             after.packageName == before.packageName && target?.checkable == true && target.checked != node.checked,
             "checked_state_unconfirmed", true)

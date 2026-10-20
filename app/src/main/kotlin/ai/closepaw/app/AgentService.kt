@@ -256,6 +256,7 @@ class AgentService : AccessibilityService() {
         registerDebugStopReceiverIfNeeded(this, stopReceiver)
         registerDebugExecReceiverIfNeeded(this, debugExecReceiver)
         registerDebugMobileActionReceiverIfNeeded(this, debugMobileActionReceiver)
+        showRemoteControlActivity()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

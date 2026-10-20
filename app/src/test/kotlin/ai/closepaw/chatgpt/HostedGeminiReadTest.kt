@@ -27,6 +27,7 @@ class HostedGeminiReadTest {
 
     @Before fun setup() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        every { service.remoteControlSession } returns ai.closepaw.chatgpt.control.ControlSession()
         mockkConstructor(AccessibilityPlatform::class, AndroidGeminiDraftUi::class, AccessibilityScreenshotCapturer::class)
         every { anyConstructed<AccessibilityPlatform>().hasRequiredPermissions() } returns true
         every { anyConstructed<AccessibilityPlatform>().getCurrentPackageName() } returns google
@@ -52,6 +53,16 @@ class HostedGeminiReadTest {
     }
 
     private fun read() = AndroidReadAppTool({ service }, 0, BrowserScreenshotOcr { error("no image") }).read("gemini")
+
+    @Test fun userPauseOrStopPreventsDirectReadToolLaunchAndCapture() {
+        for (ended in listOf(false, true)) {
+            val session = ai.closepaw.chatgpt.control.ControlSession().apply { activateLegacy(); if (ended) end() else pause() }
+            every { service.remoteControlSession } returns session
+            assertThat(read().structured["status"]!!.jsonPrimitive.content).isEqualTo("failed")
+        }
+        coVerify(exactly = 0) { anyConstructed<AccessibilityPlatform>().launchApp(any()) }
+        coVerify(exactly = 0) { anyConstructed<AccessibilityScreenshotCapturer>().captureIfEnabled(any(), any()) }
+    }
 
     @Test fun verifiedGoogleHostedScreenReachesTheSameSingleCaptureReadPath() {
         val result = read().structured

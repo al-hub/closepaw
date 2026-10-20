@@ -11,11 +11,11 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         private set
     @Volatile var id: String = UUID.randomUUID().toString()
         private set
-    @Volatile var explicit = false
+    @Volatile var explicit = initial != "idle"
         private set
     var changed: () -> Unit = {}
     var interrupt: () -> Unit = {}
-    var label: String = "AI 제어 준비"
+    var label: String = if (state == State.PAUSED) "사용자 제어 중 · 일시정지" else "AI 제어 준비"
         private set
     @Synchronized fun start(): Boolean {
         if (state !in setOf(State.IDLE, State.ENDED)) return false

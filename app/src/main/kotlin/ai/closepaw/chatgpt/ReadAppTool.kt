@@ -56,10 +56,16 @@ internal class AndroidReadAppTool(
             )
 
         val controlSession = service.remoteControlSession
+        controlSession.refusal(controlSession.id, true)?.let {
+            return@runBlocking failure(code = it, summary = "User control has priority.")
+        }
+        controlSession.activateLegacy()
         val controlEpoch = controlSession.epoch
         fun controlAllowed() = controlSession.epoch == controlEpoch && controlSession.refusal(controlSession.id, true) == null
         if (!controlAllowed()) return@runBlocking failure(code = "control_session_blocked", summary = "User control has priority.")
 
+        try {
+        withContext(Dispatchers.Main) { service.showRemoteControlActivity() }
         val platform = AccessibilityPlatform(
             service = service,
             config = SessionConfig(),
@@ -122,6 +128,7 @@ internal class AndroidReadAppTool(
         )
 
         if (!controlAllowed()) return@runBlocking failure(code = "control_session_blocked", summary = "User control has priority.")
+        controlSession.feedback("접근성 정보 읽는 중")
         val accessibility = withContext(Dispatchers.Main) {
             readTargetApplicationText(service, readForeground.packageName, readForeground.windowId)
         }
@@ -153,6 +160,7 @@ internal class AndroidReadAppTool(
             config = screenshotConfig,
             traceRecorder = NoopTraceRecorder,
         )
+        controlSession.feedback("화면 캡처 중")
         val screenshot = screenshotCapturer.captureIfEnabled(
             windowId = null,
             enabled = true,
@@ -288,6 +296,9 @@ internal class AndroidReadAppTool(
             },
             imageMimeType = image?.mimeType,
         )
+        } finally {
+            controlSession.feedback("화면 읽기 종료 · 결과 확인")
+        }
     }
 
     private data class ReadForeground(val packageName: String, val windowId: Int? = null)

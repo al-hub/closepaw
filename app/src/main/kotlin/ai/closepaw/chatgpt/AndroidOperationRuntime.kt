@@ -54,6 +54,7 @@ internal class AndroidOperationRuntime(
                 block()
             } finally {
                 session.interrupt = {}
+                session.feedback("작업 종료 · 결과 확인")
                 withContext(NonCancellable + Dispatchers.Main) { service.hideRemoteControlActivity() }
             }
         }

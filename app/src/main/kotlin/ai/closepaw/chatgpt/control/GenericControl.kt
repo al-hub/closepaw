@@ -62,7 +62,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         current = null
         chainStarted = now(); chainActions = 0; noProgress = 0
         if (!allowed()) return failure("generic_control_disabled")
-        return publish(port.capture(), filter)
+        val result = publish(port.capture(), filter)
+        port.feedback(if (result.success) "접근성 확인 완료 · 다음 명령 대기" else "화면 확인 실패 · 재관찰 필요")
+        return result
     }
     private fun publish(frame: ControlFrame, filter: String = ""): OperationResult {
         if (!allowed()) { current = null; return failure("generic_control_disabled") }
@@ -149,7 +151,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val resultReason = if (effect.attempted && effect.acknowledged && !verdict.confirmed) verdict.reason else effect.reason
         port.feedback(if (verified) "화면 변화 확인 · 다음 단계 대기" else "결과 미확인 · 재관찰 필요")
         return OperationResult(success = verified, summary = if (verified)
-            "Observed action postcondition confirmed; inspect observation for the wider task result." else resultReason,
+            if (verdict.goalVerified) "Observed action postcondition confirmed." else
+                "Screen transition observed; the wider task result remains unverified." else resultReason,
             data = buildJsonObject {
                 put("observation_age_ms", (started - observation.at).coerceAtLeast(0))
                 put("validation_scope", GenericControlActionPolicy.validationScope(action))

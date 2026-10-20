@@ -26,7 +26,7 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
     fun ownsWindow(id: Int) = id >= 0 && windows.any { owns(it, id) }
     fun controlCovers(rect: Rect): Boolean = windows.filter { it !== border }.any {
         val point = IntArray(2); it.getLocationOnScreen(point)
-        Rect.intersects(rect, Rect(point[0], point[1], point[0] + it.width, point[1] + it.height))
+        Rect(point[0], point[1], point[0] + it.width, point[1] + it.height).contains(rect.centerX(), rect.centerY())
     }
     fun isAttached() = border?.isAttachedToWindow == true
     private fun unlocked() = !service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
