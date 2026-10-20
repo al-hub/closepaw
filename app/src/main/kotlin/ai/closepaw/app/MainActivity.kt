@@ -119,6 +119,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var sessionHistoryManager: SessionHistoryManager
     private lateinit var viewModel: ChatViewModel
     private var showSettings by mutableStateOf(false)
+    private var showControlRecovery by mutableStateOf(false)
+    private var recoveryReport by mutableStateOf("")
     private var pendingSettingsDeepLink by mutableStateOf<ai.closepaw.ui.chat.SettingsDeepLink?>(null)
     private lateinit var onboardingStore: OnboardingStore
     private lateinit var authStore: AuthStore
@@ -283,7 +285,11 @@ class MainActivity : ComponentActivity() {
                     },
                     isAccessibilityEnabled = AgentService.instance != null,
                     isOverlayEnabled = Settings.canDrawOverlays(this@MainActivity),
-                    onAccessibilityClick = { openAccessibilitySettings(this@MainActivity) },
+                    onAccessibilityClick = {
+                        recoveryReport = AgentService.instance?.controlRecoveryReport()
+                            ?: "접근성 서비스가 연결되지 않았습니다. 접근성 설정에서 ClosePaw를 켜세요."
+                        showControlRecovery = true
+                    },
                     onOverlayClick = { openOverlaySettings(this@MainActivity) },
                     repairModel = repairModel,
                     onFixBattery = {
@@ -300,6 +306,25 @@ class MainActivity : ComponentActivity() {
                     memoryStore = settingsMemoryStore,
                     memoryEditGate = memoryEditGate,
                 )
+                if (showControlRecovery) {
+                    AlertDialog(
+                        onDismissRequest = { showControlRecovery = false },
+                        title = { Text("연결 및 제어 진단") },
+                        text = { Text(recoveryReport) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                val service = AgentService.instance
+                                val restored = service?.restorePausedControlPanel() == true
+                                recoveryReport = (service?.controlRecoveryReport()
+                                    ?: "접근성 서비스가 연결되지 않았습니다. Android 접근성 설정을 확인하세요.") +
+                                    if (restored) "\n제어 패널 복원 요청 성공" else "\n복원 불가: 서비스/화면/일시정지 상태 확인 필요"
+                            }) { Text("패널 복원") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showControlRecovery = false; openAccessibilitySettings(this@MainActivity) }) { Text("접근성 설정") }
+                        }
+                    )
+                }
                 pendingGoalForConfirmation?.let { goal ->
                     AlertDialog(
                         onDismissRequest = { pendingGoalForConfirmation = null },
