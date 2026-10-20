@@ -69,13 +69,17 @@ internal class XStopOverlayHost(
         var downAt = 0L
         var hasMoved = false
         fun updatePosition(rawX: Float, rawY: Float): Boolean {
-            val targetX = windowX + (rawX - touchX).toInt()
-            val targetY = windowY + (rawY - touchY).toInt()
+            val metrics = service.resources.displayMetrics
+            val target = XDragPositionPolicy.position(
+                startX = windowX, startY = windowY,
+                deltaX = rawX - touchX, deltaY = rawY - touchY,
+                screenWidth = metrics.widthPixels, screenHeight = metrics.heightPixels,
+                handleSize = sizePx, topInset = dp(24), bottomInset = dp(24),
+            )
             val oldX = lp.x
             val oldY = lp.y
-            lp.x = targetX
-            lp.y = targetY
-            clamp(lp)
+            lp.x = target.x
+            lp.y = target.y
             if (oldX == lp.x && oldY == lp.y) return false
             if (view !== button) return false
             return try {
