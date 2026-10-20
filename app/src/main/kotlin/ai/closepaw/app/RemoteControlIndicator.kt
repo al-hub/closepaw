@@ -28,8 +28,8 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
         val node = view.createAccessibilityNodeInfo() ?: return false
         return try { node.windowId == id } finally { node.recycleCompat() }
     }
-    fun ownsWindow(id: Int) = id >= 0 && windows.any { owns(it, id) }
-    fun controlCovers(rect: Rect): Boolean = windows.filter { it !== border }.any {
+    fun ownsWindow(id: Int) = id >= 0 && (windows.any { owns(it, id) } || xStopOverlay.ownsWindow(id))
+    fun controlCovers(rect: Rect): Boolean = xStopOverlay.covers(rect) || windows.filter { it !== border }.any {
         val point = IntArray(2); it.getLocationOnScreen(point)
         Rect.intersects(Rect(point[0], point[1], point[0] + it.width, point[1] + it.height), rect)
     }
