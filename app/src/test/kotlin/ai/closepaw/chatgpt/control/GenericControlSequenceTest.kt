@@ -44,6 +44,8 @@ class GenericControlSequenceTest {
         assertTrue(result.summary, result.success)
         assertEquals(9, port.writes)
         assertEquals(9, result.data.getValue("completed_steps").jsonPrimitive.int)
+        assertEquals("monotonic_process", result.data.getValue("clock_domain").jsonPrimitive.content)
+        assertTrue(result.data.getValue("elapsed_ms").jsonPrimitive.long >= 0L)
         assertEquals(JsonPrimitive(false), result.data["goal_verified"])
     }
 
@@ -53,6 +55,7 @@ class GenericControlSequenceTest {
         assertFalse(result.success)
         assertEquals("control_session_changed", result.data["reason_code"]?.jsonPrimitive?.content)
         assertEquals(1, port.writes)
+        assertEquals("monotonic_process", result.data.getValue("clock_domain").jsonPrimitive.content)
     }
 
     @Test fun ambiguousNodeFailsBeforeAnyClick() = runBlocking {
