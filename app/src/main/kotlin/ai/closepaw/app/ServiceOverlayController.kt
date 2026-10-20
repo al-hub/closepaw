@@ -99,11 +99,15 @@ class ServiceOverlayController(
         }
         this.onUserResponse = { callId, response ->
             if (stateHolder.onUserResponseSent(callId)) {
+                // The reply changes WaitingFor* → Running; replace the approval/input
+                // capsule with X immediately instead of waiting for an unrelated event.
+                applyVisibility()
                 this@ServiceOverlayController.onUserResponse(callId, response)
             }
         }
         this.onApprovalResponse = { callId, decision, scope, packageName ->
             if (stateHolder.onApprovalResolved(callId)) {
+                applyVisibility()
                 this@ServiceOverlayController.onApprovalResponse(callId, decision, scope, packageName)
             }
         }
