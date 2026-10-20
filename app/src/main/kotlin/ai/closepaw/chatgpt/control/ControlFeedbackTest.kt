@@ -29,6 +29,7 @@ internal class ControlFeedbackTest(
                 while (now() < until) {
                     val reason = refusal()
                     if (reason != null) { stop = reason; break }
+                    if (!attached()) { stop = "indicator_removed_during_test"; break }
                     delay(minOf(100, until - now()).coerceAtLeast(1))
                 }
                 // Do not lose a lock/consent change at the final interval boundary.

@@ -55,4 +55,13 @@ class ControlFeedbackTestTest {
         assertEquals("indicator_not_attached", missing.data["reason_code"]?.jsonPrimitive?.content)
         assertTrue(testScheduler.currentTime < 300)
     }
+    @Test fun serviceSideIndicatorRemovalIsInterruptionNotSuccessfulDwell() = runTest {
+        var showing = false
+        val result = ControlFeedbackTest({ testScheduler.currentTime }, { null },
+            { showing = it }, { showing && testScheduler.currentTime < 350 }).run(5_000)
+        assertFalse(result.success); assertFalse(showing)
+        assertEquals("indicator_removed_during_test", result.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(400L, testScheduler.currentTime)
+    }
+
 }
