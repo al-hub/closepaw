@@ -132,10 +132,17 @@ class AgentService : AccessibilityService() {
             val epoch = remoteControlSession.epoch
             val started = android.os.SystemClock.elapsedRealtime()
             val safe = try {
-                val result = remoteResumeCheck?.invoke() == true
-                recordResumeDiagnostic(if (result) "safe" else "screen_check_failed",
-                    android.os.SystemClock.elapsedRealtime() - started)
-                result
+                val check = remoteResumeCheck
+                val result = if (check == null) null else
+                    kotlinx.coroutines.withTimeoutOrNull(5_000L) { check() }
+                val code = when {
+                    check == null -> "resume_check_unavailable"
+                    result == null -> "screen_check_timeout"
+                    result -> "safe"
+                    else -> "screen_check_failed"
+                }
+                recordResumeDiagnostic(code, android.os.SystemClock.elapsedRealtime() - started)
+                result == true
             } catch (e: kotlinx.coroutines.CancellationException) {
                 recordResumeDiagnostic("cancelled", android.os.SystemClock.elapsedRealtime() - started)
                 throw e
