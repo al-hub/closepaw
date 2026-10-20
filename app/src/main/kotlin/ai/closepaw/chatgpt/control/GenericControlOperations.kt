@@ -31,7 +31,7 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                     data = buildJsonObject { put("reason_code", "ui_busy"); put("action_attempted", false) })
                 val started = System.nanoTime()
                 ControlDiagnostics.record(operation, "started", taskId = invocation.taskId)
-                return try { withTimeout(10_000) {
+                return try { withTimeout(if (operation == SEQUENCE) 25_000L else 10_000L) {
                     if (showActivity) {
                         session?.activateLegacy()
                         val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
@@ -123,6 +123,21 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                 } catch (e: IllegalArgumentException) { appFailure(if (e.message == "configuration_revision_changed") e.message!! else "configuration_invalid")
                 } catch (_: Exception) { appFailure("configuration_update_failed") }
             })
+        registry.register(OperationDescriptor(SEQUENCE,
+            "Run a bounded sequence of 2 to 9 exact-label native clicks only within one explicitly started control session. Requires session_id and an already authorized foreground app. Every step reobserves and revalidates foreground app/window, consent, epoch and fresh semantic node identity; ambiguous nodes and unconfirmed effects stop the sequence without retry. Never use for purchases, sending, deletion, authentication or other sensitive/irreversible operations. Returns observed step count, not a claim that the overall user goal was achieved. X stop cancels remaining steps.",
+            inputSchema = obj("labels" to buildJsonObject {
+                put("type", "array"); put("minItems", 2); put("maxItems", 9)
+                put("items", str(32, 1))
+            }, required = listOf("session_id", "labels")),
+            readOnly = false, permissions = listOf("accessibility", "generic_android_control"),
+            effects = listOf("bounded_foreground_click_sequence"), readiness = readiness),
+            handler(SEQUENCE, showActivity = true) { invocation ->
+                val labels = invocation.input["labels"]?.jsonArray?.map { it.jsonPrimitive.content }
+                    ?: emptyList()
+                GenericControlSequence(control, { session() }, { readiness().ready }).run(
+                    labels, invocation.input["session_id"]?.jsonPrimitive?.content
+                )
+            })
         registry.register(OperationDescriptor(ACTION,
             "Perform exactly one guarded action from a fresh observation, then return a new observation. Requires observation_id for ALL actions and node_id for click/tap/long_press/type/scroll/expand/collapse. click uses the native accessibility action. tap explicitly touches the center of the freshly revalidated clickable node, only on the default display with unchanged window geometry and no covering window; requires node_tap_available=true. No caller coordinates. type only fills an empty field; never overwrites. open_app requires an exact package from android.apps.list. Partial observations allow only Home/exact app launch; Back and node actions require a complete tree. Home/open_app validate foreground app/window identity; Back/node actions additionally require the unchanged content fingerprint. Inspect validation_scope. Policy, foreground owner, owned window set and consent are rechecked for every action. expand/collapse require the corresponding advertised native node action. No automatic fallback from click to tap, no model-specific logic, no automatic resend. Cancelled or unconfirmed gestures are unknown outcomes, not permission to retry. Native acknowledgement is not confirmation of the user's requested result. Inspect the new screen. Unknown outcomes require observation, never replay.",
             inputSchema = obj("observation_id" to str(128, 1), "action" to buildJsonObject {
@@ -141,6 +156,7 @@ internal class GenericControlOperations(private val control: GenericControl, pri
         const val SETTINGS = "android.control.settings"
         const val CONFIGURE = "android.control.configure"
         const val ACTION = "android.ui.action"
+        const val SEQUENCE = "android.ui.sequence"
         const val FEEDBACK_TEST = "android.control.feedback_test"
         private fun str(max: Int, min: Int = 0) = buildJsonObject { put("type", "string"); put("minLength", min); put("maxLength", max) }
         private fun obj(vararg fields: Pair<String, JsonObject>, required: List<String> = emptyList()) = buildJsonObject {
