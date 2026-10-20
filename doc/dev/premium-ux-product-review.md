@@ -83,3 +83,33 @@ Calculated relative-luminance contrast from explicit opaque sRGB token pairs (no
 ### Compact-mode acceptance boundary
 
 Automatic compact mode prioritizes Pause/Resume and Stop. The auxiliary Direct Control and waiting-response buttons can be hidden on constrained screens; Pause still transfers control safely, and physical Resume still requires fresh observation. Minimal mode also hides the visible status heading while retaining the full session status in the primary control accessibility description. Confirm that this tradeoff is understandable in rendered/physical acceptance; it is a deliberate safety fallback, not proof that every action remains visibly available at every viewport size.
+
+## Rendered evidence review — first CI renderer output
+
+The reviewer visually inspected the downscaled four-panel montage `panel-review-thumbnail.jpg`, generated from the actual CI native View rendering outputs `panel-dark-font-1.0.png`, `panel-dark-font-2.0.png`, `panel-light-font-1.0.png`, and `panel-light-font-2.0.png`. These are synthetic offscreen Android panel renders, not screenshots of a live accessibility overlay operating another app.
+
+| Observation | Verdict | Consequence |
+| --- | --- | --- |
+| Light and dark surfaces | Pass (render) | Matching blue/cyan palette, consistent corner shapes, restrained borders, clear reading contrast, and generous button areas are visible in both modes. |
+| Normal-size Korean labels | Pass (render) | Pause, Stop, Direct Control, Response Complete and Collapse are legible; row separation and button bounds are visually clear. |
+| 200% Pause label | Fail in first rendered evidence | Both light/dark output visibly truncate “일시정지” to “일시정...”. This matters because the primary safety action must remain explicit. Source-only large-font approval does not override this rendered defect. |
+| 200% heading and auxiliary buttons | Pass with limit (render) | Heading wraps across two lines and auxiliary button labels remain legible in this particular 288dp waiting-state panel. It does not establish all viewport/state/font combinations. |
+| Move affordance | Improvement opportunity | Heading is a drag handle in code/accessibility description, but has no clear visual grip. A subtle handle or short move instruction would improve discoverability; this does not block emergency control access. |
+
+### Render defect correction reviewed in source
+
+The subsequent `RemoteControlPanel` source uses two-line icon/Korean labels at fontScale ≥1.5, 14sp button type and 4dp padding for the primary Pause/Resume and Stop controls. This preserves the actual scaled font rather than disabling font scaling. `RemoteControlPanelRenderingTest` now asserts zero ellipsized lines for every visible button in the four render variants. The short-viewport test normalizes line breaks in label matching.
+
+**Correction verdict: Pass (source), corrected render Not Tested at this review.** Re-render the four images and visually verify the complete Korean primary label before changing the first-render failure to resolved. No other blocking visual issue was found in the available four images. Main app screens, the independent X, actual target/path animation, active/paused/stopped states and physical interaction were not present in this montage and remain outside this rendered evidence.
+
+## Final corrected-render verification
+
+The reviewer directly inspected `panel-corrected-thumbnail.jpg`, the downscaled montage of the four corrected native panel PNGs, for PR #123 head `308baea`. At 200% font scale, both dark and light panels now show the complete **일시정지** and **중단** labels beneath their icons with no ellipsis or clipping. At normal font scale, the same controls retain their single-line labels and consistent layout. The earlier primary-label rendered defect is **resolved — Pass (render)**. Light/dark alignment, readable contrast, rounded card consistency and generous visible button areas also pass for these four waiting-state panel renders.
+
+Engineering CI evidence reported for this head: Security CI `39393879629` succeeded; UI CI `39393879612` succeeded with six tests, zero-ellipsis checks and four PNGs, artifact `12251181863`. The Product UX reviewer independently verified the rendered images, not execution logs; the engineering report remains the authority for test execution details.
+
+**Final Product UX review conclusion:** source corrections and the available corrected panel renders pass this AI expert-role review. No outstanding blocking Product UX issue remains in the reviewed source/render scope. Physical human acceptance, live accessibility-overlay routing, actual TalkBack traversal, full app screens, IME/rotation/foldable operation and motion/performance remain **Not Tested** by this reviewer; #119 physical acceptance remains open.
+
+## Final executed delivery evidence (2026-10-20)
+
+PR #123 merged as96cc7013a4f00bb7e2c3c5c648360740785e33ae. PR Security39393879629/UI39393879612, main Security39394905098/UI39394905106 and Signed Release39395656700 all succeeded. Main reports:2632 JVM tests/0 failures/errors/skips; lint0 errors/119 warnings/4 info; Python55+8;6 native View UI tests and4 corrected render files. Actual normal/200% Light/Dark panel renders were reviewed; the large-font Pause truncation was fixed and guarded by no-ellipsis assertions. Original signer, manifest0.1.70/code71, source/tag, native runtimes, checksum and anonymous public APK download passed; proof artifact12252261387. [Full final evidence and acceptance matrix](premium-ai-human-ux-v0170.md). This final result supersedes initial pending-CI entries; local Gradle/pytest execution and an automated local RED were not available. Physical/human acceptance and measured device performance remain Not Tested.

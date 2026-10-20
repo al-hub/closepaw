@@ -1,0 +1,94 @@
+{
+  "version": "0.1.70",
+  "version_code": 71,
+  "repository": "al-hub/closepaw",
+  "pull_request": 123,
+  "source_commit": "96cc7013a4f00bb7e2c3c5c648360740785e33ae",
+  "review_type": "four independent AI expert roles; no human professional participation",
+  "pr_ci": {
+    "security": {
+      "run_id": 39393879629,
+      "status": "success"
+    },
+    "ui": {
+      "run_id": 39393879612,
+      "status": "success",
+      "tests": 6,
+      "failures": 0,
+      "rendered_variants": [
+        "dark/font1",
+        "dark/font2",
+        "light/font1",
+        "light/font2"
+      ],
+      "artifact_id": 12251181863,
+      "actual_render_review": "pass after correcting 200% Pause label truncation"
+    }
+  },
+  "android_jvm": {
+    "tests": 2632,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "errors": 0,
+    "warnings": 119,
+    "information": 4
+  },
+  "python": {
+    "termux_passed": 55,
+    "chatgpt_bridge_passed": 8
+  },
+  "minimum_text_contrast_ratio_rounded": 4.684,
+  "main_ci": {
+    "security_run_id": 39394905098,
+    "ui_run_id": 39394905106,
+    "status": "success",
+    "ui_artifact_id": 12251437266,
+    "test_artifact_note": "Parsed main XML:2632 tests,0 failures/errors/skips;119 lint warnings/4 info,0 errors"
+  },
+  "signed_release": {
+    "run_id": 39395656700,
+    "status": "success",
+    "public_verification_artifact_id": 12252261387,
+    "release_url": "https://github.com/al-hub/closepaw/releases/tag/v0.1.70",
+    "apk_url": "https://github.com/al-hub/closepaw/releases/download/v0.1.70/closepaw-aa-bridge.apk",
+    "apk_bytes": 116525229,
+    "apk_sha256": "97a35d89e34988a97c10caec05670361671cf6ac79b920f50c0b2b2e1c34fc42",
+    "manifest_package": "ai.closepaw",
+    "manifest_version": "0.1.70",
+    "manifest_version_code": 71,
+    "source_and_tag_verified": true,
+    "original_signer_continuity_verified": true,
+    "native_runtimes_verified": true,
+    "anonymous_download_verified": true,
+    "certificate_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+    "verified_apk_signature_scheme": "v2"
+  },
+  "installation": "not performed in this Work",
+  "physical_acceptance": "Not Tested",
+  "not_tested": [
+    "live overlay input routing and emergency X",
+    "physical Pause/Resume/Stop/Manual intervention",
+    "TalkBack traversal",
+    "IME/rotation/fold transitions",
+    "exact tap/path alignment on Galaxy",
+    "full-app screen-by-screen visual acceptance",
+    "long-session eye comfort",
+    "frame-time/CPU/GPU/battery measurements",
+    "stopped-result receipt retention during in-flight task teardown"
+  ],
+  "capability_boundary": {
+    "physical_injected_swipe": "real coordinates and duration, separate afterglow",
+    "semantic_scroll": "direction only; no invented contact/path",
+    "generic_drag_and_double_tap": "no new operations added"
+  },
+  "local_test_limit": "Gradle/SDK and pytest unavailable locally; Gradle download failed before tests, not an assertion RED",
+  "prior_visual_failure": {
+    "run_id": 39392695807,
+    "artifact_id": 12251030496,
+    "finding": "200% Pause label was ellipsized despite six passing tests",
+    "resolution": "two-line scaled Korean safety labels and no-ellipsis assertions, corrected render reviewed"
+  }
+}

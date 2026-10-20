@@ -51,3 +51,7 @@ Physical screenshot review, full font-scale/clipping assessment, animation frame
 ### Corrective re-review
 
 The two findings above were re-read against the final integrated source. Both are resolved at source/token-calculation level. No implementation files were changed by this re-review. Overall motion/design review result: **Source Pass; automated runtime validation pending CI; physical/human visual acceptance Not Tested.**
+
+## Final executed delivery evidence (2026-10-20)
+
+PR #123 merged as96cc7013a4f00bb7e2c3c5c648360740785e33ae. PR Security39393879629/UI39393879612, main Security39394905098/UI39394905106 and Signed Release39395656700 all succeeded. Main reports:2632 JVM tests/0 failures/errors/skips; lint0 errors/119 warnings/4 info; Python55+8;6 native View UI tests and4 corrected render files. Actual normal/200% Light/Dark panel renders were reviewed; the large-font Pause truncation was fixed and guarded by no-ellipsis assertions. Original signer, manifest0.1.70/code71, source/tag, native runtimes, checksum and anonymous public APK download passed; proof artifact12252261387. [Full final evidence and acceptance matrix](premium-ai-human-ux-v0170.md). This final result supersedes initial pending-CI entries; local Gradle/pytest execution and an automated local RED were not available. Physical/human acceptance and measured device performance remain Not Tested.

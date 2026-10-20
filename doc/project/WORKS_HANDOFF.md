@@ -1,5 +1,16 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## v0.1.70/code71 Premium UX published — physical acceptance OPEN (2026-10-20)
+
+- [PR #123](https://github.com/al-hub/closepaw/pull/123) merged. Calm Intelligence Light/Dark palette, ambient depth,56dp Korean Pause/Resume/Stop/Manual controls, independent top-right X, movable/collapsible panel, structured actual-state feedback, intended/actual target distinction, exact tap ripple and injected-path timing. Semantic scroll has direction only; no invented paths or new generic drag/double-tap operations.
+- Existing user-priority epochs, guarded physical resume, no-replay and consent/security/result verification remain. Intent preview obtains a NEW security verdict before final native epoch/freshness validation. Late state/label feedback is rejected; screen-off/user-control/cancellation clears effects.
+- Four independent **AI expert roles** completed design/source reviews. Actual4-panel render review found and fixed200% Pause truncation; corrected labels pass no-ellipsis tests and visual review. No human professional or physical-user acceptance is claimed.
+- PR Security39393879629/UI39393879612, main Security39394905098/UI39394905106, Signed Release39395656700 succeeded.2632 JVM tests/0 failures/errors/skips, Python55+8,6 native View UI tests,4 corrected renders; lint0 errors/119 warnings/4 info.
+- [Signed APK v0.1.70](https://github.com/al-hub/closepaw/releases/download/v0.1.70/closepaw-aa-bridge.apk):116,525,229 bytes; SHA-256 `97a35d89e34988a97c10caec05670361671cf6ac79b920f50c0b2b2e1c34fc42`. Anonymous public download, original signer, manifest/code71, native runtimes and immutable source/tag96cc7013 were independently verified (artifact12252261387).
+- **Not installed in this Work.** Prior installed0.1.69 evidence remains historical; do not claim new-version device acceptance. #119/#122 stay OPEN for actual overlay routing/X/physical controls/TalkBack/IME/rotation/fold, motion/alignment/comfort/performance, and stopped-result receipt retention during in-flight teardown. #117 long-run backlog, Notes/Clock HOLD and camera/locked-UI exclusions remain. No plugin re-registration or data reset.
+- Next device work: install the existing signed update through the established path, then test the currently unverified user-control/overlay cases with explicit session start and no blind replay. Preserve physical pause/end across reconnection; a fresh session is required after end.
+- [Specification, audit, four reviews, actual renders, test evidence and final Pass/Fail/Not Tested matrix](../dev/premium-ai-human-ux-v0170.md). APK source is immutable96cc7013; subsequent documentation commits do not alter the released binary.
+
 ## v0.1.69/code70 delivered and installed — #118 fixed, #119 physical acceptance OPEN (2026-10-20)
 
 - [PR #120](https://github.com/al-hub/closepaw/pull/120) adds visible postcondition verification, retained exact app selections and user-priority GUI/session control. [PR #121](https://github.com/al-hub/closepaw/pull/121) reuses the complete Gemini identity guard to verify a canonical app hosted by Google; no caller alias or automatic effect replay. Final immutable APK source `81451f026ed2d2748c035c97f1f6ee245423dff8`.

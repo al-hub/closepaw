@@ -28,7 +28,7 @@ Journey: explicit start → security observation → target validation → nativ
 | Failed / unknown | “결과 미확인 · 재관찰 필요” | Preserve unknown outcome, never blind replay |
 | Screen off / lock / disposal | Remove effects, stop decorative work | Existing lock refusal and pause policy retained |
 
-Stop and X intentionally share the irreversible **session-ended** engine gate in this version. Stop retains a result panel; X closes it. Neither force-stops Android or rolls back an external app’s completed effect. Manual takeover uses PAUSED with an explicit Korean label; it does not silently resume.
+Stop and X intentionally share the irreversible **session-ended** engine gate in this version. Stop requests a stopped-result panel; X closes it. In-flight task teardown may remove the result panel, so persistent receipt retention still needs live acceptance. Neither force-stops Android or rolls back an external app’s completed effect. Manual takeover uses PAUSED with an explicit Korean label; it does not silently resume.
 
 ## Design system
 
@@ -78,7 +78,7 @@ Effects clear on user control, rotation/size changes, detach and screen-off. Sys
 - [HCI/control review](premium-ux-hci-review.md)
 - [Android engineering/QA review](premium-ux-android-review.md)
 
-Rendered four Light/Dark and font1/2 native View images from CI39392695807 (artifact12251030496). All6 behavior/render tests passed, but independent visual review found font2 Pause text truncation. Corrected large-text critical controls to a two-line icon/Korean label with14sp base/4dp padding; added a no-ellipsis assertion. This is an actual visual QA failure/fix, not a falsely claimed successful layout. Final re-render results remain pending.
+Rendered four Light/Dark and font1/2 native View images from CI39392695807 (artifact12251030496). All6 behavior/render tests passed, but independent visual review found font2 Pause text truncation. Corrected large-text critical controls to a two-line icon/Korean label with14sp base/4dp padding; added a no-ellipsis assertion. This is an actual visual QA failure/fix, not a falsely claimed successful layout. Final re-render CI39393879612 passed all6 tests and exported4 corrected images; Product UX and integration reviewers confirmed complete Korean safety labels.
 
 Initial cross-review findings were fixed before acceptance: preserve Pause during WAITING instead of replacing it with response✓; distinguish semantic scroll bounds from the actual injected tap point for panel occlusion. Small-height/large-font placement and stable TalkBack button identity are also explicitly reviewed. Human appearance and physical routing remain separate acceptance items.
 
@@ -86,15 +86,28 @@ Initial cross-review findings were fixed before acceptance: preserve Pause durin
 
 JVM tests cover motion time/clamping/fade, manual takeover/terminal epoch behavior and the inherited session/result/security suite. Native panel instrumentation covers waiting controls, takeover, Stop, folding and rendering. A dedicated emulator workflow compiles all androidTest sources and executes the targeted classes, exports rendered evidence. Security CI runs the full Android JVM/lint, Python bridge suites and native/debug build. Existing Signed Release verifies original signer continuity, anonymous published APK checksum/manifest/native runtime/tag identity. No signing key is regenerated.
 
-Local execution limitation: Java17 exists but Android SDK/adb/Gradle distribution and pytest are unavailable; distribution fetch reports network unreachable. Local Gradle commands failed before test execution, **not assertion failures and not a RED TDD result**. `git diff --check` is available. CI results below must be filled from actual runs before claiming pass.
+Local execution limitation: Java17 exists but Android SDK/adb/Gradle distribution and pytest are unavailable; distribution fetch reports network unreachable. Local Gradle commands failed before test execution, **not assertion failures and not a RED TDD result**. `git diff --check` is available. The executed CI and rendered evidence below supersede initial pending-CI notes; no local executed RED result is claimed.
+
+## Executed engineering and rendered evidence
+
+- PR #123 merged as immutable APK source `96cc7013a4f00bb7e2c3c5c648360740785e33ae`.
+- PR [Security CI39393879629](https://github.com/al-hub/closepaw/actions/runs/39393879629) and [UI39393879612](https://github.com/al-hub/closepaw/actions/runs/39393879612): success.
+- Main [Security CI39394905098](https://github.com/al-hub/closepaw/actions/runs/39394905098) and [UI39394905106](https://github.com/al-hub/closepaw/actions/runs/39394905106): success.
+- Parsed main reports: **2,632 JVM tests,0 failures/errors/skips; lint0 errors,119 warnings,4 information**. Python bridge55+8 passed. Native/debug build passed.
+- Main UI: **6 tests**, including waiting Pause, takeover/Stop, terminal session, collapse safety controls, stable button instances,100dp/200% emergency layout and no-ellipsis rendering. Four actual native View renders were exported and asserted. Main UI artifact12251437266; independently reviewed corrected PR render artifact12251181863.
+- Initial rendered evidence showed a real200% Pause-label truncation despite passing behavior tests. The correction uses two-line scaled safety labels and no-ellipsis assertions; four corrected Light/Dark/font1/2 images passed visual review by the Product UX AI role and integration reviewer. These are **synthetic offscreen native View renders, not live overlay screenshots**.
+- [Signed Release39395656700](https://github.com/al-hub/closepaw/actions/runs/39395656700): **success**, including original signer continuity and independent anonymous public APK verification.
+- [Structured validation record](evidence/premium-ux-v0170-validation.json). CI artifacts retain their service-defined expiration; the corrected montage below is retained in this repository.
+
+![Actual corrected native panel renders: Dark/Light and normal/200% font](evidence/premium-ux-panels-v0170.jpg)
 
 ## Final acceptance matrix
 
-| User criterion | Verdict before CI | Evidence / limitation |
+| User criterion | Verdict | Evidence / limitation |
 |---|---|---|
-| Large, clear controls | Not Tested | Source56dp, instrumentation pending |
+| Large, clear controls | Pass | Native View size/behavior and corrected normal/200% renders; physical reach/routing still separate |
 | Immediate state understanding | Not Tested | Korean TextView/live region, human acceptance pending |
-| Pause/Resume/Stop/Close safety | Not Tested | Existing engine reused + new regression tests; CI pending |
+| Pause/Resume/Stop/Close safety | Not Tested | Session/View logic tests pass; live X/window routing and in-flight intervention need physical acceptance |
 | AI/user conflict prevention | Not Tested | Epoch/gates preserved, physical routing pending |
 | Natural premium light/waves | Not Tested | Renderer implemented, rendered/human review pending |
 | Exact tap point | Not Tested | NodeTapPolicy admitted point wired after submission; device check pending |
@@ -104,13 +117,19 @@ Local execution limitation: Java17 exists but Android SDK/adb/Gradle distributio
 | Design consistency | Not Tested | Shared main palette + matching native overlay; screenshots pending |
 | Long-session eye comfort | Not Tested | Muted/no flashing, no longitudinal user study |
 | Accessibility/screen sizes | Not Tested | Source and targeted layout tests; TalkBack/foldable physical pending |
-| No functional regression | Not Tested | Full CI pending, inherited device evidence preserved |
-| Expert role documentation | Pass | Four AI roles, two-stage source review; human not involved |
-| CI/signed APK | Not Tested | Pending actual run and public asset verification |
+| No functional regression | Pass | Full JVM/bridge regression and targeted native UI tests pass; current-device end-to-end is not rerun and universal absence of bugs is not claimed |
+| Expert role documentation | Pass | Four AI roles, two-stage source review and corrected actual panel-render review; no human professional participation |
+| CI/signed APK | Pass | PR/main Security and UI CI plus Signed Release39395656700/public verification artifact12252261387 succeeded |
 
 ## Release evidence
 
-Candidate v0.1.70/code71. PR/CI/release/public verification evidence will be recorded after execution. Do not interpret this candidate as released or installed.
+**Published and independently verified, not installed in this Work.**
+
+- [Release v0.1.70](https://github.com/al-hub/closepaw/releases/tag/v0.1.70) / [signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.70/closepaw-aa-bridge.apk) / [SHA-256 file](https://github.com/al-hub/closepaw/releases/download/v0.1.70/closepaw-aa-bridge.apk.sha256).
+- Published2026-10-20 08:56:04 UTC; manifest `ai.closepaw`, version0.1.70/code71,116,525,229 bytes.
+- APK SHA-256 `97a35d89e34988a97c10caec05670361671cf6ac79b920f50c0b2b2e1c34fc42`; verified original certificate SHA-256 `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba` (APK Signature Scheme v2).
+- Immutable annotated tag resolves to `96cc7013a4f00bb7e2c3c5c648360740785e33ae`; both native runtimes, original signing identity and the anonymously downloaded file were verified by the existing pipeline. Public verification artifact12252261387 contains source/version/manifest/signature/checksum evidence.
+- The last installed-version evidence remains v0.1.69 from the previous Work. No phone installation, camera, UI operation, setting change or physical button test was performed here. #119/#122 remain open for physical acceptance; #117 long-run backlog is preserved.
 
 ## Remaining roadmap
 
