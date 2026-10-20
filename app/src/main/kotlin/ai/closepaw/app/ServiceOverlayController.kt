@@ -208,13 +208,15 @@ class ServiceOverlayController(
             capsuleManager.hide()
         }
 
-        if (decision.showIsland && !showSingleX) {
+        statusIslandManager?.setReadOnly(showSingleX)
+        if (showSingleX || decision.showIsland) {
             if (statusIslandManager?.isShowing() != true) statusIslandManager?.show()
         } else {
             statusIslandManager?.hide()
         }
 
-        if (decision.showGlow) {
+        // The user's active-task surface is exactly status island + movable X.
+        if (decision.showGlow && !showSingleX) {
             if (!edgeGlowManager.isShowing()) {
                 edgeGlowManager.show(stateHolder.derivedGlowState)
             }
@@ -242,6 +244,7 @@ class ServiceOverlayController(
 
     fun onIslandTapped() {
         val mode = stateHolder.mode.value
+        if (shouldShowSingleX(stateHolder.hasActiveTask, userLocation, mode)) return
         if (shouldOpenAppWhenIslandTapped(stateHolder.hasActiveTask, mode)) {
             openMainAppAndHideOverlays()
             return
