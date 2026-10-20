@@ -150,12 +150,10 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (action == "open_app" && input["package_name"]?.jsonPrimitive?.content.isNullOrBlank()) return failure("package_required")
         if (!allowed()) return failure("generic_control_disabled")
         chainActions++
-        val validatedAt = now()
         val validatedAtNs = System.nanoTime()
         val visualEpoch = port.session()?.epoch
         port.presentation(ControlSession.VisualPhase.EXECUTING, visualEpoch)
         val effect = port.perform(frame, input, node)
-        val performedAt = now()
         val performedAtNs = System.nanoTime()
         // After an attempted action even a negative native acknowledgement is not proof of no effect.
         val post = if (effect.attempted) port.captureAfter(frame, input) else null
