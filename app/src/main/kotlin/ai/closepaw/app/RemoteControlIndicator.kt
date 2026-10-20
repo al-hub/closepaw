@@ -67,16 +67,9 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
         // Physical resume temporarily removes the app-covering panel before fresh observation.
         // The independent emergency X remains available throughout reobservation.
         if (session.state == ControlSession.State.REOBSERVING) removePanel()
-        if (!testOnly && session.state != ControlSession.State.REOBSERVING && panel == null) {
-            try {
-                panel = RemoteControlPanel(service, session,
-                    resume = {}, stop = {}, moved = { _, _ -> },
-                ).also {
-                    add(it, panelWidth(), WindowManager.LayoutParams.WRAP_CONTENT,
-                        Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(108), touchable = false)
-                }
-            } catch (_: Exception) { hide(); session.pause(); return }
-        }
+        // #128: ServiceOverlayController owns the sole visible status island.
+        // This legacy secondary panel must never create another overlay window.
+        removePanel()
         panel?.update(stoppedResult)
         placePanel()
         border?.invalidate()
