@@ -48,9 +48,10 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
                 if (!testOnly) add(button("✕", "AI 제어 완전 종료") { session.end() },
                     dp(48), dp(48), Gravity.TOP or Gravity.RIGHT, dp(12), dp(38))
                 decoration.post(guard)
-            } catch (error: Exception) { hide(); session.pause(); throw error }
+            } catch (_: Exception) { hide(); session.pause(); return }
         }
         if (!testOnly && session.state != ControlSession.State.REOBSERVING && pause == null) {
+            try {
             pause = button("⏸", "AI 제어 일시정지") {
                 when (session.state) {
                     ControlSession.State.PAUSED -> { removePause(); resume() }
@@ -58,6 +59,7 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
                     else -> session.pause()
                 }
             }.also { add(it, dp(56), dp(56), Gravity.BOTTOM or Gravity.RIGHT, dp(12), dp(80)) }
+            } catch (_: Exception) { hide(); session.pause(); return }
         }
         pause?.apply {
             text = when (session.state) { ControlSession.State.PAUSED -> "▶"; ControlSession.State.WAITING -> "✓"; else -> "⏸" }
