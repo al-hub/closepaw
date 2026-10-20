@@ -228,4 +228,23 @@ class GenericControlOperationsTest {
         assertEquals(listOf(true, false), port.activity); assertFalse(mutex.isLocked)
     }
 
+
+    @Test fun calculatorSequenceRequiresExplicitSessionAndHasBoundedSchema() = runBlocking {
+        val port = Port()
+        val registry = registry(port)
+        val descriptor = registry.get(GenericControlOperations.SEQUENCE)!!.descriptor
+        OperationSchemaValidator.checkSchema(descriptor.inputSchema)
+        assertFalse(descriptor.readOnly)
+        assertNotNull(OperationSchemaValidator.validate(descriptor.inputSchema, buildJsonObject {
+            put("labels", JsonArray(listOf(JsonPrimitive("1"), JsonPrimitive("2"))))
+        }))
+        val result = registry.get(GenericControlOperations.SEQUENCE)!!.handler.invoke(
+            OperationInvocation("no-session", buildJsonObject {
+                put("labels", JsonArray(listOf(JsonPrimitive("1"), JsonPrimitive("2"))))
+                put("session_id", "arbitrary")
+            })
+        )
+        assertFalse(result.success)
+        assertEquals(0, port.writes)
+    }
 }
