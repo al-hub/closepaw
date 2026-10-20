@@ -44,7 +44,9 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                     })
                 return try { withTimeout(if (operation == SEQUENCE) 25_000L else 10_000L) {
                     if (showActivity) {
-                        session?.activateLegacy()
+                        // A batch must never implicitly activate an idle control session.
+                        // Only explicit android.control.session.start may authorize it.
+                        if (operation != SEQUENCE) session?.activateLegacy()
                         val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
                         session?.interrupt = { job?.cancel(kotlinx.coroutines.CancellationException("user_control_interrupt")) }
                         port.activity(true)
