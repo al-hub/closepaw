@@ -30,7 +30,10 @@ internal class XStopOverlayHost(
     fun isShowing(): Boolean = view != null
 
     fun show() {
-        if (view != null) return
+        if (view != null) {
+            refreshBounds()
+            return
+        }
         val policy = XHandleGesturePolicy(moveSlopPx = dp(10).toFloat())
         val button = TextView(service).apply {
             text = "×"
@@ -38,6 +41,7 @@ internal class XStopOverlayHost(
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             contentDescription = "AI 제어 종료, 길게 눌러 이동"
+            setOnClickListener { onStop() }
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -117,6 +121,17 @@ internal class XStopOverlayHost(
     }
 
     fun dispose() = hide()
+
+    private fun refreshBounds() {
+        val button = view ?: return
+        val lp = params ?: return
+        val oldX = lp.x
+        val oldY = lp.y
+        clamp(lp)
+        if (oldX != lp.x || oldY != lp.y) {
+            try { manager.updateViewLayout(button, lp) } catch (_: Exception) { }
+        }
+    }
 
     private fun defaultX(): Int =
         service.resources.displayMetrics.widthPixels - sizePx - marginPx
