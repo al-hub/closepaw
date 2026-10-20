@@ -21,7 +21,12 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val nodes: List<ControlNode>, val reason: String? = null, val truncated: Boolean = false,
     val truncationReasons: Set<String> = emptySet(), val visitedNodes: Int = 0, val maxDepth: Int = 0,
     val touchContext: String = "", val foregroundWindowId: Int = windowId, val windowContext: String = "",
-    val windowDiagnostics: JsonObject? = null, val configurationRevision: Long = 0, val outputLimit: Int = 50)
+    val windowDiagnostics: JsonObject? = null, val configurationRevision: Long = 0, val outputLimit: Int = 50,
+    val verifiedApplicationPackage: String? = null)
+/** Logical identity is supplied only by a complete, guarded native application identity scan. */
+internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expected != null && reason == null &&
+    (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
+
 internal data class ControlEffect(val attempted: Boolean, val acknowledged: Boolean, val reason: String)
 internal interface ControlPort {
     /** Only adapters that enforce the complete freshness policy inside perform may opt in. */
@@ -89,6 +94,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         return OperationResult(data = buildJsonObject {
             put("observation_id", observation.id); put("observed_at_ms", observation.at); put("expires_in_ms", 60_000)
             put("package_name", frame.packageName); put("window_id", frame.windowId)
+            frame.verifiedApplicationPackage?.let { put("verified_application_package", it) }
             put("foreground_window_id", frame.foregroundWindowId)
             frame.windowDiagnostics?.let { put("window_diagnostics", it) }
             put("configuration_revision", frame.configurationRevision)

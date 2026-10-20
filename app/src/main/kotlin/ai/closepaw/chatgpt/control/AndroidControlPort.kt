@@ -339,14 +339,17 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 currentRoot.recycleCompat(); currentWindows.forEach { runCatching { it.recycle() } }
             }
             if (!stable) return@withContext block(denied("screen_changed", selected.diagnostics), emptyList())
+            val geminiIdentityVerified = gemini || (!truncated && GeminiReadIdentity.nativeShell(pkg, shellIds))
             val code = GenericScreenPolicy.refusal(
                 blocked = classifier.classify(pkg) == AppTier.BLOCKED, sensitive = protected,
                 packageAllowed = packageAllowed(pkg), isGeminiHost = pkg == AndroidGeminiDraftUi.GOOGLE_HOST,
-                verifiedGemini = gemini || (!truncated && GeminiReadIdentity.nativeShell(pkg, shellIds)), readable = nodes.isNotEmpty(),
+                verifiedGemini = geminiIdentityVerified, readable = nodes.isNotEmpty(),
             ) ?: reason(service)
             block(ControlFrame(pkg, window.id, fingerprint, nodes, code, truncated,
                 truncationReasons, visited, deepest, touchContext(service, window, windows), root.windowId,
-                selected.signature, selected.diagnostics, revision, outputLimit), native)
+                selected.signature, selected.diagnostics, revision, outputLimit,
+                verifiedApplicationPackage = if (code == null && !truncated &&
+                    pkg == AndroidGeminiDraftUi.GOOGLE_HOST && geminiIdentityVerified) AndroidGeminiDraftUi.PACKAGE else null), native)
         } finally {
             owned.forEach { it.recycleCompat() }
             windows.forEach { runCatching { it.recycle() } }

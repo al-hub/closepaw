@@ -20,6 +20,14 @@ class ControlPostObserverTest {
         assertEquals(0, waits)
         assertEquals(0L, testScheduler.currentTime)
     }
+    @Test fun verifiedHostedTargetDoesNotWaitOrRelaunch() = runTest {
+        var waits = 0; var reads = 0
+        val expected = before.copy(packageName = "host.app", fingerprint = "host",
+            verifiedApplicationPackage = "target.app")
+        val observer = ControlPostObserver({ testScheduler.currentTime }, { 1L }, { _, _ -> waits++; false }, { reads++; expected })
+        assertEquals(expected, observer.observe(before, input("open_app"), 0))
+        assertEquals(1, reads); assertEquals(0, waits)
+    }
     @Test fun launchWaitsForActualTargetEvenIfTheOldAppContentChanged() = runTest {
         var reads = 0
         val expected = before.copy(packageName = "target.app", fingerprint = "target")
