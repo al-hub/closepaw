@@ -162,11 +162,18 @@ internal class AndroidReadAppTool(
             BrowserReadQuality.classify(accessibilityContent, image != null)
         }
         val shouldOcr = accessibilityQuality != "ok" && image != null
+        val ocrStarted = android.os.SystemClock.elapsedRealtime()
         val ocrContent = if (shouldOcr) {
             // Text first, image second: Voice MCP clients may not consume image blocks.
             // OCR is local, bounded, and only used when Accessibility misses page text.
             screenshotOcr.read(image!!.bytes)
         } else ""
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record("browser_ocr",
+            if (!shouldOcr) "not_needed" else if (ocrContent.isBlank()) "no_usable_body" else "body_collected",
+            android.os.SystemClock.elapsedRealtime() - ocrStarted, metrics = buildJsonObject {
+                put("ocr_attempted", shouldOcr); put("ocr_chars", ocrContent.length)
+                put("accessibility_chars", accessibilityContent.length); put("screenshot_available", image != null)
+            })
         val rawContent = ocrContent.ifBlank { accessibilityContent }
         val content = rawContent.take(MAX_CONTENT_CHARS)
         val truncated = rawContent.length > MAX_CONTENT_CHARS

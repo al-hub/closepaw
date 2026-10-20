@@ -63,4 +63,15 @@ class ControlPostObserverTest {
         assertEquals(before, observer.observe(before, input(), 0))
         assertEquals(4, reads)
     }
+    @Test fun disappearingTransitionWithoutAnotherEventGetsOneBoundedFreshRead() = runTest {
+        var reads = 0
+        val expected = before.copy(fingerprint = "after")
+        val observer = ControlPostObserver({ testScheduler.currentTime }, { 0L },
+            { _, ms -> delay(ms); false }, {
+                reads++; if (reads == 1) before.copy(reason = "secure_window_changed") else expected
+            })
+        assertEquals(expected, observer.observe(before, input(), 0))
+        assertEquals(2, reads); assertEquals(100L, testScheduler.currentTime)
+    }
+
 }

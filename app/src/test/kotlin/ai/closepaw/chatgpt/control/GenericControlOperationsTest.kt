@@ -15,6 +15,13 @@ class GenericControlOperationsTest {
         var captureWait = 0L
         var captureFails = false
         override suspend fun activity(active: Boolean) { activity.add(active) }
+        var testWait = 0L
+        override suspend fun feedbackTest(durationMs: Long): OperationResult {
+            activity(true)
+            try { delay(testWait); return OperationResult(data = buildJsonObject {
+                put("reason_code", "duration_completed"); put("human_touch_verified", false)
+            }) } finally { activity(false) }
+        }
         var appsFail = false
         var appsWait = 0L
         override suspend fun capture(): ControlFrame {
@@ -160,4 +167,36 @@ class GenericControlOperationsTest {
         assertEquals("apps_query_timeout", result.data["reason_code"]?.jsonPrimitive?.content)
         assertFalse(mutex.isLocked)
     }
+    @Test fun filteredObservationTimeoutIsNeverReportedAsAppCatalogTimeout() = kotlinx.coroutines.test.runTest {
+        val port = Port().apply { captureWait = 10_001 }
+        try {
+            registry(port).get(GenericControlOperations.OBSERVE)!!.handler.invoke(
+                OperationInvocation("filtered-timeout", buildJsonObject { put("filter", "Menu") }))
+            fail("Screen timeout must propagate")
+        } catch (_: TimeoutCancellationException) { }
+        assertEquals(listOf(true, false), port.activity)
+    }
+    @Test fun explicitFeedbackTestNeverClicksAndInvalidatesExistingObservation() = runBlocking {
+        val port = Port(); val control = GenericControl(port, { true }); val registry = OperationRegistry()
+        GenericControlOperations(control, port, Mutex()) { OperationReadiness() }.register(registry)
+        val old = control.observe()
+        val result = registry.get(GenericControlOperations.FEEDBACK_TEST)!!.handler.invoke(
+            OperationInvocation("feedback", buildJsonObject {}))
+        assertTrue(result.success); assertEquals(0, port.writes)
+        assertEquals(JsonPrimitive(false), result.data["human_touch_verified"])
+        assertEquals(listOf(true, false), port.activity)
+        assertFalse(control.action(buildJsonObject {
+            put("observation_id", old.data.getValue("observation_id")); put("action", "home")
+        }).success)
+    }
+    @Test fun feedbackCancellationReleasesIndicatorAndMutex() = kotlinx.coroutines.test.runTest {
+        val port = Port().apply { testWait = 5_000 }; val mutex = Mutex()
+        val job = launch { registry(port, mutex).get(GenericControlOperations.FEEDBACK_TEST)!!.handler.invoke(
+            OperationInvocation("cancel-feedback", buildJsonObject {})) }
+        testScheduler.runCurrent()
+        assertEquals(listOf(true), port.activity)
+        job.cancelAndJoin()
+        assertEquals(listOf(true, false), port.activity); assertFalse(mutex.isLocked)
+    }
+
 }

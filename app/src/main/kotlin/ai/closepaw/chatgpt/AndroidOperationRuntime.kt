@@ -200,7 +200,7 @@ internal class AndroidOperationRuntime(
         dispatcher = OperationDispatcher(registry, store, scope,
             executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled || settings.genericControlEnabled },
             operationAllowed = { id -> when(id) {
-                GenericControlOperations.ACTION, GenericControlOperations.CONFIGURE -> settings.genericControlEnabled
+                GenericControlOperations.ACTION, GenericControlOperations.CONFIGURE, GenericControlOperations.FEEDBACK_TEST -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled

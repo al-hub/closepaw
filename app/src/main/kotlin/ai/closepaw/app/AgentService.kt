@@ -94,6 +94,7 @@ class AgentService : AccessibilityService() {
         remoteControlIndicator.show()
     }
     internal fun hideRemoteControlActivity() { remoteControlIndicator.hide() }
+    internal fun isRemoteControlActivityAttached() = remoteControlIndicator.isAttached()
     internal fun ownsRemoteControlIndicatorWindow(id: Int) = remoteControlIndicator.ownsWindow(id)
     private var currentPlatformMode: PlatformMode = PlatformMode.ACCESSIBILITY
     @Volatile private var isServiceActive = false

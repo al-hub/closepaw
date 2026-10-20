@@ -41,4 +41,16 @@ class AndroidAppCatalogTest {
         assertEquals("example.app00", apps.first().packageName)
         assertEquals("example.app39", apps.last().packageName)
     }
+    @Test fun repeatedCatalogReadRechecksVisibilityButReusesRecentLabels() = runBlocking {
+        val entry = app("example.allowed", "Example")
+        every { pm.queryIntentActivities(any(), PackageManager.MATCH_ALL) } returns listOf(entry)
+        val catalog = AndroidAppCatalog(pm) { true }
+        assertEquals(1, catalog.list("example").size)
+        assertEquals(1, catalog.list("Example").size)
+        verify(exactly = 2) { pm.queryIntentActivities(any(), PackageManager.MATCH_ALL) }
+        verify(exactly = 1) { entry.loadLabel(pm) }
+        every { pm.queryIntentActivities(any(), PackageManager.MATCH_ALL) } returns emptyList()
+        assertTrue(catalog.list("Example").isEmpty())
+    }
+
 }

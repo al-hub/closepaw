@@ -23,6 +23,7 @@ internal class RemoteControlIndicator(private val service: AccessibilityService)
         return try { node.windowId == id } finally { node.recycleCompat() }
     }
 
+    fun isAttached(): Boolean = view?.isAttachedToWindow == true
     fun show() {
         if (view != null) return
         val indicator = object : View(service) {
@@ -61,12 +62,25 @@ internal class RemoteControlIndicator(private val service: AccessibilityService)
             PixelFormat.TRANSLUCENT,
         ).apply { gravity = Gravity.TOP or Gravity.START; setTitle("ClosePaw remote activity") }
         // Only register the exact view after successful attachment; never exempt arbitrary overlays.
-        manager.addView(indicator, params)
-        view = indicator
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record("indicator", "attach_attempt")
+        try {
+            manager.addView(indicator, params)
+            view = indicator
+            ai.closepaw.chatgpt.control.ControlDiagnostics.record("indicator", "attached")
+        } catch (error: Exception) {
+            ai.closepaw.chatgpt.control.ControlDiagnostics.record("indicator", "attach_failed")
+            throw error
+        }
     }
 
     fun hide() {
         val attached = view ?: return
-        try { manager.removeViewImmediate(attached) } finally { view = null }
+        try {
+            manager.removeViewImmediate(attached)
+            ai.closepaw.chatgpt.control.ControlDiagnostics.record("indicator", "removed")
+        } catch (error: Exception) {
+            ai.closepaw.chatgpt.control.ControlDiagnostics.record("indicator", "remove_failed")
+            throw error
+        } finally { view = null }
     }
 }

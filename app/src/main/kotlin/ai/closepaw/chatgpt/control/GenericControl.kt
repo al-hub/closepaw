@@ -27,6 +27,7 @@ internal interface ControlPort {
     /** Only adapters that enforce the complete freshness policy inside perform may opt in. */
     val validatesAtNativeBoundary: Boolean get() = false
     suspend fun activity(active: Boolean) {}
+    suspend fun feedbackTest(durationMs: Long): OperationResult = OperationResult(success = false, summary = "feedback_test_unavailable")
     suspend fun captureAfter(frame: ControlFrame, input: JsonObject): ControlFrame {
         var post = capture()
         repeat(2) {
@@ -146,6 +147,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         return OperationResult(success = verified, summary = if (verified)
             "Action acknowledged; inspect the returned observation to confirm the requested app result." else effect.reason,
             data = buildJsonObject {
+                put("observation_age_ms", (started - observation.at).coerceAtLeast(0))
                 put("validation_scope", GenericControlActionPolicy.validationScope(action))
                 put("reason_code", if (!inputVerified) "input_unconfirmed" else effect.reason)
                 put("action_attempted", effect.attempted); put("action_acknowledged", effect.acknowledged)
