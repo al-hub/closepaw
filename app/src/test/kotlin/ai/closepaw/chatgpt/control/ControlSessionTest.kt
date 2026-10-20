@@ -57,4 +57,16 @@ class ControlSessionTest {
             assertEquals(ControlSession.State.ENDED, ControlSession(state).state)
         assertEquals(ControlSession.State.PAUSED, ControlSession("paused").state)
     }
+    @org.junit.Test fun lateVisualEventsCannotOverrideUserControlOrNewSession() {
+        val session = ControlSession(); session.start()
+        val epoch = session.epoch
+        session.present(ControlSession.VisualPhase.EXECUTING, epoch)
+        org.junit.Assert.assertEquals(ControlSession.VisualPhase.EXECUTING, session.visualPhase)
+        session.pause()
+        session.present(ControlSession.VisualPhase.COMPLETED, epoch)
+        org.junit.Assert.assertEquals(ControlSession.VisualPhase.EXECUTING, session.visualPhase)
+        session.end(); session.start()
+        session.present(ControlSession.VisualPhase.FAILED, epoch)
+        org.junit.Assert.assertEquals(ControlSession.VisualPhase.PREPARING, session.visualPhase)
+    }
 }

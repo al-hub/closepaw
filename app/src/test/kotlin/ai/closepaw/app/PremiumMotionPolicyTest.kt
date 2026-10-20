@@ -13,10 +13,10 @@ class PremiumMotionPolicyTest {
         assertFalse(PremiumMotionPolicy.animate(true, true, true, false, true))
     }
     @Test fun transientEffectsHaveBoundedLifetimeAndMonotonicFade() {
-        assertEquals(0f, PremiumMotionPolicy.progress(100, 200, 720))
-        assertEquals(1f, PremiumMotionPolicy.progress(1000, 200, 720))
-        assertEquals(1f, PremiumMotionPolicy.progress(100, 200, 0))
+        assertEquals(0f, PremiumMotionPolicy.progress(100, 200, 720), 0f)
+        assertEquals(1f, PremiumMotionPolicy.progress(1000, 200, 720), 0f)
+        assertEquals(1f, PremiumMotionPolicy.progress(100, 200, 0), 0f)
         assertTrue(PremiumMotionPolicy.fade(.2f) > PremiumMotionPolicy.fade(.8f))
-        assertEquals(0f, PremiumMotionPolicy.fade(1.5f))
+        assertEquals(0f, PremiumMotionPolicy.fade(1.5f), 0f)
     }
 }

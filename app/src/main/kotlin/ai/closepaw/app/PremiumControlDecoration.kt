@@ -67,7 +67,11 @@ internal open class PremiumControlDecoration(
             ControlSession.State.WAITING -> Color.rgb(225, 171, 83)
             ControlSession.State.PAUSED -> Color.rgb(139, 159, 178)
             ControlSession.State.REOBSERVING -> Color.rgb(141, 164, 239)
-            else -> if (dark) Color.rgb(96, 212, 232) else Color.rgb(0, 113, 146)
+            else -> when (session.visualPhase) {
+                ControlSession.VisualPhase.FAILED -> if (dark) Color.rgb(255, 157, 170) else Color.rgb(179, 49, 69)
+                ControlSession.VisualPhase.COMPLETED -> if (dark) Color.rgb(115, 212, 221) else Color.rgb(0, 109, 122)
+                else -> if (dark) Color.rgb(96, 212, 232) else Color.rgb(0, 113, 146)
+            }
         }
         val breath = if (animate) (.5 + .5 * sin(now / 1050.0)).toFloat() else .5f
         val edge = RectF(3 * density, 3 * density, width - 3 * density, height - 3 * density)

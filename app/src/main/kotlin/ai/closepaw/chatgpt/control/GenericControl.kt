@@ -34,6 +34,7 @@ internal interface ControlPort {
     fun session(): ControlSession? = null
     fun bindResume(check: suspend () -> Boolean) {}
     suspend fun feedback(label: String) {}
+    suspend fun presentation(phase: ControlSession.VisualPhase, expectedEpoch: Long?) {}
     suspend fun activity(active: Boolean) {}
     suspend fun feedbackTest(durationMs: Long): OperationResult = OperationResult(success = false, summary = "feedback_test_unavailable")
     suspend fun captureAfter(frame: ControlFrame, input: JsonObject): ControlFrame {
@@ -68,7 +69,10 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         current = null
         chainStarted = now(); chainActions = 0; noProgress = 0
         if (!allowed()) return failure("generic_control_disabled")
+        val visualEpoch = port.session()?.epoch
+        port.presentation(ControlSession.VisualPhase.OBSERVING, visualEpoch)
         val result = publish(port.capture(), filter)
+        port.presentation(if (result.success) ControlSession.VisualPhase.WAITING else ControlSession.VisualPhase.FAILED, visualEpoch)
         port.feedback(if (result.success) "접근성 확인 완료 · 다음 명령 대기" else "화면 확인 실패 · 재관찰 필요")
         return result
     }
@@ -145,6 +149,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (!allowed()) return failure("generic_control_disabled")
         chainActions++
         val validatedAt = now()
+        val visualEpoch = port.session()?.epoch
+        port.presentation(ControlSession.VisualPhase.EXECUTING, visualEpoch)
         val effect = port.perform(frame, input, node)
         val performedAt = now()
         // After an attempted action even a negative native acknowledgement is not proof of no effect.
@@ -156,6 +162,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val verdict = ControlResultPolicy.verify(action, frame, post, node, input)
         val verified = effect.acknowledged && observed?.success == true && verdict.confirmed
         val resultReason = if (effect.attempted && effect.acknowledged && !verdict.confirmed) verdict.reason else effect.reason
+        port.presentation(if (verified) ControlSession.VisualPhase.COMPLETED else ControlSession.VisualPhase.FAILED, visualEpoch)
         port.feedback(if (verified) "화면 변화 확인 · 다음 단계 대기" else "결과 미확인 · 재관찰 필요")
         return OperationResult(success = verified, summary = if (verified)
             if (verdict.goalVerified) "Observed action postcondition confirmed." else

@@ -5,6 +5,13 @@ import java.util.UUID
 /** User priority state machine. No Context, screen content, command queue or automatic replay. */
 internal class ControlSession(initial: String = "idle", private val persist: (String) -> Unit = {}) {
     enum class State { IDLE, ACTIVE, WAITING, PAUSED, REOBSERVING, ENDED }
+    enum class VisualPhase { PREPARING, OBSERVING, EXECUTING, WAITING, COMPLETED, FAILED }
+    @Volatile var visualPhase = VisualPhase.PREPARING
+        private set
+    @Synchronized fun present(phase: VisualPhase, expectedEpoch: Long?) {
+        if (state != State.ACTIVE || (expectedEpoch != null && epoch != expectedEpoch)) return
+        visualPhase = phase; changed()
+    }
     @Volatile var state = when (initial) { "paused" -> State.PAUSED; "ended", "active", "waiting", "reobserving" -> State.ENDED; else -> State.IDLE }
         private set
     @Volatile var epoch = 0L
@@ -68,6 +75,7 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     }
     private fun transition(next: State, text: String) {
         state = next; epoch++; label = text
+        if (next == State.ACTIVE) visualPhase = VisualPhase.PREPARING
         persist(next.name.lowercase()); changed()
     }
 }

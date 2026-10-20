@@ -98,13 +98,13 @@ class AccessibilityGestureInjector(
     private suspend fun dispatchGesture(gesture: GestureDescription, onSubmitted: () -> Unit): ActionResult {
         val gate = overlayTouchGate
         val token = gate?.beginGesturePassThrough()
-        if (token != null) {
-            Log.d(TAG, "Touch gate active — FLAG_NOT_TOUCHABLE set, waiting ${FLAG_SETTLE_MS}ms")
-            delay(FLAG_SETTLE_MS)
-        } else if (gate == null) {
-            Log.w(TAG, "overlayTouchGate is NULL — gestures may be consumed by overlay")
-        }
         try {
+            if (token != null) {
+                Log.d(TAG, "Touch gate active — FLAG_NOT_TOUCHABLE set, waiting ${FLAG_SETTLE_MS}ms")
+                delay(FLAG_SETTLE_MS)
+            } else if (gate == null) {
+                Log.w(TAG, "overlayTouchGate is NULL — gestures may be consumed by overlay")
+            }
             return withTimeoutOrNull(GESTURE_TIMEOUT_MS) {
                 suspendCancellableCoroutine { continuation ->
                     continuation.invokeOnCancellation {
