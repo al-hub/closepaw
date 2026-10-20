@@ -66,8 +66,8 @@ Second source review performed against the working implementation on 2026-10-20.
 | Real action versus visual success | Pass (source) | Tap effect only emitted after accepted dispatch. Node action shows target bounds and acknowledgement, no invented finger path. Decoration does not claim verified external success. Native result checks remain separate. |
 | Decorative input isolation | Pass (source) | Full-screen layer uses NOT_TOUCHABLE; bounded panel and X alone receive touch; overlap checking changed to rectangle intersection. Physical routing remains Not Tested. |
 | Calm visual consistency | Pass (source) | Shared blue/cyan light/dark tokens, rounded shape tokens, cached ambient background; panel and decoration use matching calm palette. Visual polish remains Not Tested pending screenshots. |
-| Font/IME/small-height layout | Fail at review; correction requested | `placePanel()` prioritizes IME minY even when the panel exceeds remaining height. On small landscape or enlarged font, the panel can extend beyond the screen top. Add available-height constraint/scrollable auxiliary content and preserve emergency controls. |
-| TalkBack focus stability | Fail at review; correction requested | `update()` removes and recreates secondary controls on every feedback update; this can lose focus. Reuse buttons and update visibility/state instead. Actual TalkBack operation remains Not Tested. |
+| Font/IME/small-height layout | Pass (corrected source); device Not Tested | Re-review of PR #123 candidate `d6224d20`: `fitAvailableHeight()` hides optional actions below 320dp and header below 176dp; fixed emergency row, one-line button labels and screen-based maxY clamp replace the overflowing IME-first placement. Added 200% font/100dp viewport measurement test is pending CI execution at this review. Extremely small remaining app area may overlap the IME to preserve emergency access; no universal device fit claim. |
+| TalkBack focus stability | Pass (corrected source); device Not Tested | Manual and response buttons are now created once and updated by visibility. `statusUpdateRetainsAccessibleControlInstances` asserts identity stability; pending CI execution. Actual focus traversal/live announcements remain Not Tested. |
 | Motion safety | Pass (source) | Pixel decoration checks interactive/attachment/animator/touch exploration state, clears geometry on resize and user control; reduced motion uses expiry invalidation rather than static frame loop. Actual lifecycle/performance remains Not Tested. |
 
 ### Contrast calculation evidence
@@ -76,6 +76,10 @@ Calculated relative-luminance contrast from explicit opaque sRGB token pairs (no
 
 ### Required follow-up before closing this review
 
-1. Engineering fixes for available-height layout and secondary-button identity, followed by source re-review.
+1. The two initial P1 findings were corrected and independently re-reviewed at source level. Run the added instrumented measurement and identity checks in CI; failures require re-opening the relevant finding.
 2. Render light/dark, active/waiting/paused/manual/stopped, 200% font and compact landscape states. Do not infer rendered quality from source approval.
 3. Physical #119 acceptance remains open: Pause/Resume/X, IME/rotation, TalkBack and non-interference. Keep Pass / Fail / Not Tested evidence separate from source review.
+
+### Compact-mode acceptance boundary
+
+Automatic compact mode prioritizes Pause/Resume and Stop. The auxiliary Direct Control and waiting-response buttons can be hidden on constrained screens; Pause still transfers control safely, and physical Resume still requires fresh observation. Minimal mode also hides the visible status heading while retaining the full session status in the primary control accessibility description. Confirm that this tradeoff is understandable in rendered/physical acceptance; it is a deliberate safety fallback, not proof that every action remains visibly available at every viewport size.

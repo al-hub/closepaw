@@ -305,7 +305,7 @@ class AccessibilityPlatform(
         return when (action) {
             is UIAction.ClickNodeAt -> {
                 recordOutOfBoundsActionTarget("click_node", action.x, action.y)
-                visualizer?.showClick(action.x.toFloat(), action.y.toFloat())
+                // Semantic node click does not inject a physical touch at the requested point.
                 nodeActionPerformer.performNodeClickAt(action.x, action.y, action.semanticHint)
             }
             is UIAction.TapAt -> {
@@ -314,7 +314,7 @@ class AccessibilityPlatform(
             }
             is UIAction.LongClickNodeAt -> {
                 recordOutOfBoundsActionTarget("long_click_node", action.x, action.y)
-                visualizer?.showClick(action.x.toFloat(), action.y.toFloat(), longPress = true)
+                // ACTION_LONG_CLICK has no known physical hold duration or contact point.
                 nodeActionPerformer.performNodeLongClickAt(action.x, action.y, action.semanticHint)
             }
             is UIAction.LongPressAt -> {
