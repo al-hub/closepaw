@@ -92,6 +92,7 @@ internal class XStopOverlayHost(
         var downAt = 0L
         var hasMoved = false
         var touchActive = false
+        var multiPointer = false
         val readyVibration = Runnable {
             if (touchActive && view === button) {
                 button.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
@@ -134,13 +135,22 @@ internal class XStopOverlayHost(
                     windowY = lp.y
                     downAt = event.eventTime
                     hasMoved = false
+                    multiPointer = false
                     touchActive = true
+                    Log.d(logTag, "x_gesture_down raw=${event.rawX},${event.rawY} origin=${lp.x},${lp.y}")
                     button.removeCallbacks(readyVibration)
                     button.postDelayed(readyVibration, 450L)
                     policy.onDown(event.rawX, event.rawY, downAt)
                     true
                 }
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    multiPointer = true
+                    policy.onCancel()
+                    button.removeCallbacks(readyVibration)
+                    true
+                }
                 MotionEvent.ACTION_MOVE -> {
+                    if (multiPointer) return@setOnTouchListener true
                     policy.onMove(event.rawX, event.rawY)
                     if (event.pointerCount == 1 && event.eventTime - downAt >= 450L) {
                         updatePosition(event.rawX, event.rawY)
@@ -151,10 +161,11 @@ internal class XStopOverlayHost(
                     touchActive = false
                     button.removeCallbacks(readyVibration)
                     val result = policy.onUp(event.rawX, event.rawY, event.eventTime)
-                    if (result == XHandleGesturePolicy.Result.TERMINATE) {
+                    Log.d(logTag, "x_gesture_up elapsed=${event.eventTime - downAt} moved=$hasMoved multi=$multiPointer result=$result")
+                    if (!multiPointer && result == XHandleGesturePolicy.Result.TERMINATE) {
                         onStop()
                     } else {
-                        if (event.eventTime - downAt >= 450L && event.pointerCount == 1) {
+                        if (!multiPointer && event.eventTime - downAt >= 450L && event.pointerCount == 1) {
                             updatePosition(event.rawX, event.rawY)
                         }
                         // Only a successful movement stores coordinates.
@@ -167,6 +178,7 @@ internal class XStopOverlayHost(
                     touchActive = false
                     button.removeCallbacks(readyVibration)
                     policy.onCancel()
+                    Log.d(logTag, "x_gesture_cancel moved=$hasMoved")
                     // ACTION_CANCEL can follow OEM window reposition; successful
                     // moves are already durable and must not trigger stop.
                     true
@@ -178,7 +190,8 @@ internal class XStopOverlayHost(
             manager.addView(button, lp)
             view = button
             params = lp
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.e(logTag, "x_overlay_add_failed", error)
             view = null
             params = null
         }
