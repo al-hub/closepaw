@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -68,6 +69,12 @@ internal class XStopOverlayHost(
         var windowY = 0
         var downAt = 0L
         var hasMoved = false
+        var touchActive = false
+        val readyVibration = Runnable {
+            if (touchActive && view === button) {
+                button.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            }
+        }
         fun updatePosition(rawX: Float, rawY: Float): Boolean {
             val metrics = service.resources.displayMetrics
             val target = XDragPositionPolicy.position(
@@ -105,6 +112,9 @@ internal class XStopOverlayHost(
                     windowY = lp.y
                     downAt = event.eventTime
                     hasMoved = false
+                    touchActive = true
+                    button.removeCallbacks(readyVibration)
+                    button.postDelayed(readyVibration, 450L)
                     policy.onDown(event.rawX, event.rawY, downAt)
                     true
                 }
@@ -116,6 +126,8 @@ internal class XStopOverlayHost(
                     true
                 }
                 MotionEvent.ACTION_UP -> {
+                    touchActive = false
+                    button.removeCallbacks(readyVibration)
                     val result = policy.onUp(event.rawX, event.rawY, event.eventTime)
                     if (result == XHandleGesturePolicy.Result.TERMINATE) {
                         onStop()
@@ -130,6 +142,8 @@ internal class XStopOverlayHost(
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
+                    touchActive = false
+                    button.removeCallbacks(readyVibration)
                     policy.onCancel()
                     // ACTION_CANCEL can follow OEM window reposition; successful
                     // moves are already durable and must not trigger stop.
