@@ -229,6 +229,23 @@ class GenericControlOperationsTest {
     }
 
 
+    @Test fun batchWithoutExplicitStartMustNotActivateIdleSession() = runBlocking {
+        val session = ControlSession()
+        val port = Port().apply { controlSession = session }
+        val registry = registry(port)
+        val result = registry.get(GenericControlOperations.SEQUENCE)!!.handler.invoke(
+            OperationInvocation("unauthorized-batch", buildJsonObject {
+                put("session_id", "arbitrary")
+                put("labels", JsonArray(listOf(JsonPrimitive("1"), JsonPrimitive("2"))))
+            })
+        )
+        assertFalse(result.success)
+        assertEquals(ControlSession.State.IDLE, session.state)
+        assertFalse(session.explicit)
+        assertEquals(0, port.writes)
+        assertTrue("A denied batch must not block a later authorized start", session.start())
+    }
+
     @Test fun calculatorSequenceRequiresExplicitSessionAndHasBoundedSchema() = runBlocking {
         val port = Port()
         val registry = registry(port)
