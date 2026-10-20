@@ -140,21 +140,20 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val changed = post != null && post.reason == null &&
             (frame.fingerprint != post.fingerprint || frame.packageName != post.packageName || frame.windowId != post.windowId)
         noProgress = if (changed) 0 else noProgress + 1
-        val inputVerified = action != "type" || post?.nodes?.singleOrNull {
-            it.editable && it.resourceId == node?.resourceId && it.bounds == node?.bounds
-        }?.text == input["text"]?.jsonPrimitive?.content
-        val verified = effect.acknowledged && observed?.success == true && inputVerified
+        val verdict = ControlResultPolicy.verify(action, frame, post, node, input)
+        val verified = effect.acknowledged && observed?.success == true && verdict.confirmed
+        val resultReason = if (effect.attempted && effect.acknowledged && !verdict.confirmed) verdict.reason else effect.reason
         return OperationResult(success = verified, summary = if (verified)
-            "Action acknowledged; inspect the returned observation to confirm the requested app result." else effect.reason,
+            "Observed action postcondition confirmed; inspect observation for the wider task result." else resultReason,
             data = buildJsonObject {
                 put("observation_age_ms", (started - observation.at).coerceAtLeast(0))
                 put("validation_scope", GenericControlActionPolicy.validationScope(action))
-                put("reason_code", if (!inputVerified) "input_unconfirmed" else effect.reason)
+                put("reason_code", resultReason)
                 put("action_attempted", effect.attempted); put("action_acknowledged", effect.acknowledged)
                 put("outcome_unknown", effect.attempted && !verified); put("screen_changed", changed)
-                put("app_result_verified", false)
+                put("app_result_verified", verified && verdict.goalVerified)
                 put("feedback", when { !effect.attempted -> "not_attempted"; !verified -> "outcome_unconfirmed";
-                    changed -> "screen_change_observed"; else -> "acknowledged_no_visible_change" })
+                    changed -> "screen_change_observed"; else -> "postcondition_confirmed" })
                 put("validation_location", if (port.validatesAtNativeBoundary) "native_boundary" else "engine_and_native")
                 put("timing_ms", buildJsonObject {
                     put("validation", (validatedAt - started).coerceAtLeast(0))

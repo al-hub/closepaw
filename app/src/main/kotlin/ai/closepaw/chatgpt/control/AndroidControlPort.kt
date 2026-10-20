@@ -85,13 +85,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         pkg != this.context.packageName && pkg != "com.android.systemui" &&
             !pkg.contains("permissioncontroller") && !pkg.contains("packageinstaller")
     }
-    private var listedPackages = emptySet<String>()
+    private val appSelections = ControlAppSelections()
     private var catalogDiagnostics = buildJsonObject {}
     override fun appDiagnostics() = catalogDiagnostics
     private var certifiedWindows: NativeControlWindows? = null
     private var windowDiagnostics: JsonObject? = null
     private val probeThrottle = ScreenProbeThrottle({ SystemClock.elapsedRealtime() })
-    override fun invalidate() { listedPackages = emptySet(); probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
+    override fun invalidate() { appSelections.clear(); probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
     private fun reason(service: AgentService?): String? = when {
         !allowed() -> "generic_control_disabled"
         service == null -> "accessibility_permission_missing"
@@ -106,8 +106,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         isPackageBlocked = { classifier.classify(it) == AppTier.BLOCKED })
 
     override suspend fun apps(filter: String): JsonArray {
-        // Invalidate old selections before any failure or cancellation.
-        listedPackages = emptySet()
+        // Searches do not revoke prior exact selections; configuration changes do.
         val service = AgentService.instance
         val refusal = withContext(Dispatchers.Main) { reason(service) }
         if (refusal != null || service == null) throw AppCatalogUnavailable(refusal ?: "accessibility_permission_missing")
@@ -122,7 +121,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             put("access_tier_filter_applied", false); put("os_visibility_diagnosis", "not_measured")
         }
         if (withContext(Dispatchers.Main) { reason(service) } != null) throw AppCatalogUnavailable("device_state_changed")
-        listedPackages = matches.map { it.packageName }.toSet()
+        appSelections.add(matches.map { it.packageName })
         return JsonArray(matches.map { buildJsonObject {
             put("label", it.label.take(128)); put("package_name", it.packageName)
             put("launch_allowed", packageAllowed(it.packageName, launcher, false, "launch"))
@@ -436,7 +435,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
             if (action == "open_app") {
                 val pkg = input["package_name"]?.jsonPrimitive?.content.orEmpty()
-                if (pkg !in listedPackages || !packageAllowed(pkg, operation = "launch")) return@withTree ControlEffect(false, false, "app_not_selected_or_blocked")
+                appSelections.refusal(pkg, packageAllowed(pkg, operation = "launch"))?.let {
+                    return@withTree ControlEffect(false, false, it)
+                }
                 val result = if (Build.VERSION.SDK_INT >= 33) {
                     try {
                         context.packageManager.getLaunchIntentSenderForPackage(pkg).sendIntent(service, 0, null, null, null)
