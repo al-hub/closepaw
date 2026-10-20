@@ -27,6 +27,7 @@ internal interface ControlPort {
     /** Only adapters that enforce the complete freshness policy inside perform may opt in. */
     val validatesAtNativeBoundary: Boolean get() = false
     fun session(): ControlSession? = null
+    fun bindResume(check: suspend () -> Boolean) {}
     suspend fun feedback(label: String) {}
     suspend fun activity(active: Boolean) {}
     suspend fun feedbackTest(durationMs: Long): OperationResult = OperationResult(success = false, summary = "feedback_test_unavailable")
@@ -83,7 +84,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         // Full security/fingerprint traversal is independent of bounded presentation.
         // Only IDs actually disclosed in this observation may be acted on.
         val bounded = frame.copy(nodes = exposed)
-        val observation = Observation(UUID.randomUUID().toString(), now(), bounded, port.session()?.epoch ?: 0)
+        val observation = Observation(UUID.randomUUID().toString(), now(), bounded, port.session()?.epoch ?: 0L)
         current = observation
         return OperationResult(data = buildJsonObject {
             put("observation_id", observation.id); put("observed_at_ms", observation.at); put("expires_in_ms", 60_000)
@@ -112,7 +113,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (input["observation_id"]?.jsonPrimitive?.content != observation.id) return failure("stale_observation")
         // Consume before any native side effect, including failure, cancellation and lost transport.
         current = null
-        if (observation.epoch != (port.session()?.epoch ?: 0)) return failure("control_session_changed_observe_again")
+        if (observation.epoch != (port.session()?.epoch ?: 0L)) return failure("control_session_changed_observe_again")
         if (now() - observation.at !in 0L..60_000L) return failure("observation_expired")
         if (chainActions >= 20 || now() - chainStarted !in 0L..180_000L || noProgress >= 3)
             return failure("control_chain_limit_observe_again")

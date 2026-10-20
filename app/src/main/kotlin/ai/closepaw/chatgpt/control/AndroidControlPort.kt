@@ -41,14 +41,8 @@ import kotlin.coroutines.resume
 internal class AndroidControlPort(context: Context, private val mutationBlock: (String) -> String? = { null },
     private val runtime: RuntimeControlSettings? = null, private val allowed: () -> Boolean) : ControlPort {
     override val validatesAtNativeBoundary = true
-    override fun session(): ControlSession? {
-        val service = AgentService.instance ?: return null
-        if (service.remoteResumeCheck == null) service.remoteResumeCheck = {
-            invalidate()
-            capture().let { it.reason == null && !it.truncated }
-        }
-        return service.remoteControlSession
-    }
+    override fun session() = AgentService.instance?.remoteControlSession
+    override fun bindResume(check: suspend () -> Boolean) { AgentService.instance?.remoteResumeCheck = check }
     override suspend fun feedback(label: String) { withContext(Dispatchers.Main) { session()?.feedback(label) } }
     private var activityService: AgentService? = null
     private var actionChangeVersion = 0L
@@ -57,10 +51,6 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             if (active) {
                 val service = AgentService.instance
                 if (reason(service) == null && service != null) {
-                    service.remoteResumeCheck = {
-                        invalidate()
-                        capture().let { it.reason == null && !it.truncated }
-                    }
                     activityService = service
                     service.showRemoteControlActivity()
                 }
