@@ -190,10 +190,11 @@ class ServiceOverlayController(
         showPreference = decision.normalizedShowPreference
         // Ordinary active screen control uses one small X overlay, not a touch-blocking
         // expanded capsule. Approval/input states keep the existing required controls.
-        val singleXMode = mode is CapsuleMode.Running ||
-            mode is CapsuleMode.TakeoverPending || mode is CapsuleMode.Takeover
-        val showSingleX = stateHolder.hasActiveTask &&
-            userLocation != OverlayUserLocation.MAIN_APP && singleXMode
+        val showSingleX = shouldShowSingleX(
+            hasActiveTask = stateHolder.hasActiveTask,
+            location = userLocation,
+            mode = mode,
+        )
         capsuleManager.setInteractionLocked(if (showSingleX) false else lockInteraction)
         if (showSingleX) xStopOverlay.show() else xStopOverlay.hide()
 
