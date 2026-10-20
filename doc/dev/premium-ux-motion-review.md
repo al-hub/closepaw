@@ -34,3 +34,20 @@ Motion respects Android animator settings and TalkBack touch exploration. Paused
 | JVM test execution | Not Tested locally | Gradle distribution unavailable; network unreachable before test runner |
 
 Added `PremiumMotionPolicyTest` checks all animation suppression gates and effect progress/fade boundaries. Parent CI must execute it. Visual acceptance remains required: soft motion and readability, actual tap point, keyboard/rotation/fold geometry and battery/frame stability. Source inspection is not a substitute for measured performance or human aesthetic acceptance.
+
+## Integrated second source review — actual phase wiring
+
+Reviewed the integrated `ControlSession.VisualPhase`, `GenericControl.presentation(expectedEpoch)`, Android native event wiring, `RemoteControlPanel`, `Color`, `Theme`, and `CalmAmbientSurface` on 2026-10-20. This is an AI role source review, not human expert approval or a physical-device visual review.
+
+- **Pass (source):** observed/executing/waiting/completed/failed phases originate in capture and action/postcondition results. Completed is emitted only after the existing postcondition verification; a submission ripple is separate from an app result. Failure and completion use restrained error/teal accents rather than celebratory success effects on submission.
+- **Pass (source):** `ControlSession.present` accepts active-state events only, with the expected epoch matching the current session. The added `lateVisualEventsCannotOverrideUserControlOrNewSession` regression test covers paused and restarted-session visual-phase rejection. CI execution is still pending at this review.
+- **Pass (source):** injected tap ripple receives the exact `NodeTapPolicy` point only when `dispatchGesture` is submitted and the session epoch still matches. Semantic node scroll draws its actual target area and direction without inventing a finger trajectory.
+- **Pass (source):** app surfaces and overlay share cool porcelain/deep navy, blue/cyan accents, rounded shapes and restrained depth. `CalmAmbientSurface` caches 8% blue and 5% cyan radial gradients without running an idle animation. Native panel controls use 56dp minimum height and quiet native ripple/haptic feedback.
+- **Pass after correction (measured palette/source):** The initial tertiary contrast finding was corrected to light `Paper` on `Amber` (4.68:1) and dark `PaperDark` on `AmberDark` (11.57:1). Primary pairs measured 5.70:1 light and 9.47:1 dark. `CalmThemeContrastTest` now checks actual Material primary/secondary/tertiary/error/surface/container foreground/background role pairs against 4.5:1 in both themes. Test execution awaits CI. These are sRGB token calculations, not rendered-device contrast measurements.
+- **Pass after correction (source):** The stale completion-label finding was corrected with `ControlSession.feedback(text, expectedEpoch)`, `ControlPort.feedbackAtEpoch`, and the Android override. Both final observe/action labels carry their original visual epoch. The restarted-session regression now asserts that an old result label cannot replace the new session label. This review establishes the generic operation final-feedback path; it does not claim every possible producer in the whole app was exhaustively race-tested. CI execution remains pending.
+
+Physical screenshot review, full font-scale/clipping assessment, animation frame timing, exact-coordinate alignment on device, battery draw, and human evaluation of motion remain **Not Tested**. A pass in source review must not be promoted to those acceptance results.
+
+### Corrective re-review
+
+The two findings above were re-read against the final integrated source. Both are resolved at source/token-calculation level. No implementation files were changed by this re-review. Overall motion/design review result: **Source Pass; automated runtime validation pending CI; physical/human visual acceptance Not Tested.**

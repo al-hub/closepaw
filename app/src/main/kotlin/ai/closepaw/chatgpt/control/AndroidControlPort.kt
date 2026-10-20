@@ -44,6 +44,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     override fun session() = AgentService.instance?.remoteControlSession
     override fun bindResume(check: suspend () -> Boolean) { AgentService.instance?.remoteResumeCheck = check }
     override suspend fun feedback(label: String) { withContext(Dispatchers.Main) { session()?.feedback(label) } }
+    override suspend fun feedbackAtEpoch(label: String, expectedEpoch: Long?) {
+        withContext(Dispatchers.Main) { session()?.feedback(label, expectedEpoch) }
+    }
     override suspend fun presentation(phase: ControlSession.VisualPhase, expectedEpoch: Long?) {
         withContext(Dispatchers.Main) { session()?.present(phase, expectedEpoch) }
     }

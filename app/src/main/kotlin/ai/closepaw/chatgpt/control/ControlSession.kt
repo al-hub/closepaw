@@ -69,8 +69,8 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         explicit && sessionId != id -> "control_session_id_required"
         else -> null
     }
-    @Synchronized fun feedback(text: String) {
-        if (state != State.ACTIVE) return
+    @Synchronized fun feedback(text: String, expectedEpoch: Long? = null) {
+        if (state != State.ACTIVE || (expectedEpoch != null && epoch != expectedEpoch)) return
         label = text; changed()
     }
     private fun transition(next: State, text: String) {

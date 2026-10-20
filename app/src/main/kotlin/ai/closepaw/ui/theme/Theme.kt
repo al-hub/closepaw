@@ -15,13 +15,13 @@ import androidx.core.view.WindowCompat
 
 // D1 → Material role mapping (design_aligned.md §1).
 // InkFaint stays in ClosePawTokens — it is a text role, not a Material slot.
-private val ClosePawLightColorScheme = lightColorScheme(
+internal val ClosePawLightColorScheme = lightColorScheme(
     primary = Claw,
     onPrimary = Paper,
     secondary = Moss,
     onSecondary = Paper,
     tertiary = Amber,
-    onTertiary = Ink,
+    onTertiary = Paper,
     error = Rust,
     onError = Paper,
     primaryContainer = PrimaryContainerLight,
@@ -47,13 +47,13 @@ private val ClosePawLightColorScheme = lightColorScheme(
     outlineVariant = InkGhost,
 )
 
-private val ClosePawDarkColorScheme = darkColorScheme(
+internal val ClosePawDarkColorScheme = darkColorScheme(
     primary = ClawDark,
     onPrimary = PaperDark,
     secondary = MossDark,
     onSecondary = PaperDark,
     tertiary = AmberDark,
-    onTertiary = InkDark,
+    onTertiary = PaperDark,
     error = RustDark,
     onError = PaperDark,
     primaryContainer = PrimaryContainerDark,

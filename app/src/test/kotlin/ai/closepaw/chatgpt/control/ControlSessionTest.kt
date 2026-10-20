@@ -67,6 +67,8 @@ class ControlSessionTest {
         org.junit.Assert.assertEquals(ControlSession.VisualPhase.EXECUTING, session.visualPhase)
         session.end(); session.start()
         session.present(ControlSession.VisualPhase.FAILED, epoch)
+        session.feedback("old result", epoch)
+        org.junit.Assert.assertEquals("AI 제어 중", session.label)
         org.junit.Assert.assertEquals(ControlSession.VisualPhase.PREPARING, session.visualPhase)
     }
 }
