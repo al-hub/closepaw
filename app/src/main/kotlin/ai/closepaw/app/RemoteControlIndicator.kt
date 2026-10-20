@@ -3,20 +3,20 @@ package ai.closepaw.app
 import ai.closepaw.chatgpt.control.ControlSession
 import ai.closepaw.util.recycleCompat
 import android.accessibilityservice.AccessibilityService
-import android.animation.ValueAnimator
 import android.graphics.*
-import android.os.SystemClock
 import android.view.*
-import android.view.accessibility.AccessibilityManager
 import android.widget.Button
 
-/** Decorative window passes every touch; only separate 48dp control windows accept input. */
+/** Full-screen decoration never receives touch; only bounded panel / emergency X windows do. */
 internal class RemoteControlIndicator(private val service: AccessibilityService,
     private val session: ControlSession, private val resume: () -> Unit) {
     private val manager = service.getSystemService(WindowManager::class.java)
     private val windows = mutableListOf<View>()
     private var border: Border? = null
-    private var pause: Button? = null
+    private var panel: RemoteControlPanel? = null
+    private var stoppedResult = false
+    private var panelX = 12
+    private var panelY = 80
     private val density get() = service.resources.displayMetrics.density
     private fun dp(value: Int) = (value * density).toInt()
     private fun owns(view: View, id: Int): Boolean {
@@ -26,7 +26,7 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
     fun ownsWindow(id: Int) = id >= 0 && windows.any { owns(it, id) }
     fun controlCovers(rect: Rect): Boolean = windows.filter { it !== border }.any {
         val point = IntArray(2); it.getLocationOnScreen(point)
-        Rect(point[0], point[1], point[0] + it.width, point[1] + it.height).contains(rect.centerX(), rect.centerY())
+        Rect.intersects(Rect(point[0], point[1], point[0] + it.width, point[1] + it.height), rect)
     }
     fun isAttached() = border?.isAttachedToWindow == true
     private fun unlocked() = !service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
@@ -34,65 +34,83 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
     private val guard = object : Runnable {
         override fun run() {
             if (!unlocked()) { session.pause(); hide(); return }
-            placePause(); border?.postDelayed(this, 500)
+            placePanel(); border?.postDelayed(this, 500)
         }
     }
     fun show(testOnly: Boolean = false) {
-        if (!unlocked() || (!testOnly && session.state in setOf(ControlSession.State.IDLE, ControlSession.State.ENDED))) { hide(); return }
+        if (session.state != ControlSession.State.ENDED) stoppedResult = false
+        if (!unlocked() || (!testOnly && (session.state == ControlSession.State.IDLE ||
+                session.state == ControlSession.State.ENDED && !stoppedResult))) { hide(); return }
         if (border == null) {
             try {
                 val decoration = Border()
                 add(decoration, WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
                     Gravity.TOP or Gravity.START, 0, 0, touchable = false)
                 border = decoration
-                if (!testOnly) add(button("✕", "AI 제어 완전 종료") { session.end() },
-                    dp(48), dp(48), Gravity.TOP or Gravity.RIGHT, dp(12), dp(38))
+                if (!testOnly) add(closeButton(), dp(56), dp(56), Gravity.TOP or Gravity.RIGHT, dp(12), dp(38))
                 decoration.post(guard)
             } catch (_: Exception) { hide(); session.pause(); return }
         }
-        if (!testOnly && session.state != ControlSession.State.REOBSERVING && pause == null) {
+        // Physical resume temporarily removes the app-covering panel before fresh observation.
+        // The independent emergency X remains available throughout reobservation.
+        if (session.state == ControlSession.State.REOBSERVING) removePanel()
+        if (!testOnly && session.state != ControlSession.State.REOBSERVING && panel == null) {
             try {
-            pause = button("⏸", "AI 제어 일시정지") {
-                when (session.state) {
-                    ControlSession.State.PAUSED -> { removePause(); resume() }
-                    ControlSession.State.WAITING -> { removePause(); session.userResponded(); resume() }
-                    else -> session.pause()
-                }
-            }.also { add(it, dp(56), dp(56), Gravity.BOTTOM or Gravity.RIGHT, dp(12), dp(80)) }
+                panel = RemoteControlPanel(service, session,
+                    resume = { removePanel(); resume() },
+                    stop = { stoppedResult = true; session.end(); show() },
+                    moved = { dx, dy ->
+                        panelX = (panelX - dx / density).toInt()
+                        panelY = (panelY - dy / density).toInt()
+                        placePanel()
+                    }).also { add(it, panelWidth(), WindowManager.LayoutParams.WRAP_CONTENT,
+                        Gravity.BOTTOM or Gravity.RIGHT, dp(panelX), dp(panelY)) }
             } catch (_: Exception) { hide(); session.pause(); return }
         }
-        pause?.apply {
-            text = when (session.state) { ControlSession.State.PAUSED -> "▶"; ControlSession.State.WAITING -> "✓"; else -> "⏸" }
-            contentDescription = when (session.state) {
-                ControlSession.State.PAUSED -> "화면 확인 후 AI 제어 재개"
-                ControlSession.State.WAITING -> "사용자 응답 완료 후 화면 확인"
-                else -> "AI 제어 일시정지"
-            }
-        }
+        panel?.update(stoppedResult)
+        placePanel()
         border?.invalidate()
     }
-    /** Release the touched overlay window before observing the app; the emergency X stays available. */
-    private fun removePause() {
-        val attached = pause ?: return
-        manager.removeViewImmediate(attached); windows.remove(attached); pause = null
+    private fun panelWidth() = minOf(dp(288), service.resources.displayMetrics.widthPixels - dp(24)).coerceAtLeast(dp(120))
+    private fun removePanel() {
+        val attached = panel ?: return
+        manager.removeViewImmediate(attached); windows.remove(attached); panel = null
     }
-    private fun placePause() {
-        val button = pause ?: return
-        val params = button.layoutParams as WindowManager.LayoutParams
+    private fun placePanel() {
+        val view = panel ?: return
+        val params = view.layoutParams as WindowManager.LayoutParams
         val nativeWindows = service.windows.orEmpty()
         val keyboardTop = try {
             nativeWindows.filter { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
                 .map { window -> Rect().also { window.getBoundsInScreen(it) } }.minOfOrNull { it.top }
         } finally { nativeWindows.forEach { runCatching { it.recycle() } } }
-        val height = service.resources.displayMetrics.heightPixels
-        val y = maxOf(dp(80), keyboardTop?.let { height - it + dp(12) } ?: 0)
-        if (params.y != y) { params.y = y; manager.updateViewLayout(button, params) }
+        val metrics = service.resources.displayMetrics
+        val maxX = maxOf(dp(12), metrics.widthPixels - panelWidth() - dp(12))
+        val minY = maxOf(dp(24), keyboardTop?.let { metrics.heightPixels - it + dp(12) } ?: dp(24))
+        // Optional actions collapse first. If IME consumes almost the entire screen,
+        // the emergency row stays on-screen even when it must overlap the keyboard.
+        if (view.fitAvailableHeight(metrics.heightPixels - minY - dp(104))) view.post { placePanel() }
+        val maxY = maxOf(dp(12), metrics.heightPixels - view.height - dp(104))
+        val nextX = dp(panelX).coerceIn(dp(12), maxX)
+        val nextY = maxOf(dp(panelY), minY).coerceAtMost(maxY)
+        val nextWidth = panelWidth()
+        if (params.x != nextX || params.y != nextY || params.width != nextWidth) {
+            params.x = nextX; params.y = nextY; params.width = nextWidth
+            if (view.isAttachedToWindow) runCatching { manager.updateViewLayout(view, params) }
+        }
     }
-    private fun button(label: String, description: String, action: () -> Unit) = Button(service).apply {
-        text = label; textSize = 20f; setPadding(0, 0, 0, 0)
-        setTextColor(Color.WHITE); setBackgroundColor(Color.rgb(0, 65, 85))
-        contentDescription = description; isFocusable = false
-        setOnClickListener { action(); show() }
+    private fun closeButton() = Button(service).apply {
+        text = "✕"; textSize = 22f; setPadding(0, 0, 0, 0)
+        setTextColor(Color.WHITE)
+        background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x4459C9DD),
+            android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.rgb(21, 45, 62)); cornerRadius = dp(18).toFloat(); setStroke(dp(1), Color.rgb(100, 152, 169))
+            }, null)
+        contentDescription = "AI 제어 세션 종료 및 패널 닫기"; isFocusable = true
+        setOnClickListener {
+            performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            stoppedResult = false; session.end(); hide()
+        }
     }
     private fun add(view: View, width: Int, height: Int, gravity: Int, x: Int, y: Int, touchable: Boolean = true) {
         val params = WindowManager.LayoutParams(width, height, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -104,37 +122,10 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
     fun hide() {
         border?.removeCallbacks(guard)
         windows.toList().forEach { runCatching { manager.removeViewImmediate(it) } }
-        windows.clear(); border = null; pause = null
+        windows.clear(); border = null; panel = null
     }
-    private inner class Border : View(service) {
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        var target: Rect? = null
-        var targetUntil = 0L
-        init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS; isClickable = false; isFocusable = false }
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            val waiting = session.state == ControlSession.State.WAITING
-            val animate = waiting && ValueAnimator.areAnimatorsEnabled() &&
-                !service.getSystemService(AccessibilityManager::class.java).isTouchExplorationEnabled
-            paint.color = if (waiting) Color.rgb(255, 190, 75) else Color.rgb(0, 185, 225)
-            paint.alpha = if (animate) (170 + 65 * kotlin.math.sin(SystemClock.elapsedRealtime() / 650.0)).toInt() else 230
-            paint.style = Paint.Style.STROKE; paint.strokeWidth = 4 * density
-            canvas.drawRoundRect(RectF(2 * density, 2 * density, width - 2 * density, height - 2 * density), 18 * density, 18 * density, paint)
-            target?.takeIf { SystemClock.elapsedRealtime() < targetUntil }?.let {
-                canvas.drawCircle(it.exactCenterX(), it.exactCenterY(), 18 * density, paint)
-                canvas.drawRect(it, paint); postInvalidateDelayed(32)
-            }
-            paint.alpha = 255; paint.style = Paint.Style.FILL; paint.textSize = 13 * resources.displayMetrics.scaledDensity
-            val label = session.label
-            val labelWidth = minOf(paint.measureText(label) + 24 * density, width - 100 * density)
-            val left = (width - labelWidth) / 2; val top = 94 * density
-            paint.color = Color.rgb(0, 65, 85)
-            canvas.drawRoundRect(RectF(left, top, left + labelWidth, top + 34 * density), 10 * density, 10 * density, paint)
-            paint.color = Color.WHITE
-            canvas.save(); canvas.clipRect(left, top, left + labelWidth, top + 34 * density)
-            canvas.drawText(label, left + 8 * density, top + 23 * density, paint); canvas.restore()
-            if (animate) postInvalidateDelayed(33)
-        }
-    }
-    fun target(rect: Rect) { border?.apply { target = Rect(rect); targetUntil = SystemClock.elapsedRealtime() + 650; invalidate() } }
+    private inner class Border : PremiumControlDecoration(service, session)
+    fun target(rect: Rect) { border?.target(rect) }
+    fun action(rect: Rect, kind: String, completed: Boolean?) { border?.action(rect, kind, completed) }
+    fun tap(rect: Rect, x: Float, y: Float) { border?.tap(rect, x, y) }
 }

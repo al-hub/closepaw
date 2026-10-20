@@ -2,6 +2,12 @@ package ai.closepaw.ui.overlay.compose
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.PixelFormat
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.PowerManager
+import android.app.KeyguardManager
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
@@ -25,12 +31,13 @@ class VisualizerOverlayHost(
     private val service: AccessibilityService,
     lifecycleOwner: LifecycleOwner,
     savedStateRegistryOwner: SavedStateRegistryOwner,
+    private val renderAllowed: () -> Boolean = { true },
 ) {
     companion object {
         private const val TAG = "VisualizerOverlayHost"
         private const val CLICK_DURATION_MS = 500L
         private const val SWIPE_EXTRA_DURATION_MS = 400L
-        private const val EDGE_PADDING = 10f
+        private const val MAX_ITEMS = 6
     }
 
     private val windowManager = service.getSystemService(WindowManager::class.java)
@@ -45,19 +52,38 @@ class VisualizerOverlayHost(
     private val items = MutableStateFlow<List<VisualizationItem>>(emptyList())
     private val nextId = AtomicLong(1)
 
-    private var screenWidth = 0
-    private var screenHeight = 0
     private var disposed = false
+    private var guardJob: Job? = null
+    private var receiverRegistered = false
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) { clear() }
+    }
 
-    fun showClick(x: Float, y: Float, longPress: Boolean) {
-        if (disposed) return
+    private fun mayRender() = !disposed && renderAllowed() &&
+        service.getSystemService(PowerManager::class.java).isInteractive &&
+        !service.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+
+    /** Synchronously drops effects on pause/takeover; no automatic replay after resume. */
+    fun clear() {
+        items.value = emptyList()
+        guardJob?.cancel(); guardJob = null
+        composeHost.hide()
+        if (receiverRegistered) {
+            runCatching { service.unregisterReceiver(screenReceiver) }
+            receiverRegistered = false
+        }
+    }
+
+    fun showClick(x: Float, y: Float, longPress: Boolean, holdDurationMs: Long = CLICK_DURATION_MS) {
+        if (!mayRender()) { clear(); return }
         ensureOverlay()
         val item = VisualizationItem.Click(
             id = nextId.getAndIncrement(),
             createdAtMs = SystemClock.uptimeMillis(),
-            durationMs = CLICK_DURATION_MS,
-            x = clampX(x),
-            y = clampY(y),
+            durationMs = if (longPress) holdDurationMs.coerceAtLeast(1) + SWIPE_EXTRA_DURATION_MS else CLICK_DURATION_MS,
+            gestureDurationMs = if (longPress) holdDurationMs.coerceAtLeast(1) else CLICK_DURATION_MS,
+            x = x,
+            y = y,
             longPress = longPress,
         )
         addItem(item)
@@ -71,16 +97,17 @@ class VisualizerOverlayHost(
         durationMs: Long,
         scroll: Boolean,
     ) {
-        if (disposed) return
+        if (!mayRender()) { clear(); return }
         ensureOverlay()
         val item = VisualizationItem.Swipe(
             id = nextId.getAndIncrement(),
             createdAtMs = SystemClock.uptimeMillis(),
-            durationMs = durationMs + SWIPE_EXTRA_DURATION_MS,
-            startX = clampX(startX),
-            startY = clampY(startY),
-            endX = clampX(endX),
-            endY = clampY(endY),
+            durationMs = durationMs.coerceAtLeast(1) + SWIPE_EXTRA_DURATION_MS,
+            startX = startX,
+            startY = startY,
+            endX = endX,
+            endY = endY,
+            gestureDurationMs = durationMs.coerceAtLeast(1),
             scroll = scroll,
         )
         addItem(item)
@@ -88,15 +115,22 @@ class VisualizerOverlayHost(
 
     fun dispose() {
         disposed = true
-        items.value = emptyList()
-        composeHost.hide()
+        clear()
         composeHost.dispose()
         scope.cancel()
     }
 
     private fun ensureOverlay() {
         if (composeHost.isShowing()) return
-        updateScreenDimensions()
+        if (!receiverRegistered) {
+            if (Build.VERSION.SDK_INT >= 33) service.registerReceiver(screenReceiver,
+                IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
+            else {
+                @Suppress("DEPRECATION")
+                service.registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+            }
+            receiverRegistered = true
+        }
         composeHost.show(createLayoutParams()) {
             val renderItems by items.collectAsState(initial = emptyList())
             ActionVisualizerCompose(items = renderItems)
@@ -105,27 +139,16 @@ class VisualizerOverlayHost(
     }
 
     private fun addItem(item: VisualizationItem) {
-        items.update { it + item }
-        scope.launch {
-            delay(item.durationMs)
-            items.update { list -> list.filterNot { it.id == item.id } }
+        items.update { (it + item).takeLast(MAX_ITEMS) }
+        if (guardJob?.isActive != true) guardJob = scope.launch {
+            while (items.value.isNotEmpty()) {
+                if (!mayRender()) { clear(); return@launch }
+                val now = SystemClock.uptimeMillis()
+                items.update { list -> list.filter { now - it.createdAtMs < it.durationMs } }
+                if (items.value.isNotEmpty()) delay(32)
+            }
+            clear()
         }
-    }
-
-    private fun updateScreenDimensions() {
-        val metrics = service.resources.displayMetrics
-        screenWidth = metrics.widthPixels
-        screenHeight = metrics.heightPixels
-    }
-
-    private fun clampX(x: Float): Float {
-        if (screenWidth <= 0) return x
-        return x.coerceIn(EDGE_PADDING, screenWidth - EDGE_PADDING)
-    }
-
-    private fun clampY(y: Float): Float {
-        if (screenHeight <= 0) return y
-        return y.coerceIn(EDGE_PADDING, screenHeight - EDGE_PADDING)
     }
 
     private fun createLayoutParams(): WindowManager.LayoutParams {

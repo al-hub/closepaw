@@ -408,13 +408,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 ?: return ControlEffect(false, false, "touch_target_clipped_or_covered")
             val region = Region(); window.getRegionInScreen(region)
             if (!region.contains(point.first, point.second)) return ControlEffect(false, false, "touch_target_outside_region")
-            if (service.remoteControlCovers(targetBounds)) return ControlEffect(false, false, "control_button_covers_target")
+            if (service.remoteControlCovers(Rect(point.first, point.second, point.first + 1, point.second + 1))) return ControlEffect(false, false, "control_button_covers_target")
             session()?.refusal(session()?.id, mutation = true)?.let { return ControlEffect(false, false, it) }
             reason(service)?.let { return ControlEffect(false, false, it) }
             mutationBlock(frame.packageName)?.let { return ControlEffect(false, false, it) }
             val path = Path().apply { moveTo(point.first.toFloat(), point.second.toFloat()) }
             val gesture = GestureDescription.Builder().setDisplayId(android.view.Display.DEFAULT_DISPLAY)
                 .addStroke(GestureDescription.StrokeDescription(path, 0, 50)).build()
+            val eventEpoch = service.remoteControlSession.epoch
             return suspendCancellableCoroutine { continuation ->
                 val submitted = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
                     override fun onCompleted(gestureDescription: GestureDescription?) {
@@ -424,6 +425,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         if (continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_cancelled"))
                     }
                 }, null)
+                if (submitted && service.remoteControlSession.epoch == eventEpoch)
+                    service.showRemoteControlTap(targetBounds, point.first.toFloat(), point.second.toFloat())
                 // Even a negative dispatch acknowledgement is conservatively not replayable.
                 if (!submitted && continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_unconfirmed"))
             }
@@ -480,7 +483,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 target.viewIdResourceName.orEmpty().take(100) != expected.resourceId || rect.flattenToString() != expected.bounds ||
                 (Build.VERSION.SDK_INT >= 34 && target.isAccessibilityDataSensitive))
                 return@withTree ControlEffect(false, false, "target_changed")
-            if (service.remoteControlCovers(rect)) return@withTree ControlEffect(false, false, "control_button_covers_target")
+            // Semantic accessibility actions do not inject a point. Large scroll containers
+            // may overlap the panel; only the actual injected tap point is occlusion-gated.
             service.showRemoteControlTarget(rect)
             session()?.feedback(if (action == "scroll") "스크롤 · 화면 탐색 중" else "AI 대상 조작 중")
             if (action == "tap") {
@@ -508,6 +512,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 }
                 else -> return@withTree ControlEffect(false, false, "unsupported_action")
             }
+            service.showRemoteControlAction(rect,
+                if (action == "scroll") "scroll_${input.getValue("direction").jsonPrimitive.content}" else action,
+                acknowledged)
             ControlEffect(true, acknowledged, if (acknowledged) "action_acknowledged" else "action_unconfirmed")
         }
         return effect

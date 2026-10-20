@@ -30,6 +30,10 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         if (state !in setOf(State.ACTIVE, State.WAITING, State.REOBSERVING)) return
         transition(State.PAUSED, "사용자 제어 중 · 일시정지"); interrupt()
     }
+    @Synchronized fun manualTakeover() {
+        if (state !in setOf(State.ACTIVE, State.WAITING, State.REOBSERVING, State.PAUSED)) return
+        transition(State.PAUSED, "직접 조작 중 · AI 일시정지"); interrupt()
+    }
     @Synchronized fun end() {
         transition(State.ENDED, "AI 제어 종료"); interrupt()
     }
