@@ -321,7 +321,7 @@ class MainActivity : ComponentActivity() {
                             }) { Text("패널 복원") }
                         },
                         dismissButton = {
-                            TextButton(onClick = { showControlRecovery = false }) { Text("닫기") }
+                            TextButton(onClick = { showControlRecovery = false; openAccessibilitySettings(this@MainActivity) }) { Text("접근성 설정") }
                         }
                     )
                 }
