@@ -40,6 +40,30 @@ class IslandOverlayHost(
 
     private var stateHolder: CapsuleStateHolder? = null
     private var readOnly = false
+    private val positions = service.getSharedPreferences("closepaw_island_position", android.content.Context.MODE_PRIVATE)
+    private var islandX = positions.getInt("x", -1)
+    private var islandY = positions.getInt("y", -1)
+    private var fractionX = 0f
+    private var fractionY = 0f
+    private fun dragBy(dx: Float, dy: Float) {
+        val metrics = service.resources.displayMetrics
+        val maxX = (metrics.widthPixels - dp(280)).coerceAtLeast(0)
+        val maxY = (metrics.heightPixels - dp(64)).coerceAtLeast(0)
+        fractionX += dx
+        fractionY += dy
+        val stepX = fractionX.toInt()
+        val stepY = fractionY.toInt()
+        fractionX -= stepX
+        fractionY -= stepY
+        islandX = ((if (islandX < 0) maxX / 2 else islandX) + stepX).coerceIn(0, maxX)
+        islandY = ((if (islandY < 0) getStatusBarHeight() + dp(4) else islandY) + stepY).coerceIn(0, maxY)
+        composeHost.updateLayoutParams { it.x = islandX; it.y = islandY }
+    }
+    private fun persistPosition() {
+        if (islandX >= 0 && islandY >= 0) {
+            positions.edit().putInt("x", islandX).putInt("y", islandY).apply()
+        }
+    }
 
     /** The active control island is status-only: never intercept screen touches. */
     fun setReadOnly(enabled: Boolean) {
@@ -61,6 +85,8 @@ class IslandOverlayHost(
                     dotColor = MaterialTheme.colorScheme.primary,
                     pulsing = true,
                     onClick = if (readOnly) null else onExpandCapsule,
+                    onDrag = if (readOnly) ::dragBy else null,
+                    onDragEnd = if (readOnly) ::persistPosition else null,
                 )
             } else {
                 val mode by holder.mode.collectAsState(initial = CapsuleMode.Hidden)
@@ -72,6 +98,8 @@ class IslandOverlayHost(
                     dotColor = glowState.toStatusColor(),
                     pulsing = mode is CapsuleMode.Running,
                     onClick = if (readOnly) null else onExpandCapsule,
+                    onDrag = if (readOnly) ::dragBy else null,
+                    onDragEnd = if (readOnly) ::persistPosition else null,
                 )
             }
         }
@@ -118,11 +146,14 @@ class IslandOverlayHost(
             },
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                (if (readOnly) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0),
+                0,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = statusBarHeight + dp(4)
+            gravity = Gravity.TOP or Gravity.START
+            val maxX = (service.resources.displayMetrics.widthPixels - dp(280)).coerceAtLeast(0)
+            val maxY = (service.resources.displayMetrics.heightPixels - dp(64)).coerceAtLeast(0)
+            x = (if (islandX < 0) maxX / 2 else islandX).coerceIn(0, maxX)
+            y = (if (islandY < 0) statusBarHeight + dp(4) else islandY).coerceIn(0, maxY)
         }
     }
 
