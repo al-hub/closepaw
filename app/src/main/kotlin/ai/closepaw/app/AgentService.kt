@@ -272,7 +272,13 @@ class AgentService : AccessibilityService() {
                         scope = serviceScope,
                         appPackage = OUR_PACKAGE,
                         logTag = TAG,
-                        onStop = { submitOp(Op.Shutdown) },
+                        onStop = {
+                            // A single visible emergency X must stop both independently
+                            // tracked control sessions, not just the agent task.
+                            remoteControlSession.end()
+                            hideRemoteControlActivity(force = true)
+                            submitOp(Op.Shutdown)
+                        },
                         onTakeover = { submitOp(Op.Takeover) },
                         onResume = { submitOp(Op.Resume) },
                         onSupplement = { text -> submitOp(Op.Supplement(text)) },
