@@ -142,11 +142,11 @@ class ServiceOverlayController(
 
     /** User preference: capsule or island while overlays are visible (A11y/VD). */
     private var showPreference = ShowPreference.ISLAND
-    private var remoteStatus: String? = null
+    private var remoteStatusText: String? = null
 
     /** Remote UI shares the existing island, including when no local agent task exists. */
     fun setRemoteStatus(text: String?) {
-        remoteStatus = text
+        remoteStatusText = text
         applyVisibility()
     }
 
@@ -223,8 +223,8 @@ class ServiceOverlayController(
             capsuleManager.hide()
         }
 
-        val showRemoteIsland = remoteStatus != null && !stateHolder.hasActiveTask
-        statusIslandManager?.setRemoteStatus(if (showRemoteIsland) remoteStatus else null)
+        val showRemoteIsland = remoteStatusText != null && !stateHolder.hasActiveTask
+        statusIslandManager?.setRemoteStatus(if (showRemoteIsland) remoteStatusText else null)
         statusIslandManager?.setReadOnly(showSingleX || showRemoteIsland)
         if (activeSurfaces.showStatusIsland || showRemoteIsland) {
             if (statusIslandManager?.isShowing() != true) statusIslandManager?.show()

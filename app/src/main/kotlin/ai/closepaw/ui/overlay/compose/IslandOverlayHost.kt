@@ -43,10 +43,10 @@ class IslandOverlayHost(
 
     private var stateHolder: CapsuleStateHolder? = null
     private var readOnly = false
-    private var remoteStatus by mutableStateOf<String?>(null)
+    private var remoteStatusText by mutableStateOf<String?>(null)
 
     /** Same window serves bridge-only sessions; never create another status surface. */
-    fun setRemoteStatus(text: String?) { remoteStatus = text }
+    fun setRemoteStatus(text: String?) { remoteStatusText = text }
     private val positions = service.getSharedPreferences("closepaw_island_position", android.content.Context.MODE_PRIVATE)
     private var islandX = positions.getInt("x", -1)
     private var islandY = positions.getInt("y", -1)
@@ -95,7 +95,7 @@ class IslandOverlayHost(
         if (composeHost.isShowing()) return
         composeHost.show(createLayoutParams()) {
             val holder = stateHolder
-            val remote = remoteStatus
+            val remote = remoteStatusText
             if (remote != null || holder == null) {
                 StatusIslandCompose(
                     text = remote ?: "Working...",
