@@ -1,0 +1,1546 @@
+{
+  "source": "04c849b701c0d6a4c8dd332053619a7135db2584",
+  "version": "0.1.75",
+  "version_code": 76,
+  "baseline": {
+    "main_ci": {
+      "run_id": 39608950694,
+      "event": "push",
+      "head_sha": "c124f3f86994664c9685b883cb31e1796b38c894",
+      "created_at": "2026-10-21T13:32:52Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119252424340,
+          "name": "security-build-test",
+          "started_at": "2026-10-21T13:32:56Z",
+          "completed_at": "2026-10-21T13:40:51Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T13:32:57Z",
+              "completed_at": "2026-10-21T13:32:58Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T13:32:58Z",
+              "completed_at": "2026-10-21T13:33:00Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T13:33:00Z",
+              "completed_at": "2026-10-21T13:33:00Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T13:33:00Z",
+              "completed_at": "2026-10-21T13:33:09Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-go@v5",
+              "started_at": "2026-10-21T13:33:09Z",
+              "completed_at": "2026-10-21T13:33:10Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify bridge is loopback-only by default",
+              "started_at": "2026-10-21T13:33:10Z",
+              "completed_at": "2026-10-21T13:33:10Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Termux bridge tests",
+              "started_at": "2026-10-21T13:33:10Z",
+              "completed_at": "2026-10-21T13:33:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "ChatGPT bridge core tests",
+              "started_at": "2026-10-21T13:33:34Z",
+              "completed_at": "2026-10-21T13:33:35Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Reject obvious committed secrets",
+              "started_at": "2026-10-21T13:33:35Z",
+              "completed_at": "2026-10-21T13:33:35Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify signed APK release gate",
+              "started_at": "2026-10-21T13:33:35Z",
+              "completed_at": "2026-10-21T13:33:35Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Android unit tests and lint",
+              "started_at": "2026-10-21T13:33:35Z",
+              "completed_at": "2026-10-21T13:38:44Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Android test reports",
+              "started_at": "2026-10-21T13:38:44Z",
+              "completed_at": "2026-10-21T13:38:45Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build bundled cloudflared for Android",
+              "started_at": "2026-10-21T13:38:45Z",
+              "completed_at": "2026-10-21T13:39:48Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build debug APK",
+              "started_at": "2026-10-21T13:39:48Z",
+              "completed_at": "2026-10-21T13:40:19Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload debug APK",
+              "started_at": "2026-10-21T13:40:19Z",
+              "completed_at": "2026-10-21T13:40:25Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-go@v5",
+              "started_at": "2026-10-21T13:40:25Z",
+              "completed_at": "2026-10-21T13:40:26Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T13:40:26Z",
+              "completed_at": "2026-10-21T13:40:49Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T13:40:49Z",
+              "completed_at": "2026-10-21T13:40:49Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T13:40:49Z",
+              "completed_at": "2026-10-21T13:40:49Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T13:40:49Z",
+              "completed_at": "2026-10-21T13:40:49Z",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "ui": {
+      "run_id": 39608950568,
+      "event": "push",
+      "head_sha": "c124f3f86994664c9685b883cb31e1796b38c894",
+      "created_at": "2026-10-21T13:32:52Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119252423897,
+          "name": "panel-instrumentation",
+          "started_at": "2026-10-21T13:32:55Z",
+          "completed_at": "2026-10-21T13:38:45Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T13:32:56Z",
+              "completed_at": "2026-10-21T13:33:01Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T13:33:01Z",
+              "completed_at": "2026-10-21T13:33:03Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T13:33:03Z",
+              "completed_at": "2026-10-21T13:33:03Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run android-actions/setup-android@v3",
+              "started_at": "2026-10-21T13:33:03Z",
+              "completed_at": "2026-10-21T13:33:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T13:33:13Z",
+              "completed_at": "2026-10-21T13:33:24Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Compile app and instrumented UI tests",
+              "started_at": "2026-10-21T13:33:24Z",
+              "completed_at": "2026-10-21T13:35:32Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Enable hardware acceleration",
+              "started_at": "2026-10-21T13:35:32Z",
+              "completed_at": "2026-10-21T13:35:32Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run native panel behavior and rendered-layout checks",
+              "started_at": "2026-10-21T13:35:32Z",
+              "completed_at": "2026-10-21T13:38:10Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report exact instrumentation failures",
+              "started_at": "2026-10-21T13:38:10Z",
+              "completed_at": "2026-10-21T13:38:10Z",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload UI test and rendered-layout evidence",
+              "started_at": "2026-10-21T13:38:10Z",
+              "completed_at": "2026-10-21T13:38:11Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T13:38:11Z",
+              "completed_at": "2026-10-21T13:38:43Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T13:38:43Z",
+              "completed_at": "2026-10-21T13:38:43Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T13:38:43Z",
+              "completed_at": "2026-10-21T13:38:43Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T13:38:43Z",
+              "completed_at": "2026-10-21T13:38:43Z",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "release": {
+      "run_id": 39610112952,
+      "event": "workflow_run",
+      "head_sha": "c124f3f86994664c9685b883cb31e1796b38c894",
+      "created_at": "2026-10-21T13:40:55Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119256462036,
+          "name": "signed-release",
+          "started_at": "2026-10-21T13:40:58Z",
+          "completed_at": "2026-10-21T13:51:38Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T13:40:59Z",
+              "completed_at": "2026-10-21T13:41:04Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T13:41:04Z",
+              "completed_at": "2026-10-21T13:41:08Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Resolve release version",
+              "started_at": "2026-10-21T13:41:08Z",
+              "completed_at": "2026-10-21T13:41:08Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate main and CI; classify release state",
+              "started_at": "2026-10-21T13:41:08Z",
+              "completed_at": "2026-10-21T13:41:09Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout OpenAI tunnel-client v0.0.15 source",
+              "started_at": "2026-10-21T13:41:09Z",
+              "completed_at": "2026-10-21T13:41:11Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T13:41:11Z",
+              "completed_at": "2026-10-21T13:41:11Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T13:41:11Z",
+              "completed_at": "2026-10-21T13:41:21Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-go@v5",
+              "started_at": "2026-10-21T13:41:21Z",
+              "completed_at": "2026-10-21T13:41:29Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Require signing secrets",
+              "started_at": "2026-10-21T13:41:29Z",
+              "completed_at": "2026-10-21T13:41:29Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Preflight signing identity against v0.1.33",
+              "started_at": "2026-10-21T13:41:29Z",
+              "completed_at": "2026-10-21T13:41:36Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build bundled OpenAI Secure MCP tunnel runtime for Android",
+              "started_at": "2026-10-21T13:41:36Z",
+              "completed_at": "2026-10-21T13:42:01Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build bundled cloudflared for Android",
+              "started_at": "2026-10-21T13:42:01Z",
+              "completed_at": "2026-10-21T13:42:49Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test and build signed release",
+              "started_at": "2026-10-21T13:42:49Z",
+              "completed_at": "2026-10-21T13:50:45Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Android test reports",
+              "started_at": "2026-10-21T13:50:45Z",
+              "completed_at": "2026-10-21T13:50:47Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate signer against previous signed Release",
+              "started_at": "2026-10-21T13:50:47Z",
+              "completed_at": "2026-10-21T13:50:48Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Create version tag only if absent",
+              "started_at": "2026-10-21T13:50:48Z",
+              "completed_at": "2026-10-21T13:50:51Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Publish missing Release",
+              "started_at": "2026-10-21T13:50:51Z",
+              "completed_at": "2026-10-21T13:51:02Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Independently verify public APK download",
+              "started_at": "2026-10-21T13:51:02Z",
+              "completed_at": "2026-10-21T13:51:07Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload public APK verification evidence",
+              "started_at": "2026-10-21T13:51:07Z",
+              "completed_at": "2026-10-21T13:51:09Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-go@v5",
+              "started_at": "2026-10-21T13:51:09Z",
+              "completed_at": "2026-10-21T13:51:09Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T13:51:09Z",
+              "completed_at": "2026-10-21T13:51:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T13:51:34Z",
+              "completed_at": "2026-10-21T13:51:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout OpenAI tunnel-client v0.0.15 source",
+              "started_at": "2026-10-21T13:51:34Z",
+              "completed_at": "2026-10-21T13:51:35Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T13:51:35Z",
+              "completed_at": "2026-10-21T13:51:35Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T13:51:35Z",
+              "completed_at": "2026-10-21T13:51:35Z",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 119256463751,
+          "name": "ensure-main-security-ci",
+          "started_at": "2026-10-21T13:40:56Z",
+          "completed_at": "2026-10-21T13:40:55Z",
+          "conclusion": "skipped",
+          "steps": []
+        }
+      ]
+    },
+    "pr_ci": {
+      "run_id": 39607783934,
+      "event": "pull_request",
+      "head_sha": "12f803ef28ef1589a092a5c34d3c3c4bb4bda076",
+      "created_at": "2026-10-21T13:24:55Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119248383905,
+          "name": "security-build-test",
+          "started_at": "2026-10-21T13:24:59Z",
+          "completed_at": "2026-10-21T13:32:30Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T13:25:00Z",
+              "completed_at": "2026-10-21T13:25:02Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T13:25:02Z",
+              "completed_at": "2026-10-21T13:25:04Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T13:25:04Z",
+              "completed_at": "2026-10-21T13:25:04Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T13:25:04Z",
+              "completed_at": "2026-10-21T13:25:18Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-go@v5",
+              "started_at": "2026-10-21T13:25:18Z",
+              "completed_at": "2026-10-21T13:25:20Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify bridge is loopback-only by default",
+              "started_at": "2026-10-21T13:25:20Z",
+              "completed_at": "2026-10-21T13:25:20Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Termux bridge tests",
+              "started_at": "2026-10-21T13:25:20Z",
+              "completed_at": "2026-10-21T13:25:45Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "ChatGPT bridge core tests",
+              "started_at": "2026-10-21T13:25:45Z",
+              "completed_at": "2026-10-21T13:25:45Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Reject obvious committed secrets",
+              "started_at": "2026-10-21T13:25:45Z",
+              "completed_at": "2026-10-21T13:25:45Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify signed APK release gate",
+              "started_at": "2026-10-21T13:25:45Z",
+              "completed_at": "2026-10-21T13:25:45Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Android unit tests and lint",
+              "started_at": "2026-10-21T13:25:45Z",
+              "completed_at": "2026-10-21T13:30:42Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Android test reports",
+              "started_at": "2026-10-21T13:30:42Z",
+              "completed_at": "2026-10-21T13:30:44Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build bundled cloudflared for Android",
+              "started_at": "2026-10-21T13:30:44Z",
+              "completed_at": "2026-10-21T13:31:48Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build debug APK",
+              "started_at": "2026-10-21T13:31:48Z",
+              "completed_at": "2026-10-21T13:32:19Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload debug APK",
+              "started_at": "2026-10-21T13:32:19Z",
+              "completed_at": "2026-10-21T13:32:26Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-go@v5",
+              "started_at": "2026-10-21T13:32:26Z",
+              "completed_at": "2026-10-21T13:32:26Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T13:32:26Z",
+              "completed_at": "2026-10-21T13:32:26Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T13:32:26Z",
+              "completed_at": "2026-10-21T13:32:27Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T13:32:27Z",
+              "completed_at": "2026-10-21T13:32:27Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T13:32:27Z",
+              "completed_at": "2026-10-21T13:32:27Z",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "pr_ui": {
+      "run_id": 39607783952,
+      "event": "pull_request",
+      "head_sha": "12f803ef28ef1589a092a5c34d3c3c4bb4bda076",
+      "created_at": "2026-10-21T13:24:55Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119248384131,
+          "name": "panel-instrumentation",
+          "started_at": "2026-10-21T13:24:59Z",
+          "completed_at": "2026-10-21T13:30:12Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T13:25:00Z",
+              "completed_at": "2026-10-21T13:25:03Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T13:25:03Z",
+              "completed_at": "2026-10-21T13:25:04Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T13:25:04Z",
+              "completed_at": "2026-10-21T13:25:04Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run android-actions/setup-android@v3",
+              "started_at": "2026-10-21T13:25:04Z",
+              "completed_at": "2026-10-21T13:25:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T13:25:13Z",
+              "completed_at": "2026-10-21T13:25:25Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Compile app and instrumented UI tests",
+              "started_at": "2026-10-21T13:25:25Z",
+              "completed_at": "2026-10-21T13:27:30Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Enable hardware acceleration",
+              "started_at": "2026-10-21T13:27:30Z",
+              "completed_at": "2026-10-21T13:27:30Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run native panel behavior and rendered-layout checks",
+              "started_at": "2026-10-21T13:27:30Z",
+              "completed_at": "2026-10-21T13:30:06Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report exact instrumentation failures",
+              "started_at": "2026-10-21T13:30:06Z",
+              "completed_at": "2026-10-21T13:30:06Z",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload UI test and rendered-layout evidence",
+              "started_at": "2026-10-21T13:30:06Z",
+              "completed_at": "2026-10-21T13:30:07Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T13:30:07Z",
+              "completed_at": "2026-10-21T13:30:08Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T13:30:08Z",
+              "completed_at": "2026-10-21T13:30:08Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T13:30:08Z",
+              "completed_at": "2026-10-21T13:30:08Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T13:30:08Z",
+              "completed_at": "2026-10-21T13:30:08Z",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "after": {
+    "main_ci": {
+      "run_id": 39617725426,
+      "event": "push",
+      "head_sha": "04c849b701c0d6a4c8dd332053619a7135db2584",
+      "created_at": "2026-10-21T14:32:42Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119282938178,
+          "name": "security-build-test",
+          "started_at": "2026-10-21T14:32:46Z",
+          "completed_at": "2026-10-21T14:40:27Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T14:32:47Z",
+              "completed_at": "2026-10-21T14:32:50Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:32:50Z",
+              "completed_at": "2026-10-21T14:32:51Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T14:32:51Z",
+              "completed_at": "2026-10-21T14:32:51Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T14:32:51Z",
+              "completed_at": "2026-10-21T14:33:09Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-go@v5",
+              "started_at": "2026-10-21T14:33:09Z",
+              "completed_at": "2026-10-21T14:33:10Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify bridge is loopback-only by default",
+              "started_at": "2026-10-21T14:33:10Z",
+              "completed_at": "2026-10-21T14:33:10Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Termux bridge tests",
+              "started_at": "2026-10-21T14:33:10Z",
+              "completed_at": "2026-10-21T14:33:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "ChatGPT bridge core tests",
+              "started_at": "2026-10-21T14:33:34Z",
+              "completed_at": "2026-10-21T14:33:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Reject obvious committed secrets",
+              "started_at": "2026-10-21T14:33:34Z",
+              "completed_at": "2026-10-21T14:33:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release input trust boundary",
+              "started_at": "2026-10-21T14:33:34Z",
+              "completed_at": "2026-10-21T14:33:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify signed APK release gate",
+              "started_at": "2026-10-21T14:33:34Z",
+              "completed_at": "2026-10-21T14:33:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Android unit tests and lint",
+              "started_at": "2026-10-21T14:33:34Z",
+              "completed_at": "2026-10-21T14:38:08Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Android test reports",
+              "started_at": "2026-10-21T14:38:08Z",
+              "completed_at": "2026-10-21T14:38:10Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build bundled cloudflared for Android",
+              "started_at": "2026-10-21T14:38:10Z",
+              "completed_at": "2026-10-21T14:39:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build debug APK",
+              "started_at": "2026-10-21T14:39:13Z",
+              "completed_at": "2026-10-21T14:39:42Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload debug APK",
+              "started_at": "2026-10-21T14:39:42Z",
+              "completed_at": "2026-10-21T14:39:49Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Gradle timing evidence",
+              "started_at": "2026-10-21T14:39:49Z",
+              "completed_at": "2026-10-21T14:39:51Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-go@v5",
+              "started_at": "2026-10-21T14:39:51Z",
+              "completed_at": "2026-10-21T14:39:51Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T14:39:51Z",
+              "completed_at": "2026-10-21T14:40:22Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T14:40:22Z",
+              "completed_at": "2026-10-21T14:40:22Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:40:22Z",
+              "completed_at": "2026-10-21T14:40:23Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T14:40:23Z",
+              "completed_at": "2026-10-21T14:40:23Z",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 119282938455,
+          "name": "unsigned-release",
+          "started_at": "2026-10-21T14:32:46Z",
+          "completed_at": "2026-10-21T14:42:50Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T14:32:46Z",
+              "completed_at": "2026-10-21T14:32:48Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:32:48Z",
+              "completed_at": "2026-10-21T14:32:50Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:32:50Z",
+              "completed_at": "2026-10-21T14:32:51Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T14:32:51Z",
+              "completed_at": "2026-10-21T14:32:52Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T14:32:52Z",
+              "completed_at": "2026-10-21T14:33:00Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-go@v5",
+              "started_at": "2026-10-21T14:33:00Z",
+              "completed_at": "2026-10-21T14:33:09Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build bundled OpenAI Secure MCP tunnel runtime for Android",
+              "started_at": "2026-10-21T14:33:09Z",
+              "completed_at": "2026-10-21T14:33:38Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build bundled cloudflared for Android",
+              "started_at": "2026-10-21T14:33:38Z",
+              "completed_at": "2026-10-21T14:34:35Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build optimized unsigned release",
+              "started_at": "2026-10-21T14:34:35Z",
+              "completed_at": "2026-10-21T14:42:04Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload unsigned release for exact main CI run",
+              "started_at": "2026-10-21T14:42:04Z",
+              "completed_at": "2026-10-21T14:42:05Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload release task timing evidence",
+              "started_at": "2026-10-21T14:42:05Z",
+              "completed_at": "2026-10-21T14:42:06Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-go@v5",
+              "started_at": "2026-10-21T14:42:06Z",
+              "completed_at": "2026-10-21T14:42:06Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T14:42:06Z",
+              "completed_at": "2026-10-21T14:42:46Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T14:42:46Z",
+              "completed_at": "2026-10-21T14:42:46Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:42:46Z",
+              "completed_at": "2026-10-21T14:42:47Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:42:47Z",
+              "completed_at": "2026-10-21T14:42:47Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T14:42:47Z",
+              "completed_at": "2026-10-21T14:42:47Z",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "ui": {
+      "run_id": 39617725429,
+      "event": "push",
+      "head_sha": "04c849b701c0d6a4c8dd332053619a7135db2584",
+      "created_at": "2026-10-21T14:32:42Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119282938337,
+          "name": "panel-instrumentation",
+          "started_at": "2026-10-21T14:32:46Z",
+          "completed_at": "2026-10-21T14:38:49Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T14:32:47Z",
+              "completed_at": "2026-10-21T14:32:49Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:32:49Z",
+              "completed_at": "2026-10-21T14:32:51Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T14:32:51Z",
+              "completed_at": "2026-10-21T14:32:51Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run android-actions/setup-android@v3",
+              "started_at": "2026-10-21T14:32:51Z",
+              "completed_at": "2026-10-21T14:33:02Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T14:33:02Z",
+              "completed_at": "2026-10-21T14:33:14Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Compile app and instrumented UI tests",
+              "started_at": "2026-10-21T14:33:14Z",
+              "completed_at": "2026-10-21T14:35:24Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Enable hardware acceleration",
+              "started_at": "2026-10-21T14:35:24Z",
+              "completed_at": "2026-10-21T14:35:24Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run native panel behavior and rendered-layout checks",
+              "started_at": "2026-10-21T14:35:24Z",
+              "completed_at": "2026-10-21T14:37:54Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report exact instrumentation failures",
+              "started_at": "2026-10-21T14:37:54Z",
+              "completed_at": "2026-10-21T14:37:54Z",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload UI test and rendered-layout evidence",
+              "started_at": "2026-10-21T14:37:54Z",
+              "completed_at": "2026-10-21T14:37:56Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T14:37:56Z",
+              "completed_at": "2026-10-21T14:38:26Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T14:38:26Z",
+              "completed_at": "2026-10-21T14:38:26Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:38:26Z",
+              "completed_at": "2026-10-21T14:38:26Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T14:38:26Z",
+              "completed_at": "2026-10-21T14:38:26Z",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "release": {
+      "run_id": 39619258531,
+      "event": "workflow_run",
+      "head_sha": "04c849b701c0d6a4c8dd332053619a7135db2584",
+      "created_at": "2026-10-21T14:42:53Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119287984667,
+          "name": "signed-release",
+          "started_at": "2026-10-21T14:42:57Z",
+          "completed_at": "2026-10-21T14:43:40Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T14:42:58Z",
+              "completed_at": "2026-10-21T14:42:59Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:42:59Z",
+              "completed_at": "2026-10-21T14:43:03Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Resolve release version",
+              "started_at": "2026-10-21T14:43:03Z",
+              "completed_at": "2026-10-21T14:43:03Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate main and CI; classify release state",
+              "started_at": "2026-10-21T14:43:03Z",
+              "completed_at": "2026-10-21T14:43:04Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Resolve exact trusted Security CI run",
+              "started_at": "2026-10-21T14:43:04Z",
+              "completed_at": "2026-10-21T14:43:04Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Download unsigned APK from exact CI run",
+              "started_at": "2026-10-21T14:43:04Z",
+              "completed_at": "2026-10-21T14:43:10Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify trusted main provenance and unsigned APK",
+              "started_at": "2026-10-21T14:43:10Z",
+              "completed_at": "2026-10-21T14:43:11Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Require signing secrets",
+              "started_at": "2026-10-21T14:43:11Z",
+              "completed_at": "2026-10-21T14:43:11Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Preflight signing identity against v0.1.33",
+              "started_at": "2026-10-21T14:43:11Z",
+              "completed_at": "2026-10-21T14:43:17Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Align and sign verified release with original key",
+              "started_at": "2026-10-21T14:43:17Z",
+              "completed_at": "2026-10-21T14:43:20Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Remove temporary signing material",
+              "started_at": "2026-10-21T14:43:20Z",
+              "completed_at": "2026-10-21T14:43:20Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate signer against previous signed Release",
+              "started_at": "2026-10-21T14:43:20Z",
+              "completed_at": "2026-10-21T14:43:21Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Create version tag only if absent",
+              "started_at": "2026-10-21T14:43:21Z",
+              "completed_at": "2026-10-21T14:43:23Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Publish missing Release",
+              "started_at": "2026-10-21T14:43:23Z",
+              "completed_at": "2026-10-21T14:43:31Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Independently verify public APK download",
+              "started_at": "2026-10-21T14:43:31Z",
+              "completed_at": "2026-10-21T14:43:35Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload public APK verification evidence",
+              "started_at": "2026-10-21T14:43:35Z",
+              "completed_at": "2026-10-21T14:43:37Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:43:37Z",
+              "completed_at": "2026-10-21T14:43:37Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T14:43:37Z",
+              "completed_at": "2026-10-21T14:43:37Z",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 119287986312,
+          "name": "ensure-main-security-ci",
+          "started_at": "2026-10-21T14:42:54Z",
+          "completed_at": "2026-10-21T14:42:53Z",
+          "conclusion": "skipped",
+          "steps": []
+        }
+      ]
+    },
+    "pr_ci": {
+      "run_id": 39615844117,
+      "event": "pull_request",
+      "head_sha": "f94131712cdc122a62dc52af5424269df2e073ed",
+      "created_at": "2026-10-21T14:19:14Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119277085238,
+          "name": "security-build-test",
+          "started_at": "2026-10-21T14:20:24Z",
+          "completed_at": "2026-10-21T14:27:51Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T14:20:25Z",
+              "completed_at": "2026-10-21T14:20:27Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:20:27Z",
+              "completed_at": "2026-10-21T14:20:29Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T14:20:29Z",
+              "completed_at": "2026-10-21T14:20:29Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T14:20:29Z",
+              "completed_at": "2026-10-21T14:20:39Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-go@v5",
+              "started_at": "2026-10-21T14:20:39Z",
+              "completed_at": "2026-10-21T14:20:40Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify bridge is loopback-only by default",
+              "started_at": "2026-10-21T14:20:40Z",
+              "completed_at": "2026-10-21T14:20:41Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Termux bridge tests",
+              "started_at": "2026-10-21T14:20:41Z",
+              "completed_at": "2026-10-21T14:21:05Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "ChatGPT bridge core tests",
+              "started_at": "2026-10-21T14:21:05Z",
+              "completed_at": "2026-10-21T14:21:05Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Reject obvious committed secrets",
+              "started_at": "2026-10-21T14:21:05Z",
+              "completed_at": "2026-10-21T14:21:05Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release input trust boundary",
+              "started_at": "2026-10-21T14:21:05Z",
+              "completed_at": "2026-10-21T14:21:06Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify signed APK release gate",
+              "started_at": "2026-10-21T14:21:06Z",
+              "completed_at": "2026-10-21T14:21:06Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Android unit tests and lint",
+              "started_at": "2026-10-21T14:21:06Z",
+              "completed_at": "2026-10-21T14:26:06Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Android test reports",
+              "started_at": "2026-10-21T14:26:06Z",
+              "completed_at": "2026-10-21T14:26:08Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build bundled cloudflared for Android",
+              "started_at": "2026-10-21T14:26:08Z",
+              "completed_at": "2026-10-21T14:27:12Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build debug APK",
+              "started_at": "2026-10-21T14:27:12Z",
+              "completed_at": "2026-10-21T14:27:42Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload debug APK",
+              "started_at": "2026-10-21T14:27:42Z",
+              "completed_at": "2026-10-21T14:27:48Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Gradle timing evidence",
+              "started_at": "2026-10-21T14:27:48Z",
+              "completed_at": "2026-10-21T14:27:49Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-go@v5",
+              "started_at": "2026-10-21T14:27:49Z",
+              "completed_at": "2026-10-21T14:27:49Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T14:27:49Z",
+              "completed_at": "2026-10-21T14:27:49Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T14:27:49Z",
+              "completed_at": "2026-10-21T14:27:49Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:27:49Z",
+              "completed_at": "2026-10-21T14:27:50Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T14:27:50Z",
+              "completed_at": "2026-10-21T14:27:50Z",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 119277085454,
+          "name": "unsigned-release",
+          "started_at": "2026-10-21T14:20:24Z",
+          "completed_at": "2026-10-21T14:28:04Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T14:20:25Z",
+              "completed_at": "2026-10-21T14:20:28Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:20:28Z",
+              "completed_at": "2026-10-21T14:20:30Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:20:30Z",
+              "completed_at": "2026-10-21T14:20:31Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T14:20:31Z",
+              "completed_at": "2026-10-21T14:20:31Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T14:20:31Z",
+              "completed_at": "2026-10-21T14:20:41Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-go@v5",
+              "started_at": "2026-10-21T14:20:41Z",
+              "completed_at": "2026-10-21T14:20:55Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build bundled OpenAI Secure MCP tunnel runtime for Android",
+              "started_at": "2026-10-21T14:20:55Z",
+              "completed_at": "2026-10-21T14:21:17Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build bundled cloudflared for Android",
+              "started_at": "2026-10-21T14:21:17Z",
+              "completed_at": "2026-10-21T14:22:07Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build optimized unsigned release",
+              "started_at": "2026-10-21T14:22:07Z",
+              "completed_at": "2026-10-21T14:27:57Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload unsigned release for exact main CI run",
+              "started_at": "2026-10-21T14:27:57Z",
+              "completed_at": "2026-10-21T14:27:59Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload release task timing evidence",
+              "started_at": "2026-10-21T14:27:59Z",
+              "completed_at": "2026-10-21T14:28:00Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-go@v5",
+              "started_at": "2026-10-21T14:28:00Z",
+              "completed_at": "2026-10-21T14:28:00Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T14:28:00Z",
+              "completed_at": "2026-10-21T14:28:00Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T14:28:00Z",
+              "completed_at": "2026-10-21T14:28:00Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:28:00Z",
+              "completed_at": "2026-10-21T14:28:00Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:28:00Z",
+              "completed_at": "2026-10-21T14:28:01Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T14:28:01Z",
+              "completed_at": "2026-10-21T14:28:01Z",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "pr_ui": {
+      "run_id": 39615844102,
+      "event": "pull_request",
+      "head_sha": "f94131712cdc122a62dc52af5424269df2e073ed",
+      "created_at": "2026-10-21T14:19:14Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119276959904,
+          "name": "panel-instrumentation",
+          "started_at": "2026-10-21T14:20:09Z",
+          "completed_at": "2026-10-21T14:25:38Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T14:20:10Z",
+              "completed_at": "2026-10-21T14:20:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:20:13Z",
+              "completed_at": "2026-10-21T14:20:16Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T14:20:16Z",
+              "completed_at": "2026-10-21T14:20:16Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run android-actions/setup-android@v3",
+              "started_at": "2026-10-21T14:20:16Z",
+              "completed_at": "2026-10-21T14:20:27Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T14:20:27Z",
+              "completed_at": "2026-10-21T14:20:39Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Compile app and instrumented UI tests",
+              "started_at": "2026-10-21T14:20:39Z",
+              "completed_at": "2026-10-21T14:22:50Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Enable hardware acceleration",
+              "started_at": "2026-10-21T14:22:50Z",
+              "completed_at": "2026-10-21T14:22:51Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run native panel behavior and rendered-layout checks",
+              "started_at": "2026-10-21T14:22:51Z",
+              "completed_at": "2026-10-21T14:25:32Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report exact instrumentation failures",
+              "started_at": "2026-10-21T14:25:32Z",
+              "completed_at": "2026-10-21T14:25:32Z",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload UI test and rendered-layout evidence",
+              "started_at": "2026-10-21T14:25:32Z",
+              "completed_at": "2026-10-21T14:25:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T14:25:34Z",
+              "completed_at": "2026-10-21T14:25:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T14:25:34Z",
+              "completed_at": "2026-10-21T14:25:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T14:25:34Z",
+              "completed_at": "2026-10-21T14:25:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T14:25:34Z",
+              "completed_at": "2026-10-21T14:25:34Z",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "results": {
+    "baseline_main_to_public_seconds": 1095,
+    "after_main_to_public_seconds": 653,
+    "baseline_pr_to_public_seconds": 1572,
+    "after_pr_to_public_seconds": 1461,
+    "baseline_main_runner_seconds": 1465,
+    "after_main_runner_seconds": 1471,
+    "baseline_full_cycle_runner_seconds": 2229,
+    "after_full_cycle_runner_seconds": 2707
+  },
+  "install": {
+    "task_id": "de99172c-2a6e-4bb1-ba3b-b66a40fece89",
+    "single_submission": true,
+    "durable_state": "installed",
+    "current_version": "0.1.75",
+    "current_code": 76,
+    "independent_status": "succeeded",
+    "observed_submit_to_durable_seconds": 186.05,
+    "observed_submit_to_independent_status_seconds": 198.185,
+    "limitation": "Observation intervals include one connector timeout; not exact OS install duration."
+  }
+}

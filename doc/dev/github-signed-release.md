@@ -1,6 +1,6 @@
 # GitHub 저장소만으로 서명 APK 릴리스하기
 
-> al-hub/closepaw의 실제 운영 경로. 2026-10-21 v0.1.74/code75 발행·휴대폰 설치로 검증.
+> al-hub/closepaw의 실제 운영 경로. 2026-10-21 v0.1.75/code76 병렬 빌드·artifact 서명·휴대폰 설치로 검증.
 > 다음 대화/Work는 이 문서와 현재 워크플로를 먼저 읽는다.
 
 **로컬 Android SDK나 서명키가 없어도 GitHub Actions에서 서명 APK를 만들고 공개 릴리스할 수 있다.**
@@ -176,3 +176,15 @@ PR artifact나 다른 SHA로 대체하지 않는다. [#132 설계·계측·롤�
 설치 task와 독립 버전 확인, 실행하지 못한 검증을 이슈와
 [WORKS_HANDOFF.md](../project/WORKS_HANDOFF.md)에 남긴다. 과거 성공 버전을
 다음 릴리스 버전으로 그대로 재사용하지 않는다.
+
+## 9. 병렬 CI 산출물 서명 성공 사례 (#132)
+
+PR#133 → source/tag `04c849b701c0d6a4c8dd332053619a7135db2584`,0.1.75/code76.
+main Security39617725426/UI39617725429 → Signed39619258531 success,
+공개 검증 및 단일 요청 설치 후 durable installed/current와 독립 get_status 확인.
+main→공개1095s→653s(40.4% 단축), runner 총 사용량은 별도 비교한다.
+[전체 근거·제약·롤백](issue132-pipeline-performance.md). 기존0.1.74 성공 사례는
+과거 경로의 증거로 보존한다. workflow artifact가 만료되면 현재 main의 새
+Security CI dispatch로 산출물을 만든다. 성공한 unsigned artifact가 남아 있는
+run 전체를 재실행하면 동일 이름 upload가 충돌할 수 있으므로 원인에 맞는
+실패 job만 재시도하거나 새 CI dispatch를 사용한다. 서명 중 main을 변경하지 않는다.

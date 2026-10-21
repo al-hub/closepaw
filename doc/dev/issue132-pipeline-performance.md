@@ -92,3 +92,104 @@ submit to durable current/installed and independent responding-app version.
 Final exact PR/main/release runs, profile task leaders, cache hit/miss, artifact overhead,
 public APK checksum/signer/size, before/after reduction and installation results are
 appended after successful publication. #132 stays open until evidence is recorded.
+
+## 완료 결과 — 2026-10-21, v0.1.75/code76
+
+[PR #133](https://github.com/al-hub/closepaw/pull/133), immutable APK/tag source
+`04c849b701c0d6a4c8dd332053619a7135db2584`. Final PR HEAD
+`f94131712cdc122a62dc52af5424269df2e073ed` passed Security39615844117/UI39615844102.
+Main [Security39617725426](https://github.com/al-hub/closepaw/actions/runs/39617725426),
+[UI39617725429](https://github.com/al-hub/closepaw/actions/runs/39617725429) and
+[Signed Release39619258531](https://github.com/al-hub/closepaw/actions/runs/39619258531)
+all completed success. Only after publication/install confirmation was this docs-only
+record added; no tag was moved and no second APK was requested.
+
+### 동일 경계의 전후 비교
+
+| 구간 | v0.1.74 이전 | v0.1.75 이후 | 관측 변화 |
+|---|---:|---:|---:|
+| main CI 생성→공개 APK 독립 검증 완료 |18m15s (1095s)|10m53s (653s)|40.4% 단축,7m22s 절감 |
+| 최종 PR CI 생성→공개 검증 |26m12s (1572s)|24m21s (1461s)|7.1% 단축 |
+| 최종 PR CI 생성→가장 늦은 job 완료 |7m35s|8m50s|75s 증가; PR R8 검증 추가 및 queue 포함 |
+| PR 마지막 job 완료→main CI 생성 |22s|4m38s|상태 관측/검토/병합 대기; 빌드로 해석하지 않음 |
+| main 이후 runner job 합계(UI/서명 포함) |1465s|1471s|0.4% 증가 |
+| 최종 PR+main 이후 runner 합계 |2229s|2707s|21.4% 증가; PR optimized release 추가 영향 |
+| Signed Release job |640s|43s|중복 빌드를 앞선 병렬 CI로 이동; 서명 자체가93% 빨라졌다는 뜻이 아님 |
+
+이후 main CI는14:32:42Z 생성, 공개 검증은14:43:35Z 완료했다. 두 표본 모두
+같은 앱 기능·ubuntu-latest·같은 JVM/최적화·테스트 범위를 유지하되 새 PR에는
+optimized release 사전 검증을 추가했다. baseline1회와 이후 PR/main2회는
+동일 통제 실험/P50/P95가 아니다. 전체 CPU 사용량을 줄였다고 주장하지 않는다.
+새 PR 반복 R8 비용의 후속 개선은 [#134](https://github.com/al-hub/closepaw/issues/134)에
+분리했다. 일반 PR과 workflow/build/native 변경 PR의 게이트 범위를 비교하되,
+main optimized release 및 모든 서명·공개 검증은 유지한다.
+
+### 세부 계측과 남은 병목
+
+| main 단계 | API step wall |
+|---|---:|
+| test+lint |274s (이전309s) |
+| security cloudflared / debug APK / Gradle post |63s /29s /31s |
+| unsigned OpenAI runtime / cloudflared |29s /57s |
+| optimized release Gradle |449s (PR350s); 기존 직렬 test+release476s와 작업 범위가 다름 |
+| unsigned APK upload / signing job download |1s /6s |
+| input provenance+manifest / original signer preflight |1s /6s |
+| zipalign+sign / final signer / public download+verify |3s /1s /4s |
+
+| 정확한 task profile | main | PR |
+|---|---:|---:|
+| minifyReleaseWithR8 |347.51s|265.68s |
+| compileReleaseKotlin |68.64s|59.071s |
+| lintVitalAnalyzeRelease |86.14s|67.66s |
+| lintAnalyzeDebug |176.20s|199.69s |
+| lintAnalyzeDebugUnitTest |139.13s|160.47s |
+| testDebugUnitTest |103.73s|112.06s |
+| compileDebugUnitTestKotlin |73.33s|84.71s |
+| compileDebugKotlin |71.78s|74.93s |
+
+Task 시간은 중첩되므로 합산해 wall time으로 취급하지 않는다. R8은 release의
+가장 큰 task로 확정됐지만, baseline task profile이 없어 R8 자체의 전후 가속률은
+계산하지 않는다. PR/main의 차이는 runner/cache 등 조건 변동이 있는 관측이며
+원인을 CPU/GC로 단정하지 않는다. PR runner는4CPU/약16GB RAM으로 계측됐다.
+client `/usr/bin/time`만으로 daemon RSS/GC 병목을 진단하지 않았다.
+
+PR/main unsigned50개 작업은41 executed/9 FROM-CACHE: Kotlin/R8 등의 캐시
+미적중에도 실제 빌드 성공. configuration-cache는 unsigned-only에서 stored.
+Test/lint는41개 중31 executed/10 cached이며 기존179 problems로 configuration
+cache가 폐기된다. 완전히 비어 있는 SDK/의존성 캐시 실험은 별도로 실행하지 않았다.
+새 binary cache는 도입하지 않았고, artifact missing/만료는 다른 소스로 대체하지
+않고 main CI 재실행으로 복구한다. 실제 production artifact 변조/만료를 유발하지
+않았으며 신뢰 경계 거부는4개 unittest(여러 negative subcase)로 검증했다.
+이전 PR 두 파동은 새 커밋 후 cancelled가 됐고 최신 PR은 success; main/서명은
+취소하지 않았다. 개발 도중 취소된 두 파동의 사용량은 위 최종 PR/배포 합계에서
+제외했으며, 전체 Work 소비시간이 이 합계라고 주장하지 않는다.
+
+### 품질·APK·설치 검증
+
+- Android JUnit2665 tests,0 failures/errors/skips (282 XML suites), lint0 errors/
+  119 warnings/4 info. Python bridge55+8, provenance4 cases 통과.
+- 기존 UI6 tests와4 renders 통과. Samsung 물리 GUI 인수의 대체 증거가 아니며
+  #128은 OPEN, #126 응답 지연도 별도다.
+- [공개 APK](https://github.com/al-hub/closepaw/releases/download/v0.1.75/closepaw-aa-bridge.apk),
+  [checksum](https://github.com/al-hub/closepaw/releases/download/v0.1.75/closepaw-aa-bridge.apk.sha256),
+  [release](https://github.com/al-hub/closepaw/releases/tag/v0.1.75).
+  116585012 bytes, SHA256 `ad48eb9629e8be7551643b297aaeaa1dd35b29b431aff403d08ab64dac664319`.
+- Original certificate `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`;
+  unsigned input provenance, nondebug manifest76, both runtimes, zipalign16KB,
+  existing/new signer and anonymous public re-download checks all succeeded.
+- Public evidence artifact12352979581; main test reports12354106749;
+  release timings12354162781; security timings12353387671. Available from run links.
+- Single update task `de99172c-2a6e-4bb1-ba3b-b66a40fece89`: installing receipt was
+  followed by one connector timeout during replacement; no install resubmission.
+  Then durable installed/current0.1.75/code76 and independent responding-app
+  get_status0.1.75/code76 confirmed. Permissions retained; no re-registration/data reset.
+- Observed submit→durable confirmation186.05s, independent status198.185s. These
+  include observation intervals and a timeout; they are not exact OS install time.
+  No new user approval request was needed. No #126/#128 physical checks were repeated.
+
+[Machine-readable API timestamps and installation observations](evidence/issue132-v0175-timing.json)
+allow recomputing the boundaries. Remaining cost/R8/cache/UI optimizations and limits
+are documented above and in#134. The original main→public target≥30% was met in this
+single sample; future runs may vary. Rollback is a new PR restoring the old workflow
+and removing artifact signing, with a new version/code and full signed validation;
+never overwrite0.1.75 or move its tag.

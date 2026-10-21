@@ -1,12 +1,15 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
-## 다음 별도 Works — 코드 수정→서명 APK 발행 시간 개선 (#132)
+## #132 완료 — v0.1.75/code76 발행·설치, 비용 후속 #134 (2026-10-21)
 
-- 사용자 요청: 추가 변경 검증에 앞서 개발·CI·릴리스 대기 시간을 별도 Works에서 개선한다.
-- [이슈 #132: 병목 실측·개선안 비교·구현·릴리스 인계](https://github.com/al-hub/closepaw/issues/132)에 독립 실행 지침과 수용 기준을 등록했다. 이 등록 작업에서는 워크플로/빌드 설정을 변경하지 않았다.
-- v0.1.74 성공 실행 1세트: main CI 생성→공개 APK 검증18분15초, 릴리스 job 종료18분46초. 주요 단계는 unit+lint5분09초, release test+assemble7분56초. UI5분50초는 병렬이므로 합산하지 않는다. 세부 Gradle/R8 비중은 아직 미확정이다.
-- 새 Works는 이 이슈와 아래 서명 실행서를 읽고 계측→개선안 비교→우선 구현→CI·기존 키의 서명 APK→가능한 설치 검증까지 진행한다. 캐시/중복 실행/중복 테스트·네이티브 빌드/병렬화를 검토하되 필요한 테스트·서명·공개 검증은 유지한다.
-- #126 앱 명령 응답 지연과 #128 실기기 GUI 수용은 별개다. 기존 설치0.1.74/code75와 검증 기준선을 보존하고, 이 성능 개선을 이유로 미실행 물리 검증을 완료 처리하지 않는다.
+- [PR #133](https://github.com/al-hub/closepaw/pull/133), immutable APK/tag source `04c849b701c0d6a4c8dd332053619a7135db2584`.
+- optimized unsigned release를 unit/lint/debug와 병렬화하고 정확한 성공 main CI artifact만 기존 키로 서명한다. 모든 테스트/lint/R8/두 런타임/기존 인증서/불변 태그/공개 독립 검증 유지. PR-only cancellation, 중복 security/** push 제거, task profile 추가.
+- main Security39617725426/UI39617725429/Signed39619258531 success. Android2665 tests·lint0 errors, bridge55+8, provenance4, UI6/4 renders 통과.
+- main→공개 검증1095s→653s(40.4% 단축). 최종 PR→공개1572s→1461s(7.1% 단축). main 이후 runner1465s→1471s(+0.4%); PR 포함2229s→2707s(+21.4%). PR의 R8 사전 검증 추가 비용은 [#134](https://github.com/al-hub/closepaw/issues/134)로 추적한다. 평균/P95나 CPU 절감으로 일반화하지 않는다.
+- [APK0.1.75](https://github.com/al-hub/closepaw/releases/download/v0.1.75/closepaw-aa-bridge.apk), SHA256 `ad48eb9629e8be7551643b297aaeaa1dd35b29b431aff403d08ab64dac664319`,116585012 bytes. 기존 인증서·manifest76·두 런타임·익명 다운로드 검증 완료.
+- 설치1회 task `de99172c-2a6e-4bb1-ba3b-b66a40fece89`; 교체 중 timeout 후 durable installed/current0.1.75/code76, 독립 get_status 정상 응답 확인. 재제출/재등록/데이터 초기화 없음.
+- [비교표·세부 계측·한계·롤백](../dev/issue132-pipeline-performance.md), [API 증거](../dev/evidence/issue132-v0175-timing.json). 완전 의존성 cold-cache/production artifact 변조는 실행하지 않았으며 주요 task cache miss와 신뢰 경계 negative tests는 통과했다.
+- #126 앱 응답 지연과 #128 Samsung 물리 GUI 수용은 별도 OPEN 유지. 아래0.1.74는 당시 완료 이력이며 최신 설치본은0.1.75다. 이미 통과한 기본기능을 반복하지 않는다.
 
 **서명 APK 발행 방법:** [GitHub Actions 서명 릴리스 실행서](../dev/github-signed-release.md).
 다른 대화/Work는 로컬 키나 SDK를 요청하기 전에 이 문서를 읽는다. 기존 secrets와
