@@ -2,8 +2,8 @@ package ai.closepaw.ui.settings
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Memory
-import androidx.compose.material.icons.outlined.Psychology
+import ai.closepaw.ui.icons.vendor.outlined.Memory
+import ai.closepaw.ui.icons.vendor.outlined.Psychology
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable

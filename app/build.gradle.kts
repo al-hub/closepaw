@@ -153,9 +153,9 @@ licenseReport {
     copyJsonReportToAssets = true
 }
 
-// Surface the license JSON to debug builds too. The plugin auto-wires
-// `licenseReleaseReport` into the release `assets` task, but debug needs an
-// explicit hook so the in-app page works in regular `assembleDebug` builds.
+// Generate the current license JSON explicitly before debug/release assets.
+// The observed unsigned-only graph did not include the plugin report task;
+// both variants must avoid packaging a stale tracked dependency notice.
 //
 // gradle-license-plugin 0.9.8 calls `Task.project` at execution time, which
 // is incompatible with Gradle's configuration cache and causes the report
@@ -169,6 +169,9 @@ afterEvaluate {
         )
     }
     tasks.findByName("mergeDebugAssets")?.dependsOn("licenseDebugReport")
+    // Keep the release dependency notice current after removing extended icons.
+    // The plugin's release auto-wiring is not present in the observed task graph.
+    tasks.findByName("mergeReleaseAssets")?.dependsOn("licenseReleaseReport")
 
     // Kotlin 2.3.0's `produceReleaseComposeMapping` ships an older ASM that
     // can't read class file major version 69 (Java 25). bcprov-jdk18on:1.84
@@ -207,7 +210,8 @@ dependencies {
 
     // Material 3
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
+    // Only common core icons; selected extended vectors are source-vendored unchanged.
+    implementation("androidx.compose.material:material-icons-core")
 
     // Lucide icons
     implementation("com.composables:icons-lucide-cmp:2.2.1")

@@ -1,0 +1,536 @@
+{
+  "format": 1,
+  "compose_bom": "2024.12.01",
+  "version": "1.7.6",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2024 The Android Open Source Project",
+  "baseline_resolved_evidence": {
+    "commit": "4aa6a4af94dabdc8216c2dec6c9f81732c9b0282",
+    "path": "app/src/main/assets/open_source_licenses.json",
+    "dependencies": [
+      "androidx.compose.material:material-icons-core-android:1.7.6",
+      "androidx.compose.material:material-icons-extended-android:1.7.6"
+    ]
+  },
+  "transformation": "Only package declaration changes. Generated ImageVector code, imports, copyright and license header are unchanged. Core icons remain provided by material-icons-core.",
+  "archives": {
+    "core": {
+      "url": "https://dl.google.com/dl/android/maven2/androidx/compose/material/material-icons-core-android/1.7.6/material-icons-core-android-1.7.6-sources.jar",
+      "filename": "core-sources.jar",
+      "sha256": "b3f1be7fda4d13a6d938bb918275ddc143e9d6a2007727f284778480526f5f16",
+      "bytes": 284048,
+      "kotlin_source_files": 281
+    },
+    "extended": {
+      "url": "https://dl.google.com/dl/android/maven2/androidx/compose/material/material-icons-extended-android/1.7.6/material-icons-extended-android-1.7.6-sources.jar",
+      "filename": "extended-sources.jar",
+      "sha256": "9b22840d9d5ec83fca54783df66640c0e2d76bb164687d654c23bcc6c02f3a96",
+      "bytes": 12085941,
+      "kotlin_source_files": 11105
+    },
+    "bom": {
+      "url": "https://dl.google.com/dl/android/maven2/androidx/compose/compose-bom/2024.12.01/compose-bom-2024.12.01.pom",
+      "filename": "bom.pom",
+      "sha256": "7118e83b528ca3152d9c278afe9c6cd37062db49ef01f838db4cb4a6341f64e6",
+      "bytes": 21587
+    }
+  },
+  "icons": [
+    {
+      "original_import": "androidx.compose.material.icons.automirrored.filled.ArrowBack",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/automirrored/filled/ArrowBack.kt",
+      "upstream_sha256": "e433acfe42ac12422466a9b2192c6669fff89e96740d1aab3907d8c3839e89df"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.automirrored.rounded.ArrowBack",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/automirrored/rounded/ArrowBack.kt",
+      "upstream_sha256": "b556eddb38926c3f6d82a485a3d1d2392d386e0ada01203c2764bea8f8ebb010"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.automirrored.rounded.FormatListBulleted",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/automirrored/rounded/FormatListBulleted.kt",
+      "upstream_sha256": "1cee0fca70c32dc1f9ea0418edde80e37740dbc7c2c0353f340a733d2da7ea73",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/automirrored/rounded/FormatListBulleted.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.automirrored.rounded.FormatListBulleted",
+      "vendored_sha256": "ddc03a3a20a28aec0aa0fbd4b59c5fad8b8e0f9f3615e0682d5f55e9c438c0c7",
+      "original_package": "androidx.compose.material.icons.automirrored.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.automirrored.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.filled.Check",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/filled/Check.kt",
+      "upstream_sha256": "b8b74a9e72637e98060287f6d845ed4d24a1f2ff33ae2b44077e37ea315b7c6f"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.filled.Close",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/filled/Close.kt",
+      "upstream_sha256": "0c3714f3905e36fae7c554dfcd08276040acb702bd2330bf5021fa4599b9c02e"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Add",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Add.kt",
+      "upstream_sha256": "9832aa30974ae1d8a9543eb7f2f3f2a33330e6f76c06b1988d9a1e3523575eff"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.BatteryChargingFull",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/BatteryChargingFull.kt",
+      "upstream_sha256": "cd45982194817bd22b59ab150bd701a647f87f016f0a273b9aa2fc8de3a1fcd8",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/BatteryChargingFull.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.BatteryChargingFull",
+      "vendored_sha256": "bb26f8252d7c339dbf29b9f75d6af6033cb4f97abe1af241e7e5d31cfe34bac3",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.BugReport",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/BugReport.kt",
+      "upstream_sha256": "f9c10c892fa1de0a261b3733ba13ef968d29e63e0bdad242e2e87b7ddcbb185f",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/BugReport.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.BugReport",
+      "vendored_sha256": "020fcd3ba986d0332c963a084206ac33264f8e386567c698fb4f1dfd88abb9fb",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Check",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Check.kt",
+      "upstream_sha256": "5f169f8eddad964e96d423cd213af37fbe363fda6f2495374cd970ae96171443"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.DeleteOutline",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/DeleteOutline.kt",
+      "upstream_sha256": "a45cd6728fc6a02d8193d2e771906286d244d0047bbb4a4d5003e223df684bbc",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/DeleteOutline.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.DeleteOutline",
+      "vendored_sha256": "665e1b59e9d3a520242cefd03cc4422e7b24950e8f235174c63157664d53a6e8",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.ExpandLess",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/ExpandLess.kt",
+      "upstream_sha256": "4bc62c97f8e83d37ffc2043c98f4adb1e8ebe04a58f6f5576e507589c9858968",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/ExpandLess.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.ExpandLess",
+      "vendored_sha256": "774cecc7554fdd4bf9fe54aa65a69959a6706bca182612a12c124bb99f8b7f45",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.ExpandMore",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/ExpandMore.kt",
+      "upstream_sha256": "274ad055d9a087b82264b8fdc4a4c6e63b37aab2c801da1d863e03c97b33aed9",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/ExpandMore.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.ExpandMore",
+      "vendored_sha256": "e8698ac20005aec282f296366c34e81d7497881b5a79aa71eb38092dd1d21d65",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Info",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Info.kt",
+      "upstream_sha256": "6111c46a5576f5c37223c917ea7620e9d8d00db0ebc82274fc378f30c05ac935"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Key",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Key.kt",
+      "upstream_sha256": "ef102c30f4f9af63ee6fa202550031383a6308f615920b41dfb414a9aa56a48e",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/Key.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.Key",
+      "vendored_sha256": "1bd0fe7a9616bbedd258cf75467dde673146ed68563abaaf323cc01719ab2a17",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.KeyboardArrowDown",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/KeyboardArrowDown.kt",
+      "upstream_sha256": "c6725e0e48964145146f1074339bbaa1f0d2712ca59a05e7ba6427dfbe3da611"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.KeyboardArrowRight",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/KeyboardArrowRight.kt",
+      "upstream_sha256": "9796582eac492068e34ee8c6d433b52d251286cc54b3be1ecec90e5cb0cce9e4"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Layers",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Layers.kt",
+      "upstream_sha256": "5a83c091b0a15cd5635fb23aecaca282d45daab500c3e5b70f8277219b6b2ca6",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/Layers.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.Layers",
+      "vendored_sha256": "d296e6d4335f1dad53243206d1bf0882fd68ac0b0ae9bac9a0a060b048a6f8d3",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Lock",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Lock.kt",
+      "upstream_sha256": "eaeb61c810c533e8b231f44045becb8df412dad5a91b3d3079fa66b78fc1d858"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Memory",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Memory.kt",
+      "upstream_sha256": "25adf2a2784d7902628075e863a594836586ad12bd6588c345ea8168ac6864da",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/Memory.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.Memory",
+      "vendored_sha256": "ce926256fe4305d3c52fc366851577c1c21c4903b49e4279f1d9fe33bc49b426",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Psychology",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Psychology.kt",
+      "upstream_sha256": "79eea4deac2609620c3edb574fca56dacb0bb44961137c388765198d3e43819d",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/Psychology.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.Psychology",
+      "vendored_sha256": "ba55d562f6531aac220448ea203efd10dd4f9a0590c2aa5acff77f0ba648988f",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Refresh",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Refresh.kt",
+      "upstream_sha256": "e9ab789b60637242aaec2bd233c752e4cb2ab4a571e4a7ccf2c8bb45e7a332cf"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.RocketLaunch",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/RocketLaunch.kt",
+      "upstream_sha256": "e4be5bc2a9a992cece698b2cdef13b499521d225654014ec80a4627d8137f722",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/RocketLaunch.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.RocketLaunch",
+      "vendored_sha256": "76fa22e8ac5e51f0e63a808ed692d00128eb078994dbf2e4c4199c22fb149190",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Search",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Search.kt",
+      "upstream_sha256": "16b0049775c9ecb0daea7abb2d31bf05ec32bb56ea57ffda796db5c97543fc44"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Security",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Security.kt",
+      "upstream_sha256": "7e654283ca1c1fd73e31afd93ae9121e730aa396000e91992e6f050d8f03dc09",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/Security.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.Security",
+      "vendored_sha256": "a34c7425356aa41c9c69e0c5f6a953cdea818793e3cf2b7a9ebcf9166d13c1a4",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Settings",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Settings.kt",
+      "upstream_sha256": "157119ab78016e8c57f6ccd0135e2c079a5926c96519889316a52da50159b122"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Storage",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Storage.kt",
+      "upstream_sha256": "8d717be2413cbb9ab13f6aa0225c3651dbcd22f8f40c69a18b965913759a2e29",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/Storage.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.Storage",
+      "vendored_sha256": "22a3567b21977cbfe66d32c9f62842c9f13d423725a87ec39f5c44b02e30c2b5",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Visibility",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Visibility.kt",
+      "upstream_sha256": "646f20fa4eae0e6661280fe9a704abc2b9ee168f8678788e50ea36872ff2aa02",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/Visibility.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.Visibility",
+      "vendored_sha256": "78f85f1517142717d128ed653416371b1de482cd4a59cbec509e98d80c1a35e4",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.VisibilityOff",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/VisibilityOff.kt",
+      "upstream_sha256": "780f62f77fac51ad1ed76e606f65eca47b1b3eec8e152699a55a561ce3d041a5",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/outlined/VisibilityOff.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.outlined.VisibilityOff",
+      "vendored_sha256": "52c0124c2887b78a8dbf11471129e33f352ea342859eefb9e370adba2948a6e9",
+      "original_package": "androidx.compose.material.icons.outlined",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.outlined"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.outlined.Warning",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/outlined/Warning.kt",
+      "upstream_sha256": "3532d843d7610ea9234edf615c9e027490c444f6744eafe8d51922ed0991dade"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.Add",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/Add.kt",
+      "upstream_sha256": "ecd09ed5efd63253e6a6114738e11860339439bf286bf69b99fb15173a84cdb7"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.Apps",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/Apps.kt",
+      "upstream_sha256": "3f578f6e845559a02c008b0b26f76d33d7d9de7525361e90ce6c40297bbd2bbe",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/Apps.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.Apps",
+      "vendored_sha256": "81f8ce8cc1f80717b4d8761a2da8c028b9677be162080676c4dcf08e8e07e0e7",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.ArrowUpward",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/ArrowUpward.kt",
+      "upstream_sha256": "2bd1b3dff9c08f69c027418329b7cda1781013ca37d58c709e940e23503a488f",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/ArrowUpward.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.ArrowUpward",
+      "vendored_sha256": "776fd828051829573a447fcbf08200c35977d46009fda5b51b90c57ee79bb82b",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.Build",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/Build.kt",
+      "upstream_sha256": "ab7358a18b20b1b8d0208aac155dc017aabd25e06e7a8a7b0b532534c9242739"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.Check",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/Check.kt",
+      "upstream_sha256": "23cbf6658cd80f59460ab32dd04985fbe203aad0b120982c6f95f94abca3e43f"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.CheckCircle",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/CheckCircle.kt",
+      "upstream_sha256": "53cc32c2669b9b64fd3c1f333e3aec9a8f67ec475a6440528ab4117bce3e7630"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.ChevronLeft",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/ChevronLeft.kt",
+      "upstream_sha256": "a4e8268b10c48c1f00850ef38cee9dcc7a74434b6f1bd78ae9ab11d7f832ef78",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/ChevronLeft.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.ChevronLeft",
+      "vendored_sha256": "1d16f60a49ba30d7d55e8aa2c9012b26fb029a09896f160ed073367b61cffc3f",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.Close",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/Close.kt",
+      "upstream_sha256": "84454a75d62ed52c283daa62aa3a8045068070170aa4ab5eb3378c19d00f780e"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.Delete",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/Delete.kt",
+      "upstream_sha256": "0c54eb83b7517fd3caf12003939153a7bf99fc804fc887923b0559d51281f63e"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.Home",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/Home.kt",
+      "upstream_sha256": "40bd6d517dfab787d77534f2aa0d950c110a8cad1a8b587b07faa2f954d16acc"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.HourglassEmpty",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/HourglassEmpty.kt",
+      "upstream_sha256": "8b3562fe549f4b246d4ac6ec787a2157d073b49e80af7949361aaeecac52cb84",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/HourglassEmpty.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.HourglassEmpty",
+      "vendored_sha256": "b6dc10c2375a2bebc219c77e9421d87d3ccfebaaa27785348c43db036b5b6db6",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.Keyboard",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/Keyboard.kt",
+      "upstream_sha256": "4d2e94c37383144147699b231548e0de01f44fc57b172a87f6b20ab81418f886",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/Keyboard.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.Keyboard",
+      "vendored_sha256": "110fa03dd6bd2e1938e909dde7472a965ee0d6abacfa3cd7b7500e78e9103664",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.KeyboardArrowDown",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/KeyboardArrowDown.kt",
+      "upstream_sha256": "0e0d31ae9f961e40eb498ec27cedbc04f38afec4be53fadcc4527cb87610be33"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.Menu",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/Menu.kt",
+      "upstream_sha256": "82932724dceb8d8037e15aee9e7e14e07477288dc76017945863cd8ee0027729"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.Mic",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/Mic.kt",
+      "upstream_sha256": "fb261a4193a951d3bfcc0ad65c908a9ba7abde0f1dc35afef58a54511faab7da",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/Mic.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.Mic",
+      "vendored_sha256": "1474efde0c738ab808af07619648d4a424cc12c94e03de97459d30b8d5bbf945",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.PanTool",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/PanTool.kt",
+      "upstream_sha256": "71fa259c1971dae19becfe018082f9a8d35f8736480050696687d918edb80ad2",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/PanTool.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.PanTool",
+      "vendored_sha256": "3b0c5983dff45f2046997f322f65a4f40086909848708bc90bdd5b90d03ef331",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.PhoneAndroid",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/PhoneAndroid.kt",
+      "upstream_sha256": "f7ff817a428cacf171be9e0757c494be76a6e308ea2d82c35f02955dead3cebb",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/PhoneAndroid.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.PhoneAndroid",
+      "vendored_sha256": "70b463f8a8d32588fc3c08d4d790f9ce2b9f85faadc22c59da90317303e4e603",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.PlayArrow",
+      "source_archive": "core",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/PlayArrow.kt",
+      "upstream_sha256": "aefdb09a61764c6820316b659a86921e91d82dae04fddd3225d01550bc4984cf"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.RemoveCircleOutline",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/RemoveCircleOutline.kt",
+      "upstream_sha256": "623f88792ea3233cf2de461b73756792bfee6e0a1f86dbf8061fd3952816b5f4",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/RemoveCircleOutline.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.RemoveCircleOutline",
+      "vendored_sha256": "bb11b470b9fe02322e1721223b17c096dfb18ca8d7fc50143017a1f2b4910dc3",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.StopCircle",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/StopCircle.kt",
+      "upstream_sha256": "b07a6f082b62881584d560b794a8f3b5fbb13551f81900e960594efdb9a5ce88",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/StopCircle.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.StopCircle",
+      "vendored_sha256": "510d38a047d61621af605b6aa83d828c1dbdd75205e7f6f61b69443a0cb59c92",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.SwipeVertical",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/SwipeVertical.kt",
+      "upstream_sha256": "d9d0020b45afa6b62fb3399041d2825783c069a3e98c088131b17a903e923a97",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/SwipeVertical.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.SwipeVertical",
+      "vendored_sha256": "db7eb1fe97d014fca25922cf17ec3bc139f9a679b41263678343674ccb526e7b",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.TouchApp",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/TouchApp.kt",
+      "upstream_sha256": "47ed4248a6bc7318db9ab0004b66dc640166d805affef4574d28a3c27aab31ea",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/TouchApp.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.TouchApp",
+      "vendored_sha256": "00958c450a5e23f21599f362eb36c9e43dd860a1a92efa60d2eed7581e75d056",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.UnfoldMore",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/UnfoldMore.kt",
+      "upstream_sha256": "00e81cbf774dda369bbf3da88076fe440af6680c06968f5791843ec7206fb4ab",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/UnfoldMore.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.UnfoldMore",
+      "vendored_sha256": "1814aa1036fa84f92341efb0ace0b2cafb86e7af6128d9f043ed57cb44773579",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    },
+    {
+      "original_import": "androidx.compose.material.icons.rounded.Visibility",
+      "source_archive": "extended",
+      "source_entry": "commonMain/androidx/compose/material/icons/rounded/Visibility.kt",
+      "upstream_sha256": "223149710caabc02915bacdad67a2873052e7df13f6996fb6b63de7b72abe0db",
+      "vendored_path": "app/src/main/kotlin/ai/closepaw/ui/icons/vendor/rounded/Visibility.kt",
+      "vendored_import": "ai.closepaw.ui.icons.vendor.rounded.Visibility",
+      "vendored_sha256": "c3260eed55d6d8e7ca8acce5c76f1a728bc26e436bc111d0ba156b37eb0e82a3",
+      "original_package": "androidx.compose.material.icons.rounded",
+      "vendor_package": "ai.closepaw.ui.icons.vendor.rounded"
+    }
+  ],
+  "changed_import_files": [
+    "app/src/main/kotlin/ai/closepaw/ui/theme/Ornaments.kt",
+    "app/src/main/kotlin/ai/closepaw/ui/settings/AppAccessSettingsPage.kt",
+    "app/src/main/kotlin/ai/closepaw/ui/settings/SettingsDropdowns.kt",
+    "app/src/main/kotlin/ai/closepaw/ui/settings/PermissionsAdvancedSettingsPage.kt",
+    "app/src/main/kotlin/ai/closepaw/ui/settings/ApiKeyFields.kt",
+    "app/src/main/kotlin/ai/closepaw/ui/onboarding/OnboardingSteps.kt",
+    "app/src/main/kotlin/ai/closepaw/ui/common/ToolUi.kt",
+    "app/src/main/kotlin/ai/closepaw/ui/capsule/surface/CapsuleInputBar.kt",
+    "app/src/main/kotlin/ai/closepaw/ui/capsule/surface/CapsuleControlBar.kt"
+  ],
+  "binary_inputs": {
+    "core": {
+      "filename": "core.aar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/compose/material/material-icons-core-android/1.7.6/material-icons-core-android-1.7.6.aar",
+      "sha256": "48d182051236b1dfec829b33bf4d3fd06d03c2876d532208e3f7490159d65c46",
+      "aar_bytes": 823515,
+      "classes_jar_sha256": "a20acb301009c3e3c1a9b80076d286aa65e68b4566efc51398f9018f742efaab",
+      "classes_jar_bytes": 869838,
+      "class_files": 293,
+      "uncompressed_class_bytes": 1949379
+    },
+    "extended": {
+      "filename": "extended.aar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/compose/material/material-icons-extended-android/1.7.6/material-icons-extended-android-1.7.6.aar",
+      "sha256": "07e97e52f35d789ef475d9c687e5ca46cc54f9a0d4af8e1dca92ac25fb21450c",
+      "aar_bytes": 35721003,
+      "classes_jar_sha256": "88fa6fe6e5af04443f89b4fee2414d2b574af5c3a7b3a6187900bfb96d20b867",
+      "classes_jar_bytes": 37425981,
+      "class_files": 11105,
+      "uncompressed_class_bytes": 85390331
+    }
+  }
+}
