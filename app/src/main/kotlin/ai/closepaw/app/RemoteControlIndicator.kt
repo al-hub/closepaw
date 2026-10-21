@@ -39,10 +39,10 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
     /** Modern task UI owns the emergency X while it is visible. */
     fun hideEmergencyXOnly() { xStopOverlay.hide() }
     /** Rebuild a missing control panel without changing the user-owned session state. */
-    fun restorePanel() {
+    fun restorePanel(showEmergencyX: Boolean = true) {
         if (session.state == ControlSession.State.PAUSED && unlocked()) {
             if (border == null || !isAttached()) hide()
-            show()
+            show(showEmergencyX = showEmergencyX)
         }
     }
     private fun unlocked() = !service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
