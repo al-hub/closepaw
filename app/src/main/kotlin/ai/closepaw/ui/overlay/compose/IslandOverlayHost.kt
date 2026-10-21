@@ -56,9 +56,18 @@ class IslandOverlayHost(
         val stepY = fractionY.toInt()
         fractionX -= stepX
         fractionY -= stepY
-        islandX = ((if (islandX < 0) maxX / 2 else islandX) + stepX).coerceIn(0, maxX)
-        islandY = ((if (islandY < 0) getStatusBarHeight() + dp(88) else islandY) + stepY).coerceIn(0, maxY)
-        composeHost.updateLayoutParams { it.x = islandX; it.y = islandY }
+        val nextX = ((if (islandX < 0) maxX / 2 else islandX) + stepX).coerceIn(0, maxX)
+        val nextY = ((if (islandY < 0) getStatusBarHeight() + dp(88) else islandY) + stepY).coerceIn(0, maxY)
+        if (nextX == islandX && nextY == islandY) return
+        try {
+            composeHost.updateLayoutParams { it.x = nextX; it.y = nextY }
+            islandX = nextX
+            islandY = nextY
+            // Some OEMs cancel touch on window movement; store every acknowledged move.
+            persistPosition()
+        } catch (error: RuntimeException) {
+            Log.w(TAG, "island_drag_update_failed host=$hostId", error)
+        }
     }
     private fun persistPosition() {
         if (islandX >= 0 && islandY >= 0) {
