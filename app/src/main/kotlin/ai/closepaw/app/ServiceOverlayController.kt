@@ -46,6 +46,7 @@ class ServiceOverlayController(
     private val appPackage: String,
     private val logTag: String,
     private val onStop: () -> Unit,
+    private val onEmergencyXVisibilityChanged: (Boolean) -> Unit = {},
     private val onTakeover: () -> Unit,
     private val onResume: () -> Unit,
     private val onSupplement: (String) -> Unit,
@@ -204,6 +205,7 @@ class ServiceOverlayController(
         )
         capsuleManager.setInteractionLocked(if (showSingleX) false else lockInteraction)
         if (showSingleX) xStopOverlay.show() else xStopOverlay.hide()
+        onEmergencyXVisibilityChanged(xStopOverlay.isShowing())
 
         if (activeSurfaces.showCapsule) {
             if (!capsuleManager.isShowing()) capsuleManager.show()
@@ -300,6 +302,7 @@ class ServiceOverlayController(
 
     fun hideAll() {
         xStopOverlay.hide()
+        onEmergencyXVisibilityChanged(false)
         capsuleManager.hide()
         edgeGlowManager.hideImmediately()
         statusIslandManager?.hide()
@@ -307,6 +310,7 @@ class ServiceOverlayController(
 
     fun dispose() {
         xStopOverlay.dispose()
+        onEmergencyXVisibilityChanged(false)
         edgeGlowManager.dispose()
         capsuleManager.dispose()
         statusIslandManager?.dispose()
