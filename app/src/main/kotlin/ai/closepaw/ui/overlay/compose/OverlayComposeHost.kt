@@ -64,14 +64,20 @@ class OverlayComposeHost(
         params = null
     }
 
-    fun updateLayoutParams(update: (WindowManager.LayoutParams) -> Unit) {
-        val view = composeView ?: return
-        val layoutParams = params ?: return
+    fun updateLayoutParams(update: (WindowManager.LayoutParams) -> Unit): Boolean {
+        val view = composeView ?: return false
+        val layoutParams = params ?: return false
+        val oldX = layoutParams.x
+        val oldY = layoutParams.y
         update(layoutParams)
-        try {
+        return try {
             windowManager.updateViewLayout(view, layoutParams)
+            true
         } catch (e: Exception) {
+            layoutParams.x = oldX
+            layoutParams.y = oldY
             Log.w(tag, "Failed to update Compose overlay params", e)
+            false
         }
     }
 

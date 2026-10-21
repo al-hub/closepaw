@@ -52,16 +52,31 @@ fun StatusIslandCompose(
             .minimumInteractiveComponentSize()
             .clip(shape)
             .then(if (onDrag != null) Modifier.pointerInput(onDrag) {
+                val screen = IntArray(2)
+                var previousX = 0f
+                var previousY = 0f
                 detectDragGesturesAfterLongPress(
-                    onDragStart = {
+                    onDragStart = { point ->
+                        localView.getLocationOnScreen(screen)
+                        previousX = screen[0] + point.x
+                        previousY = screen[1] + point.y
                         localView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         onDragStart?.invoke()
                     },
                     onDragEnd = { onDragEnd?.invoke() },
                     onDragCancel = { onDragEnd?.invoke() },
-                    onDrag = { change, amount ->
+                    onDrag = { change, _ ->
                         change.consume()
-                        onDrag(amount.x, amount.y)
+                        // Local pointer coordinates change when the overlay window moves.
+                        // Compare screen coordinates so continuous dragging follows the finger.
+                        localView.getLocationOnScreen(screen)
+                        val rawX = screen[0] + change.position.x
+                        val rawY = screen[1] + change.position.y
+                        val dx = rawX - previousX
+                        val dy = rawY - previousY
+                        previousX = rawX
+                        previousY = rawY
+                        onDrag(dx, dy)
                     },
                 )
             } else Modifier)

@@ -66,7 +66,7 @@ class IslandOverlayHost(
         val nextY = ((if (islandY < 0) getStatusBarHeight() + dp(88) else islandY) + stepY).coerceIn(0, maxY)
         if (nextX == islandX && nextY == islandY) return
         try {
-            composeHost.updateLayoutParams { it.x = nextX; it.y = nextY }
+            if (!composeHost.updateLayoutParams { it.x = nextX; it.y = nextY }) return
             islandX = nextX
             islandY = nextY
             // Some OEMs cancel touch on window movement; store every acknowledged move.
