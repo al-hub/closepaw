@@ -17,6 +17,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
@@ -44,13 +46,17 @@ fun StatusIslandCompose(
     val shape = MaterialTheme.shapes.large
     val spacing = MaterialTheme.closePaw.spacing
     val reducedMotion = ClosePawMotion.reducedMotion()
+    val localView = LocalView.current
     Surface(
         modifier = modifier
             .minimumInteractiveComponentSize()
             .clip(shape)
             .then(if (onDrag != null) Modifier.pointerInput(onDrag) {
                 detectDragGesturesAfterLongPress(
-                    onDragStart = { onDragStart?.invoke() },
+                    onDragStart = {
+                        localView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        onDragStart?.invoke()
+                    },
                     onDragEnd = { onDragEnd?.invoke() },
                     onDragCancel = { onDragEnd?.invoke() },
                     onDrag = { change, amount ->
