@@ -3,6 +3,8 @@ package ai.closepaw.ui.overlay.compose
 import android.content.Context
 import android.util.Log
 import android.view.WindowManager
+import android.graphics.Rect
+import ai.closepaw.util.recycleCompat
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -74,6 +76,20 @@ class OverlayComposeHost(
     }
 
     fun getWindowToken() = composeView?.windowToken
+
+    fun ownsWindow(id: Int): Boolean {
+        if (id < 0) return false
+        val node = composeView?.createAccessibilityNodeInfo() ?: return false
+        return try { node.windowId == id } finally { node.recycleCompat() }
+    }
+
+    fun covers(rect: Rect): Boolean {
+        val view = composeView ?: return false
+        if (!view.isAttachedToWindow) return false
+        val xy = IntArray(2)
+        view.getLocationOnScreen(xy)
+        return Rect.intersects(Rect(xy[0], xy[1], xy[0] + view.width, xy[1] + view.height), rect)
+    }
 
     fun dispose() {
         hide()

@@ -55,7 +55,7 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     }
     @Synchronized fun waitForUser(): Boolean {
         if (state != State.ACTIVE) return false
-        transition(State.WAITING, "사용자 응답 대기 · 선택 후 ✓"); interrupt(); return true
+        transition(State.WAITING, "사용자 응답 대기"); interrupt(); return true
     }
     @Synchronized fun userResponded(): Boolean {
         if (state != State.WAITING) return false

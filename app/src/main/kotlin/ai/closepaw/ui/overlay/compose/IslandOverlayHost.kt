@@ -10,6 +10,8 @@ import android.view.WindowManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.LifecycleOwner
 import androidx.savedstate.SavedStateRegistryOwner
 import ai.closepaw.protocol.TurnPhase
@@ -41,6 +43,10 @@ class IslandOverlayHost(
 
     private var stateHolder: CapsuleStateHolder? = null
     private var readOnly = false
+    private var remoteStatus by mutableStateOf<String?>(null)
+
+    /** Same window serves bridge-only sessions; never create another status surface. */
+    fun setRemoteStatus(text: String?) { remoteStatus = text }
     private val positions = service.getSharedPreferences("closepaw_island_position", android.content.Context.MODE_PRIVATE)
     private var islandX = positions.getInt("x", -1)
     private var islandY = positions.getInt("y", -1)
@@ -89,9 +95,10 @@ class IslandOverlayHost(
         if (composeHost.isShowing()) return
         composeHost.show(createLayoutParams()) {
             val holder = stateHolder
-            if (holder == null) {
+            val remote = remoteStatus
+            if (remote != null || holder == null) {
                 StatusIslandCompose(
-                    text = "Working...",
+                    text = remote ?: "Working...",
                     dotColor = MaterialTheme.colorScheme.primary,
                     pulsing = true,
                     onClick = if (readOnly) null else onExpandCapsule,
@@ -122,6 +129,8 @@ class IslandOverlayHost(
     }
 
     fun isShowing(): Boolean = composeHost.isShowing()
+    fun ownsWindow(id: Int): Boolean = composeHost.ownsWindow(id)
+    fun covers(rect: android.graphics.Rect): Boolean = composeHost.covers(rect)
 
     fun startObserving(stateHolder: CapsuleStateHolder, @Suppress("UNUSED_PARAMETER") scope: CoroutineScope) {
         this.stateHolder = stateHolder

@@ -43,7 +43,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest --stacktrace
+            ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest,ai.closepaw.qa.ControlOverlayWindowTest --stacktrace
             mkdir -p ui-render-evidence
             adb pull /sdcard/Download/closepaw-premium-ux-qa ui-render-evidence
             test "$(find ui-render-evidence -name '*.png' | wc -l)" -eq 4
