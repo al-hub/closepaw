@@ -1,0 +1,86 @@
+name: Issue 128 Signed APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Candidate versionName, e.g. 0.1.74"
+        required: true
+        type: string
+      version_code:
+        description: "Candidate versionCode greater than installed release"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  signed-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+      - name: Validate candidate version and signing secret availability
+        shell: bash
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          [[ "$VERSION_CODE" =~ ^[0-9]+$ ]] || exit 1
+          (( VERSION_CODE > 74 )) || { echo "versionCode must exceed installed build 74"; exit 1; }
+          for name in SIGNING_KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            [[ -n "${!name}" ]] || { echo "Missing GitHub Actions secret $name"; exit 1; }
+          done
+          echo "Candidate release version validated; signing secrets present"
+      - name: Build bundled cloudflared for Android
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null
+          ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018" bash scripts/build-cloudflared-android.sh
+      - name: Assemble and verify signed APK
+        shell: bash
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          set -euo pipefail
+          umask 077
+          export KEYSTORE_PATH="$RUNNER_TEMP/closepaw-signing.jks"
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          trap 'rm -f "$KEYSTORE_PATH"' EXIT
+          ./gradlew :app:assembleRelease "-PVERSION_NAME=$VERSION_NAME" "-PVERSION_CODE=$VERSION_CODE" --stacktrace
+          apk="app/build/outputs/apk/release/app-release.apk"
+          [[ -s "$apk" ]] || exit 1
+          tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$tools/zipalign" -c -p 4 "$apk"
+          "$tools/apksigner" verify --verbose --print-certs "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+      - name: Upload verified candidate (not public release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: closepaw-issue128-signed-release-apk
+          path: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/release/app-release.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
