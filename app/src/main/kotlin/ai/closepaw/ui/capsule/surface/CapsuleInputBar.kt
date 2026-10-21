@@ -12,9 +12,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowUpward
-import androidx.compose.material.icons.rounded.Mic
-import androidx.compose.material.icons.rounded.StopCircle
+import ai.closepaw.ui.icons.vendor.rounded.ArrowUpward
+import ai.closepaw.ui.icons.vendor.rounded.Mic
+import ai.closepaw.ui.icons.vendor.rounded.StopCircle
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton

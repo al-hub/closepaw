@@ -2,16 +2,16 @@ package ai.closepaw.ui.common
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
-import androidx.compose.material.icons.rounded.Apps
+import ai.closepaw.ui.icons.vendor.automirrored.rounded.FormatListBulleted
+import ai.closepaw.ui.icons.vendor.rounded.Apps
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.HourglassEmpty
-import androidx.compose.material.icons.rounded.Keyboard
-import androidx.compose.material.icons.rounded.SwipeVertical
-import androidx.compose.material.icons.rounded.TouchApp
-import androidx.compose.material.icons.rounded.UnfoldMore
+import ai.closepaw.ui.icons.vendor.rounded.HourglassEmpty
+import ai.closepaw.ui.icons.vendor.rounded.Keyboard
+import ai.closepaw.ui.icons.vendor.rounded.SwipeVertical
+import ai.closepaw.ui.icons.vendor.rounded.TouchApp
+import ai.closepaw.ui.icons.vendor.rounded.UnfoldMore
 import androidx.compose.ui.graphics.vector.ImageVector
 import ai.closepaw.tool.MobileActionName
 import ai.closepaw.tool.ToolName

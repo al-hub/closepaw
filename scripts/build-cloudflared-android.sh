@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CLOUDFLARED_REF="${CLOUDFLARED_REF:-2026.10.0}"
+# 2026.10.0 is an annotated tag; pin its dereferenced immutable commit.
+CLOUDFLARED_COMMIT="18cdfe0a6fc7b72a0702d255a1f984e776ce0498"
 NDK_VERSION="${NDK_VERSION:-27.2.12479018}"
 ANDROID_HOME="${ANDROID_HOME:?ANDROID_HOME is required}"
 NDK_ROOT="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-$ANDROID_HOME/ndk/$NDK_VERSION}}"
@@ -29,7 +30,10 @@ OUT="$ROOT/app/src/main/jniLibs/arm64-v8a/libcloudflared.so"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-git clone --quiet --depth 1 --branch "$CLOUDFLARED_REF" https://github.com/cloudflare/cloudflared.git "$WORK/cloudflared"
+git init --quiet "$WORK/cloudflared"
+git -C "$WORK/cloudflared" fetch --quiet --depth 1 https://github.com/cloudflare/cloudflared.git "$CLOUDFLARED_COMMIT"
+git -C "$WORK/cloudflared" checkout --quiet --detach FETCH_HEAD
+test "$(git -C "$WORK/cloudflared" rev-parse HEAD)" = "$CLOUDFLARED_COMMIT"
 mkdir -p "$(dirname "$OUT")"
 
 (
@@ -45,4 +49,4 @@ mkdir -p "$(dirname "$OUT")"
 )
 
 test -s "$OUT"
-echo "Built $OUT from cloudflared $CLOUDFLARED_REF"
+echo "Built $OUT from cloudflared commit $CLOUDFLARED_COMMIT"

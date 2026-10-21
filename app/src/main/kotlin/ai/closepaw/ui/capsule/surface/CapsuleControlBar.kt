@@ -14,12 +14,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.PanTool
-import androidx.compose.material.icons.rounded.PhoneAndroid
+import ai.closepaw.ui.icons.vendor.rounded.PanTool
+import ai.closepaw.ui.icons.vendor.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.RemoveCircleOutline
-import androidx.compose.material.icons.rounded.StopCircle
-import androidx.compose.material.icons.rounded.Visibility
+import ai.closepaw.ui.icons.vendor.rounded.RemoveCircleOutline
+import ai.closepaw.ui.icons.vendor.rounded.StopCircle
+import ai.closepaw.ui.icons.vendor.rounded.Visibility
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
