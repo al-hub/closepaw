@@ -3,6 +3,7 @@ package ai.closepaw.ui.overlay.compose
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
@@ -15,6 +16,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
@@ -34,6 +36,9 @@ fun StatusIslandCompose(
     dotColor: Color,
     pulsing: Boolean,
     onClick: (() -> Unit)?,
+    onDragStart: (() -> Unit)? = null,
+    onDrag: ((Float, Float) -> Unit)? = null,
+    onDragEnd: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val shape = MaterialTheme.shapes.large
@@ -43,6 +48,17 @@ fun StatusIslandCompose(
         modifier = modifier
             .minimumInteractiveComponentSize()
             .clip(shape)
+            .then(if (onDrag != null) Modifier.pointerInput(onDrag) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { onDragStart?.invoke() },
+                    onDragEnd = { onDragEnd?.invoke() },
+                    onDragCancel = { onDragEnd?.invoke() },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        onDrag(amount.x, amount.y)
+                    },
+                )
+            } else Modifier)
             .then(if (onClick != null) Modifier.clickable(
                 role = Role.Button,
                 onClickLabel = "Open current app",
