@@ -9,8 +9,8 @@ import ai.closepaw.ui.overlay.XStopOverlayHost
 
 /** Full-screen decoration never receives touch; only bounded panel / emergency X windows do. */
 internal class RemoteControlIndicator(private val service: AccessibilityService,
-    private val session: ControlSession, private val resume: () -> Unit,
-    private val stopOtherSessions: () -> Unit = {}) {
+    private val session: ControlSession,
+    private val stopOtherSessions: () -> Unit = {}, private val resume: () -> Unit) {
     private val manager = service.getSystemService(WindowManager::class.java)
     private val windows = mutableListOf<View>()
     private var border: Border? = null
