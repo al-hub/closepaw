@@ -1,5 +1,15 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## v0.1.74/code75 X + Island signed release installed — #128 physical acceptance OPEN (2026-10-21)
+
+- [PR #131](https://github.com/al-hub/closepaw/pull/131) merged as `c124f3f86994664c9685b883cb31e1796b38c894`, the immutable APK/tag source. One visible emergency X arbitrates local/remote sessions and stops both; the shared draggable Compose island also covers bridge-only status. Modern owned controls participate in observation security and reject AI touches over their bounds.
+- Final PR Security CI39607783934 / UI39607783952, main Security CI39608950694 / UI39608950568, and [Signed Release39610112952](https://github.com/al-hub/closepaw/actions/runs/39610112952) succeeded. Six emulator UI tests include real service overlay MotionEvent injection, X/Island ten drags each, persistence/X redisplay, single-X arbitration and short-tap stop/cleanup. This is not Samsung physical input or accessibility dispatchGesture evidence.
+- [Release](https://github.com/al-hub/closepaw/releases/tag/v0.1.74) / [signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.74/closepaw-aa-bridge.apk):116,539,549 bytes, SHA-256 `e408bc8ed554acfafb91deef1ac8c8067da9e68aeaf2167c146ff6a265429ada`. Existing signer `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`; anonymous public download, manifest75, both native runtimes and checksum independently verified, artifact12350816441.
+- Exactly one update task `96622026-8dc2-49f3-9da9-a78e3ecae77b`: durable installed/current0.1.74/code75 and independent responding-app status confirmed. Update/install permissions preserved; no re-registration or repeated installation.
+- **OPEN:** Samsung physical X/Island drag10/10, haptics, real window count across lifecycle/app transitions, collision avoidance, outside touch/IME, rotation/folding/TalkBack and service recreation. #128 stays OPEN; #119 physical acceptance is not silently marked complete. Ordinary active UI is X + read-only Island; earlier Pause/Resume/✓ GUI instructions below are historical and superseded.
+- [Full evidence and limits](../dev/issue128-release-v0174.md). Preserve #118 and v0.1.67+ accepted functional baselines; do not repeat Wi-Fi/SSH, locked Termux, calculator/browser/Gemini basics absent a new regression risk. Camera and locked-screen acceptance excluded. Documentation-only followups do not move the released tag.
+
+
 ## v0.1.70/code71 Premium UX published — physical acceptance OPEN (2026-10-20)
 
 - [PR #123](https://github.com/al-hub/closepaw/pull/123) merged. Calm Intelligence Light/Dark palette, ambient depth,56dp Korean Pause/Resume/Stop/Manual controls, independent top-right X, movable/collapsible panel, structured actual-state feedback, intended/actual target distinction, exact tap ripple and injected-path timing. Semantic scroll has direction only; no invented paths or new generic drag/double-tap operations.
