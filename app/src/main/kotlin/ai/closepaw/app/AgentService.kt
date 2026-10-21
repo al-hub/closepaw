@@ -124,7 +124,7 @@ class AgentService : AccessibilityService() {
     fun restorePausedControlPanel(): Boolean {
         if (!isServiceActive ||
             remoteControlSession.state != ai.closepaw.chatgpt.control.ControlSession.State.PAUSED) return false
-        remoteControlIndicator.restorePanel()
+        remoteControlIndicator.restorePanel(showEmergencyX = !modernEmergencyXVisible)
         return remoteControlIndicator.isAttached()
     }
 
@@ -171,7 +171,7 @@ class AgentService : AccessibilityService() {
             !getSystemService(android.os.PowerManager::class.java).isInteractive) return
         remoteControlIndicator.show(showEmergencyX = !modernEmergencyXVisible)
         if (remoteControlSession.state == ai.closepaw.chatgpt.control.ControlSession.State.PAUSED)
-            remoteControlIndicator.restorePanel()
+            remoteControlIndicator.restorePanel(showEmergencyX = !modernEmergencyXVisible)
     }
     internal fun showRemoteControlFeedbackTest() { remoteControlIndicator.show(testOnly = true) }
     internal fun hideRemoteControlActivity(force: Boolean = false) {
