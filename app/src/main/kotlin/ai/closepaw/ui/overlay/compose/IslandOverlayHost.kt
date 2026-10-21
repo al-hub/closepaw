@@ -50,7 +50,7 @@ class IslandOverlayHost(
     private var downTime = 0L
     private var dragging = false
 
-    /** The active control island is status-only: never intercept screen touches. */
+    /** Status content is read-only; the bounded window still accepts long-press dragging. */
     fun setReadOnly(enabled: Boolean) {
         if (readOnly == enabled) return
         readOnly = enabled
@@ -174,7 +174,7 @@ class IslandOverlayHost(
             },
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                (if (readOnly) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0),
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
