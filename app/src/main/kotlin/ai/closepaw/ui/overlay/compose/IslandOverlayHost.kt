@@ -29,6 +29,7 @@ class IslandOverlayHost(
         private const val TAG = "IslandOverlayHost"
     }
 
+    private val hostId = Integer.toHexString(System.identityHashCode(this))
     private val windowManager = service.getSystemService(WindowManager::class.java)
     private val composeHost = OverlayComposeHost(
         context = service,
@@ -103,10 +104,11 @@ class IslandOverlayHost(
                 )
             }
         }
-        Log.i(TAG, "Status island shown")
+        Log.i(TAG, "island_show_requested host=$hostId attached=${composeHost.isShowing()}")
     }
 
     fun hide() {
+        if (composeHost.isShowing()) Log.i(TAG, "island_hide host=$hostId")
         composeHost.hide()
     }
 
