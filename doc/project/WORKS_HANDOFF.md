@@ -1,5 +1,13 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## 다음 별도 Works — 코드 수정→서명 APK 발행 시간 개선 (#132)
+
+- 사용자 요청: 추가 변경 검증에 앞서 개발·CI·릴리스 대기 시간을 별도 Works에서 개선한다.
+- [이슈 #132: 병목 실측·개선안 비교·구현·릴리스 인계](https://github.com/al-hub/closepaw/issues/132)에 독립 실행 지침과 수용 기준을 등록했다. 이 등록 작업에서는 워크플로/빌드 설정을 변경하지 않았다.
+- v0.1.74 성공 실행 1세트: main CI 생성→공개 APK 검증18분15초, 릴리스 job 종료18분46초. 주요 단계는 unit+lint5분09초, release test+assemble7분56초. UI5분50초는 병렬이므로 합산하지 않는다. 세부 Gradle/R8 비중은 아직 미확정이다.
+- 새 Works는 이 이슈와 아래 서명 실행서를 읽고 계측→개선안 비교→우선 구현→CI·기존 키의 서명 APK→가능한 설치 검증까지 진행한다. 캐시/중복 실행/중복 테스트·네이티브 빌드/병렬화를 검토하되 필요한 테스트·서명·공개 검증은 유지한다.
+- #126 앱 명령 응답 지연과 #128 실기기 GUI 수용은 별개다. 기존 설치0.1.74/code75와 검증 기준선을 보존하고, 이 성능 개선을 이유로 미실행 물리 검증을 완료 처리하지 않는다.
+
 **서명 APK 발행 방법:** [GitHub Actions 서명 릴리스 실행서](../dev/github-signed-release.md).
 다른 대화/Work는 로컬 키나 SDK를 요청하기 전에 이 문서를 읽는다. 기존 secrets와
 main Security CI → Signed Release 자동 경로, dispatch 없는 예약 fallback,
