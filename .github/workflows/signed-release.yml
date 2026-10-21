@@ -191,7 +191,9 @@ jobs:
           aapt="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)"
           "$aapt" dump badging "$apk" > "$RUNNER_TEMP/unsigned-manifest.txt"
           grep -F "package: name='ai.closepaw' versionCode='$EXPECTED_CODE' versionName='$EXPECTED_VERSION'" "$RUNNER_TEMP/unsigned-manifest.txt"
-          ! grep -q 'application-debuggable' "$RUNNER_TEMP/unsigned-manifest.txt"
+          if grep -q 'application-debuggable' "$RUNNER_TEMP/unsigned-manifest.txt"; then
+            echo 'Refusing debuggable APK' >&2; exit 1
+          fi
           unzip -l "$apk" | grep -F 'lib/arm64-v8a/libopenaitunnel.so'
           unzip -l "$apk" | grep -F 'lib/arm64-v8a/libcloudflared.so'
 
