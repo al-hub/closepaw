@@ -36,6 +36,8 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
         Rect.intersects(Rect(point[0], point[1], point[0] + it.width, point[1] + it.height), rect)
     }
     fun isAttached() = border?.isAttachedToWindow == true
+    /** Modern task UI owns the emergency X while it is visible. */
+    fun hideEmergencyXOnly() { xStopOverlay.hide() }
     /** Rebuild a missing control panel without changing the user-owned session state. */
     fun restorePanel() {
         if (session.state == ControlSession.State.PAUSED && unlocked()) {
@@ -51,7 +53,7 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
             placePanel(); border?.postDelayed(this, 500)
         }
     }
-    fun show(testOnly: Boolean = false) {
+    fun show(testOnly: Boolean = false, showEmergencyX: Boolean = true) {
         if (session.state != ControlSession.State.ENDED) stoppedResult = false
         if (!unlocked() || (!testOnly && (session.state == ControlSession.State.IDLE ||
                 session.state == ControlSession.State.ENDED && !stoppedResult))) { hide(); return }
@@ -61,11 +63,12 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
                 add(decoration, WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
                     Gravity.TOP or Gravity.START, 0, 0, touchable = false)
                 border = decoration
-                if (!testOnly) xStopOverlay.show()
+                if (!testOnly && showEmergencyX) xStopOverlay.show()
                 decoration.post(guard)
             } catch (_: Exception) { hide(); session.pause(); return }
         }
-        if (!testOnly && !xStopOverlay.isShowing()) xStopOverlay.show()
+        if (!testOnly && !showEmergencyX) xStopOverlay.hide()
+        if (!testOnly && showEmergencyX && !xStopOverlay.isShowing()) xStopOverlay.show()
         // #128: Modern status island has sole ownership of the visible status
         // surface. Legacy controls retain emergency X and passive border only.
         // Do not create a second, non-draggable RemoteControlPanel window.
