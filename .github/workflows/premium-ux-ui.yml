@@ -4,11 +4,15 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, 'security/**']
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: premium-ui-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   panel-instrumentation:
@@ -29,7 +33,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Compile app and instrumented UI tests
         # View-only QA: arm64 tunnel/cloudflared production binaries are not needed or exercised.
-        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -Pandroid.injected.build.abi=x86_64 --stacktrace
+        run: bash scripts/ci-gradle.sh ui-compile :app:assembleDebug :app:assembleDebugAndroidTest -Pandroid.injected.build.abi=x86_64
       - name: Enable hardware acceleration
         run: |
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
@@ -43,7 +47,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest,ai.closepaw.qa.ControlOverlayWindowTest --stacktrace
+            bash scripts/ci-gradle.sh ui-test :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest,ai.closepaw.qa.ControlOverlayWindowTest --stacktrace
             mkdir -p ui-render-evidence
             adb pull /sdcard/Download/closepaw-premium-ux-qa ui-render-evidence
             test "$(find ui-render-evidence -name '*.png' | wc -l)" -eq 4
@@ -67,5 +71,7 @@ jobs:
             app/build/reports/androidTests/connected
             app/build/outputs/androidTest-results/connected
             ui-render-evidence
+            build/ci-metrics
+            build/reports/profile
           if-no-files-found: warn
           retention-days: 14

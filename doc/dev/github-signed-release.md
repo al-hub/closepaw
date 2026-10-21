@@ -97,18 +97,20 @@ KEYSTORE_PATH는 runner의 임시 keystore 경로로 설정된다. 일반적인
 d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba
 ```
 
-그 뒤 두 Android 네이티브 런타임(`libopenaitunnel.so`, `libcloudflared.so`)을
-빌드·포함하고, 서명 환경변수와 함께 다음을 실행한다.
+Security CI의 `unsigned-release` job이 두 Android 네이티브 런타임을 빌드·포함하고,
+R8/리소스 축소를 유지한 `:app:assembleRelease`를 단위 테스트·lint/debug job과
+독립 runner에서 병렬 실행한다. 모든 Security CI job 성공 후 Signed Release가
+**동일 저장소/main/SHA/정확한 성공 CI run**의 unsigned APK만 내려받는다.
+PR/fork/다른 workflow/다른 run 또는 버전·hash 불일치는 서명 전에 거부한다.
+기존 키로 zipalign/apksigner 서명하고 이전 APK 인증서와 다시 비교한다.
+단위 테스트는 같은 main CI에서 통과하며 서명 job에서 중복 실행하지 않는다.
 
-```bash
-./gradlew :app:testDebugUnitTest :app:assembleRelease --stacktrace
-```
-
-생성 APK의 인증서를 다시 비교한 뒤 불변 태그와 릴리스를 만들고 두 자산을
-올린다. 마지막으로 **인증 없는 공개 URL에서 별도 다운로드**하여 SHA-256,
-서명, package `ai.closepaw`, 버전/code, 두 런타임 및 태그 소스를 검증한다.
-증거는 `public-apk-verification-<run_id>` artifact에 남는다. 단위 테스트 보고서는
-`signed-release-test-reports-<run_id>` artifact에 남는다.
+태그/릴리스 및 인증 없는 공개 URL의 SHA256·서명·manifest·두 런타임·소스 검증은
+유지한다. `public-apk-verification-<run_id>`가 독립 공개 검증 증거다.
+테스트 보고서는 **Security CI**의 `android-test-reports-<run_id>`, task profile은
+`security-gradle-timing-<run_id>` / `release-gradle-timing-<run_id>`에 있다.
+unsigned artifact가 없거나 만료되면 현재 main의 Security CI를 원인 확인 후 재실행한다.
+PR artifact나 다른 SHA로 대체하지 않는다. [#132 설계·계측·롤백](issue132-pipeline-performance.md).
 
 로컬에서 서명 환경변수 없이 `assembleRelease`를 실행하면 unsigned 결과가
 나올 수 있다. 로컬 SDK 다운로드 실패나 keystore 부재를 해결하려고 운영 키를
@@ -122,7 +124,7 @@ d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba
   workflow dispatch를 실행하지 않으며 APK 바이너리 다운로드도 지원하지 않는다.
 - 실행 목록/상태/로그는 반드시 대상 SHA와 run/job ID를 대조한다. 이전 HEAD의
   success나 `queued`/`in_progress`를 현재 릴리스 성공으로 보고하지 않는다.
-- `Test and build signed release`는 단위 테스트와 배포용 최적화를 포함해 수 분 이상
+- Security CI의 `Build optimized unsigned release`는 배포용 최적화를 포함해 수 분 이상
   걸릴 수 있다. 진행 중 job의 로그 다운로드는 아직 404일 수 있다. job이 끝나기
   전에 이를 빌드 실패로 오인하거나 무작정 재실행하지 않는다.
 - secret 누락 또는 인증서 불일치면 중단 원인을 기록한다. 새 키 생성, 인증서
