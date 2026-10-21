@@ -49,6 +49,16 @@ jobs:
             exit 1
           fi
 
+      - name: Verify signed APK release gate
+        shell: bash
+        run: |
+          bash -n scripts/release-apk.sh
+          if env -u KEYSTORE_PATH -u KEYSTORE_PASSWORD -u KEY_ALIAS -u KEY_PASSWORD bash scripts/release-apk.sh > /tmp/release-gate.out 2>&1; then
+            echo "Unsigned release incorrectly accepted" >&2
+            exit 1
+          fi
+          grep -q 'KEYSTORE_PATH is required' /tmp/release-gate.out
+
       - name: Android unit tests and lint
         run: ./gradlew :app:testDebugUnitTest :app:lintDebug --stacktrace
 
