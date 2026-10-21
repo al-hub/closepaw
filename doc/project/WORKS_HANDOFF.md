@@ -1,5 +1,15 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## 2026-10-22 운영 지침·main-only R8 조건 수정 — 검증은 다음 개발에 이관 (#134)
+
+- 사용자 범위: 지침과 GitHub workflow 수정까지만. CI·서명·새 APK·휴대폰 설치는 실행하지 않는다.
+- security-ci.yml의 unsigned-release는 main의 non-PR 실행으로 제한했다. 일반 PR의 Python/JVM/lint/debug 및 별도 UI 검증, main의 R8·서명·공개 검증 경로는 유지한다.
+- AI.md에 수정 일괄 제출, 기존 결과 재사용, 완료 예상 시점 중심의 상태 조회, 중복 보고 최소화, 설치1회 후 재연결 여유와 durable→독립 버전 확인을 기록했다.
+- 이번 변경은 [skip ci]로 저장하고 앱 버전은0.1.75/code76을 유지한다. 최신 설치·서명 검증 증거는 아래 v0.1.75 그대로이며 이번 조건은 미검증이다.
+- 다음 실제 개발에서 새 버전/code와 함께 PR unsigned-release skipped/main unsigned-release success 및 기존 서명·공개 검증을 확인하고 #134를 갱신한다. 예상 발행18~20분/설치 포함21~24분은 아직 재측정하지 않았다.
+- #126과 #128은 별도 유지한다.
+
+
 ## #132 완료 — v0.1.75/code76 발행·설치, 비용 후속 #134 (2026-10-21)
 
 - [PR #133](https://github.com/al-hub/closepaw/pull/133), immutable APK/tag source `04c849b701c0d6a4c8dd332053619a7135db2584`.

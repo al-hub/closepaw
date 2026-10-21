@@ -97,7 +97,9 @@ KEYSTORE_PATH는 runner의 임시 keystore 경로로 설정된다. 일반적인
 d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba
 ```
 
-Security CI의 `unsigned-release` job이 두 Android 네이티브 런타임을 빌드·포함하고,
+Security CI의 `unsigned-release` job은 main에서만 실행한다. PR은 기존 테스트·lint·debug·UI 검증을 유지하고 optimized release/R8는 생략한다. 이 main-only 조건은 2026-10-22 사용자 요청으로 수정만 반영했으며 다음 개발 CI에서 검증한다.
+
+main의 이 job이 두 Android 네이티브 런타임을 빌드·포함하고,
 R8/리소스 축소를 유지한 `:app:assembleRelease`를 단위 테스트·lint/debug job과
 독립 runner에서 병렬 실행한다. 모든 Security CI job 성공 후 Signed Release가
 **동일 저장소/main/SHA/정확한 성공 CI run**의 unsigned APK만 내려받는다.
@@ -188,3 +190,9 @@ main→공개1095s→653s(40.4% 단축), runner 총 사용량은 별도 비교�
 Security CI dispatch로 산출물을 만든다. 성공한 unsigned artifact가 남아 있는
 run 전체를 재실행하면 동일 이름 upload가 충돌할 수 있으므로 원인에 맞는
 실패 job만 재시도하거나 새 CI dispatch를 사용한다. 서명 중 main을 변경하지 않는다.
+
+## 10. 변경만 반영한 운영 조정 — 2026-10-22 (#134)
+
+사용자가 지침과 workflow 파일 수정까지만 요청했다. unsigned-release를 main으로 제한하고 일반 PR의 추가 R8 실행을 제거하도록 설정했다. 이번 커밋은 [skip ci]로 저장하며 VERSION_NAME/CODE·기존 APK·태그는 그대로다. 변경된 조건의 CI·서명·새 APK·설치는 실행하지 않았다. 이전 v0.1.75 성공이 이 조건의 검증 증거는 아니다.
+
+다음 실제 개발 작업에서 새 버전/code와 함께 PR의 security-build-test/UI success 및 unsigned-release skipped, main의 두 Security job success, 기존 키 서명·공개 APK 검증을 확인한다. 설치가 요청 범위면 한 번 제출 후 약60초 재연결 여유를 두고 durable status와 독립 앱 버전을 확인한다. 상세 조회 간격과 일괄 제출 원칙은 [AI.md](../../AI.md)를 따른다. #134는 검증 대기로 유지한다.
