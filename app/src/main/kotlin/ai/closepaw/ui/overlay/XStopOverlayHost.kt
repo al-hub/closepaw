@@ -25,6 +25,8 @@ internal class XStopOverlayHost(
 ) {
     private val manager = service.getSystemService(WindowManager::class.java)
     private val logTag = "ClosePawXOverlay"
+    // Distinguishes legacy vs modern X hosts without exposing user content.
+    private val hostId = Integer.toHexString(System.identityHashCode(this))
     private val preferences = service.getSharedPreferences("x_stop_overlay", 0)
     private var view: View? = null
     private var params: WindowManager.LayoutParams? = null
@@ -55,6 +57,7 @@ internal class XStopOverlayHost(
 
     fun show() {
         if (view != null) {
+            Log.d(logTag, "x_show_existing host=$hostId")
             refreshBounds()
             return
         }
@@ -178,7 +181,9 @@ internal class XStopOverlayHost(
             manager.addView(button, lp)
             view = button
             params = lp
-        } catch (_: Exception) {
+            Log.i(logTag, "x_window_added host=$hostId")
+        } catch (error: Exception) {
+            Log.w(logTag, "x_window_add_failed host=$hostId", error)
             view = null
             params = null
         }
@@ -188,7 +193,12 @@ internal class XStopOverlayHost(
         val existing = view ?: return
         view = null
         params = null
-        try { manager.removeView(existing) } catch (_: Exception) { }
+        try {
+            manager.removeView(existing)
+            Log.i(logTag, "x_window_removed host=$hostId")
+        } catch (error: Exception) {
+            Log.w(logTag, "x_window_remove_failed host=$hostId", error)
+        }
     }
 
     fun dispose() = hide()

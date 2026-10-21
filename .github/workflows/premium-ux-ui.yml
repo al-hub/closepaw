@@ -43,10 +43,21 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest --stacktrace
+            ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest,ai.closepaw.qa.ControlOverlayWindowTest --stacktrace
             mkdir -p ui-render-evidence
             adb pull /sdcard/Download/closepaw-premium-ux-qa ui-render-evidence
             test "$(find ui-render-evidence -name '*.png' | wc -l)" -eq 4
+      - name: Report exact instrumentation failures
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          for path in glob.glob('app/build/outputs/androidTest-results/connected/**/*.xml', recursive=True):
+              for case in ET.parse(path).iter('testcase'):
+                  for failure in case.findall('failure'):
+                      print(case.attrib.get('classname'), case.attrib.get('name'))
+                      print(failure.text or failure.attrib)
+          PY
       - name: Upload UI test and rendered-layout evidence
         if: always()
         uses: actions/upload-artifact@v4

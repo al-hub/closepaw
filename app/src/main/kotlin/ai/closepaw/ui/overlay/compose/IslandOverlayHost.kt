@@ -10,6 +10,8 @@ import android.view.WindowManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.LifecycleOwner
 import androidx.savedstate.SavedStateRegistryOwner
 import ai.closepaw.protocol.TurnPhase
@@ -29,6 +31,7 @@ class IslandOverlayHost(
         private const val TAG = "IslandOverlayHost"
     }
 
+    private val hostId = Integer.toHexString(System.identityHashCode(this))
     private val windowManager = service.getSystemService(WindowManager::class.java)
     private val composeHost = OverlayComposeHost(
         context = service,
@@ -40,8 +43,45 @@ class IslandOverlayHost(
 
     private var stateHolder: CapsuleStateHolder? = null
     private var readOnly = false
+    private var remoteStatusText by mutableStateOf<String?>(null)
 
-    /** The active control island is status-only: never intercept screen touches. */
+    /** Same window serves bridge-only sessions; never create another status surface. */
+    fun setRemoteStatus(text: String?) { remoteStatusText = text }
+    private val positions = service.getSharedPreferences("closepaw_island_position", android.content.Context.MODE_PRIVATE)
+    private var islandX = positions.getInt("x", -1)
+    private var islandY = positions.getInt("y", -1)
+    private var fractionX = 0f
+    private var fractionY = 0f
+    private fun dragBy(dx: Float, dy: Float) {
+        val metrics = service.resources.displayMetrics
+        val maxX = (metrics.widthPixels - dp(280)).coerceAtLeast(0)
+        val maxY = (metrics.heightPixels - dp(64)).coerceAtLeast(0)
+        fractionX += dx
+        fractionY += dy
+        val stepX = fractionX.toInt()
+        val stepY = fractionY.toInt()
+        fractionX -= stepX
+        fractionY -= stepY
+        val nextX = ((if (islandX < 0) maxX / 2 else islandX) + stepX).coerceIn(0, maxX)
+        val nextY = ((if (islandY < 0) getStatusBarHeight() + dp(88) else islandY) + stepY).coerceIn(0, maxY)
+        if (nextX == islandX && nextY == islandY) return
+        try {
+            if (!composeHost.updateLayoutParams { it.x = nextX; it.y = nextY }) return
+            islandX = nextX
+            islandY = nextY
+            // Some OEMs cancel touch on window movement; store every acknowledged move.
+            persistPosition()
+        } catch (error: RuntimeException) {
+            Log.w(TAG, "island_drag_update_failed host=$hostId", error)
+        }
+    }
+    private fun persistPosition() {
+        if (islandX >= 0 && islandY >= 0) {
+            positions.edit().putInt("x", islandX).putInt("y", islandY).apply()
+        }
+    }
+
+    /** Read-only disables commands; the island itself remains touchable for deliberate dragging. */
     fun setReadOnly(enabled: Boolean) {
         if (readOnly == enabled) return
         readOnly = enabled
@@ -55,12 +95,15 @@ class IslandOverlayHost(
         if (composeHost.isShowing()) return
         composeHost.show(createLayoutParams()) {
             val holder = stateHolder
-            if (holder == null) {
+            val remote = remoteStatusText
+            if (remote != null || holder == null) {
                 StatusIslandCompose(
-                    text = "Working...",
+                    text = remote ?: "Working...",
                     dotColor = MaterialTheme.colorScheme.primary,
                     pulsing = true,
                     onClick = if (readOnly) null else onExpandCapsule,
+                    onDrag = ::dragBy,
+                    onDragEnd = ::persistPosition,
                 )
             } else {
                 val mode by holder.mode.collectAsState(initial = CapsuleMode.Hidden)
@@ -72,17 +115,22 @@ class IslandOverlayHost(
                     dotColor = glowState.toStatusColor(),
                     pulsing = mode is CapsuleMode.Running,
                     onClick = if (readOnly) null else onExpandCapsule,
+                    onDrag = ::dragBy,
+                    onDragEnd = ::persistPosition,
                 )
             }
         }
-        Log.i(TAG, "Status island shown")
+        Log.i(TAG, "island_show_requested host=$hostId attached=${composeHost.isShowing()}")
     }
 
     fun hide() {
+        if (composeHost.isShowing()) Log.i(TAG, "island_hide host=$hostId")
         composeHost.hide()
     }
 
     fun isShowing(): Boolean = composeHost.isShowing()
+    fun ownsWindow(id: Int): Boolean = composeHost.ownsWindow(id)
+    fun covers(rect: android.graphics.Rect): Boolean = composeHost.covers(rect)
 
     fun startObserving(stateHolder: CapsuleStateHolder, @Suppress("UNUSED_PARAMETER") scope: CoroutineScope) {
         this.stateHolder = stateHolder
@@ -118,11 +166,14 @@ class IslandOverlayHost(
             },
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                (if (readOnly) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0),
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = statusBarHeight + dp(4)
+            gravity = Gravity.TOP or Gravity.START
+            val maxX = (service.resources.displayMetrics.widthPixels - dp(280)).coerceAtLeast(0)
+            val maxY = (service.resources.displayMetrics.heightPixels - dp(64)).coerceAtLeast(0)
+            x = (if (islandX < 0) maxX / 2 else islandX).coerceIn(0, maxX)
+            y = (if (islandY < 0) statusBarHeight + dp(88) else islandY).coerceIn(0, maxY)
         }
     }
 

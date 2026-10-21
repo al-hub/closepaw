@@ -85,6 +85,7 @@ class AgentService : AccessibilityService() {
     private val serviceLifecycleOwner = ServiceLifecycleOwner()
     private var session: AgentSession? = null
     private var overlayController: ServiceOverlayController? = null
+    private var modernEmergencyXVisible = false
     private var actionVisualizer: ActionVisualizerManager? = null
     internal val remoteControlChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
     internal val remoteControlSession: ai.closepaw.chatgpt.control.ControlSession by lazy {
@@ -123,11 +124,13 @@ class AgentService : AccessibilityService() {
     fun restorePausedControlPanel(): Boolean {
         if (!isServiceActive ||
             remoteControlSession.state != ai.closepaw.chatgpt.control.ControlSession.State.PAUSED) return false
-        remoteControlIndicator.restorePanel()
+        remoteControlIndicator.restorePanel(showEmergencyX = !modernEmergencyXVisible)
         return remoteControlIndicator.isAttached()
     }
 
-    private val remoteControlIndicator by lazy { RemoteControlIndicator(this, remoteControlSession) {
+    private val remoteControlIndicator by lazy { RemoteControlIndicator(this, remoteControlSession, stopOtherSessions = {
+        if (overlayController?.stateHolder?.hasActiveTask == true) submitOp(Op.Shutdown)
+    }) {
         if (remoteControlSession.beginResume()) serviceScope.launch {
             val epoch = remoteControlSession.epoch
             val started = android.os.SystemClock.elapsedRealtime()
@@ -162,21 +165,31 @@ class AgentService : AccessibilityService() {
         runCatching { remoteControlIndicator.tap(rect, x, y) }
     }
     internal fun showRemoteControlTarget(rect: android.graphics.Rect) { runCatching { remoteControlIndicator.target(rect) } }
-    internal fun remoteControlCovers(rect: android.graphics.Rect) = remoteControlIndicator.controlCovers(rect)
+    internal fun remoteControlCovers(rect: android.graphics.Rect) = remoteControlIndicator.controlCovers(rect) ||
+        overlayController?.controlCovers(rect) == true
     internal fun showRemoteControlActivity() {
-        if (getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked ||
-            !getSystemService(android.os.PowerManager::class.java).isInteractive) return
-        remoteControlIndicator.show()
+        val unlocked = !getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
+            getSystemService(android.os.PowerManager::class.java).isInteractive
+        val active = remoteControlSession.state !in setOf(
+            ai.closepaw.chatgpt.control.ControlSession.State.IDLE,
+            ai.closepaw.chatgpt.control.ControlSession.State.ENDED)
+        overlayController?.setRemoteStatus(if (unlocked && active) remoteControlSession.label else null)
+        if (!unlocked) { remoteControlIndicator.hide(); return }
+        remoteControlIndicator.show(showEmergencyX = !modernEmergencyXVisible)
         if (remoteControlSession.state == ai.closepaw.chatgpt.control.ControlSession.State.PAUSED)
-            remoteControlIndicator.restorePanel()
+            remoteControlIndicator.restorePanel(showEmergencyX = !modernEmergencyXVisible)
     }
     internal fun showRemoteControlFeedbackTest() { remoteControlIndicator.show(testOnly = true) }
     internal fun hideRemoteControlActivity(force: Boolean = false) {
         if (force || remoteControlSession.state in setOf(ai.closepaw.chatgpt.control.ControlSession.State.IDLE,
-                ai.closepaw.chatgpt.control.ControlSession.State.ENDED)) remoteControlIndicator.hide()
+                ai.closepaw.chatgpt.control.ControlSession.State.ENDED)) {
+            remoteControlIndicator.hide()
+            overlayController?.setRemoteStatus(null)
+        }
     }
     internal fun isRemoteControlActivityAttached() = remoteControlIndicator.isAttached()
-    internal fun ownsRemoteControlIndicatorWindow(id: Int) = remoteControlIndicator.ownsWindow(id)
+    internal fun ownsRemoteControlIndicatorWindow(id: Int) = remoteControlIndicator.ownsWindow(id) ||
+        overlayController?.ownsControlWindow(id) == true
     private var currentPlatformMode: PlatformMode = PlatformMode.ACCESSIBILITY
     @Volatile private var isServiceActive = false
     private val viewerBridge by lazy {
@@ -272,7 +285,20 @@ class AgentService : AccessibilityService() {
                         scope = serviceScope,
                         appPackage = OUR_PACKAGE,
                         logTag = TAG,
-                        onStop = { submitOp(Op.Shutdown) },
+                        onEmergencyXVisibilityChanged = { visible ->
+                            modernEmergencyXVisible = visible
+                            if (visible) remoteControlIndicator.hideEmergencyXOnly()
+                            else if (remoteControlSession.state != ai.closepaw.chatgpt.control.ControlSession.State.IDLE &&
+                                     remoteControlSession.state != ai.closepaw.chatgpt.control.ControlSession.State.ENDED)
+                                remoteControlIndicator.show(showEmergencyX = true)
+                        },
+                        onStop = {
+                            // A single visible emergency X must stop both independently
+                            // tracked control sessions, not just the agent task.
+                            remoteControlSession.end()
+                            hideRemoteControlActivity(force = true)
+                            submitOp(Op.Shutdown)
+                        },
                         onTakeover = { submitOp(Op.Takeover) },
                         onResume = { submitOp(Op.Resume) },
                         onSupplement = { text -> submitOp(Op.Supplement(text)) },

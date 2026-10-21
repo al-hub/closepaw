@@ -46,6 +46,7 @@ class ServiceOverlayController(
     private val appPackage: String,
     private val logTag: String,
     private val onStop: () -> Unit,
+    private val onEmergencyXVisibilityChanged: (Boolean) -> Unit = {},
     private val onTakeover: () -> Unit,
     private val onResume: () -> Unit,
     private val onSupplement: (String) -> Unit,
@@ -141,6 +142,16 @@ class ServiceOverlayController(
 
     /** User preference: capsule or island while overlays are visible (A11y/VD). */
     private var showPreference = ShowPreference.ISLAND
+    private var remoteStatusText: String? = null
+
+    /** Remote UI shares the existing island, including when no local agent task exists. */
+    fun setRemoteStatus(text: String?) {
+        remoteStatusText = text
+        applyVisibility()
+    }
+
+    internal fun ownsControlWindow(id: Int) = xStopOverlay.ownsWindow(id) || statusIslandManager?.ownsWindow(id) == true
+    internal fun controlCovers(rect: android.graphics.Rect) = xStopOverlay.covers(rect) || statusIslandManager?.covers(rect) == true
 
     init {
         statusIslandManager?.startObserving(stateHolder, scope)
@@ -204,6 +215,7 @@ class ServiceOverlayController(
         )
         capsuleManager.setInteractionLocked(if (showSingleX) false else lockInteraction)
         if (showSingleX) xStopOverlay.show() else xStopOverlay.hide()
+        onEmergencyXVisibilityChanged(xStopOverlay.isShowing())
 
         if (activeSurfaces.showCapsule) {
             if (!capsuleManager.isShowing()) capsuleManager.show()
@@ -211,8 +223,10 @@ class ServiceOverlayController(
             capsuleManager.hide()
         }
 
-        statusIslandManager?.setReadOnly(showSingleX)
-        if (activeSurfaces.showStatusIsland) {
+        val showRemoteIsland = remoteStatusText != null && !stateHolder.hasActiveTask
+        statusIslandManager?.setRemoteStatus(if (showRemoteIsland) remoteStatusText else null)
+        statusIslandManager?.setReadOnly(showSingleX || showRemoteIsland)
+        if (activeSurfaces.showStatusIsland || showRemoteIsland) {
             if (statusIslandManager?.isShowing() != true) statusIslandManager?.show()
         } else {
             statusIslandManager?.hide()
@@ -300,6 +314,7 @@ class ServiceOverlayController(
 
     fun hideAll() {
         xStopOverlay.hide()
+        onEmergencyXVisibilityChanged(false)
         capsuleManager.hide()
         edgeGlowManager.hideImmediately()
         statusIslandManager?.hide()
@@ -307,6 +322,7 @@ class ServiceOverlayController(
 
     fun dispose() {
         xStopOverlay.dispose()
+        onEmergencyXVisibilityChanged(false)
         edgeGlowManager.dispose()
         capsuleManager.dispose()
         statusIslandManager?.dispose()
