@@ -1,5 +1,18 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## #135 완료 — v0.1.76/code77 main 빌드 최적화·발행·휴대폰 설치 (2026-10-22 KST)
+
+- [이슈 #135](https://github.com/al-hub/closepaw/issues/135), [PR #136](https://github.com/al-hub/closepaw/pull/136). immutable APK/tag source `f4dddbafece5acd0d6b5039950d84d830cffd21a`. 이후 docs-only 커밋은 발행 소스/태그를 바꾸지 않는다.
+- extended icon 전체 의존성 대신 core24+원본 동일 vendor29/출처·라이선스·전체 소스 hash 유지. exact source/toolchain/flags/script native cache(main 단일 writer, 복원 metadata/hash/ELF 검증, miss/오염 시 source build), unit/lint/debug 단일 Gradle graph, 정상 cache cleanup 생략, release GC/Java RSS 계측 적용. 서명 신뢰 경계·기존 키·R8/축소·두 런타임·불변 태그·익명 공개 검증 유지.
+- R8 347.51s→276.87s(-20.3%); main unsigned604s→545s, security461s→322s. main→공개653s→593s(10:53→9:53,-9.2%); 최종 PR→공개1461s→1086s(24:21→18:06,-25.7%). main runner1471s→1267s(-13.9%); PR 포함2707s→2002s(-26.0%). CPU/평균/P95 수치가 아니며 단일 표본이다.
+- native 최초 source build106s + 실제 로컬 cache 삭제 후 원격 exact 복원3s 포함. changed-code warm 전체 릴리스는 미측정. 약8:10 추정은 실측이 아니며6~7분 목표는 미달. Full GC0/daemon pause 총17.862s와 host memory 여유를 근거로 heap 증설·R8 별도 JVM은 보류. configuration-cache release174/debug178 problems는 남아 있으며 라이선스 asset 정확성을 우선했다.
+- PR Security39683757439/UI39683757480 success, unsigned skipped로 #134 조건 검증. main Security39684799317/UI39684799318/Signed39685929310 success. Android2665 tests/0 failures/errors/skips·lint0 errors119 warnings4 info, Python55+8, cache/provenance/gate18, UI6/4 renders, debug/release resolved graph 검증 통과. UI는 Samsung 물리 수용을 대신하지 않는다.
+- [Release/APK](https://github.com/al-hub/closepaw/releases/tag/v0.1.76),116593263 bytes, SHA256 `9a77f807f5360535032d97e5cf8320adf09ed5abaa11ec3ac2f9ffaef80a363f`. 기존 signer `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`, manifest77/두 런타임/exact source/불변 tag/익명 다운로드 검증 완료(artifact12386227075).
+- 설치1회 task `4288d196-c775-435e-bc8d-db53fe0f2408`. installing 후 교체 중 connector timeout1회, 재연결 뒤 durable installed/current0.1.76/code77 + 독립 get_status 정상 응답 확인. 업데이트·설치 권한 유지, 재제출/재등록/초기화 없음. 관측 시간은 transport/조회 대기를 포함한다.
+- [최종 보고서](../dev/issue135-main-build-optimization.md), [원시 API/계측 증거](../dev/evidence/issue135-v0176-timing.json). 다음 후보는 남은 R8 입력/규칙과 configuration/plugin 비용의 격리 계측. 무근거 keep 삭제·heap/SDK 업그레이드나 효과 과장 금지. #126 앱 지연과 #128 Samsung GUI 물리 검증은 별도 OPEN 유지.
+
+아래 #134의 “다음 개발에서 검증”과0.1.75 설치본은 당시 이력이다. 최신 설치본은0.1.76이며 #134 검증은 위에서 완료했다.
+
 ## 2026-10-22 운영 지침·main-only R8 조건 수정 — 검증은 다음 개발에 이관 (#134)
 
 - 사용자 범위: 지침과 GitHub workflow 수정까지만. CI·서명·새 APK·휴대폰 설치는 실행하지 않는다.

@@ -1,0 +1,1383 @@
+{
+  "source": "f4dddbafece5acd0d6b5039950d84d830cffd21a",
+  "version": "0.1.76",
+  "version_code": 77,
+  "issue": 135,
+  "pr": 136,
+  "runs": {
+    "pr_ci": {
+      "run_id": 39683757439,
+      "event": "pull_request",
+      "head_sha": "e2cb979e0651059af0b504bbbf00c407d90dd00a",
+      "created_at": "2026-10-21T22:04:22Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119512497212,
+          "name": "security-build-test",
+          "started_at": "2026-10-21T22:04:25Z",
+          "completed_at": "2026-10-21T22:11:07Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T22:04:26Z",
+              "completed_at": "2026-10-21T22:04:31Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T22:04:31Z",
+              "completed_at": "2026-10-21T22:04:33Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T22:04:33Z",
+              "completed_at": "2026-10-21T22:04:33Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T22:04:33Z",
+              "completed_at": "2026-10-21T22:04:46Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify bridge is loopback-only by default",
+              "started_at": "2026-10-21T22:04:46Z",
+              "completed_at": "2026-10-21T22:04:46Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Termux bridge tests",
+              "started_at": "2026-10-21T22:04:46Z",
+              "completed_at": "2026-10-21T22:05:12Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "ChatGPT bridge core tests",
+              "started_at": "2026-10-21T22:05:12Z",
+              "completed_at": "2026-10-21T22:05:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Reject obvious committed secrets",
+              "started_at": "2026-10-21T22:05:13Z",
+              "completed_at": "2026-10-21T22:05:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release input trust boundary",
+              "started_at": "2026-10-21T22:05:13Z",
+              "completed_at": "2026-10-21T22:05:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify signed APK release gate",
+              "started_at": "2026-10-21T22:05:13Z",
+              "completed_at": "2026-10-21T22:05:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify vendored icon provenance",
+              "started_at": "2026-10-21T22:05:13Z",
+              "completed_at": "2026-10-21T22:05:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Prepare verified cloudflared runtime",
+              "started_at": "2026-10-21T22:05:13Z",
+              "completed_at": "2026-10-21T22:06:32Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Android unit tests, lint and debug APK",
+              "started_at": "2026-10-21T22:06:32Z",
+              "completed_at": "2026-10-21T22:10:53Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Reject extended icons in resolved production dependencies",
+              "started_at": "2026-10-21T22:10:53Z",
+              "completed_at": "2026-10-21T22:10:53Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Android test reports",
+              "started_at": "2026-10-21T22:10:53Z",
+              "completed_at": "2026-10-21T22:10:55Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload debug APK",
+              "started_at": "2026-10-21T22:10:55Z",
+              "completed_at": "2026-10-21T22:11:00Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Gradle timing evidence",
+              "started_at": "2026-10-21T22:11:00Z",
+              "completed_at": "2026-10-21T22:11:02Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Prepare verified cloudflared runtime",
+              "started_at": "2026-10-21T22:11:02Z",
+              "completed_at": "2026-10-21T22:11:02Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T22:11:02Z",
+              "completed_at": "2026-10-21T22:11:02Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T22:11:02Z",
+              "completed_at": "2026-10-21T22:11:02Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T22:11:02Z",
+              "completed_at": "2026-10-21T22:11:03Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T22:11:03Z",
+              "completed_at": "2026-10-21T22:11:03Z",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 119512499196,
+          "name": "unsigned-release",
+          "started_at": "2026-10-21T22:04:23Z",
+          "completed_at": "2026-10-21T22:04:22Z",
+          "conclusion": "skipped",
+          "steps": []
+        }
+      ]
+    },
+    "pr_ui": {
+      "run_id": 39683757480,
+      "event": "pull_request",
+      "head_sha": "e2cb979e0651059af0b504bbbf00c407d90dd00a",
+      "created_at": "2026-10-21T22:04:22Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119512497380,
+          "name": "panel-instrumentation",
+          "started_at": "2026-10-21T22:04:25Z",
+          "completed_at": "2026-10-21T22:09:58Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T22:04:26Z",
+              "completed_at": "2026-10-21T22:04:29Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T22:04:29Z",
+              "completed_at": "2026-10-21T22:04:31Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T22:04:31Z",
+              "completed_at": "2026-10-21T22:04:31Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run android-actions/setup-android@v3",
+              "started_at": "2026-10-21T22:04:31Z",
+              "completed_at": "2026-10-21T22:04:41Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T22:04:41Z",
+              "completed_at": "2026-10-21T22:04:51Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify vendored icon provenance",
+              "started_at": "2026-10-21T22:04:51Z",
+              "completed_at": "2026-10-21T22:04:51Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Compile app and instrumented UI tests",
+              "started_at": "2026-10-21T22:04:51Z",
+              "completed_at": "2026-10-21T22:07:05Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Enable hardware acceleration",
+              "started_at": "2026-10-21T22:07:05Z",
+              "completed_at": "2026-10-21T22:07:05Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run native panel behavior and rendered-layout checks",
+              "started_at": "2026-10-21T22:07:05Z",
+              "completed_at": "2026-10-21T22:09:53Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report exact instrumentation failures",
+              "started_at": "2026-10-21T22:09:53Z",
+              "completed_at": "2026-10-21T22:09:53Z",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload UI test and rendered-layout evidence",
+              "started_at": "2026-10-21T22:09:53Z",
+              "completed_at": "2026-10-21T22:09:55Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T22:09:55Z",
+              "completed_at": "2026-10-21T22:09:56Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T22:09:56Z",
+              "completed_at": "2026-10-21T22:09:56Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T22:09:56Z",
+              "completed_at": "2026-10-21T22:09:56Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T22:09:56Z",
+              "completed_at": "2026-10-21T22:09:56Z",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "main_ci": {
+      "run_id": 39684799317,
+      "event": "push",
+      "head_sha": "f4dddbafece5acd0d6b5039950d84d830cffd21a",
+      "created_at": "2026-10-21T22:12:35Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119516014398,
+          "name": "unsigned-release",
+          "started_at": "2026-10-21T22:12:39Z",
+          "completed_at": "2026-10-21T22:21:44Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T22:12:39Z",
+              "completed_at": "2026-10-21T22:12:42Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T22:12:42Z",
+              "completed_at": "2026-10-21T22:12:43Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T22:12:43Z",
+              "completed_at": "2026-10-21T22:12:44Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T22:12:44Z",
+              "completed_at": "2026-10-21T22:12:53Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify vendored icon provenance",
+              "started_at": "2026-10-21T22:12:53Z",
+              "completed_at": "2026-10-21T22:12:54Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Prepare verified native runtimes",
+              "started_at": "2026-10-21T22:12:54Z",
+              "completed_at": "2026-10-21T22:14:40Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Clear local native cache for first-main restore proof",
+              "started_at": "2026-10-21T22:14:40Z",
+              "completed_at": "2026-10-21T22:14:40Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Prove exact remote native cache restore after cold build",
+              "started_at": "2026-10-21T22:14:40Z",
+              "completed_at": "2026-10-21T22:14:43Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build optimized unsigned release",
+              "started_at": "2026-10-21T22:14:43Z",
+              "completed_at": "2026-10-21T22:21:07Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload unsigned release for exact main CI run",
+              "started_at": "2026-10-21T22:21:07Z",
+              "completed_at": "2026-10-21T22:21:09Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload release task timing evidence",
+              "started_at": "2026-10-21T22:21:09Z",
+              "completed_at": "2026-10-21T22:21:10Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Prove exact remote native cache restore after cold build",
+              "started_at": "2026-10-21T22:21:10Z",
+              "completed_at": "2026-10-21T22:21:10Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Prepare verified native runtimes",
+              "started_at": "2026-10-21T22:21:10Z",
+              "completed_at": "2026-10-21T22:21:10Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T22:21:10Z",
+              "completed_at": "2026-10-21T22:21:41Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T22:21:41Z",
+              "completed_at": "2026-10-21T22:21:41Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T22:21:41Z",
+              "completed_at": "2026-10-21T22:21:41Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T22:21:41Z",
+              "completed_at": "2026-10-21T22:21:41Z",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 119516014580,
+          "name": "security-build-test",
+          "started_at": "2026-10-21T22:12:39Z",
+          "completed_at": "2026-10-21T22:18:01Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T22:12:39Z",
+              "completed_at": "2026-10-21T22:12:42Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T22:12:42Z",
+              "completed_at": "2026-10-21T22:12:43Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T22:12:43Z",
+              "completed_at": "2026-10-21T22:12:44Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T22:12:44Z",
+              "completed_at": "2026-10-21T22:12:55Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify bridge is loopback-only by default",
+              "started_at": "2026-10-21T22:12:55Z",
+              "completed_at": "2026-10-21T22:12:55Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Termux bridge tests",
+              "started_at": "2026-10-21T22:12:55Z",
+              "completed_at": "2026-10-21T22:13:19Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "ChatGPT bridge core tests",
+              "started_at": "2026-10-21T22:13:19Z",
+              "completed_at": "2026-10-21T22:13:19Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Reject obvious committed secrets",
+              "started_at": "2026-10-21T22:13:19Z",
+              "completed_at": "2026-10-21T22:13:19Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release input trust boundary",
+              "started_at": "2026-10-21T22:13:19Z",
+              "completed_at": "2026-10-21T22:13:19Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify signed APK release gate",
+              "started_at": "2026-10-21T22:13:19Z",
+              "completed_at": "2026-10-21T22:13:19Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify vendored icon provenance",
+              "started_at": "2026-10-21T22:13:19Z",
+              "completed_at": "2026-10-21T22:13:19Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Prepare verified cloudflared runtime",
+              "started_at": "2026-10-21T22:13:19Z",
+              "completed_at": "2026-10-21T22:14:16Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Android unit tests, lint and debug APK",
+              "started_at": "2026-10-21T22:14:16Z",
+              "completed_at": "2026-10-21T22:17:40Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Reject extended icons in resolved production dependencies",
+              "started_at": "2026-10-21T22:17:40Z",
+              "completed_at": "2026-10-21T22:17:40Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Android test reports",
+              "started_at": "2026-10-21T22:17:40Z",
+              "completed_at": "2026-10-21T22:17:41Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload debug APK",
+              "started_at": "2026-10-21T22:17:41Z",
+              "completed_at": "2026-10-21T22:17:46Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload Gradle timing evidence",
+              "started_at": "2026-10-21T22:17:46Z",
+              "completed_at": "2026-10-21T22:17:47Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Prepare verified cloudflared runtime",
+              "started_at": "2026-10-21T22:17:47Z",
+              "completed_at": "2026-10-21T22:17:47Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T22:17:47Z",
+              "completed_at": "2026-10-21T22:17:58Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T22:17:58Z",
+              "completed_at": "2026-10-21T22:17:58Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T22:17:58Z",
+              "completed_at": "2026-10-21T22:17:58Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T22:17:58Z",
+              "completed_at": "2026-10-21T22:17:58Z",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "ui": {
+      "run_id": 39684799318,
+      "event": "push",
+      "head_sha": "f4dddbafece5acd0d6b5039950d84d830cffd21a",
+      "created_at": "2026-10-21T22:12:35Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119516013511,
+          "name": "panel-instrumentation",
+          "started_at": "2026-10-21T22:12:39Z",
+          "completed_at": "2026-10-21T22:18:38Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T22:12:40Z",
+              "completed_at": "2026-10-21T22:12:45Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T22:12:45Z",
+              "completed_at": "2026-10-21T22:12:46Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-java@v4",
+              "started_at": "2026-10-21T22:12:46Z",
+              "completed_at": "2026-10-21T22:12:47Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run android-actions/setup-android@v3",
+              "started_at": "2026-10-21T22:12:47Z",
+              "completed_at": "2026-10-21T22:13:02Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T22:13:02Z",
+              "completed_at": "2026-10-21T22:13:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify vendored icon provenance",
+              "started_at": "2026-10-21T22:13:13Z",
+              "completed_at": "2026-10-21T22:13:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Compile app and instrumented UI tests",
+              "started_at": "2026-10-21T22:13:13Z",
+              "completed_at": "2026-10-21T22:15:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Enable hardware acceleration",
+              "started_at": "2026-10-21T22:15:13Z",
+              "completed_at": "2026-10-21T22:15:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run native panel behavior and rendered-layout checks",
+              "started_at": "2026-10-21T22:15:13Z",
+              "completed_at": "2026-10-21T22:18:12Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report exact instrumentation failures",
+              "started_at": "2026-10-21T22:18:12Z",
+              "completed_at": "2026-10-21T22:18:12Z",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload UI test and rendered-layout evidence",
+              "started_at": "2026-10-21T22:18:12Z",
+              "completed_at": "2026-10-21T22:18:14Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run gradle/actions/setup-gradle@v4",
+              "started_at": "2026-10-21T22:18:14Z",
+              "completed_at": "2026-10-21T22:18:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-java@v4",
+              "started_at": "2026-10-21T22:18:34Z",
+              "completed_at": "2026-10-21T22:18:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T22:18:34Z",
+              "completed_at": "2026-10-21T22:18:34Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T22:18:34Z",
+              "completed_at": "2026-10-21T22:18:35Z",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "release": {
+      "run_id": 39685929310,
+      "event": "workflow_run",
+      "head_sha": "f4dddbafece5acd0d6b5039950d84d830cffd21a",
+      "created_at": "2026-10-21T22:21:46Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 119519840998,
+          "name": "signed-release",
+          "started_at": "2026-10-21T22:21:50Z",
+          "completed_at": "2026-10-21T22:22:31Z",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "started_at": "2026-10-21T22:21:51Z",
+              "completed_at": "2026-10-21T22:21:52Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "started_at": "2026-10-21T22:21:52Z",
+              "completed_at": "2026-10-21T22:21:55Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Resolve release version",
+              "started_at": "2026-10-21T22:21:55Z",
+              "completed_at": "2026-10-21T22:21:55Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate main and CI; classify release state",
+              "started_at": "2026-10-21T22:21:55Z",
+              "completed_at": "2026-10-21T22:21:57Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Resolve exact trusted Security CI run",
+              "started_at": "2026-10-21T22:21:57Z",
+              "completed_at": "2026-10-21T22:21:57Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Download unsigned APK from exact CI run",
+              "started_at": "2026-10-21T22:21:57Z",
+              "completed_at": "2026-10-21T22:22:01Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify trusted main provenance and unsigned APK",
+              "started_at": "2026-10-21T22:22:01Z",
+              "completed_at": "2026-10-21T22:22:02Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Require signing secrets",
+              "started_at": "2026-10-21T22:22:02Z",
+              "completed_at": "2026-10-21T22:22:02Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Preflight signing identity against v0.1.33",
+              "started_at": "2026-10-21T22:22:02Z",
+              "completed_at": "2026-10-21T22:22:08Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Align and sign verified release with original key",
+              "started_at": "2026-10-21T22:22:08Z",
+              "completed_at": "2026-10-21T22:22:11Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Remove temporary signing material",
+              "started_at": "2026-10-21T22:22:11Z",
+              "completed_at": "2026-10-21T22:22:11Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate signer against previous signed Release",
+              "started_at": "2026-10-21T22:22:11Z",
+              "completed_at": "2026-10-21T22:22:12Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Create version tag only if absent",
+              "started_at": "2026-10-21T22:22:12Z",
+              "completed_at": "2026-10-21T22:22:13Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Publish missing Release",
+              "started_at": "2026-10-21T22:22:13Z",
+              "completed_at": "2026-10-21T22:22:21Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Independently verify public APK download",
+              "started_at": "2026-10-21T22:22:21Z",
+              "completed_at": "2026-10-21T22:22:28Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload public APK verification evidence",
+              "started_at": "2026-10-21T22:22:28Z",
+              "completed_at": "2026-10-21T22:22:29Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "started_at": "2026-10-21T22:22:29Z",
+              "completed_at": "2026-10-21T22:22:29Z",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "started_at": "2026-10-21T22:22:29Z",
+              "completed_at": "2026-10-21T22:22:29Z",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 119519844041,
+          "name": "ensure-main-security-ci",
+          "started_at": "2026-10-21T22:21:47Z",
+          "completed_at": "2026-10-21T22:21:47Z",
+          "conclusion": "skipped",
+          "steps": []
+        }
+      ]
+    }
+  },
+  "artifacts": {
+    "pr_ci": [
+      {
+        "id": 12385830797,
+        "name": "security-gradle-timing-39683757439",
+        "size": 10103,
+        "digest": "sha256:6443d8a647e1969a9ff33db04a9ac14faf14424bb1b1d94743b7e82270aa9774"
+      },
+      {
+        "id": 12385790821,
+        "name": "android-test-reports-39683757439",
+        "size": 784268,
+        "digest": "sha256:95325dcbda5b4fa69f62872c7a82b9d544cf0a55b725c1ad7be28121e8f04c94"
+      },
+      {
+        "id": 12385367766,
+        "name": "closepaw-security-debug-apk",
+        "size": 108318574,
+        "digest": "sha256:ec7d69ee3a4fb3d9ccfb645e6a27803c0c67924ae997c55b2d2b5463e3cc0c16"
+      }
+    ],
+    "pr_ui": [
+      {
+        "id": 12384884949,
+        "name": "premium-ux-ui-39683757480",
+        "size": 243484,
+        "digest": "sha256:78413e854400d2bbfa5e579a80910ad0f2ace4896080dee975d6f144eb53c67d"
+      }
+    ],
+    "main_ci": [
+      {
+        "id": 12386935137,
+        "name": "android-test-reports-39684799317",
+        "size": 783481,
+        "digest": "sha256:c4b1ac886b6c01a32082a9bea6f787813673746116820557f90d3b532faa5a82"
+      },
+      {
+        "id": 12386655459,
+        "name": "closepaw-security-debug-apk",
+        "size": 108318565,
+        "digest": "sha256:5be178553fff40d9683f1d87ab7659962840813ce16b89238a6593144954eca1"
+      },
+      {
+        "id": 12386595938,
+        "name": "unsigned-release-f4dddbafece5acd0d6b5039950d84d830cffd21a",
+        "size": 116528735,
+        "digest": "sha256:c259078daa3346ea87c71b11715b641c37ea718a1230c8f6f59dafe332ac9e77"
+      },
+      {
+        "id": 12386490923,
+        "name": "release-gradle-timing-39684799317",
+        "size": 18938,
+        "digest": "sha256:fd55ee913e05a8e5b4cf386b658fd3aede2712b7ed024f02f9773fdf046b9763"
+      },
+      {
+        "id": 12385484588,
+        "name": "security-gradle-timing-39684799317",
+        "size": 10087,
+        "digest": "sha256:ec351c58ee1cb7f70b9855341112a4f0a199f6933307a018cab2d6b870a30431"
+      }
+    ],
+    "ui": [
+      {
+        "id": 12386351312,
+        "name": "premium-ux-ui-39684799318",
+        "size": 269713,
+        "digest": "sha256:4c8dd83e63b7e5280a5b007c3f2daa17bc43d690da55c0c1053787a0db74147a"
+      }
+    ],
+    "release": [
+      {
+        "id": 12386227075,
+        "name": "public-apk-verification-39685929310",
+        "size": 2289,
+        "digest": "sha256:d3ccbeeffcaac62507fb8bcb5e676be5647362e38d3e38b310a92adcbfad1c9f"
+      }
+    ]
+  },
+  "tag": {
+    "tag": "refs/tags/v0.1.76",
+    "object": {
+      "sha": "f4dddbafece5acd0d6b5039950d84d830cffd21a",
+      "type": "commit",
+      "url": "https://api.github.com/repos/al-hub/closepaw/git/commits/f4dddbafece5acd0d6b5039950d84d830cffd21a"
+    }
+  },
+  "release": {
+    "url": "https://github.com/al-hub/closepaw/releases/tag/v0.1.76",
+    "published_at": "2026-10-21T22:22:21Z",
+    "assets": [
+      {
+        "id": 663958372,
+        "name": "closepaw-aa-bridge.apk",
+        "size": 116593263,
+        "digest": "sha256:9a77f807f5360535032d97e5cf8320adf09ed5abaa11ec3ac2f9ffaef80a363f",
+        "url": "https://github.com/al-hub/closepaw/releases/download/v0.1.76/closepaw-aa-bridge.apk"
+      },
+      {
+        "id": 663958371,
+        "name": "closepaw-aa-bridge.apk.sha256",
+        "size": 89,
+        "digest": "sha256:78c54053d45e48c25262c061f4e0c09236b1503fd0363cd89bf74173cc232ba2",
+        "url": "https://github.com/al-hub/closepaw/releases/download/v0.1.76/closepaw-aa-bridge.apk.sha256"
+      }
+    ]
+  },
+  "task_profiles": {
+    "119516014398": [
+      ":app | 7.843s",
+      ": | 1.042s",
+      ":app:releaseRuntimeClasspath | 0.356s",
+      ":app:releaseCompileClasspath | 0.043s",
+      ":app:pomsreleaselicenseReleaseReport | 0.012s",
+      ":app:kotlin-extension | 0.009s",
+      ":app:detachedConfiguration1 | 0.008s",
+      ":app:composeMappingProducerClasspath | 0.003s",
+      ":app:kotlinBuildToolsApiClasspath | 0.003s",
+      ":app:detachedConfiguration2 | 0.002s",
+      ":app:kotlinCompilerClasspath | 0.002s",
+      ":app:kotlinCompilerPluginClasspathRelease | 0.002s",
+      ":app:androidApis | 0.001s",
+      ":app:androidJdkImage | 0.001s",
+      ":app:detachedConfiguration3 | 0.001s",
+      ":app:detachedConfiguration8 | 0.001s",
+      ":app:releaseReverseMetadataValues | 0.001s",
+      ":app:lintChecks | 0s",
+      ":app:releaseAnnotationProcessorClasspath | 0s",
+      ":app | 7m31.77s | (total)",
+      ":app:minifyReleaseWithR8 | 4m36.87s | ",
+      ":app:lintVitalAnalyzeRelease | 1m8.40s | ",
+      ":app:compileReleaseKotlin | 59.305s | ",
+      ":app:processReleaseManifestForPackage | 12.171s | ",
+      ":app:licenseReleaseReport | 11.991s | ",
+      ":app:packageRelease | 3.775s | ",
+      ":app:mergeReleaseResources | 3.029s | ",
+      ":app:compileReleaseJavaWithJavac | 2.753s | ",
+      ":app:expandReleaseArtProfileWildcards | 2.508s | ",
+      ":app:mergeReleaseJavaResource | 2.135s | ",
+      ":app:parseReleaseLocalResources | 1.401s | FROM-CACHE",
+      ":app:processReleaseResources | 0.805s | ",
+      ":app:mergeReleaseNativeLibs | 0.771s | ",
+      ":app:generateReleaseLintVitalReportModel | 0.752s | ",
+      ":app:checkReleaseDuplicateClasses | 0.670s | ",
+      ":app:compileReleaseArtProfile | 0.609s | ",
+      ":app:stripReleaseDebugSymbols | 0.473s | ",
+      ":app:compressReleaseAssets | 0.431s | ",
+      ":app:processReleaseMainManifest | 0.381s | ",
+      ":app:checkReleaseAarMetadata | 0.371s | ",
+      ":app:collectReleaseDependencies | 0.326s | ",
+      ":app:mergeReleaseJniLibFolders | 0.314s | ",
+      ":app:optimizeReleaseResources | 0.216s | ",
+      ":app:lintVitalReportRelease | 0.194s | ",
+      ":app:convertShrunkResourcesToBinaryRelease | 0.168s | ",
+      ":app:compileReleaseAidl | 0.127s | FROM-CACHE",
+      ":app:processReleaseManifest | 0.108s | ",
+      ":app:extractReleaseVersionControlInfo | 0.095s | ",
+      ":app:sdkReleaseDependencyData | 0.086s | ",
+      ":app:processReleaseJavaRes | 0.069s | ",
+      ":app:mergeReleaseArtProfile | 0.068s | ",
+      ":app:extractDeepLinksRelease | 0.065s | FROM-CACHE",
+      ":app:mergeReleaseAssets | 0.058s | ",
+      ":app:copyClosePawBridge | 0.044s | ",
+      ":app:mapReleaseSourceSetPaths | 0.043s | ",
+      ":app:buildKotlinToolingMetadata | 0.040s | ",
+      ":app:packageReleaseResources | 0.029s | FROM-CACHE",
+      ":app:createReleaseCompatibleScreenManifests | 0.018s | ",
+      ":app:generateReleaseBuildConfig | 0.017s | ",
+      ":app:extractProguardFiles | 0.015s | ",
+      ":app:writeReleaseSigningConfigVersions | 0.015s | ",
+      ":app:lintVitalRelease | 0.011s | ",
+      ":app:javaPreCompileRelease | 0.009s | FROM-CACHE",
+      ":app:mergeReleaseGeneratedProguardFiles | 0.006s | ",
+      ":app:mergeReleaseShaders | 0.006s | ",
+      ":app:extractReleaseNativeSymbolTables | 0.005s | FROM-CACHE",
+      ":app:createReleaseApkListingFileRedirect | 0.003s | ",
+      ":app:generateReleaseResValues | 0.003s | FROM-CACHE",
+      ":app:generateReleaseResources | 0.003s | FROM-CACHE",
+      ":app:mergeReleaseStartupProfile | 0.003s | ",
+      ":app:writeReleaseAppMetadata | 0.003s | ",
+      ":app:compileReleaseShaders | 0.001s | NO-SOURCE",
+      ":app:mergeReleaseNativeDebugMetadata | 0.001s | NO-SOURCE",
+      ":app:assembleRelease | 0s | Did No Work",
+      ":app:checkKotlinGradlePluginConfigurationErrors | 0s | SKIPPED",
+      ":app:generateReleaseAssets | 0s | UP-TO-DATE",
+      ":app:mergeReleaseComposeMapping | 0s | SKIPPED",
+      ":app:preBuild | 0s | Did No Work",
+      ":app:preReleaseBuild | 0s | Did No Work",
+      ":app:produceReleaseComposeMapping | 0s | SKIPPED",
+      ":app:reportReleaseComposeMappingErrors | 0s | SKIPPED",
+      ": | 0s | (total)"
+    ],
+    "119516014580": [
+      ":app | 5.606s",
+      ": | 0.795s",
+      ":app:debugCompileClasspath | 0.208s",
+      ":app:debugRuntimeClasspath | 0.173s",
+      ":app:debugUnitTestCompileClasspath | 0.062s",
+      ":app:debugUnitTestRuntimeClasspath | 0.043s",
+      ":app:debugAndroidTestRuntimeClasspath | 0.022s",
+      ":app:debugAndroidTestCompileClasspath | 0.014s",
+      ":app:pomsdebuglicenseDebugReport | 0.014s",
+      ":app:detachedConfiguration1 | 0.008s",
+      ":app:kotlin-extension | 0.004s",
+      ":app:detachedConfiguration2 | 0.003s",
+      ":app:kotlinBuildToolsApiClasspath | 0.003s",
+      ":app:kotlinCompilerPluginClasspathDebug | 0.002s",
+      ":app:androidApis | 0.001s",
+      ":app:detachedConfiguration3 | 0.001s",
+      ":app:detachedConfiguration5 | 0.001s",
+      ":app:detachedConfiguration6 | 0.001s",
+      ":app:kotlinCompilerClasspath | 0.001s",
+      ":app:kotlinCompilerPluginClasspathDebugUnitTest | 0.001s",
+      ":app:lintChecks | 0.001s",
+      ":app:androidJdkImage | 0s",
+      ":app:debugAnnotationProcessorClasspath | 0s",
+      ":app:debugReverseMetadataValues | 0s",
+      ":app:debugUnitTestAnnotationProcessorClasspath | 0s",
+      ":app | 8m8.21s | (total)",
+      ":app:lintAnalyzeDebug | 1m53.93s | ",
+      ":app:lintAnalyzeDebugUnitTest | 1m34.99s | ",
+      ":app:testDebugUnitTest | 1m3.86s | ",
+      ":app:compileDebugUnitTestKotlin | 1m1.31s | ",
+      ":app:compileDebugKotlin | 54.871s | ",
+      ":app:lintAnalyzeDebugAndroidTest | 36.742s | ",
+      ":app:dexBuilderDebug | 25.329s | ",
+      ":app:mergeExtDexDebug | 20.559s | ",
+      ":app:compileDebugJavaWithJavac | 2.143s | ",
+      ":app:mergeDebugJavaResource | 1.799s | ",
+      ":app:mergeDebugResources | 1.589s | ",
+      ":app:packageDebug | 1.384s | ",
+      ":app:validateSigningDebug | 1.297s | ",
+      ":app:mergeProjectDexDebug | 1.278s | ",
+      ":app:mergeDebugNativeLibs | 0.976s | ",
+      ":app:lintReportDebug | 0.857s | ",
+      ":app:stripDebugDebugSymbols | 0.691s | ",
+      ":app:processDebugResources | 0.688s | ",
+      ":app:parseDebugLocalResources | 0.629s | FROM-CACHE",
+      ":app:licenseDebugReport | 0.415s | ",
+      ":app:generateDebugLintReportModel | 0.381s | ",
+      ":app:bundleDebugClassesToRuntimeJar | 0.249s | ",
+      ":app:checkDebugDuplicateClasses | 0.206s | ",
+      ":app:bundleDebugClassesToCompileJar | 0.196s | ",
+      ":app:compileDebugAidl | 0.190s | FROM-CACHE",
+      ":app:processDebugMainManifest | 0.181s | ",
+      ":app:compressDebugAssets | 0.142s | ",
+      ":app:generateDebugAndroidTestLintModel | 0.138s | ",
+      ":app:generateDebugUnitTestConfig | 0.138s | ",
+      ":app:mergeDebugJniLibFolders | 0.126s | ",
+      ":app:mergeDebugAssets | 0.110s | ",
+      ":app:checkDebugAarMetadata | 0.109s | ",
+      ":app:mapDebugSourceSetPaths | 0.080s | ",
+      ":app:generateDebugBuildConfig | 0.071s | ",
+      ":app:mergeDebugGlobalSynthetics | 0.062s | FROM-CACHE",
+      ":app:processDebugManifest | 0.058s | ",
+      ":app:processDebugJavaRes | 0.056s | ",
+      ":app:generateDebugUnitTestLintModel | 0.055s | ",
+      ":app:processDebugUnitTestJavaRes | 0.054s | ",
+      ":app:packageDebugUnitTestForUnitTest | 0.044s | ",
+      ":app:copyClosePawBridge | 0.038s | ",
+      ":app:packageDebugResources | 0.032s | FROM-CACHE",
+      ":app:writeDebugSigningConfigVersions | 0.027s | ",
+      ":app:processDebugManifestForPackage | 0.023s | ",
+      ":app:mergeDebugShaders | 0.015s | ",
+      ":app:desugarDebugFileDependencies | 0.013s | FROM-CACHE",
+      ":app:compileDebugUnitTestJavaWithJavac | 0.011s | NO-SOURCE",
+      ":app:createDebugCompatibleScreenManifests | 0.011s | ",
+      ":app:mergeLibDexDebug | 0.011s | FROM-CACHE",
+      ":app:extractProguardFiles | 0.009s | ",
+      ":app:generateDebugResources | 0.008s | FROM-CACHE",
+      ":app:writeDebugAppMetadata | 0.008s | ",
+      ":app:extractDeepLinksDebug | 0.005s | FROM-CACHE",
+      ":app:generateDebugResValues | 0.005s | FROM-CACHE",
+      ":app:javaPreCompileDebug | 0.004s | FROM-CACHE",
+      ":app:generateDebugAndroidTestResValues | 0.003s | FROM-CACHE",
+      ":app:javaPreCompileDebugUnitTest | 0.003s | FROM-CACHE",
+      ":app:compileDebugShaders | 0.002s | NO-SOURCE",
+      ":app:createDebugApkListingFileRedirect | 0.002s | ",
+      ":app:lintDebug | 0.002s | ",
+      ":app:assembleDebug | 0s | Did No Work",
+      ":app:checkKotlinGradlePluginConfigurationErrors | 0s | SKIPPED",
+      ":app:generateDebugAssets | 0s | UP-TO-DATE",
+      ":app:mergeDebugNativeDebugMetadata | 0s | NO-SOURCE",
+      ":app:preBuild | 0s | Did No Work",
+      ":app:preDebugAndroidTestBuild | 0s | SKIPPED",
+      ":app:preDebugBuild | 0s | Did No Work",
+      ":app:preDebugUnitTestBuild | 0s | Did No Work",
+      ": | 0s | (total)"
+    ],
+    "119516013511": [
+      ":app | 7.491s",
+      ": | 1.080s",
+      ":app:debugCompileClasspath | 0.282s",
+      ":app:debugRuntimeClasspath | 0.233s",
+      ":app:debugAndroidTestRuntimeClasspath | 0.038s",
+      ":app:debugAndroidTestCompileClasspath | 0.022s",
+      ":app:pomsdebuglicenseDebugReport | 0.012s",
+      ":app:kotlin-extension | 0.006s",
+      ":app:kotlinBuildToolsApiClasspath | 0.004s",
+      ":app:detachedConfiguration2 | 0.003s",
+      ":app:androidApis | 0.002s",
+      ":app:kotlinCompilerClasspath | 0.002s",
+      ":app:kotlinCompilerPluginClasspathDebug | 0.002s",
+      ":app:androidJdkImage | 0.001s",
+      ":app:detachedConfiguration4 | 0.001s",
+      ":app:detachedConfiguration6 | 0.001s",
+      ":app:kotlinCompilerPluginClasspathDebugAndroidTest | 0.001s",
+      ":app:debugAndroidTestAnnotationProcessorClasspath | 0s",
+      ":app:debugAnnotationProcessorClasspath | 0s",
+      ":app:debugReverseMetadataValues | 0s",
+      ":app | 2m18.99s | (total)",
+      ":app:compileDebugKotlin | 1m10.73s | ",
+      ":app:mergeExtDexDebug | 25.029s | ",
+      ":app:dexBuilderDebug | 14.307s | ",
+      ":app:compileDebugAndroidTestKotlin | 6.022s | ",
+      ":app:compileDebugJavaWithJavac | 2.685s | ",
+      ":app:mergeDebugJavaResource | 2.546s | ",
+      ":app:mergeDebugResources | 2.190s | ",
+      ":app:packageDebug | 1.884s | ",
+      ":app:mergeProjectDexDebug | 1.521s | ",
+      ":app:validateSigningDebug | 1.409s | ",
+      ":app:compileDebugAndroidTestJavaWithJavac | 1.205s | ",
+      ":app:processDebugResources | 1.021s | ",
+      ":app:stripDebugDebugSymbols | 0.935s | ",
+      ":app:bundleDebugClassesToCompileJar | 0.905s | ",
+      ":app:dexBuilderDebugAndroidTest | 0.749s | ",
+      ":app:mergeDebugNativeLibs | 0.702s | ",
+      ":app:parseDebugLocalResources | 0.570s | FROM-CACHE",
+      ":app:processDebugManifestForPackage | 0.525s | ",
+      ":app:processDebugMainManifest | 0.378s | ",
+      ":app:mergeDebugAndroidTestResources | 0.360s | FROM-CACHE",
+      ":app:licenseDebugReport | 0.341s | ",
+      ":app:checkDebugDuplicateClasses | 0.335s | ",
+      ":app:mergeDebugAndroidTestJavaResource | 0.309s | ",
+      ":app:mergeExtDexDebugAndroidTest | 0.239s | FROM-CACHE",
+      ":app:compileDebugAidl | 0.191s | FROM-CACHE",
+      ":app:mergeProjectDexDebugAndroidTest | 0.187s | ",
+      ":app:compressDebugAssets | 0.170s | ",
+      ":app:processDebugAndroidTestManifest | 0.152s | ",
+      ":app:packageDebugAndroidTest | 0.130s | ",
+      ":app:processDebugManifest | 0.097s | ",
+      ":app:checkDebugAarMetadata | 0.085s | ",
+      ":app:mergeDebugAssets | 0.081s | ",
+      ":app:mergeDebugAndroidTestNativeLibs | 0.075s | ",
+      ":app:checkDebugAndroidTestDuplicateClasses | 0.067s | ",
+      ":app:processDebugAndroidTestResources | 0.063s | FROM-CACHE",
+      ":app:mapDebugSourceSetPaths | 0.060s | ",
+      ":app:mergeDebugGlobalSynthetics | 0.047s | FROM-CACHE",
+      ":app:stripDebugAndroidTestDebugSymbols | 0.047s | ",
+      ":app:generateDebugBuildConfig | 0.046s | ",
+      ":app:packageDebugResources | 0.045s | FROM-CACHE",
+      ":app:mergeDebugAndroidTestAssets | 0.043s | ",
+      ":app:processDebugJavaRes | 0.043s | ",
+      ":app:writeDebugSigningConfigVersions | 0.042s | ",
+      ":app:mapDebugAndroidTestSourceSetPaths | 0.041s | ",
+      ":app:copyClosePawBridge | 0.032s | ",
+      ":app:checkDebugAndroidTestAarMetadata | 0.028s | ",
+      ":app:mergeDebugAndroidTestGlobalSynthetics | 0.023s | FROM-CACHE",
+      ":app:mergeDebugAndroidTestShaders | 0.023s | ",
+      ":app:mergeDebugShaders | 0.023s | ",
+      ":app:mergeLibDexDebugAndroidTest | 0.022s | FROM-CACHE",
+      ":app:mergeDebugAndroidTestJniLibFolders | 0.018s | ",
+      ":app:mergeLibDexDebug | 0.017s | FROM-CACHE",
+      ":app:createDebugApkListingFileRedirect | 0.014s | ",
+      ":app:generateDebugAndroidTestBuildConfig | 0.014s | ",
+      ":app:writeDebugAppMetadata | 0.013s | ",
+      ":app:createDebugCompatibleScreenManifests | 0.012s | ",
+      ":app:javaPreCompileDebugAndroidTest | 0.012s | FROM-CACHE",
+      ":app:validateSigningDebugAndroidTest | 0.012s | ",
+      ":app:desugarDebugAndroidTestFileDependencies | 0.011s | FROM-CACHE",
+      ":app:generateDebugAndroidTestResValues | 0.010s | FROM-CACHE",
+      ":app:writeDebugAndroidTestSigningConfigVersions | 0.010s | ",
+      ":app:desugarDebugFileDependencies | 0.009s | FROM-CACHE",
+      ":app:generateDebugResValues | 0.009s | FROM-CACHE",
+      ":app:processDebugAndroidTestJavaRes | 0.009s | ",
+      ":app:generateDebugResources | 0.008s | FROM-CACHE",
+      ":app:mergeDebugJniLibFolders | 0.008s | ",
+      ":app:extractDeepLinksDebug | 0.006s | FROM-CACHE",
+      ":app:compressDebugAndroidTestAssets | 0.005s | FROM-CACHE",
+      ":app:createDebugAndroidTestApkListingFileRedirect | 0.005s | ",
+      ":app:javaPreCompileDebug | 0.005s | FROM-CACHE",
+      ":app:compileDebugAndroidTestAidl | 0.004s | NO-SOURCE",
+      ":app:compileDebugAndroidTestShaders | 0.004s | NO-SOURCE",
+      ":app:generateDebugAndroidTestResources | 0.004s | FROM-CACHE",
+      ":app:compileDebugShaders | 0.003s | NO-SOURCE",
+      ":app:mergeDebugNativeDebugMetadata | 0.001s | NO-SOURCE",
+      ":app:assembleDebug | 0s | Did No Work",
+      ":app:assembleDebugAndroidTest | 0s | Did No Work",
+      ":app:checkKotlinGradlePluginConfigurationErrors | 0s | SKIPPED",
+      ":app:generateDebugAndroidTestAssets | 0s | UP-TO-DATE",
+      ":app:generateDebugAssets | 0s | UP-TO-DATE",
+      ":app:preBuild | 0s | Did No Work",
+      ":app:preDebugAndroidTestBuild | 0s | SKIPPED",
+      ":app:preDebugBuild | 0s | Did No Work",
+      ": | 0s | (total)",
+      ": | 0.183s",
+      ":app | 0.166s",
+      ":app:debugCompileClasspath | 0.365s",
+      ":app:debugRuntimeClasspath | 0.308s",
+      ":app:debugAndroidTestRuntimeClasspath | 0.046s",
+      ":app:debugAndroidTestCompileClasspath | 0.037s",
+      ":app:_internal-unified-test-platform-android-test-plugin-host-additional-test-output | 0.020s",
+      ":app:_internal-unified-test-platform-android-test-plugin-host-emulator-control | 0.014s",
+      ":app:_internal-unified-test-platform-core | 0.013s",
+      ":app:_internal-unified-test-platform-android-test-plugin-host-retention | 0.010s",
+      ":app:_internal-unified-test-platform-android-test-plugin-host-device-info | 0.008s",
+      ":app:_internal-unified-test-platform-android-test-plugin-result-listener-gradle | 0.008s",
+      ":app:_internal-unified-test-platform-android-device-provider-ddmlib | 0.007s",
+      ":app:_internal-unified-test-platform-android-test-plugin-host-coverage | 0.007s",
+      ":app:_internal-unified-test-platform-android-driver-instrumentation | 0.006s",
+      ":app:kotlinBuildToolsApiClasspath | 0.006s",
+      ":app:_internal-unified-test-platform-android-test-plugin | 0.005s",
+      ":app:_internal-unified-test-platform-android-device-provider-gradle | 0.004s",
+      ":app:_internal-unified-test-platform-android-test-plugin-host-apk-installer | 0.004s",
+      ":app:_internal-unified-test-platform-android-test-plugin-host-logcat | 0.004s",
+      ":app:detachedConfiguration2 | 0.004s",
+      ":app:_internal-unified-test-platform-launcher | 0.003s",
+      ":app:detachedConfiguration4 | 0.002s",
+      ":app:kotlinCompilerPluginClasspathDebug | 0.002s",
+      ":app:kotlinCompilerPluginClasspathDebugAndroidTest | 0.002s",
+      ":app:androidApis | 0.001s",
+      ":app:androidJdkImage | 0.001s",
+      ":app:debugReverseMetadataValues | 0.001s",
+      ":app:detachedConfiguration6 | 0.001s",
+      ":app:kotlin-extension | 0.001s",
+      ":app:kotlinCompilerClasspath | 0.001s",
+      ":app:androidTestUtil | 0s",
+      ":app:debugAndroidTestAnnotationProcessorClasspath | 0s",
+      ":app:debugAnnotationProcessorClasspath | 0s",
+      ":app | 1m0.93s | (total)",
+      ":app:connectedDebugAndroidTest | 1m0.49s | ",
+      ":app:mergeExtDexDebug | 0.035s | UP-TO-DATE",
+      ":app:copyClosePawBridge | 0.031s | UP-TO-DATE",
+      ":app:compileDebugKotlin | 0.029s | UP-TO-DATE",
+      ":app:mergeDebugGlobalSynthetics | 0.022s | UP-TO-DATE",
+      ":app:compileDebugAndroidTestKotlin | 0.020s | UP-TO-DATE",
+      ":app:processDebugMainManifest | 0.020s | UP-TO-DATE",
+      ":app:checkDebugAarMetadata | 0.016s | UP-TO-DATE",
+      ":app:mergeDebugResources | 0.016s | UP-TO-DATE",
+      ":app:checkDebugDuplicateClasses | 0.014s | UP-TO-DATE",
+      ":app:compileDebugJavaWithJavac | 0.014s | UP-TO-DATE",
+      ":app:processDebugResources | 0.014s | UP-TO-DATE",
+      ":app:compileDebugAidl | 0.013s | UP-TO-DATE",
+      ":app:mergeDebugJavaResource | 0.011s | UP-TO-DATE",
+      ":app:extractDeepLinksDebug | 0.010s | UP-TO-DATE",
+      ":app:mapDebugSourceSetPaths | 0.010s | UP-TO-DATE",
+      ":app:mergeDebugNativeLibs | 0.010s | UP-TO-DATE",
+      ":app:compileDebugAndroidTestJavaWithJavac | 0.009s | UP-TO-DATE",
+      ":app:mergeExtDexDebugAndroidTest | 0.009s | UP-TO-DATE",
+      ":app:mergeDebugAndroidTestGlobalSynthetics | 0.008s | UP-TO-DATE",
+      ":app:processDebugJavaRes | 0.008s | UP-TO-DATE",
+      ":app:dexBuilderDebug | 0.006s | UP-TO-DATE",
+      ":app:generateDebugBuildConfig | 0.006s | UP-TO-DATE",
+      ":app:packageDebug | 0.006s | UP-TO-DATE",
+      ":app:processDebugAndroidTestResources | 0.006s | UP-TO-DATE",
+      ":app:checkDebugAndroidTestDuplicateClasses | 0.005s | UP-TO-DATE",
+      ":app:mergeDebugAndroidTestJavaResource | 0.005s | UP-TO-DATE",
+      ":app:mergeDebugAssets | 0.005s | UP-TO-DATE",
+      ":app:processDebugAndroidTestManifest | 0.005s | UP-TO-DATE",
+      ":app:checkDebugAndroidTestAarMetadata | 0.004s | UP-TO-DATE",
+      ":app:createDebugCompatibleScreenManifests | 0.004s | UP-TO-DATE",
+      ":app:mergeDebugAndroidTestResources | 0.004s | UP-TO-DATE",
+      ":app:parseDebugLocalResources | 0.004s | UP-TO-DATE",
+      ":app:compileDebugAndroidTestAidl | 0.003s | NO-SOURCE",
+      ":app:javaPreCompileDebug | 0.003s | UP-TO-DATE",
+      ":app:mergeDebugAndroidTestNativeLibs | 0.003s | UP-TO-DATE",
+      ":app:packageDebugAndroidTest | 0.003s | UP-TO-DATE",
+      ":app:desugarDebugFileDependencies | 0.002s | UP-TO-DATE",
+      ":app:dexBuilderDebugAndroidTest | 0.002s | UP-TO-DATE",
+      ":app:generateDebugResValues | 0.002s | UP-TO-DATE",
+      ":app:mapDebugAndroidTestSourceSetPaths | 0.002s | UP-TO-DATE",
+      ":app:mergeDebugAndroidTestAssets | 0.002s | UP-TO-DATE",
+      ":app:mergeDebugJniLibFolders | 0.002s | UP-TO-DATE",
+      ":app:mergeLibDexDebugAndroidTest | 0.002s | UP-TO-DATE",
+      ":app:mergeProjectDexDebug | 0.002s | UP-TO-DATE",
+      ":app:mergeProjectDexDebugAndroidTest | 0.002s | UP-TO-DATE",
+      ":app:processDebugAndroidTestJavaRes | 0.002s | UP-TO-DATE",
+      ":app:processDebugManifestForPackage | 0.002s | UP-TO-DATE",
+      ":app:stripDebugDebugSymbols | 0.002s | UP-TO-DATE",
+      ":app:bundleDebugClassesToCompileJar | 0.001s | UP-TO-DATE",
+      ":app:compileDebugAndroidTestShaders | 0.001s | NO-SOURCE",
+      ":app:compileDebugShaders | 0.001s | NO-SOURCE",
+      ":app:compressDebugAndroidTestAssets | 0.001s | UP-TO-DATE",
+      ":app:compressDebugAssets | 0.001s | UP-TO-DATE",
+      ":app:createDebugAndroidTestApkListingFileRedirect | 0.001s | UP-TO-DATE",
+      ":app:desugarDebugAndroidTestFileDependencies | 0.001s | UP-TO-DATE",
+      ":app:generateDebugAndroidTestBuildConfig | 0.001s | UP-TO-DATE",
+      ":app:generateDebugAndroidTestResValues | 0.001s | UP-TO-DATE",
+      ":app:generateDebugAndroidTestResources | 0.001s | UP-TO-DATE",
+      ":app:generateDebugResources | 0.001s | UP-TO-DATE",
+      ":app:javaPreCompileDebugAndroidTest | 0.001s | UP-TO-DATE",
+      ":app:licenseDebugReport | 0.001s | UP-TO-DATE",
+      ":app:mergeDebugAndroidTestJniLibFolders | 0.001s | UP-TO-DATE",
+      ":app:mergeDebugAndroidTestShaders | 0.001s | UP-TO-DATE",
+      ":app:mergeDebugShaders | 0.001s | UP-TO-DATE",
+      ":app:mergeLibDexDebug | 0.001s | UP-TO-DATE",
+      ":app:packageDebugResources | 0.001s | UP-TO-DATE",
+      ":app:processDebugManifest | 0.001s | UP-TO-DATE",
+      ":app:stripDebugAndroidTestDebugSymbols | 0.001s | UP-TO-DATE",
+      ":app:writeDebugAppMetadata | 0.001s | UP-TO-DATE",
+      ":app:writeDebugSigningConfigVersions | 0.001s | UP-TO-DATE",
+      ":app:checkKotlinGradlePluginConfigurationErrors | 0s | SKIPPED",
+      ":app:createDebugApkListingFileRedirect | 0s | UP-TO-DATE",
+      ":app:generateDebugAndroidTestAssets | 0s | UP-TO-DATE",
+      ":app:generateDebugAssets | 0s | UP-TO-DATE",
+      ":app:preBuild | 0s | UP-TO-DATE",
+      ":app:preDebugAndroidTestBuild | 0s | SKIPPED",
+      ":app:preDebugBuild | 0s | UP-TO-DATE",
+      ":app:validateSigningDebug | 0s | UP-TO-DATE",
+      ":app:validateSigningDebugAndroidTest | 0s | UP-TO-DATE",
+      ":app:writeDebugAndroidTestSigningConfigVersions | 0s | UP-TO-DATE",
+      ": | 0s | (total)"
+    ]
+  },
+  "limitations": [
+    "One release sample; no mean/P95 or randomized attribution.",
+    "Native cold source build plus real remote restore included. No changed-code warm full release measured.",
+    "Job seconds are aggregate runner wall time, not CPU or billed-minute rounding.",
+    "Aggregate Java RSS double-counts shared pages; GC log covers whole Gradle daemon, not only R8."
+  ],
+  "results": {
+    "main_to_public_seconds": 593,
+    "pr_to_public_seconds": 1086,
+    "main_runner_seconds": 1267,
+    "full_cycle_runner_seconds": 2002,
+    "baseline_v0175": {
+      "baseline_main_to_public_seconds": 1095,
+      "after_main_to_public_seconds": 653,
+      "baseline_pr_to_public_seconds": 1572,
+      "after_pr_to_public_seconds": 1461,
+      "baseline_main_runner_seconds": 1465,
+      "after_main_runner_seconds": 1471,
+      "baseline_full_cycle_runner_seconds": 2229,
+      "after_full_cycle_runner_seconds": 2707
+    },
+    "public_verified_at": "2026-10-21T22:22:28Z"
+  },
+  "quality": {
+    "junit": {
+      "tests": 2665,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "test_suites": 282,
+    "lint": {
+      "Warning": 119,
+      "Information": 4
+    }
+  },
+  "release_metrics": {
+    "ci-metrics/release-gc-7936.log": {
+      "lines": 407,
+      "pause_count": 335,
+      "total_pause_ms": 17862.316,
+      "max_pause_ms": 215.399,
+      "full_gc_count": 0,
+      "first": [
+        "[2026-10-21T22:14:44.824+0000][info][gc] Using G1",
+        "[2026-10-21T22:14:44.958+0000][info][gc] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 13M->2M(254M) 1.784ms"
+      ],
+      "last": [
+        "[2026-10-21T22:21:00.279+0000][info][gc] GC(307) Pause Cleanup 2770M->2770M(4096M) 0.516ms",
+        "[2026-10-21T22:21:00.286+0000][info][gc] GC(307) Concurrent Mark Cycle 3589.568ms"
+      ]
+    },
+    "ci-metrics/release-host.txt": "cpus=4\n               total        used        free      shared  buff/cache   available\nMem:           15982        1291        6284          50        8802       14691\nSwap:           3071           0        3071\n",
+    "ci-metrics/release-jvm-memory.json": "{\n  \"samples\": 381,\n  \"peak_aggregate_java_rss_kib\": 7711388,\n  \"peak_java_process_count\": 3,\n  \"minimum_host_available_kib\": 7649116,\n  \"limitation\": \"Sampled aggregate RSS includes shared pages; not unique physical RSS or R8-only memory.\"\n}",
+    "ci-metrics/release-process.txt": "\tCommand being timed: \"./gradlew -Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8 -Xlog:gc:file=/home/runner/work/closepaw/closepaw/build/ci-metrics/release-gc-%p.log:time,level,tags :app:assembleRelease --profile --console=plain --stacktrace\"\n\tUser time (seconds): 2.34\n\tSystem time (seconds): 0.24\n\tPercent of CPU this job got: 0%\n\tElapsed (wall clock) time (h:mm:ss or m:ss): 6:23.41\n\tAverage shared text size (kbytes): 0\n\tAverage unshared data size (kbytes): 0\n\tAverage stack size (kbytes): 0\n\tAverage total size (kbytes): 0\n\tMaximum resident set size (kbytes): 124944\n\tAverage resident set size (kbytes): 0\n\tMajor (requiring I/O) page faults: 7\n\tMinor (reclaiming a frame) page faults: 32151\n\tVoluntary context switches: 18665\n\tInvoluntary context switches: 658\n\tSwaps: 0\n\tFile system inputs: 2912\n\tFile system outputs: 808\n\tSocket messages sent: 0\n\tSocket messages received: 0\n\tSignals delivered: 0\n\tPage size (bytes): 4096\n\tExit status: 0\n",
+    "ci-metrics/release-wall.txt": "elapsed_seconds=384\nexit_code=0\n"
+  },
+  "public_signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+  "install": {
+    "task_id": "4288d196-c775-435e-bc8d-db53fe0f2408",
+    "single_submission": true,
+    "submitted_at": "2026-10-21T22:23:03.743Z",
+    "durable_observed_at": "2026-10-21T22:25:21.172Z",
+    "durable_state": "installed",
+    "current_version": "0.1.76",
+    "current_code": 77,
+    "remote_update_enabled": true,
+    "install_source_allowed": true,
+    "independent_observed_at": "2026-10-21T22:25:27.579Z",
+    "independent_status": "succeeded",
+    "independent_version": "0.1.76",
+    "independent_code": 77,
+    "connector_timeouts": 1,
+    "limitation": "Observed completion includes wait/query timing and one transport timeout; not exact Android installation duration."
+  },
+  "ui_artifact_verification": {
+    "png_files": [
+      "ui-render-evidence/closepaw-premium-ux-qa/panel-dark-font-1.0.png",
+      "ui-render-evidence/closepaw-premium-ux-qa/panel-dark-font-2.0.png",
+      "ui-render-evidence/closepaw-premium-ux-qa/panel-light-font-1.0.png",
+      "ui-render-evidence/closepaw-premium-ux-qa/panel-light-font-2.0.png"
+    ],
+    "test_suites": [
+      {
+        "name": "ai.closepaw.qa.ControlOverlayWindowTest",
+        "tests": "6",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0"
+      }
+    ]
+  }
+}

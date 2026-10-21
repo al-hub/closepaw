@@ -83,3 +83,96 @@ source tag. Only the final selected combination is published.
 Rollback: revert the scoped cache/workflow/icon changes in a new PR/version and verify
 again. Never move a released tag or replace a published APK. Existing update permissions
 and pairing data are preserved. GC/metrics files contain only build resource numbers.
+
+## Final result — v0.1.76/code77 (2026-10-22 KST)
+
+[Issue #135](https://github.com/al-hub/closepaw/issues/135),
+[PR #136](https://github.com/al-hub/closepaw/pull/136) merged once as
+`f4dddbafece5acd0d6b5039950d84d830cffd21a`. This is the immutable annotated-tag/APK
+source; subsequent documentation commits do not change the released binary.
+Three AI reviewers covered R8/icon provenance, Gradle/native cache, and independent
+pipeline/security review. No human review is claimed. One submitted implementation,
+one successful PR/main cycle, no CI retry or extra full release benchmark.
+
+| Comparable observation | v0.1.75 | v0.1.76 | Reduction |
+|---|---:|---:|---:|
+| R8 task |347.51s|276.87s|20.3%|
+| Release Kotlin task |68.64s|59.305s|13.6%|
+| Release lintVital analysis task |86.14s|68.40s|20.6%|
+| Unsigned release build step, API timestamps |449s|384s|14.5%|
+| Main unsigned job |604s|545s|9.8%|
+| Main security/test/lint/debug job |461s|322s|30.2%|
+| Main UI job |363s|359s|1.1%|
+| Main CI created → public APK independently verified |653s (10:53)|593s (9:53)|9.2%|
+| Final PR CI created → public verification |1461s (24:21)|1086s (18:06)|25.7%|
+| Main + UI + signing runner job seconds |1471s|1267s|13.9%|
+| PR + main + UI + signing runner job seconds |2707s|2002s|26.0%|
+
+Task times overlap and must not be summed as wall time. Whole-cycle wall includes
+queue and merge/observation delay. Runner seconds are summed successful job wall time,
+not CPU consumption or GitHub's rounded billing. Against the earlier v0.1.74 serial
+pipeline, main→public1095s→593s is45.8% shorter; whole-cycle runner2229s→2002s is10.2%
+lower. Raw timestamps, all step durations, task profiles and artifact IDs are in
+[machine-readable evidence](evidence/issue135-v0176-timing.json).
+The new Gradle build summary is382s, GNU time command383.41s, wrapper384s and API
+build step384s. The449→384 comparison uses API step boundaries on both releases.
+
+This release includes a native cache **cold miss**: unsigned prepare106s and security
+cloudflared57s. The publisher then deleted its dedicated local directory and restored
+both exact remote entries with hash/input/ELF validation in3s. This proves real remote
+restore, not an entire changed-code warm release. Subtracting roughly103s suggests
+about8m10s with other durations unchanged, but that is an estimate and is not a measured
+release or SLA. No extra APK was published merely to obtain a favorable warm number.
+The6–7min research target was **not achieved**; actual main cold result is9m53s.
+
+R8 is still the largest task:276.87s versus382s Gradle summary. The release JVM log
+recorded335 pauses totaling17.862s, maximum215.399ms, **zero Full GC** across the whole
+Gradle daemon. This is not an R8-only pause measurement. Four CPUs/15,982MiB RAM;
+381 one-second samples found peak aggregate Java RSS7,711,388KiB (three Java processes),
+minimum host available7,649,116KiB. Aggregate RSS includes shared pages. The GNU time
+124,944KiB covers the Gradle client, so it is not used as R8 memory. These results do
+not establish memory pressure justifying a larger heap or separate R8 JVM. Even
+eliminating all observed daemon pauses removes at most17.9s of this sample; arbitrary
+heap inflation is not a credible route to the6–7min target.
+
+Release174/debug178 configuration-cache problems remain; license report tasks are
+incompatible and the entry is discarded. They are reported rather than hidden.
+The current release dependency-license asset was regenerated and verified. Next
+experiments should isolate remaining R8 execution inputs/rules and configuration/plugin
+cost with matched changed-code samples. Keep/optimizer changes require behavioral
+evidence; no broad rule relaxation or heap/SDK upgrade was bundled here. Independent
+cache-maintenance dispatch is also deferred because current Security dispatch can
+start a release and is only documented for an unpublished version.
+
+## Final validation and delivery
+
+- PR [Security39683757439](https://github.com/al-hub/closepaw/actions/runs/39683757439)
+  and [UI39683757480](https://github.com/al-hub/closepaw/actions/runs/39683757480) success;
+  PR unsigned-release **skipped**, validating #134's main-only condition.
+- Main [Security39684799317](https://github.com/al-hub/closepaw/actions/runs/39684799317),
+  [UI39684799318](https://github.com/al-hub/closepaw/actions/runs/39684799318) and
+  [Signed39685929310](https://github.com/al-hub/closepaw/actions/runs/39685929310) success.
+  Main Android artifact12386935137:2,665 tests/0 failures/errors/skips,282 suites;
+  lint0 errors/119 warnings/4 info. Python55+8, release/cache/provenance18 tests pass.
+  UI6 tests and4 render artifacts retained. Both debug and release resolved-license
+  checks confirm core1.7.6 and absence of extended. Local upstream archives verified;
+  offline CI's upstream_archives_verified=false means no archive download, not failed
+  source identity. No53-icon pixel test or Samsung GUI acceptance is claimed.
+- Original-key signature, nondebug manifest/package `ai.closepaw`,0.1.76/code77,
+  both AArch64 runtimes, exact trusted main CI provenance, immutable tag/source,
+  anonymous public checksum/download and signer verification all passed.
+  Public verification artifact12386227075. Signing workflow was unchanged.
+- [Release](https://github.com/al-hub/closepaw/releases/tag/v0.1.76) /
+  [signed APK](https://github.com/al-hub/closepaw/releases/download/v0.1.76/closepaw-aa-bridge.apk):
+  **116,593,263 bytes**; SHA256
+  `9a77f807f5360535032d97e5cf8320adf09ed5abaa11ec3ac2f9ffaef80a363f`.
+  Original certificate SHA256
+  `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`.
+- Device: exactly one update task `4288d196-c775-435e-bc8d-db53fe0f2408` reached
+  installing, then one connector timeout during replacement. After reconnect durable
+  state **installed/current0.1.76/code77** and independent get_status responding
+  **0.1.76/code77** confirmed completion. Remote-update/install-source permissions
+  preserved; no resubmission, re-registration or data reset. Observed completion time
+  includes polling/transport delay and is not Android's exact install duration.
+  #126 runtime latency and #128 Samsung physical GUI acceptance remain separate OPEN
+  work; installing this build does not complete those acceptance criteria.

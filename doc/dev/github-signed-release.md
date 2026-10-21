@@ -1,7 +1,15 @@
 # GitHub 저장소만으로 서명 APK 릴리스하기
 
-> al-hub/closepaw의 실제 운영 경로. 2026-10-21 v0.1.75/code76 병렬 빌드·artifact 서명·휴대폰 설치로 검증.
+> al-hub/closepaw의 실제 운영 경로. 2026-10-22 KST v0.1.76/code77 main-only R8·검증된 native cache·artifact 서명·공개 확인·휴대폰 설치로 검증.
 > 다음 대화/Work는 이 문서와 현재 워크플로를 먼저 읽는다.
+
+최신 [#135 성능 보고서](issue135-main-build-optimization.md): main→공개 검증593s,
+최종 PR→공개1086s. 최초 native cache 생성 비용을 포함한 단일 표본이다.
+일반 PR은 unsigned-release를 생략하고 main은 R8/두 런타임/기존 서명·공개 검증을 유지한다.
+native cache는 정확한 source/toolchain/flags/script key만 사용하며 main의 unsigned job만
+저장한다. 복원 검증 실패는 source build로 대체한다. `clean_gradle_cache=true` dispatch는
+릴리스 경로도 시작할 수 있어 **새 미발행 버전의 CI에서만** 사용한다. 독립 cache maintenance로
+오해하지 않는다. main 고정·기존 키·정확한 CI artifact·불변 태그 원칙은 동일하다.
 
 **로컬 Android SDK나 서명키가 없어도 GitHub Actions에서 서명 APK를 만들고 공개 릴리스할 수 있다.**
 기존 서명키는 이미 GitHub Actions secrets에 설정되어 있다. 저장소에 키 파일이
