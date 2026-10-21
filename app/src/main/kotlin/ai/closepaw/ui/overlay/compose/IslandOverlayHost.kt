@@ -86,8 +86,8 @@ class IslandOverlayHost(
                     dotColor = MaterialTheme.colorScheme.primary,
                     pulsing = true,
                     onClick = if (readOnly) null else onExpandCapsule,
-                    onDrag = if (readOnly) ::dragBy else null,
-                    onDragEnd = if (readOnly) ::persistPosition else null,
+                    onDrag = ::dragBy,
+                    onDragEnd = ::persistPosition,
                 )
             } else {
                 val mode by holder.mode.collectAsState(initial = CapsuleMode.Hidden)
@@ -99,8 +99,8 @@ class IslandOverlayHost(
                     dotColor = glowState.toStatusColor(),
                     pulsing = mode is CapsuleMode.Running,
                     onClick = if (readOnly) null else onExpandCapsule,
-                    onDrag = if (readOnly) ::dragBy else null,
-                    onDragEnd = if (readOnly) ::persistPosition else null,
+                    onDrag = ::dragBy,
+                    onDragEnd = ::persistPosition,
                 )
             }
         }
