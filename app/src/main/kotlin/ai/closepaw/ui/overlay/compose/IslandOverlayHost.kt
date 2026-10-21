@@ -56,7 +56,7 @@ class IslandOverlayHost(
         fractionX -= stepX
         fractionY -= stepY
         islandX = ((if (islandX < 0) maxX / 2 else islandX) + stepX).coerceIn(0, maxX)
-        islandY = ((if (islandY < 0) getStatusBarHeight() + dp(4) else islandY) + stepY).coerceIn(0, maxY)
+        islandY = ((if (islandY < 0) getStatusBarHeight() + dp(88) else islandY) + stepY).coerceIn(0, maxY)
         composeHost.updateLayoutParams { it.x = islandX; it.y = islandY }
     }
     private fun persistPosition() {
@@ -65,7 +65,7 @@ class IslandOverlayHost(
         }
     }
 
-    /** The active control island is status-only: never intercept screen touches. */
+    /** Read-only disables commands; the island itself remains touchable for deliberate dragging. */
     fun setReadOnly(enabled: Boolean) {
         if (readOnly == enabled) return
         readOnly = enabled
@@ -146,14 +146,14 @@ class IslandOverlayHost(
             },
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                0,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             val maxX = (service.resources.displayMetrics.widthPixels - dp(280)).coerceAtLeast(0)
             val maxY = (service.resources.displayMetrics.heightPixels - dp(64)).coerceAtLeast(0)
             x = (if (islandX < 0) maxX / 2 else islandX).coerceIn(0, maxX)
-            y = (if (islandY < 0) statusBarHeight + dp(4) else islandY).coerceIn(0, maxY)
+            y = (if (islandY < 0) statusBarHeight + dp(88) else islandY).coerceIn(0, maxY)
         }
     }
 
