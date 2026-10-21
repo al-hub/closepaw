@@ -3,6 +3,8 @@ package ai.closepaw.ui.overlay.compose
 import android.content.Context
 import android.util.Log
 import android.view.WindowManager
+import android.view.MotionEvent
+import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -29,6 +31,7 @@ class OverlayComposeHost(
 
     fun show(
         layoutParams: WindowManager.LayoutParams,
+        onTouch: ((View, MotionEvent) -> Boolean)? = null,
         content: @Composable () -> Unit,
     ) {
         if (composeView != null) return
@@ -43,6 +46,7 @@ class OverlayComposeHost(
                     }
                 }
             }
+            if (onTouch != null) view.setOnTouchListener { v, event -> onTouch(v, event) }
             windowManager.addView(view, layoutParams)
             composeView = view
             params = layoutParams

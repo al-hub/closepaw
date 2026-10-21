@@ -61,6 +61,25 @@ class XHandleGesturePolicyTest {
             .isEqualTo(XHandleGesturePolicy.Result.TERMINATE)
     }
 
+    @Test fun repeatedLongDragsNeverStop() {
+        repeat(10) { attempt ->
+            val policy = XHandleGesturePolicy()
+            val start = attempt * 1000L
+            policy.onDown(25f, 25f, start)
+            policy.onMove(90f, 100f)
+            assertThat(policy.onUp(90f, 100f, start + 500L))
+                .isEqualTo(XHandleGesturePolicy.Result.KEEP_SESSION)
+        }
+    }
+
+    @Test fun secondPointerCancellationNeverTerminates() {
+        val policy = XHandleGesturePolicy()
+        policy.onDown(25f, 25f, 100L)
+        policy.onCancel()
+        assertThat(policy.onUp(25f, 25f, 150L))
+            .isEqualTo(XHandleGesturePolicy.Result.KEEP_SESSION)
+    }
+
     @Test fun reversedTimestampsCannotTriggerStop() {
         val policy = XHandleGesturePolicy()
         policy.onDown(10f, 10f, 200L)
