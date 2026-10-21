@@ -64,20 +64,10 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
             } catch (_: Exception) { hide(); session.pause(); return }
         }
         if (!testOnly && !xStopOverlay.isShowing()) xStopOverlay.show()
-        // Physical resume temporarily removes the app-covering panel before fresh observation.
-        // The independent emergency X remains available throughout reobservation.
-        if (session.state == ControlSession.State.REOBSERVING) removePanel()
-        if (!testOnly && session.state != ControlSession.State.REOBSERVING && panel == null) {
-            try {
-                panel = RemoteControlPanel(service, session,
-                    resume = {}, stop = {}, moved = { _, _ -> },
-                ).also {
-                    add(it, panelWidth(), WindowManager.LayoutParams.WRAP_CONTENT,
-                        Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(108), touchable = false)
-                }
-            } catch (_: Exception) { hide(); session.pause(); return }
-        }
-        panel?.update(stoppedResult)
+        // #128: Modern status island has sole ownership of the visible status
+        // surface. Legacy controls retain emergency X and passive border only.
+        // Do not create a second, non-draggable RemoteControlPanel window.
+        removePanel()
         placePanel()
         border?.invalidate()
     }
