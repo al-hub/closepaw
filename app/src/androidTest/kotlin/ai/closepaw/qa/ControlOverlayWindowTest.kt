@@ -89,25 +89,39 @@ class ControlOverlayWindowTest {
                     assertTrue(x.isAttachedToWindow)
                 }
             }
+            var expectedX = 0
+            var expectedY = 0
             main {
-                val expectedX = params(x).x
-                val expectedY = params(island).y
+                expectedX = params(x).x
+                expectedY = params(island).y
                 assertEquals(expectedX, service.getSharedPreferences("x_stop_overlay", 0).getInt("x", -1))
                 assertEquals(expectedY, service.getSharedPreferences("closepaw_island_position", 0).getInt("y", -1))
                 service.remoteControlSession.feedback("화면 확인 중")
                 controller.handleWindowStateChanged("com.android.settings", "com.android.settings.Settings", 0)
                 controller.onTaskStarted("overlay-window-qa", "test-only state; no agent execution")
+            }
+            // addView registers a ViewRoot before its first traversal attaches the view.
+            // Wait off Main before checking attachment or injecting the next gesture.
+            instrumentation.waitForIdleSync()
+            main {
                 assertNull(view(remoteX))
-                assertTrue(requireNotNull(view(modernX)).isAttachedToWindow)
+                assertTrue("modern X must attach after traversal", requireNotNull(view(modernX)).isAttachedToWindow)
                 assertSame(island, field(requireNotNull(field(islandHost, "composeHost")), "composeView"))
                 controller.onSessionCompleted(SessionEndReason.USER_STOPPED)
                 service.showRemoteControlActivity()
+            }
+            instrumentation.waitForIdleSync()
+            main {
                 x = requireNotNull(view(remoteX))
                 assertNull(view(modernX))
                 assertEquals(expectedX, params(x).x)
                 assertEquals(expectedY, params(island).y)
-                x.performClick()
             }
+            var tapX = 0f; var tapY = 0f
+            main { val xy = IntArray(2); x.getLocationOnScreen(xy); tapX = xy[0] + x.width / 2f; tapY = xy[1] + x.height / 2f }
+            val tapAt = SystemClock.uptimeMillis()
+            send(x, MotionEvent.ACTION_DOWN, tapAt, tapX, tapY)
+            send(x, MotionEvent.ACTION_UP, tapAt, tapX, tapY)
             instrumentation.waitForIdleSync()
             main {
                 assertEquals(ControlSession.State.ENDED, service.remoteControlSession.state)
