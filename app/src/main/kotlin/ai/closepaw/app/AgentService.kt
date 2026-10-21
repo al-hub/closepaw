@@ -85,6 +85,7 @@ class AgentService : AccessibilityService() {
     private val serviceLifecycleOwner = ServiceLifecycleOwner()
     private var session: AgentSession? = null
     private var overlayController: ServiceOverlayController? = null
+    private var modernEmergencyXVisible = false
     private var actionVisualizer: ActionVisualizerManager? = null
     internal val remoteControlChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
     internal val remoteControlSession: ai.closepaw.chatgpt.control.ControlSession by lazy {
@@ -168,7 +169,7 @@ class AgentService : AccessibilityService() {
     internal fun showRemoteControlActivity() {
         if (getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked ||
             !getSystemService(android.os.PowerManager::class.java).isInteractive) return
-        remoteControlIndicator.show()
+        remoteControlIndicator.show(showEmergencyX = !modernEmergencyXVisible)
         if (remoteControlSession.state == ai.closepaw.chatgpt.control.ControlSession.State.PAUSED)
             remoteControlIndicator.restorePanel()
     }
@@ -274,6 +275,13 @@ class AgentService : AccessibilityService() {
                         scope = serviceScope,
                         appPackage = OUR_PACKAGE,
                         logTag = TAG,
+                        onEmergencyXVisibilityChanged = { visible ->
+                            modernEmergencyXVisible = visible
+                            if (visible) remoteControlIndicator.hideEmergencyXOnly()
+                            else if (remoteControlSession.state != ai.closepaw.chatgpt.control.ControlSession.State.IDLE &&
+                                     remoteControlSession.state != ai.closepaw.chatgpt.control.ControlSession.State.ENDED)
+                                showRemoteControlActivity()
+                        },
                         onStop = {
                             // A single visible emergency X must stop both independently
                             // tracked control sessions, not just the agent task.
