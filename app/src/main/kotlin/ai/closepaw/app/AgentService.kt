@@ -127,7 +127,9 @@ class AgentService : AccessibilityService() {
         return remoteControlIndicator.isAttached()
     }
 
-    private val remoteControlIndicator by lazy { RemoteControlIndicator(this, remoteControlSession) {
+    private val remoteControlIndicator by lazy { RemoteControlIndicator(this, remoteControlSession, stopOtherSessions = {
+        if (overlayController?.stateHolder?.hasActiveTask == true) submitOp(Op.Shutdown)
+    }) {
         if (remoteControlSession.beginResume()) serviceScope.launch {
             val epoch = remoteControlSession.epoch
             val started = android.os.SystemClock.elapsedRealtime()
