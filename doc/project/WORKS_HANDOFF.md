@@ -1,5 +1,10 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+**서명 APK 발행 방법:** [GitHub Actions 서명 릴리스 실행서](../dev/github-signed-release.md).
+다른 대화/Work는 로컬 키나 SDK를 요청하기 전에 이 문서를 읽는다. 기존 secrets와
+main Security CI → Signed Release 자동 경로, dispatch 없는 예약 fallback,
+공개 APK 검증과 실제 설치 완료 기준을 포함한다.
+
 ## v0.1.74/code75 X + Island signed release installed — #128 physical acceptance OPEN (2026-10-21)
 
 - [PR #131](https://github.com/al-hub/closepaw/pull/131) merged as `c124f3f86994664c9685b883cb31e1796b38c894`, the immutable APK/tag source. One visible emergency X arbitrates local/remote sessions and stops both; the shared draggable Compose island also covers bridge-only status. Modern owned controls participate in observation security and reject AI touches over their bounds.

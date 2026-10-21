@@ -1,6 +1,7 @@
 <h1 align="center">
 
 > ChatGPT bridge delivery: [current progress](PROGRESS.md) · [Works handoff and remaining PR work](doc/project/WORKS_HANDOFF.md).
+> **서명 APK 릴리스:** [GitHub Actions 실행서](doc/dev/github-signed-release.md) — 기존 서명키로 자동 빌드·공개 릴리스·휴대폰 업데이트. 로컬 SDK/keystore 없이 진행 가능. AI 개발 진입점: [AI.md](AI.md).
 >
 > **범용 제어기 개발 준비 완료 / 구현 미착수:** [Generic Android control — Works 개발 인계](doc/project/GENERIC_ANDROID_CONTROL_HANDOFF.md). 다른 Works에서 범용 제어기 개발을 시작할 때 이 문서를 먼저 읽는다.
 

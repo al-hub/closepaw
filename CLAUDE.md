@@ -13,6 +13,7 @@ AI-powered Android automation using accessibility services. Kotlin/Jetpack Compo
 
 **Architecture Docs**: `doc/main/`
 **Dev Workflow**: `doc/dev/development.md`
+**Signed APK / GitHub Release**: Read [the GitHub-only release runbook](doc/dev/github-signed-release.md) before shipping. Existing `CLOSEPAW_*` Actions secrets sign the APK after successful main Security CI; local SDK/keystore absence or missing connector dispatch is not a release blocker. Use the documented automatic/scheduled path; never regenerate the production key. Keep main fixed until release finishes. See also [AI.md](AI.md).
 **Termux Shell**: `termux_shell` joins the agent tool roster when F-Droid Termux is installed, enabled, and bridge-ready. See `doc/main/app/termux_shell.md`.
 **Private workspace**: if `projects/` exists locally, treat it as ignored private agent state / artifacts. Do not link it from public repo docs.
 

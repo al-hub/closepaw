@@ -4,6 +4,13 @@
 
 This guide covers the development workflow for ClosePaw - building, testing, and debugging.
 
+**Shipping this fork from GitHub:** follow [GitHub-only signed APK release](github-signed-release.md).
+The existing Actions secrets already supply the production key. Merge verified code with a new
+version/code, wait for main Security CI and automatic Signed Release, then verify published
+assets and actual installation. The runbook includes scheduled fallback when a connector has
+no workflow dispatch, exact secret names, signature checks and installation completion rules.
+The local build commands below are not prerequisites for GitHub-hosted release builds.
+
 ## Debug vs Release APK — always debug unless shipping
 
 All day-to-day work uses the **debug** APK. The **release** APK is only for shipping, release smoke tests, or APK-size / cold-start measurements. Do **not** drive eval, autotune, UX QA, or `debug-run.sh` against a release build.
@@ -25,6 +32,10 @@ All day-to-day work uses the **debug** APK. The **release** APK is only for ship
 3. Measuring APK size, cold start, or dex method count.
 
 ### Signed release builds (`scripts/release-build.sh`)
+
+This subsection is for an already configured trusted local signing host. For this fork's
+production distribution, use the existing [GitHub Actions path](github-signed-release.md);
+requesting or copying signing keys to the current work environment is not required.
 
 `./gradlew assembleRelease` direct doesn't sign — `signingConfigs.create("release")` reads keystore env vars (`KEYSTORE_PATH/KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD`) and gracefully falls back to `null` when they're absent (so IDE syncs don't break). The wrapper script validates that these env vars are present before shipping:
 
