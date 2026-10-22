@@ -55,6 +55,10 @@ class OverlayComposeHost(
                 override fun dispatchTouchEvent(event: MotionEvent): Boolean =
                     onTouch(this, event) || super.dispatchTouchEvent(event)
             }.apply { addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT)) }
+            // Compose's window recomposer resolves owners from the outermost view.
+            // The gesture wrapper is the WindowManager root, so it must carry them too.
+            root.setViewTreeLifecycleOwner(lifecycleOwner)
+            root.setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
             windowManager.addView(root, layoutParams)
             composeView = root
             params = layoutParams
