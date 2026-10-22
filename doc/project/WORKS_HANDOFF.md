@@ -1,5 +1,15 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## #141 완료 — v0.1.77/code78 네 가지 우선 과제 발행·설치·핵심 수용 (2026-10-23 KST)
+
+- 범위: #139 비화면 실행/한정 복구, #128 단일 아일랜드·드래그, #126 로컬 sequence/지연, #69 Gemini 완료 인식. [계획·최종 근거](../dev/four-priorities-v0177.md), [PR #141](https://github.com/al-hub/closepaw/pull/141).
+- TDD RED `ad47de351b258fc5b895d78cc309e3f0761f347b`; 최종 PR head `bcafdcf908cabd2c2d61c4211a9985c0ef20f3f2`; main/tag source `eaa943281495dd8ab19a6f977cd08dcc702b643e`. PR Security398? Correction: PR Security39797780567/UI39797780502 success. main Security39811521413/UI39811521593/Signed39812483379 success.
+- [v0.1.77/code78](https://github.com/al-hub/closepaw/releases/tag/v0.1.77): 116,597,359 bytes; SHA256 `17760216f5002a0096d051502818a9c3a8bcde7043a46ea726dee39d1696b8f7`; existing signer `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`; R8, manifest, both native runtimes, immutable tag/exact source and public checksum verified (artifact12439499425).
+- Install submitted once, task `99fd7724-bfef-4720-bf7b-9583b0c4feb1`; durable self-update installed/current and independent get_status both 0.1.77/code78. No reinstall, connector re-registration or data reset.
+- Actual device: calculator `123,456,789` sequence 11,036 ms single sample; Gemini short exact reply45 about8.48s and long 20 paragraphs/2,160 chars with ending marker about25.20s, both complete/non-partial/no resend; #69 closed. User confirmed island1/X1 and both physical drags. User-confirmed locked state during five sequential non-UI Termux successes; UI-ended probes also succeeded.
+- Retain #126 open for 10-run/P95 and interruption/screen/network regressions; #128 open for repeated physical/haptic/boundary/rotation/fold/TalkBack/recreation persistence, with production automated drag in #142; #139 open for lock+screen-OFF, reachable Windows SSH, forced-stop/reboot/network failure and duplicate prevention. SSH alias read timed out while Tailscale VPN/overlay was absent; one connection request was unconfirmed and the SSH command was not replayed. #117 owns long-run stability. Camera and Voice listening were not tested.
+- The docs-only commit after the immutable release source does not move or rebuild v0.1.77. Do not reinstall the same APK or claim residual gates as PASS.
+
 ## #135 완료 — v0.1.76/code77 main 빌드 최적화·발행·휴대폰 설치 (2026-10-22 KST)
 
 - [이슈 #135](https://github.com/al-hub/closepaw/issues/135), [PR #136](https://github.com/al-hub/closepaw/pull/136). immutable APK/tag source `f4dddbafece5acd0d6b5039950d84d830cffd21a`. 이후 docs-only 커밋은 발행 소스/태그를 바꾸지 않는다.
