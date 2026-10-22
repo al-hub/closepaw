@@ -23,6 +23,8 @@ class ControlOverlayWindowTest {
     private fun field(owner: Any, name: String): Any? = owner.javaClass.getDeclaredField(name).run {
         isAccessible = true; get(owner)
     }
+    private fun indicatorFor(service: AgentService): Any =
+        (field(service, "remoteControlIndicator\$delegate") as Lazy<*>).value!!
     private fun view(host: Any): View? = field(host, "view") as? View
     private fun params(view: View) = view.layoutParams as WindowManager.LayoutParams
     private fun send(view: View, action: Int, down: Long, rawX: Float, rawY: Float) = main {
@@ -71,6 +73,19 @@ class ControlOverlayWindowTest {
                 island = field(requireNotNull(field(islandHost, "composeHost")), "composeView") as View
                 x = requireNotNull(view(remoteX))
                 assertTrue(island.isAttachedToWindow)
+                // Draw the decoration alone: a second status capsule used to be painted
+                // here even though WindowManager reported only one island window.
+                val decoration = field(indicatorFor(service), "border") as View
+                val bitmap = android.graphics.Bitmap.createBitmap(decoration.width, decoration.height,
+                    android.graphics.Bitmap.Config.ARGB_8888)
+                decoration.draw(android.graphics.Canvas(bitmap))
+                val d = service.resources.displayMetrics.density
+                val paintedCapsule = (94 * d).toInt() until (136 * d).toInt()
+                for (row in paintedCapsule) {
+                    assertEquals("decoration must not paint a second status island", 0,
+                        android.graphics.Color.alpha(bitmap.getPixel(bitmap.width / 2, row)))
+                }
+                bitmap.recycle()
                 assertTrue(x.isAttachedToWindow)
                 assertNull(view(modernX))
                 assertEquals(0, params(island).flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)

@@ -33,4 +33,10 @@ class GeminiTaskAwaiterTest {
         assertEquals("succeeded", result.getValue("state").jsonPrimitive.content)
         assertEquals(200L, waited)
     }
+    @Test fun calculatorSequenceReturnsCompletionWithoutAnotherRoundTrip() = runBlocking {
+        var reads = 0; var waited = 0L
+        val result = GeminiTaskAwaiter({ if (++reads < 3) task("running", "android.ui.sequence") else task("succeeded", "android.ui.sequence") }, { waited += it }).get(buildJsonObject {})
+        assertEquals("succeeded", result.getValue("state").jsonPrimitive.content)
+        assertEquals(200L, waited)
+    }
 }

@@ -12,7 +12,7 @@ internal class GeminiTaskAwaiter(
     suspend fun get(arguments: JsonObject): JsonObject {
         var task = read(arguments)
         repeat(80) {
-            if (task["operation_id"]?.jsonPrimitive?.content !in setOf("gemini.question.ask", "android.ui.action") ||
+            if (task["operation_id"]?.jsonPrimitive?.content !in setOf("gemini.question.ask", "android.ui.action", "android.ui.sequence") ||
                 task["state"]?.jsonPrimitive?.content !in setOf("queued", "running")) return task
             pause(100)
             task = read(arguments)
