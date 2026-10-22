@@ -9,12 +9,30 @@ User authorized implementation, TDD/SRP, original-key signed APK publication and
 4. **#69 — final Gemini acceptance.** Explicitly start an authorized session, launch/ask one harmless unique question, collect the new exact reply, compare its answer, confirm current installed version and end the test session. An old successful question or read-only tool advertisement does not prove the updated APK's acceptance. Speech playback and human physical dragging remain separate from machine-observed text/results.
 
 ## TDD and SRP
-RED commit ad47de351b258fc5b895d78cc309e3f0761f347b on PR #141 adds recovery/gesture unit cases, sequence long-poll regression, and a decoration bitmap check rejecting the old painted capsule. CI is the Android execution environment; local Gradle wrapper distribution download is blocked and no local Android SDK is assumed. RED and GREEN results must be recorded separately after execution.
+RED commit `ad47de351b258fc5b895d78cc309e3f0761f347b` on PR #141 added recovery/gesture unit cases, sequence long-poll regression, and a decoration bitmap check rejecting the old painted capsule. Security CI 39792814995 failed because the new production classes were deliberately absent, and UI 39792814970 reproduced the second painted capsule. Intermediate `d350f0f` exposed a delegated setter JVM-name collision. Final GREEN head `bcafdcf908cabd2c2d61c4211a9985c0ef20f3f2` also assigns lifecycle and saved-state owners to the native gesture root before WindowManager attachment. PR Security 39797780567 and Premium UX UI 39797780502 succeeded.
 
-Responsibilities: TermuxJobReadinessGate owns readiness/recovery admission only; IslandDragGesture owns gesture classification only; overlay host owns native window movement/persistence; decoration owns visual effects only; runtime composes existing operation/security policies. No new production key, permissions reset or plugin re-registration.
+Responsibilities remain separated: TermuxJobReadinessGate owns readiness/recovery admission only; IslandDragGesture owns gesture classification only; overlay host owns native window movement/persistence; decoration owns visual effects only; runtime composes existing operation/security policies. No new production key, permission reset or plugin re-registration was used.
+
+## Release and installation
+- PR #141 final head was merged as main `eaa943281495dd8ab19a6f977cd08dcc702b643e`.
+- Main [Security CI 39811521413](https://github.com/al-hub/closepaw/actions/runs/39811521413), [Premium UX UI 39811521593](https://github.com/al-hub/closepaw/actions/runs/39811521593), and [Signed Release 39812483379](https://github.com/al-hub/closepaw/actions/runs/39812483379) succeeded.
+- [v0.1.77/code78](https://github.com/al-hub/closepaw/releases/tag/v0.1.77) APK is 116,597,359 bytes with SHA-256 `17760216f5002a0096d051502818a9c3a8bcde7043a46ea726dee39d1696b8f7`. Manifest, both native runtimes, exact source/tag, R8/public checksum and existing signer `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba` were independently verified (artifact 12439499425).
+- Install was submitted once: request `four-priorities-v0177-install-20261023-0240`, task `99fd7724-bfef-4720-bf7b-9583b0c4feb1`. Durable self-update state and independent get_status both confirmed installed/current 0.1.77/code78. No duplicate install, connector re-registration or data reset occurred.
+
+## Updated-device acceptance
+- **#139:** UI-ended non-screen shell probes succeeded, including task `b171e559-e0d4-4a25-b707-ce0888525c5c` at 102 ms. The user then confirmed the device remained locked while five sequential Termux commands returned LOCK_CHECK_1…5_OK, exit 0 and known outcomes. Later UI-ended probes `554bd94b-c604-4f13-be9e-1236b4b7c658` and `d0587386-34b7-47c8-8868-2013f9a9d2f4` also succeeded. Existing SSH alias `laptop` read timed out before remote execution (task `8d254947-6c3f-4ff9-b6cf-3b57689d12aa`); one supported Tailscale connect request remained unconfirmed because no VPN/overlay address was present, so the SSH command was not replayed.
+- **#128:** Automated observation confirmed one island and one X. The user physically confirmed each appeared exactly once and each could be dragged. This is the basic physical acceptance, not ten repetitions, haptic/edge/rotation/fold/TalkBack coverage or persistence across service recreation. Production-tool automated drag/result verification is tracked separately in #142.
+- **#126:** Calculator-only sequence task `948bb3ad-903d-4e91-8197-57a57a05e8c3` completed nine steps, outcome known, and a fresh observation showed `123,456,789`; elapsed time was 11,036 ms. This is one sample, not an average/P95 or proven improvement percentage. A later attempt to start repeated measurement ended before the first app action; it was not restarted or counted.
+- **#69:** Short Gemini task `0481075a-0979-4c8f-ab56-a10317f257bc` completed a new question/reply with exact answer 45, `partial=false`, complete coverage in about 8.48 s. Long-answer task `689e293c-48f9-4582-b423-98cf42d0634f` completed 20 paragraphs/2,160 characters with the unique ending marker, `partial=false`, complete coverage in about 25.20 s; read_app confirmed the ending. No automatic resend occurred. #69 is closed.
+
+## Remaining ownership
+- #126 remains open for same-condition 10-run timing, interruption/screen-change/network-delay regressions and any evidence-backed average/P95 or improvement claim.
+- #128 remains open for repeated physical/rotation/fold/TalkBack/haptic/boundary and recreation persistence coverage; #142 owns production automated drag support.
+- #139 remains open for combined lock+screen-OFF, reachable Windows SSH, forced-stop/reboot/network-failure recovery and duplicate-prevention evidence. Tailscale login/VPN and target-PC SSH availability are prerequisites for the blocked remote read.
+- Long-run stability belongs to #117. Camera remains excluded. Voice playback/listening was not tested. No unexecuted item is reported as PASS.
 
 ## Baseline evidence
-- Phone get_status: 0.1.76/code77 responds.
-- UI session initially ended/epoch12. Without starting it, Termux read-only probe task 0eb04ae6-1a0e-4593-b25f-fd5100735cc1 succeeded, exit0, daemon duration103ms. This proves current non-UI execution, not lock/OFF state or automatic fault recovery.
-- PR #130 is older unfinished work; do not merge its obsolete code over main.
-- Release/install/updated-device acceptance: pending. Do not close issues until their actual gates pass.
+- Previous phone version was 0.1.76/code77.
+- UI session initially ended/epoch12. Without starting it, Termux read-only probe task `0eb04ae6-1a0e-4593-b25f-fd5100735cc1` succeeded, exit 0, daemon duration 103 ms. This was baseline non-UI execution evidence only.
+- Baseline Gemini task `c21ba6a8-7862-4f38-8012-a5f543e96dd8` returned 43 on screen but ended reply_timeout/partial after 29,818 ms; v0.1.77 acceptance above supersedes that failed completion recognition.
+- PR #130 is older unfinished work and must not be merged over main.
