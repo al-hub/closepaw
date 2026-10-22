@@ -46,7 +46,7 @@ class IslandOverlayHost(
     )
 
     private var stateHolder: CapsuleStateHolder? = null
-    private var readOnly by mutableStateOf(false)
+    private var readOnlyMode by mutableStateOf(false)
     private val dragGesture = IslandDragGesture()
     private var touchView: View? = null
     private var holdFeedback: Runnable? = null
@@ -103,8 +103,8 @@ class IslandOverlayHost(
 
     /** Read-only disables commands; the island itself remains touchable for deliberate dragging. */
     fun setReadOnly(enabled: Boolean) {
-        if (readOnly == enabled) return
-        readOnly = enabled
+        if (readOnlyMode == enabled) return
+        readOnlyMode = enabled
     }
 
     fun show() {
@@ -119,8 +119,8 @@ class IslandOverlayHost(
                     text = remote ?: "Working...",
                     dotColor = MaterialTheme.colorScheme.primary,
                     pulsing = true,
-                    onClick = if (readOnly) null else onExpandCapsule,
-                    onDrag = if (readOnly) null else ::dragBy,
+                    onClick = if (readOnlyMode) null else onExpandCapsule,
+                    onDrag = if (readOnlyMode) null else ::dragBy,
                     onDragEnd = ::persistPosition,
                 )
             } else {
@@ -132,8 +132,8 @@ class IslandOverlayHost(
                     text = if (text.isBlank()) "Working..." else text,
                     dotColor = glowState.toStatusColor(),
                     pulsing = mode is CapsuleMode.Running,
-                    onClick = if (readOnly) null else onExpandCapsule,
-                    onDrag = if (readOnly) null else ::dragBy,
+                    onClick = if (readOnlyMode) null else onExpandCapsule,
+                    onDrag = if (readOnlyMode) null else ::dragBy,
                     onDragEnd = ::persistPosition,
                 )
             }
@@ -142,7 +142,7 @@ class IslandOverlayHost(
     }
 
     private fun handleTouch(view: View, event: MotionEvent): Boolean {
-        if (!readOnly) return false
+        if (!readOnlyMode) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 cancelTouch()
