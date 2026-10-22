@@ -55,7 +55,19 @@ internal object GeminiNativeReplyPageParser {
             scope.none { it.index != n.index && it.id() == BODY && belongs(n, it) }
         }.map { it.body() }
         if (fragments.isEmpty()) return page()
-        val controls = scope.filter(::visible)
+        // The native response body and its action toolbar may be siblings in
+        // one RecyclerView row. Require the SAME non-history row and a known
+        // native actions container; never borrow controls from another turn.
+        fun row(n: GeminiUiNode) = path(n).zipWithNext().firstOrNull { it.second.index == root.index }?.first
+        val responseRow = row(reply)
+        val siblingToolbar = if (responseRow == null || responseRow.index == reply.index) emptyList() else
+            owned.filter { n ->
+                row(n)?.index == responseRow.index && positions.getValue(n.index) > positions.getValue(reply.index) &&
+                    path(n).any { a -> a.id() in setOf(
+                        "assistant_robin_content_actions_scroll_view", "assistant_robin_content_actions_container") } &&
+                    path(n).none { a -> a.id() == RESPONSE && a.index != reply.index }
+            }
+        val controls = (scope + siblingToolbar).distinctBy { it.index }.filter(::visible)
         fun target(n: GeminiUiNode) = path(n).take(4).firstOrNull { a ->
             a.index != reply.index && a.index != root.index && visible(a) && !a.scrollable && (a.clickable || a.clickAction)
         }?.index

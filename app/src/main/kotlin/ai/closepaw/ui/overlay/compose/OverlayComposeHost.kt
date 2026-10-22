@@ -3,6 +3,9 @@ package ai.closepaw.ui.overlay.compose
 import android.content.Context
 import android.util.Log
 import android.view.WindowManager
+import android.view.MotionEvent
+import android.view.View
+import android.widget.FrameLayout
 import android.graphics.Rect
 import ai.closepaw.util.recycleCompat
 import androidx.compose.runtime.Composable
@@ -24,13 +27,14 @@ class OverlayComposeHost(
     private val windowManager: WindowManager,
     private val tag: String,
 ) {
-    private var composeView: ComposeView? = null
+    private var composeView: View? = null
     private var params: WindowManager.LayoutParams? = null
 
     fun isShowing(): Boolean = composeView != null
 
     fun show(
         layoutParams: WindowManager.LayoutParams,
+        onTouch: ((View, MotionEvent) -> Boolean)? = null,
         content: @Composable () -> Unit,
     ) {
         if (composeView != null) return
@@ -45,8 +49,14 @@ class OverlayComposeHost(
                     }
                 }
             }
-            windowManager.addView(view, layoutParams)
-            composeView = view
+            // Route active-island gestures before Compose's local-coordinate recognizers.
+            // Other overlays and idle content retain their usual Compose event dispatch.
+            val root = if (onTouch == null) view else object : FrameLayout(context) {
+                override fun dispatchTouchEvent(event: MotionEvent): Boolean =
+                    onTouch(this, event) || super.dispatchTouchEvent(event)
+            }.apply { addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT)) }
+            windowManager.addView(root, layoutParams)
+            composeView = root
             params = layoutParams
         } catch (e: Exception) {
             Log.e(tag, "Failed to show Compose overlay", e)
@@ -80,6 +90,8 @@ class OverlayComposeHost(
             false
         }
     }
+
+    fun measuredSize(): Pair<Int, Int>? = composeView?.takeIf { it.width > 0 && it.height > 0 }?.let { it.width to it.height }
 
     fun getWindowToken() = composeView?.windowToken
 

@@ -111,7 +111,8 @@ internal open class PremiumControlDecoration(
                 if (event.kind.startsWith("scroll")) drawDirection(canvas, rect, event.kind.endsWith("up"), tint, opacity)
             }
         }
-        drawLabel(canvas, dark, accent)
+        // Status text belongs exclusively to IslandOverlayHost. Painting a label
+        // here produced a second, non-draggable capsule invisible to window counts.
         if (animate) postInvalidateDelayed(PremiumMotionPolicy.FRAME_MS)
         else {
             // Reduced motion gets one expiry invalidation, no 30fps static redraw loop.
@@ -138,26 +139,5 @@ internal open class PremiumControlDecoration(
         canvas.drawLine(x, y + sign * 12 * density, x - 6 * density, y + sign * 6 * density, paint)
         canvas.drawLine(x, y + sign * 12 * density, x + 6 * density, y + sign * 6 * density, paint)
         paint.strokeCap = Paint.Cap.BUTT
-    }
-    private fun drawLabel(canvas: Canvas, dark: Boolean, accent: Int) {
-        paint.shader = null; paint.style = Paint.Style.FILL; paint.alpha = 255
-        paint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        paint.textSize = 14 * resources.displayMetrics.scaledDensity
-        val prefix = if (target != null) "대상 확인 · " else ""
-        val label = prefix + session.label
-        val available = (width - 104 * density).coerceAtLeast(48 * density)
-        val fitted = android.text.TextUtils.ellipsize(label, android.text.TextPaint(paint), available - 32 * density,
-            android.text.TextUtils.TruncateAt.END).toString()
-        val labelWidth = (paint.measureText(fitted) + 32 * density).coerceAtMost(available)
-        val left = (width - labelWidth) / 2; val top = 94 * density
-        val box = RectF(left, top, left + labelWidth, top + 42 * density)
-        paint.color = if (dark) Color.rgb(18, 32, 45) else Color.rgb(246, 250, 252); paint.alpha = 245
-        canvas.drawRoundRect(box, 21 * density, 21 * density, paint)
-        paint.style = Paint.Style.STROKE; paint.strokeWidth = density; paint.color = accent; paint.alpha = 100
-        canvas.drawRoundRect(box, 21 * density, 21 * density, paint)
-        paint.style = Paint.Style.FILL; paint.alpha = 255
-        paint.color = if (dark) Color.rgb(235, 245, 250) else Color.rgb(22, 48, 64)
-        val baseline = box.centerY() - (paint.fontMetrics.ascent + paint.fontMetrics.descent) / 2
-        canvas.drawText(fitted, left + 16 * density, baseline, paint)
     }
 }

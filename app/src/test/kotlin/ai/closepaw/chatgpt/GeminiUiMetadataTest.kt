@@ -59,4 +59,10 @@ class GeminiUiMetadataTest {
         assertThat(incomplete["traversal_complete"]!!.jsonPrimitive.boolean).isFalse()
         assertThat(incomplete["reason_code"]!!.jsonPrimitive.content).isEqualTo("traversal_incomplete")
     }
+    @Test fun hiddenHistoryCannotCrowdVisibleControlsOutOfDiagnostics() {
+        val history = (0..200).map { node(it).copy(visible = false, resourceId = "", text = "", description = "") }
+        val control = node(201).copy(description = "복사", resourceId = "", text = "")
+        val result = metadata(history + control)
+        assertThat(result.getValue("nodes").jsonArray.map { it.jsonObject.getValue("index").jsonPrimitive.int }).contains(201)
+    }
 }

@@ -39,7 +39,16 @@ internal object GeminiUiMetadata {
         }
         var used = 0
         val exported = mutableListOf<JsonElement>()
-        if (verified) for (node in nodes) {
+        // Preserve original node IDs/parents, but prioritize visible controls
+        // and text before hidden history so bounded diagnostics describe the active turn.
+        val prioritized = nodes.sortedBy { node -> when {
+            node.visible && (node.composer || GeminiUiControlResolver.isCopyRole(node) ||
+                GeminiUiControlResolver.isFeedbackRole(node) || GeminiUiControlResolver.isStopRole(node) ||
+                GeminiUiControlResolver.isSendRole(node)) -> 0
+            node.visible -> 1
+            else -> 2
+        } }
+        if (verified) for (node in prioritized) {
             if (exported.size >= MAX_NODES) break
             // Untrusted app nodes do not contribute even lengths or inferred roles.
             if (node.packageName !in packages) continue

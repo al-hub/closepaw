@@ -6,6 +6,10 @@ import android.os.Build
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.HapticFeedbackConstants
+import ai.closepaw.ui.overlay.IslandDragGesture
 import android.view.WindowManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
@@ -42,7 +46,16 @@ class IslandOverlayHost(
     )
 
     private var stateHolder: CapsuleStateHolder? = null
-    private var readOnly = false
+    private var readOnly by mutableStateOf(false)
+    private val dragGesture = IslandDragGesture()
+    private var touchView: View? = null
+    private var holdFeedback: Runnable? = null
+    private var holdVibrated = false
+    private fun cancelTouch() {
+        holdFeedback?.let { touchView?.removeCallbacks(it) }
+        holdFeedback = null; touchView = null
+        dragGesture.cancel()
+    }
     private var remoteStatusText by mutableStateOf<String?>(null)
 
     /** Same window serves bridge-only sessions; never create another status surface. */
@@ -54,8 +67,9 @@ class IslandOverlayHost(
     private var fractionY = 0f
     private fun dragBy(dx: Float, dy: Float) {
         val metrics = service.resources.displayMetrics
-        val maxX = (metrics.widthPixels - dp(280)).coerceAtLeast(0)
-        val maxY = (metrics.heightPixels - dp(64)).coerceAtLeast(0)
+        val size = composeHost.measuredSize() ?: (dp(280) to dp(64))
+        val maxX = (metrics.widthPixels - size.first).coerceAtLeast(0)
+        val maxY = (metrics.heightPixels - size.second).coerceAtLeast(0)
         fractionX += dx
         fractionY += dy
         val stepX = fractionX.toInt()
@@ -65,6 +79,12 @@ class IslandOverlayHost(
         val nextX = ((if (islandX < 0) maxX / 2 else islandX) + stepX).coerceIn(0, maxX)
         val nextY = ((if (islandY < 0) getStatusBarHeight() + dp(88) else islandY) + stepY).coerceIn(0, maxY)
         if (nextX == islandX && nextY == islandY) return
+        // Keep the emergency X's real persisted hit area unobstructed.
+        val stop = service.getSharedPreferences("x_stop_overlay", 0)
+        val stopX = stop.getInt("x", metrics.widthPixels - dp(68))
+        val stopY = stop.getInt("y", dp(40))
+        if (nextX < stopX + dp(56) && nextX + size.first > stopX &&
+            nextY < stopY + dp(56) && nextY + size.second > stopY) return
         try {
             if (!composeHost.updateLayoutParams { it.x = nextX; it.y = nextY }) return
             islandX = nextX
@@ -85,15 +105,13 @@ class IslandOverlayHost(
     fun setReadOnly(enabled: Boolean) {
         if (readOnly == enabled) return
         readOnly = enabled
-        if (composeHost.isShowing()) {
-            hide()
-            show()
-        }
     }
 
     fun show() {
         if (composeHost.isShowing()) return
-        composeHost.show(createLayoutParams()) {
+        val layout = createLayoutParams()
+        islandX = layout.x; islandY = layout.y
+        composeHost.show(layout, onTouch = ::handleTouch) {
             val holder = stateHolder
             val remote = remoteStatusText
             if (remote != null || holder == null) {
@@ -102,7 +120,7 @@ class IslandOverlayHost(
                     dotColor = MaterialTheme.colorScheme.primary,
                     pulsing = true,
                     onClick = if (readOnly) null else onExpandCapsule,
-                    onDrag = ::dragBy,
+                    onDrag = if (readOnly) null else ::dragBy,
                     onDragEnd = ::persistPosition,
                 )
             } else {
@@ -115,7 +133,7 @@ class IslandOverlayHost(
                     dotColor = glowState.toStatusColor(),
                     pulsing = mode is CapsuleMode.Running,
                     onClick = if (readOnly) null else onExpandCapsule,
-                    onDrag = ::dragBy,
+                    onDrag = if (readOnly) null else ::dragBy,
                     onDragEnd = ::persistPosition,
                 )
             }
@@ -123,7 +141,38 @@ class IslandOverlayHost(
         Log.i(TAG, "island_show_requested host=$hostId attached=${composeHost.isShowing()}")
     }
 
+    private fun handleTouch(view: View, event: MotionEvent): Boolean {
+        if (!readOnly) return false
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                cancelTouch()
+                fractionX = 0f; fractionY = 0f
+                touchView = view; holdVibrated = false
+                holdFeedback = Runnable {
+                    if (touchView === view && !holdVibrated) {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        holdVibrated = true
+                    }
+                }.also { view.postDelayed(it, 450L) }
+                dragGesture.down(event.rawX, event.rawY, event.eventTime)
+            }
+            MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP -> {
+                if (event.pointerCount != 1) { cancelTouch(); return true }
+                dragGesture.move(event.rawX, event.rawY, event.eventTime, event.pointerCount)?.let {
+                    if (it.began && !holdVibrated) {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); holdVibrated = true
+                    }
+                    dragBy(it.dx, it.dy)
+                }
+                if (event.actionMasked == MotionEvent.ACTION_UP) { persistPosition(); cancelTouch() }
+            }
+            MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> cancelTouch()
+        }
+        return true // A short tap never expands or terminates the read-only status island.
+    }
+
     fun hide() {
+        cancelTouch()
         if (composeHost.isShowing()) Log.i(TAG, "island_hide host=$hostId")
         composeHost.hide()
     }

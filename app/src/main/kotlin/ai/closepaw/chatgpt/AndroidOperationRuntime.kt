@@ -26,8 +26,14 @@ internal class AndroidOperationRuntime(
 ) : McpOperationTools {
     private val client = TermuxJobClient(TermuxBridgeAuth.token(context))
     private val termuxBridge = TermuxBridgeManager.get(context)
-    private val recoveryMutex = Mutex()
-    private var lastRecoveryAttemptMs = 0L
+    private val shellReadiness = TermuxJobReadinessGate(client::probe, {
+        when (val status = termuxBridge.ensureReadyForSession(8_000)) {
+            ai.closepaw.termux.TermuxBridgeStatus.Ready -> null
+            ai.closepaw.termux.TermuxBridgeStatus.NotInstalled -> "termux_not_installed"
+            is ai.closepaw.termux.TermuxBridgeStatus.NeedsSetup -> status.reason.name.lowercase(java.util.Locale.ROOT)
+            else -> "termux_recovery_unavailable"
+        }
+    }, android.os.SystemClock::elapsedRealtime)
     private val shell = TermuxShellOperation(client, TermuxJobLinkStore(File(context.filesDir, "mcp/job-links.tsv")))
     private val store = OperationTaskStore(File(context.filesDir, "mcp/tasks.json"))
     private val registry = OperationRegistry()
@@ -124,17 +130,7 @@ internal class AndroidOperationRuntime(
             readiness={
                 if(!settings.enabled) OperationReadiness(false,"remote_execution_disabled")
                 else runBlocking {
-                    var readiness = client.probe()
-                    if (!readiness.ready && readiness.reason?.startsWith("bridge_daemon_unreachable:") == true) {
-                        recoveryMutex.withLock {
-                            val now = android.os.SystemClock.elapsedRealtime()
-                            if (now - lastRecoveryAttemptMs >= 30_000 || lastRecoveryAttemptMs == 0L) {
-                                lastRecoveryAttemptMs = now
-                                termuxBridge.ensureReadyForSession(8_000)
-                                readiness = client.probe()
-                            }
-                        }
-                    }
+                    val readiness = shellReadiness.check()
                     OperationReadiness(readiness.ready, readiness.reason)
                 }
             },
@@ -218,12 +214,12 @@ internal class AndroidOperationRuntime(
             }
         })
         dispatcher = OperationDispatcher(registry, store, scope,
-            operationEpoch = { id -> if (id in setOf("android.ui.action", "android.control.feedback_test",
+            operationEpoch = { id -> if (id in setOf("android.ui.action", "android.ui.sequence", "android.control.feedback_test",
                     "app.screen.read", "gemini.draft.insert", "gemini.question.ask"))
                 AgentService.instance?.remoteControlSession?.epoch ?: -1L else 0L },
             executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled || settings.genericControlEnabled },
             operationAllowed = { id -> when(id) {
-                GenericControlOperations.ACTION, GenericControlOperations.CONFIGURE, GenericControlOperations.FEEDBACK_TEST,
+                GenericControlOperations.ACTION, GenericControlOperations.SEQUENCE, GenericControlOperations.CONFIGURE, GenericControlOperations.FEEDBACK_TEST,
                 "android.control.session.start", "android.control.session.wait", "android.control.session.end" -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
                 "linux.shell.exec" -> settings.enabled

@@ -62,4 +62,20 @@ class GeminiNativeReplyPageParserTest {
         assertNull(parse(fixture().map { if (it.index == 1) it.copy(visible = false) else it }))
         assertNull(GeminiReplyPageParser.parse(fixture(), question, false))
     }
+    @Test fun nativeSiblingToolbarBelongsOnlyToItsCurrentResponseRow() {
+        // Native Gemini can place body and footer in separate siblings under one RecyclerView row.
+        val nodes = listOf(n(0, -1), n(1, 0, "assistant_robin_chat_history_list").copy(scrollable = true, scrollForward = true),
+            n(2, 1, "assistant_robin_user_message_text", question),
+            n(3, 1, "native_response_row"), n(4, 3, "assistant_robin_content_message_container"),
+            n(5, 4, "assistant_robin_text", "43"),
+            n(6, 3, "assistant_robin_content_actions_scroll_view").copy(scrollable = true),
+            n(7, 6, text = "복사", action = true),
+            n(8, 6, text = "대답이 마음에 들어요", action = true),
+            n(9, 6, text = "대답이 마음에 들지 않아요", action = true))
+        assertTrue(parse(nodes)!!.endVisible)
+        // Identical controls in an earlier/different native row cannot complete the response.
+        val foreign = nodes.map { if (it.index == 6) it.copy(parent = 1) else it }
+        assertFalse(parse(foreign)!!.endVisible)
+        assertFalse(parse(nodes.map { if (it.index == 6) it.copy(visible = false) else it })!!.endVisible)
+    }
 }
