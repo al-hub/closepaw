@@ -118,7 +118,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           EXPECTED_SHA: ${{ needs.authorize.outputs.head }}
-          TOKEN: ${{ github.token }}
+          TOKEN: ${{ secrets.CLOSEPAW_AGENT_PUSH_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -145,4 +145,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'agent-round: one bounded TDD follow-up (#143)'
           # Must push using an explicitly permitted token, not expose it to Codex job.
+          if [[ -z "$TOKEN" ]]; then echo "CLOSEPAW_AGENT_PUSH_TOKEN not configured; cannot trigger follow-up CI. No push." >&2; exit 1; fi
           git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)" push origin HEAD:refs/heads/feat/issues-126-140-142-integrated
