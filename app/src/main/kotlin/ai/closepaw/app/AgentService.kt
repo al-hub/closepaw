@@ -179,6 +179,11 @@ class AgentService : AccessibilityService() {
         if (remoteControlSession.state == ai.closepaw.chatgpt.control.ControlSession.State.PAUSED)
             remoteControlIndicator.restorePanel(showEmergencyX = !modernEmergencyXVisible)
     }
+    internal fun observedIsland() = overlayController?.observedIsland()
+    internal suspend fun dragIsland(before: ai.closepaw.chatgpt.control.IslandBounds, dx: Int, dy: Int,
+        holdMs: Long, moveMs: Long, permitted: () -> Boolean): Boolean =
+        overlayController?.dragIsland(before, dx, dy, holdMs, moveMs, permitted) ?: false
+
     internal fun showRemoteControlFeedbackTest() { remoteControlIndicator.show(testOnly = true) }
     internal fun hideRemoteControlActivity(force: Boolean = false) {
         if (force || remoteControlSession.state in setOf(ai.closepaw.chatgpt.control.ControlSession.State.IDLE,
@@ -288,7 +293,8 @@ class AgentService : AccessibilityService() {
                         onEmergencyXVisibilityChanged = { visible ->
                             modernEmergencyXVisible = visible
                             if (visible) remoteControlIndicator.hideEmergencyXOnly()
-                            else if (remoteControlSession.state != ai.closepaw.chatgpt.control.ControlSession.State.IDLE &&
+                            else if (!getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
+                                     getSystemService(android.os.PowerManager::class.java).isInteractive && remoteControlSession.state != ai.closepaw.chatgpt.control.ControlSession.State.IDLE &&
                                      remoteControlSession.state != ai.closepaw.chatgpt.control.ControlSession.State.ENDED)
                                 remoteControlIndicator.show(showEmergencyX = true)
                         },
@@ -381,6 +387,7 @@ class AgentService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(controlScreenReceiver) }
         remoteControlSession.end()
         hideRemoteControlActivity(force = true)
         remoteControlChanges.changed()
@@ -426,9 +433,25 @@ class AgentService : AccessibilityService() {
         serviceScope.cancel()
     }
 
+    private val controlScreenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            if (intent?.action == android.content.Intent.ACTION_SCREEN_OFF) {
+                remoteControlIndicator.hide()
+                actionVisualizer?.clear()
+            } else showRemoteControlActivity()
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         serviceLifecycleOwner.onCreate()
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_SCREEN_OFF)
+            addAction(android.content.Intent.ACTION_SCREEN_ON)
+            addAction(android.content.Intent.ACTION_USER_PRESENT)
+        }
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(controlScreenReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+        else { @Suppress("DEPRECATION") registerReceiver(controlScreenReceiver, filter) }
     }
 
     private fun submitOp(op: Op) {

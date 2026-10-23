@@ -52,6 +52,9 @@ class IslandOverlayHost(
     private var touchView: View? = null
     private var holdFeedback: Runnable? = null
     private var holdVibrated = false
+    private var syntheticInput = false
+    private var physicalInputEpoch = 0L
+    private var automaticDrag = false
     private fun cancelTouch() {
         holdFeedback?.let { touchView?.removeCallbacks(it) }
         holdFeedback = null; touchView = null
@@ -144,6 +147,7 @@ class IslandOverlayHost(
     }
 
     private fun handleTouch(view: View, event: MotionEvent): Boolean {
+        if (!syntheticInput) physicalInputEpoch++
         if (!readOnlyMode) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -183,11 +187,67 @@ class IslandOverlayHost(
      * A post-gesture observation, never an acknowledgement of movement.
      * Null when the island window is detached or no measured layout exists.
      */
-    fun observedPosition(): ai.closepaw.ui.overlay.IslandPosition? {
-        if (!composeHost.isShowing()) return null
-        val bounds = composeHost.measuredSize() ?: return null
-        if (bounds.first <= 0 || bounds.second <= 0 || islandX < 0 || islandY < 0) return null
-        return ai.closepaw.ui.overlay.IslandPosition(islandX, islandY)
+    fun observedPosition(): ai.closepaw.ui.overlay.IslandPosition? = observedBounds()?.position
+
+    internal fun observedBounds(): ai.closepaw.chatgpt.control.IslandBounds? {
+        val root = composeHost.attachedRoot() ?: return null
+        if (!readOnlyMode || !root.isShown) return null
+        val xy = IntArray(2); root.getLocationOnScreen(xy)
+        val metrics = service.resources.displayMetrics
+        return ai.closepaw.chatgpt.control.IslandBounds(xy[0], xy[1], root.width, root.height,
+            metrics.widthPixels, metrics.heightPixels, "$hostId:${System.identityHashCode(root)}:$physicalInputEpoch:${service.display?.rotation}")
+    }
+
+    /** Local owned-window input, with a cancellable hold/move loop. Never dispatches to Android apps. */
+    internal suspend fun dragOwnedWindow(before: ai.closepaw.chatgpt.control.IslandBounds, dx: Int, dy: Int,
+        holdMs: Long, moveMs: Long, permitted: () -> Boolean): Boolean {
+        check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+        if (automaticDrag || observedBounds() != before || !permitted()) return false
+        val root = composeHost.attachedRoot() ?: return false
+        val inputEpoch = physicalInputEpoch
+        val down = android.os.SystemClock.uptimeMillis()
+        val startX = before.x + before.width / 2f
+        val startY = before.y + before.height / 2f
+        var rawX = startX; var rawY = startY
+        fun safe(): Boolean {
+            val metrics = service.resources.displayMetrics
+            return permitted() && physicalInputEpoch == inputEpoch && readOnlyMode &&
+                metrics.widthPixels == before.displayWidth && metrics.heightPixels == before.displayHeight &&
+                observedBounds()?.identity == before.identity && composeHost.attachedRoot() === root
+        }
+        fun send(action: Int): Boolean {
+            if (composeHost.attachedRoot() !== root) return false
+            val xy = IntArray(2); root.getLocationOnScreen(xy)
+            val event = MotionEvent.obtain(down, android.os.SystemClock.uptimeMillis(), action, rawX, rawY, 0)
+            event.offsetLocation(-xy[0].toFloat(), -xy[1].toFloat())
+            syntheticInput = true
+            return try { root.dispatchTouchEvent(event) } finally { syntheticInput = false; event.recycle() }
+        }
+        automaticDrag = true
+        var released = false
+        return try {
+            if (!send(MotionEvent.ACTION_DOWN)) return false
+            while (android.os.SystemClock.uptimeMillis() - down < holdMs) {
+                kotlinx.coroutines.delay(16)
+                if (!safe()) return false
+            }
+            val started = android.os.SystemClock.uptimeMillis()
+            while (true) {
+                if (!safe()) return false
+                val fraction = ((android.os.SystemClock.uptimeMillis() - started).toFloat() / moveMs).coerceIn(0f, 1f)
+                rawX = startX + dx * fraction; rawY = startY + dy * fraction
+                if (!send(MotionEvent.ACTION_MOVE)) return false
+                if (fraction >= 1f) break
+                kotlinx.coroutines.delay(16)
+            }
+            if (!safe()) return false
+            released = send(MotionEvent.ACTION_UP)
+            kotlinx.coroutines.delay(48) // permit WindowManager traversal before postcondition observation
+            released && safe()
+        } finally {
+            if (!released) send(MotionEvent.ACTION_CANCEL)
+            automaticDrag = false
+        }
     }
 
     fun isShowing(): Boolean = composeHost.isShowing()

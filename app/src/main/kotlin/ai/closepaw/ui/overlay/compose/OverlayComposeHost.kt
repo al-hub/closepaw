@@ -95,6 +95,9 @@ class OverlayComposeHost(
         }
     }
 
+    /** The exact attached root, never a screen or another overlay target. Main-thread only. */
+    internal fun attachedRoot(): View? = composeView?.takeIf { it.isAttachedToWindow && it.width > 0 && it.height > 0 }
+
     fun measuredSize(): Pair<Int, Int>? = composeView?.takeIf { it.width > 0 && it.height > 0 }?.let { it.width to it.height }
 
     fun getWindowToken() = composeView?.windowToken

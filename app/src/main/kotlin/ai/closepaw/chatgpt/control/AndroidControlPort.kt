@@ -41,6 +41,25 @@ import kotlin.coroutines.resume
 internal class AndroidControlPort(context: Context, private val mutationBlock: (String) -> String? = { null },
     private val runtime: RuntimeControlSettings? = null, private val allowed: () -> Boolean) : ControlPort {
     override val validatesAtNativeBoundary = true
+    override fun islandRefusal(sessionId: String): String? {
+        val service = AgentService.instance ?: return "accessibility_permission_missing"
+        val session = service.remoteControlSession
+        if (!session.explicit || session.state != ControlSession.State.ACTIVE) return "explicit_active_session_required"
+        session.refusal(sessionId, mutation = true)?.let { return it }
+        return reason(service)
+    }
+    override suspend fun observeIsland(): IslandBounds? = withContext(Dispatchers.Main) {
+        AgentService.instance?.observedIsland()
+    }
+    override suspend fun dragIsland(before: IslandBounds, dx: Int, dy: Int, holdMs: Long, moveMs: Long, sessionId: String): Boolean =
+        withContext(Dispatchers.Main) {
+            val service = AgentService.instance ?: return@withContext false
+            val epoch = service.remoteControlSession.epoch
+            if (islandRefusal(sessionId) != null) return@withContext false
+            service.dragIsland(before, dx, dy, holdMs, moveMs) {
+                AgentService.instance === service && service.remoteControlSession.epoch == epoch && islandRefusal(sessionId) == null
+            }
+        }
     override fun session() = AgentService.instance?.remoteControlSession
     override fun bindResume(check: suspend () -> Boolean) { AgentService.instance?.remoteResumeCheck = check }
     override suspend fun feedback(label: String) { withContext(Dispatchers.Main) { session()?.feedback(label) } }
