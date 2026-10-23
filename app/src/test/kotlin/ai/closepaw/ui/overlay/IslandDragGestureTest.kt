@@ -26,4 +26,22 @@ class IslandDragGestureTest {
         assertNull(g.move(9f, 9f, 999L)); g.cancel()
         assertNull(g.move(9f, 9f, 1500L))
     }
+    @Test fun invalidCoordinatesCancelGestureWithoutMovingOverlay() {
+        val g = IslandDragGesture()
+        g.down(Float.NaN, 20f, 0L)
+        assertNull(g.move(30f, 40f, 500L))
+        g.down(10f, 20f, 0L)
+        assertNull(g.move(Float.POSITIVE_INFINITY, 30f, 500L))
+        assertNull(g.move(15f, 25f, 600L))
+        g.down(10f, 20f, 0L)
+        val valid = requireNotNull(g.move(15f, 25f, 500L))
+        assertEquals(5f, valid.dx, 0f)
+    }
+    @Test fun overflowedDeltaIsRejectedInsteadOfBeingApplied() {
+        val g = IslandDragGesture()
+        g.down(-Float.MAX_VALUE, 0f, 0L)
+        assertNull(g.move(Float.MAX_VALUE, 0f, 500L))
+        assertNull(g.move(0f, 0f, 600L))
+    }
+
 }
