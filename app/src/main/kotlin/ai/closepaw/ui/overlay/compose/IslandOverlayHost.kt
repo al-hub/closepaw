@@ -195,7 +195,7 @@ class IslandOverlayHost(
         val xy = IntArray(2); root.getLocationOnScreen(xy)
         val metrics = service.resources.displayMetrics
         return ai.closepaw.chatgpt.control.IslandBounds(xy[0], xy[1], root.width, root.height,
-            metrics.widthPixels, metrics.heightPixels, "$hostId:${System.identityHashCode(root)}:$physicalInputEpoch:${service.display?.rotation}")
+            metrics.widthPixels, metrics.heightPixels, "$hostId:${System.identityHashCode(root)}:$physicalInputEpoch:${root.display?.rotation}")
     }
 
     /** Local owned-window input, with a cancellable hold/move loop. Never dispatches to Android apps. */

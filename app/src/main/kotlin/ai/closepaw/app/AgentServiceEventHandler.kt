@@ -36,7 +36,7 @@ internal class AgentServiceEventHandler(
 
             // ===== Task Events (for SmartCapsule streaming) =====
             is TaskStarted -> {
-                islandEvents.start(event.sessionId.value, event.taskId, event.timestamp)
+                val currentTask = islandEvents.start(event.sessionId.value, event.taskId, event.timestamp)
                 recordingService?.onTaskStarted()
                 recordingService?.recordUserMessage(
                     UUID.randomUUID().toString(),
@@ -44,7 +44,7 @@ internal class AgentServiceEventHandler(
                     event.input
                 )
                 recordingService?.startAgentMessage(event.taskId, event.timestamp)
-                overlay?.onTaskStarted(event.taskId, event.input)
+                if (currentTask) overlay?.onTaskStarted(event.taskId, event.input)
             }
             is MessageDelta -> {
                 recordingService?.appendTextDelta(event.delta)
@@ -77,7 +77,7 @@ internal class AgentServiceEventHandler(
                 updateStatus("🤖 ${event.agentName} $status")
             }
             is TaskCompleted -> {
-                islandEvents.end(event.sessionId.value, event.taskId)
+                val currentTask = islandEvents.end(event.sessionId.value, event.taskId)
                 Log.i(logTag, "Task completed: ${event.taskId}, outcome: ${event.outcome}")
                 // Stash outcome BEFORE finalize so the recorder can derive
                 // rowState ("error" vs "complete") on the persisted row.
@@ -99,7 +99,7 @@ internal class AgentServiceEventHandler(
                 // Finalize the agent message buffer so the session file
                 // is complete before Hot Idle.
                 recordingService?.completeAgentMessage()
-                overlay?.onTaskCompleted(event.outcome, event.result)
+                if (currentTask) overlay?.onTaskCompleted(event.outcome, event.result)
             }
             is ActionProposed -> {
                 islandEvents.proposed(event.sessionId.value, event.actionId, event.timestamp)
@@ -131,7 +131,7 @@ internal class AgentServiceEventHandler(
 
             // ===== Session Lifecycle Events =====
             is SessionCompleted -> {
-                islandEvents.end(event.sessionId.value)
+                val currentSession = islandEvents.end(event.sessionId.value)
                 Log.i(logTag, "Session completed: ${event.sessionId}, reason: ${event.reason}")
                 recordingService?.completeSession()
                 val statusMessage = when (event.reason) {
@@ -140,7 +140,7 @@ internal class AgentServiceEventHandler(
                     SessionEndReason.IDLE_TIMEOUT -> "💤 Session timed out"
                 }
                 updateStatus(statusMessage)
-                overlay?.onSessionCompleted(event.reason)
+                if (currentSession) overlay?.onSessionCompleted(event.reason)
                 sessionCleared()
             }
             is SessionError -> {

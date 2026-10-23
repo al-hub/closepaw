@@ -4,10 +4,12 @@ package ai.closepaw.ui.overlay
 internal class IslandEventGate {
     private var session: String? = null
     private var task: String? = null
-    private var started = Long.MAX_VALUE
+    private var started = Long.MIN_VALUE
     private val proposed = linkedMapOf<String, Long>()
-    fun start(session: String, task: String, timestamp: Long) {
+    fun start(session: String, task: String, timestamp: Long): Boolean {
+        if (timestamp < started || (this.session == session && this.task == task)) return false
         this.session = session; this.task = task; started = timestamp; proposed.clear()
+        return true
     }
     fun proposed(session: String, action: String, timestamp: Long) {
         if (this.session != session || task == null || timestamp < started || proposed.size >= 256) return
@@ -20,8 +22,9 @@ internal class IslandEventGate {
         proposed.remove(action)
         return true
     }
-    fun end(session: String, task: String? = null) {
-        if (this.session != session || (task != null && this.task != task)) return
+    fun end(session: String, task: String? = null): Boolean {
+        if (this.session != session || (task != null && this.task != task)) return false
         this.task = null; proposed.clear()
+        return true
     }
 }
