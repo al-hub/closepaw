@@ -1,0 +1,178 @@
+{
+  "source_sha": "ed46c6a7e39b04e10483e4c501e4b1530fd2026d",
+  "pr": 148,
+  "pr_head": "d8640b1458b4490ce4443ec108fb9ed594d7fc24",
+  "version": "0.1.79",
+  "version_code": 80,
+  "apk_sha256": "28ba835c82a870e4b2932f1e1c64a2c0087cc391bfdecd22861ffa8f0f402698",
+  "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+  "size": 116630127,
+  "public_verification_artifact": 12503863290,
+  "runs": {
+    "pr_security": 39957889906,
+    "pr_ui": 39957889977,
+    "main_security": 39958925642,
+    "main_ui": 39958925680,
+    "signed_release": 39959940340
+  },
+  "install_task": "2b0a3df7-e3fb-4ed1-937f-b0656c20cf60",
+  "install_status": {
+    "status": "succeeded",
+    "summary": "Self-update state: installed. Check installed version after reconnection; handle required approval with the user.",
+    "data": {
+      "state": "installed",
+      "task_id": "2b0a3df7-e3fb-4ed1-937f-b0656c20cf60",
+      "target_version": "0.1.79",
+      "session_id": 1924064029,
+      "target_code": 80,
+      "installed_version": "0.1.79",
+      "current_version": "0.1.79",
+      "current_code": 80,
+      "install_source_allowed": true,
+      "remote_update_enabled": true
+    },
+    "stdout": "",
+    "stderr": "",
+    "output_truncated": false
+  },
+  "independent_status": {
+    "status": "succeeded",
+    "summary": "ClosePaw is reachable and responding.",
+    "app": "ClosePaw",
+    "version_name": "0.1.79",
+    "version_code": 80,
+    "capability": "status",
+    "operation_contract_version": 1,
+    "operation_discovery_tool": "discover_operations",
+    "supported_read_apps": [
+      {
+        "id": "samsung_internet",
+        "package_name": "com.sec.android.app.sbrowser",
+        "display_name": "Samsung Internet"
+      },
+      {
+        "id": "chrome",
+        "package_name": "com.android.chrome",
+        "display_name": "Chrome"
+      },
+      {
+        "id": "gemini",
+        "package_name": "com.google.android.apps.bard",
+        "display_name": "Gemini"
+      }
+    ],
+    "mcp_tool_count": 9,
+    "runtime_info_tool": "get_runtime_info",
+    "tool_list_refresh_verified": false
+  },
+  "final_session": {
+    "status": "succeeded",
+    "summary": "Control session state returned.",
+    "data": {
+      "state": "ended",
+      "session_id": "c781eaf9-8039-41e3-94c9-9e1ef59e5973",
+      "epoch": 0,
+      "physical_resume_required": false,
+      "external_effects_undone": false
+    },
+    "stdout": "",
+    "stderr": "",
+    "output_truncated": false
+  },
+  "baseline": {
+    "baseline_version": "0.1.78/code79",
+    "task_id": "63db98fd-ebb1-4a74-891a-e57d23a99a7b",
+    "operation_diagnostics_elapsed_ms": 10980,
+    "captures": [
+      {
+        "timestamp_ms": 1792757147841,
+        "elapsed_ms": 98,
+        "probe_ms": 33,
+        "tree_ms": 65,
+        "visited_nodes": 36,
+        "truncated": false
+      },
+      {
+        "timestamp_ms": 1792757149123,
+        "elapsed_ms": 416,
+        "probe_ms": 283,
+        "tree_ms": 133,
+        "visited_nodes": 36,
+        "truncated": false
+      },
+      {
+        "timestamp_ms": 1792757150355,
+        "elapsed_ms": 459,
+        "probe_ms": 291,
+        "tree_ms": 168,
+        "visited_nodes": 36,
+        "truncated": false
+      },
+      {
+        "timestamp_ms": 1792757151493,
+        "elapsed_ms": 374,
+        "probe_ms": 273,
+        "tree_ms": 101,
+        "visited_nodes": 36,
+        "truncated": false
+      },
+      {
+        "timestamp_ms": 1792757152722,
+        "elapsed_ms": 415,
+        "probe_ms": 284,
+        "tree_ms": 131,
+        "visited_nodes": 36,
+        "truncated": false
+      },
+      {
+        "timestamp_ms": 1792757153915,
+        "elapsed_ms": 404,
+        "probe_ms": 282,
+        "tree_ms": 122,
+        "visited_nodes": 36,
+        "truncated": false
+      },
+      {
+        "timestamp_ms": 1792757155112,
+        "elapsed_ms": 413,
+        "probe_ms": 295,
+        "tree_ms": 118,
+        "visited_nodes": 36,
+        "truncated": false
+      },
+      {
+        "timestamp_ms": 1792757156261,
+        "elapsed_ms": 371,
+        "probe_ms": 315,
+        "tree_ms": 56,
+        "visited_nodes": 36,
+        "truncated": false
+      },
+      {
+        "timestamp_ms": 1792757157492,
+        "elapsed_ms": 381,
+        "probe_ms": 299,
+        "tree_ms": 82,
+        "visited_nodes": 36,
+        "truncated": false
+      },
+      {
+        "timestamp_ms": 1792757158707,
+        "elapsed_ms": 380,
+        "probe_ms": 272,
+        "tree_ms": 108,
+        "visited_nodes": 36,
+        "truncated": false
+      }
+    ],
+    "capture_probe_ms": 2627,
+    "capture_tree_ms": 1084,
+    "limitation": "Only capture components available; native-action internals not attributed. Not full E2E. No inferred top-three ranking."
+  },
+  "new_performance_measurement": "not_measured; ended user session preserved",
+  "issue_acceptance": {
+    "145": "OPEN; OneUI lock notification, Galaxy/TalkBack/Gemini detailed progress incomplete",
+    "146": "OPEN; foldable and physical boundary/cancellation acceptance incomplete",
+    "147": "OPEN; new trace profiling/top-three/optimization/10+10/E2E incomplete"
+  }
+}

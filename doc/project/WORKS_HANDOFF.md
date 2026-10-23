@@ -1,10 +1,12 @@
-## #145/#146/#147 통합 작업 진행 — PR #148 (2026-10-23 KST)
+## #145/#146/#147 통합 수정·계측 v0.1.79/code80 발행·설치 (2026-10-23 KST)
 
-- 기준 main7f0d5c2, 후보 v0.1.79/code80. [통합 PR #148](https://github.com/al-hub/closepaw/pull/148), [체크리스트·원인·검증 제한](../dev/issues145-146-147-v0179.md).
-- #145 같은 location unlock 재평가/이전 overlay 소유자·observer 정리/안전한 실제 라벨/숫자 sequence 상세 진행/알림 제어종료, #146 측정 크기 기반 clamp·X 우선, #147 invocation-local nested monotonic trace/중단 증거 보존.
-- 로컬 release trust/cache18 tests PASS. 로컬 Gradle 다운로드 네트워크 제한으로 Android 미실행; 필수 PR unit/lint/debug/UI 진행. 독립 리뷰 지적은 반영 중.
-- APK 아직 미발행/미설치. 필수 checks와 리뷰 후 main 병합·기존키 서명·공개 독립 검증을 진행한다. 사용자 종료 세션 자동 재개 금지.
-- #147 병목3개 및 동일조건10+10 개선율/Voice not_measured, Galaxy/폴더블/TalkBack·알림 실수용은 잔여로 OPEN 유지. 기존10회 성공 증거 반복 없음.
+- [PR #148](https://github.com/al-hub/closepaw/pull/148), 최종 HEAD d8640b1458b4490ce4443ec108fb9ed594d7fc24; merged main/APK/tag 정확 source **ed46c6a7e39b04e10483e4c501e4b1530fd2026d**.
+- #145 같은 location unlock 복원·이전 소유자/observer 정리·안전한 동작/상태·숫자 sequence 상세 진행·알림 제어종료. #146 measured full-rectangle reflow/복원 clamp·X 우선·기존 X 경계 보정. #147 correlation/step/nested monotonic trace 및 cancellation finally 증거; 보안 probe/spacing/epoch/fingerprint/no-replay 유지.
+- PR Security39957889906/UI39957889977, main Security39958925642/UI39958925680/Signed39959940340 모두 success. unit2717 실패/오류/skip0,lint오류0/경고120/info4,Python55+8/trust18. PR UI8 실패/오류/skip0·PNG4,실제 host 교체/회전/ended 회귀 포함. Galaxy 물리 수용으로 확대하지 않음.
+- [Release/APK](https://github.com/al-hub/closepaw/releases/tag/v0.1.79):116630127 bytes, SHA256 **28ba835c82a870e4b2932f1e1c64a2c0087cc391bfdecd22861ffa8f0f402698**. 기존 signer d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba/v3. 공개 익명 download/checksum/manifest80/ABIs/두 runtime/R8/exact source 검증,artifact12503863290 내용 대조.
+- 설치1회 task2b0a3df7-e3fb-4ed1-937f-b0656c20cf60: installing 뒤 재제출 없이 durable installed/current0.1.79/code80 → 독립 get_status0.1.79/code80 정상 확인. 최종 UI session **ended/epoch0**. 새 UI 세션·계산기·드래그·잠금·알림 물리 검증은 실행하지 않음.
+- **#145/#146/#147 모두 OPEN 유지**. #145 OneUI 잠금 알림/실패·Gemini 상세/TalkBack, #146 실제 재생성·폴더블/경계·취소 수용, #147 새 trace1회→상위3개 확정→최적화→동일조건10+10/취소queue/E2E 잔여. Voice not_measured. 기존11초 단일/10회 데이터와 probe2627ms/tree1084ms는 baseline이며 개선율/확정 순위 아님.
+- 사용자 종료 상태를 임의 재개하지 않는다. 다음 명시적 신규 기기 제어 요청에서만 새 측정한다. 같은 APK 재설치/태그 이동/불필요한 CI 금지. [종합 보고서·체크리스트](../dev/issues145-146-147-v0179.md), [원시 metadata](../dev/evidence/issues145-146-147-v0179.json).
 
 ## v0.1.78/code79 실기기 검증 종료 및 안정화 이관 (2026-10-23 KST)
 
