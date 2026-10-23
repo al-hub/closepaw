@@ -192,14 +192,14 @@ class IslandOverlayHost(
     }
 
     private fun modeText(mode: CapsuleMode): String = when (mode) {
-        is CapsuleMode.Running -> mode.thought
+        is CapsuleMode.Running -> "AI 제어 중"
         is CapsuleMode.TakeoverPending -> "Handing over..."
         is CapsuleMode.Takeover -> "Paused"
         is CapsuleMode.WaitingForInput -> "Awaiting response"
         is CapsuleMode.WaitingForAction -> "Action needed"
-        is CapsuleMode.WaitingForApproval -> "Allow ClosePaw to operate ${mode.appLabel}?"
-        is CapsuleMode.Done -> "Done: ${mode.message.take(18)}"
-        is CapsuleMode.Error -> "Error: ${mode.message.take(18)}"
+        is CapsuleMode.WaitingForApproval -> "승인 대기"
+        is CapsuleMode.Done -> "AI 작업 완료"
+        is CapsuleMode.Error -> "AI 작업 오류"
         is CapsuleMode.Hidden -> ""
     }
 
