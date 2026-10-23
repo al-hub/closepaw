@@ -1,0 +1,204 @@
+{
+  "version": "0.1.78",
+  "code": 79,
+  "pr": 143,
+  "pr_head": "26ed9b3753fa5384e4f08499cd8e576b403b83b3",
+  "source": "a56ea0d6d61bc5c8be15af254d941f5fb4a075ed",
+  "release": "https://github.com/al-hub/closepaw/releases/tag/v0.1.78",
+  "apk": {
+    "url": "https://api.github.com/repos/al-hub/closepaw/releases/assets/668803544",
+    "id": 668803544,
+    "node_id": "RA_kwDOU67ujc4n3SHY",
+    "name": "closepaw-aa-bridge.apk",
+    "label": "",
+    "uploader": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "node_id": "MDM6Qm90NDE4OTgyODI=",
+      "avatar_url": "https://avatars.githubusercontent.com/in/15368?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/github-actions%5Bbot%5D",
+      "html_url": "https://github.com/apps/github-actions",
+      "followers_url": "https://api.github.com/users/github-actions%5Bbot%5D/followers",
+      "following_url": "https://api.github.com/users/github-actions%5Bbot%5D/following{/other_user}",
+      "gists_url": "https://api.github.com/users/github-actions%5Bbot%5D/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/github-actions%5Bbot%5D/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/github-actions%5Bbot%5D/subscriptions",
+      "organizations_url": "https://api.github.com/users/github-actions%5Bbot%5D/orgs",
+      "repos_url": "https://api.github.com/users/github-actions%5Bbot%5D/repos",
+      "events_url": "https://api.github.com/users/github-actions%5Bbot%5D/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/github-actions%5Bbot%5D/received_events",
+      "type": "Bot",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "content_type": "application/vnd.android.package-archive",
+    "state": "uploaded",
+    "size": 116613743,
+    "digest": "sha256:2ca1e8009799d6c1084dcb9d98d03c0b310063631d8f8a3d307616442e051982",
+    "download_count": 0,
+    "created_at": "2026-10-23T10:40:18Z",
+    "updated_at": "2026-10-23T10:40:22Z",
+    "browser_download_url": "https://github.com/al-hub/closepaw/releases/download/v0.1.78/closepaw-aa-bridge.apk"
+  },
+  "ci": {
+    "pr": {
+      "security": 39938814385,
+      "ui": 39938814477
+    },
+    "main": {
+      "security": 39939738598,
+      "ui": 39939738671
+    },
+    "signed": 39940690741
+  },
+  "public_verification_artifact": 12496455034,
+  "main_ui_artifact": 12495448243,
+  "unit_artifact": 12495233865,
+  "certificate_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+  "signature_scheme": "v3",
+  "tag": "v0.1.78",
+  "tag_source": "a56ea0d6d61bc5c8be15af254d941f5fb4a075ed",
+  "install_task": "2cbc1e4b-945e-47b3-b776-7aa3b9b74e80",
+  "durable_install": {
+    "state": "installed",
+    "task_id": "2cbc1e4b-945e-47b3-b776-7aa3b9b74e80",
+    "target_version": "0.1.78",
+    "session_id": 181305797,
+    "target_code": 79,
+    "installed_version": "0.1.78",
+    "current_version": "0.1.78",
+    "current_code": 79,
+    "install_source_allowed": true,
+    "remote_update_enabled": true
+  },
+  "independent_status": {
+    "status": "succeeded",
+    "summary": "ClosePaw is reachable and responding.",
+    "app": "ClosePaw",
+    "version_name": "0.1.78",
+    "version_code": 79,
+    "capability": "status",
+    "operation_contract_version": 1,
+    "operation_discovery_tool": "discover_operations",
+    "supported_read_apps": [
+      {
+        "id": "samsung_internet",
+        "package_name": "com.sec.android.app.sbrowser",
+        "display_name": "Samsung Internet"
+      },
+      {
+        "id": "chrome",
+        "package_name": "com.android.chrome",
+        "display_name": "Chrome"
+      },
+      {
+        "id": "gemini",
+        "package_name": "com.google.android.apps.bard",
+        "display_name": "Gemini"
+      }
+    ],
+    "mcp_tool_count": 9,
+    "runtime_info_tool": "get_runtime_info",
+    "tool_list_refresh_verified": false
+  },
+  "control_session": {
+    "state": "ended",
+    "session_id": "9f3a37fa-20fc-461b-b309-81733962116c",
+    "epoch": 0,
+    "physical_resume_required": false,
+    "external_effects_undone": false
+  },
+  "island_discovery": [
+    {
+      "operation_id": "android.control.island.observe",
+      "description": "Observe only the attached ClosePaw island. Requires an explicitly active session. Returns a single-use 60s observation for island drag; never observes or targets underlying apps.",
+      "operation_version": 1,
+      "schema_hash": "247a4fb017d9644ff194f3b44bc7849a81c0ee83776f009fdcdcd412ccc510d5",
+      "output_schema_hash": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "read_only": true,
+      "effects": [],
+      "cancellation_supported": false,
+      "permissions": [
+        "accessibility",
+        "generic_android_control"
+      ],
+      "ready": true
+    },
+    {
+      "operation_id": "android.control.island.drag",
+      "description": "Drag only ClosePaw's owned island using local window MotionEvents: hold >=450ms, move and release. Requires fresh single-use island observation and explicit active session. Deltas are bounded by the entire island rectangle and cannot target apps or X. Physical input, X, lock, geometry changes, cancellation and timeout stop the stream. Reports observed before/after positions; no automatic replay. This is not OS dispatchGesture or physical-input acceptance. Cancellation is conservative and an unconfirmed effect is never retried.",
+      "operation_version": 1,
+      "schema_hash": "bcd9970345f7bed6329aacf08a2861404bc894093e124c0cd8e37c65ec006fb7",
+      "output_schema_hash": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "read_only": false,
+      "effects": [
+        "owned_island_position"
+      ],
+      "cancellation_supported": true,
+      "permissions": [
+        "accessibility",
+        "generic_android_control"
+      ],
+      "ready": true
+    }
+  ],
+  "ended_refusal": {
+    "status": "failed",
+    "summary": "control_session_ended",
+    "data": {
+      "reason_code": "control_session_ended",
+      "action_attempted": false
+    },
+    "stdout": "",
+    "stderr": "",
+    "output_truncated": false,
+    "error_code": "INVALID_ARGUMENT"
+  },
+  "benchmark": {
+    "environment": "Android35 emulator owned-window island operation; NOT Galaxy calculator/E2E benchmark",
+    "samples_ms": [
+      1027,
+      937,
+      1077,
+      872,
+      788,
+      942,
+      803,
+      709,
+      959,
+      891
+    ],
+    "count": 10,
+    "p50_ms": 891,
+    "p95_ms": 1077,
+    "p99_ms": 1077,
+    "mean_ms": 900.5,
+    "clock": "Android SystemClock.elapsedRealtime; production handler wall duration in debug emulator",
+    "hold_ms": 450,
+    "move_ms": 120,
+    "dx_px": 0,
+    "dy_px": "alternating +24/-24",
+    "physical_device": false,
+    "calculator_e2e": false
+  },
+  "unit_tests": {
+    "tests": 2712,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "ui_tests": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "rendered_pngs": 4
+  },
+  "unverified": [
+    "Galaxy calculator 10-run and AI/network/E2E stage latency",
+    "Galaxy automatic island drag/haptics/keyguard acceptance",
+    "Physical network-transition regression",
+    "OS AccessibilityService.dispatchGesture overlay delivery"
+  ]
+}

@@ -1,5 +1,16 @@
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
+## #143 통합 변경 완료 — v0.1.78/code79 발행·설치 (2026-10-23 KST)
+
+- [PR #143](https://github.com/al-hub/closepaw/pull/143), 최종 HEAD `26ed9b3753fa5384e4f08499cd8e576b403b83b3`; 병합·APK·태그 실제 source `a56ea0d6d61bc5c8be15af254d941f5fb4a075ed`.
+- #142 production island.observe/drag: 로컬 동의·명시적 활성 세션·UI mutex·single-use60s 관찰·durable dedup·>=450ms hold/move/release·전후 실제 좌표 판정. 자체 창 MotionEvent 경로이며 OS dispatchGesture/삼성 물리 제스처 증거로 과장하지 않는다. X/물리 입력/잠금/세션 변경/취소/타임아웃에서 중단, unknown/no-replay 유지.
+- #140 아일랜드 작업/앱명/오류 원문 비노출, 같은 owner의 잠금/해제 표시 전환, 세션 보존과 지연 작업 완료 거부. 잠금 위 표시/인증 우회/사용자 종료 후 자동 재개 없음.
+- PR Security39938814385/UI39938814477, main Security39939738598/UI39939738671/Signed39940690741 모두 success. main JUnit2712/실패·오류·skip0, lint오류0, UI7/실패·오류·skip0·PNG4. 10회 production drag·10회 power/keyguard 전환·중단/재실행 거부 포함.
+- [Release/APK](https://github.com/al-hub/closepaw/releases/tag/v0.1.78):116,613,743 bytes, SHA256 `2ca1e8009799d6c1084dcb9d98d03c0b310063631d8f8a3d307616442e051982`. 기존 signer `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba` / v3, 공개 익명 다운로드·checksum·manifest79·R8·두 런타임·불변 태그/정확 source 검증 완료(artifact12496455034).
+- 설치1회 task `2cbc1e4b-945e-47b3-b776-7aa3b9b74e80`: durable installed/current0.1.78/code79 후 독립 get_status0.1.78/code79 확인. 기존9개 도구·권한 유지, island 명령2개 ready. 실기기 session은 ended 유지; island.observe가 control_session_ended/action_attempted=false로 거부함.
+- main debug 에뮬레이터 island operation10회: P50=891ms/P95=P99=1077ms/평균900.5ms. **Galaxy 계산기/Voice/AI·네트워크 E2E 또는 개선율이 아니다.** #126의 실기기10회·구간별 계측/네트워크 회귀, #140/#142의 Galaxy 물리 수용은 미검증으로 OPEN 유지. 사용자 명시적 신규 요청 없이 ended 세션을 다시 시작하지 않는다.
+- [최종 보고서](../dev/issues126-140-142-v0178.md), [원시 증거](../dev/evidence/issues126-140-142-v0178.json). 완료 기록은 docs-only로 발행 태그/자산을 이동·재생성하지 않는다.
+
 ## #141 완료 — v0.1.77/code78 네 가지 우선 과제 발행·설치·핵심 수용 (2026-10-23 KST)
 
 - 범위: #139 비화면 실행/한정 복구, #128 단일 아일랜드·드래그, #126 로컬 sequence/지연, #69 Gemini 완료 인식. [계획·최종 근거](../dev/four-priorities-v0177.md), [PR #141](https://github.com/al-hub/closepaw/pull/141).
