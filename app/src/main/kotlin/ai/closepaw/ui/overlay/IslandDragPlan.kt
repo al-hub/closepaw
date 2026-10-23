@@ -19,7 +19,11 @@ data class IslandDragPlan(
             if (holdMs !in 450L..2000L || moveMs !in 100L..5000L) return null
             if (startX !in 0 until displayWidth || endX !in 0 until displayWidth) return null
             if (startY !in 0 until displayHeight || endY !in 0 until displayHeight) return null
-            if (startX == endX && startY == endY) return null
+            // Keep the stroke below the 5s AccessibilityGestureInjector timeout, with margin.
+            if (holdMs + moveMs > 4500L) return null
+            val dx = kotlin.math.abs(endX.toLong() - startX.toLong())
+            val dy = kotlin.math.abs(endY.toLong() - startY.toLong())
+            if (dx < 8L && dy < 8L) return null
             return IslandDragPlan(startX, startY, endX, endY, holdMs, moveMs)
         }
     }
