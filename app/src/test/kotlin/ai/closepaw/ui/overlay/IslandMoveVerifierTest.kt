@@ -14,6 +14,13 @@ class IslandMoveVerifierTest {
             .isEqualTo(IslandMoveVerdict.NOT_MOVED)
     }
 
+    @Test fun `subpixel or window jitter is not a confirmed drag`() {
+        assertThat(IslandMoveVerifier.verify(IslandPosition(10, 20), IslandPosition(13, 24), true))
+            .isEqualTo(IslandMoveVerdict.NOT_MOVED)
+        assertThat(IslandMoveVerifier.verify(IslandPosition(10, 20), IslandPosition(18, 20), true))
+            .isEqualTo(IslandMoveVerdict.MOVED)
+    }
+
     @Test fun `actual movement requires fresh measurements and acknowledged gesture`() {
         val before = IslandPosition(10, 20)
         val after = IslandPosition(120, 220)
