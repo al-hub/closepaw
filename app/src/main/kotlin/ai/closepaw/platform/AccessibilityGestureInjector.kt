@@ -73,16 +73,20 @@ class AccessibilityGestureInjector(
     suspend fun injectIslandDrag(
             plan: ai.closepaw.ui.overlay.IslandDragPlan,
     ): ActionResult = withContext(Dispatchers.Main) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return@withContext ActionResult.Failure("island_drag_requires_android_8")
+        }
+        // Hold must be a distinct stationary stroke continued into movement.
+        // No OverlayTouchGate pass-through: the island must receive this gesture.
+        val stationary = Path().apply { moveTo(plan.startX.toFloat(), plan.startY.toFloat()) }
+        val hold = GestureDescription.StrokeDescription(stationary, 0, plan.holdMs, true)
         val path = Path().apply {
             moveTo(plan.startX.toFloat(), plan.startY.toFloat())
-            // Hold at a stationary coordinate before beginning movement.
-            lineTo(plan.startX.toFloat() + 0.001f, plan.startY.toFloat())
             lineTo(plan.endX.toFloat(), plan.endY.toFloat())
         }
-        val duration = plan.holdMs + plan.moveMs
-        // A single linear stroke cannot encode a stationary hold followed by movement.
-        // Reject rather than silently execute a swipe with the wrong semantics.
-        ActionResult.Failure("island_drag_requires_timed_path")
+        val move = hold.continueStroke(path, plan.holdMs, plan.moveMs, false)
+        val gesture = GestureDescription.Builder().addStroke(hold).addStroke(move).build()
+        dispatchGesture(gesture, {}, allowOverlayTarget = true)
     }
 
     suspend fun injectLongPress(x: Float, y: Float, durationMs: Long): ActionResult {
@@ -116,14 +120,14 @@ class AccessibilityGestureInjector(
         }
     }
 
-    private suspend fun dispatchGesture(gesture: GestureDescription, onSubmitted: () -> Unit): ActionResult {
+    private suspend fun dispatchGesture(gesture: GestureDescription, onSubmitted: () -> Unit, allowOverlayTarget: Boolean = false): ActionResult {
         val gate = overlayTouchGate
-        val token = gate?.beginGesturePassThrough()
+        val token = if (allowOverlayTarget) null else gate?.beginGesturePassThrough()
         try {
             if (token != null) {
                 Log.d(TAG, "Touch gate active — FLAG_NOT_TOUCHABLE set, waiting ${FLAG_SETTLE_MS}ms")
                 delay(FLAG_SETTLE_MS)
-            } else if (gate == null) {
+            } else if (!allowOverlayTarget && gate == null) {
                 Log.w(TAG, "overlayTouchGate is NULL — gestures may be consumed by overlay")
             }
             return withTimeoutOrNull(GESTURE_TIMEOUT_MS) {
