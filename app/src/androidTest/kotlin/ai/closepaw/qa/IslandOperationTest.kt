@@ -67,17 +67,30 @@ class IslandOperationTest {
             fun shell(command: String) {
                 android.os.ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command)).use { it.readBytes() }
             }
+            val power = service.getSystemService(android.os.PowerManager::class.java)
+            fun field(owner: Any, name: String): Any? = owner.javaClass.getDeclaredField(name).run { isAccessible = true; get(owner) }
+            val controller = requireNotNull(field(service, "overlayController"))
+            val host = field(controller, "statusIslandManager") as ai.closepaw.ui.overlay.compose.IslandOverlayHost
+            suspend fun awaitCondition(description: String, condition: suspend () -> Boolean) {
+                val until = SystemClock.uptimeMillis() + 5_000
+                while (!condition() && SystemClock.uptimeMillis() < until) delay(50)
+                assertTrue(description, condition())
+            }
             repeat(10) {
                 shell("input keyevent 223")
-                delay(250)
+                awaitCondition("emulator must really enter non-interactive state") { !power.isInteractive }
+                awaitCondition("screen-off broadcast removes the actual island and X decoration") {
+                    withContext(Dispatchers.Main) { !host.isShowing() && !service.isRemoteControlActivityAttached() }
+                }
                 assertNull("island hidden while display is off", port.observeIsland())
                 assertEquals(session, service.remoteControlSession.id)
                 assertEquals(epoch, service.remoteControlSession.epoch)
                 shell("input keyevent 224")
                 shell("wm dismiss-keyguard")
-                delay(350)
+                awaitCondition("same session restores island after unlock") { port.observeIsland() != null }
                 i.waitForIdleSync()
-                assertNotNull("same session restores island after unlock", port.observeIsland())
+                assertEquals(session, service.remoteControlSession.id)
+                assertEquals(epoch, service.remoteControlSession.epoch)
             }
             // X/session stop interrupts a hold before any displacement.
             val stopObserved = invoke(GenericControlOperations.ISLAND_OBSERVE, buildJsonObject { put("session_id", session) })

@@ -49,7 +49,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         return reason(service)
     }
     override suspend fun observeIsland(): IslandBounds? = withContext(Dispatchers.Main) {
-        AgentService.instance?.observedIsland()
+        val service = AgentService.instance ?: return@withContext null
+        if (islandRefusal(service.remoteControlSession.id) != null) return@withContext null
+        service.observedIsland()
     }
     override suspend fun dragIsland(before: IslandBounds, dx: Int, dy: Int, holdMs: Long, moveMs: Long, sessionId: String): Boolean =
         withContext(Dispatchers.Main) {
