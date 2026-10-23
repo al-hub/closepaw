@@ -10,6 +10,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.HapticFeedbackConstants
 import ai.closepaw.ui.overlay.IslandDragGesture
+import ai.closepaw.ui.overlay.IslandStatusText
 import android.view.WindowManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
@@ -127,7 +128,7 @@ class IslandOverlayHost(
                 val mode by holder.mode.collectAsState(initial = CapsuleMode.Hidden)
                 val turnPhase by holder.turnPhase.collectAsState(initial = null)
                 val actionLabel by holder.actionLabel.collectAsState(initial = null)
-                val text = if (mode is CapsuleMode.Running) actionLabel ?: "AI 제어 중" else modeText(mode)
+                val text = if (mode is CapsuleMode.Running) actionLabel ?: "AI 제어 중" else IslandStatusText.label(mode)
                 val glowState = deriveGlowState(mode, turnPhase)
                 StatusIslandCompose(
                     text = if (text.isBlank()) "Working..." else text,
@@ -189,18 +190,6 @@ class IslandOverlayHost(
     fun dispose() {
         hide()
         composeHost.dispose()
-    }
-
-    private fun modeText(mode: CapsuleMode): String = when (mode) {
-        is CapsuleMode.Running -> "AI 제어 중"
-        is CapsuleMode.TakeoverPending -> "Handing over..."
-        is CapsuleMode.Takeover -> "Paused"
-        is CapsuleMode.WaitingForInput -> "Awaiting response"
-        is CapsuleMode.WaitingForAction -> "Action needed"
-        is CapsuleMode.WaitingForApproval -> "승인 대기"
-        is CapsuleMode.Done -> "AI 작업 완료"
-        is CapsuleMode.Error -> "AI 작업 오류"
-        is CapsuleMode.Hidden -> ""
     }
 
     private fun createLayoutParams(): WindowManager.LayoutParams {
