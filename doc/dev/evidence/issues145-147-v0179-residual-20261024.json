@@ -1,0 +1,635 @@
+{
+  "date_kst": "2026-10-24",
+  "version": "0.1.79/code80",
+  "session_start": {
+    "task_id": "74ab83ab-078b-4793-a2b6-53bad09ce611",
+    "request_id": "residual-start-20261024-1",
+    "operation_id": "android.control.session.start",
+    "operation_version": 1,
+    "schema_hash": "d746974fa9afd5e951f76f9af38954b0ad7f436f2120dc974da65e5ee39f856f",
+    "state": "succeeded",
+    "created_at_ms": 1792797929275,
+    "summary": "Control session state returned.",
+    "started_at_ms": 1792797930589,
+    "completed_at_ms": 1792797931539,
+    "status": "succeeded",
+    "result": {
+      "status": "succeeded",
+      "summary": "Control session state returned.",
+      "data": {
+        "state": "active",
+        "session_id": "38014777-e864-4341-a846-df977c964c80",
+        "epoch": 17,
+        "physical_resume_required": false,
+        "external_effects_undone": false
+      },
+      "stdout": "",
+      "stderr": "",
+      "output_truncated": false
+    },
+    "output_offset": 0,
+    "output_limit": 16000,
+    "offset_unit": "unicode_code_points",
+    "has_more": false
+  },
+  "stale_observation_test": {
+    "old_observation_id": "2304befe-1b12-4588-967e-24f743514b82",
+    "old_formula": "계산기 입력란 123,456,789",
+    "clear_task_id": "b7e9a454-0c40-4303-81d9-221c79b84ff1",
+    "rejected": {
+      "task_id": "9f5f0d96-3030-41c8-9b22-f0d9db7ee4f2",
+      "request_id": "residual-stale-20261024-1",
+      "operation_id": "android.ui.action",
+      "operation_version": 1,
+      "schema_hash": "47ed0d26a36c7c51933737991953b1dc99a7eb2d24511f8294a90ab72a8867ea",
+      "state": "failed",
+      "created_at_ms": 1792798018325,
+      "summary": "stale_observation",
+      "started_at_ms": 1792798018660,
+      "completed_at_ms": 1792798018926,
+      "status": "failed",
+      "result": {
+        "status": "failed",
+        "summary": "stale_observation",
+        "data": {
+          "reason_code": "stale_observation",
+          "action_attempted": false,
+          "outcome_unknown": false
+        },
+        "stdout": "",
+        "stderr": "",
+        "output_truncated": false
+      },
+      "output_offset": 0,
+      "output_limit": 16000,
+      "offset_unit": "unicode_code_points",
+      "has_more": false,
+      "error_code": "INVALID_ARGUMENT"
+    },
+    "after_formula": "계산기 입력란 "
+  },
+  "interrupt": {
+    "submitted": {
+      "task_id": "2816be57-4543-42f8-a344-d40549209b3e",
+      "request_id": "residual-interrupt-20261024-1",
+      "operation_id": "android.ui.sequence",
+      "operation_version": 1,
+      "schema_hash": "0c3f7c355ed03abbba473159b4f50863479e01ff9207ceaebf78b7a98bbc6c07",
+      "state": "queued",
+      "created_at_ms": 1792798038337,
+      "summary": "Operation accepted; use get_task to confirm its outcome.",
+      "status": "accepted"
+    },
+    "end_submitted": {
+      "task_id": "7731832d-595b-4b25-a7dc-a54d71eaa61d",
+      "request_id": "residual-interrupt-end-20261024-1",
+      "operation_id": "android.control.session.end",
+      "operation_version": 1,
+      "schema_hash": "247a4fb017d9644ff194f3b44bc7849a81c0ee83776f009fdcdcd412ccc510d5",
+      "state": "queued",
+      "created_at_ms": 1792798041783,
+      "summary": "Operation accepted; use get_task to confirm its outcome.",
+      "status": "accepted"
+    },
+    "initial_result": {
+      "task_id": "2816be57-4543-42f8-a344-d40549209b3e",
+      "request_id": "residual-interrupt-20261024-1",
+      "operation_id": "android.ui.sequence",
+      "operation_version": 1,
+      "schema_hash": "0c3f7c355ed03abbba473159b4f50863479e01ff9207ceaebf78b7a98bbc6c07",
+      "state": "outcome_unknown",
+      "created_at_ms": 1792798038337,
+      "summary": "Execution observer stopped; command termination is not confirmed.",
+      "started_at_ms": 1792798038728,
+      "status": "failed",
+      "error_code": "INVALID_ARGUMENT"
+    },
+    "final_result": {
+      "task_id": "2816be57-4543-42f8-a344-d40549209b3e",
+      "request_id": "residual-interrupt-20261024-1",
+      "operation_id": "android.ui.sequence",
+      "operation_version": 1,
+      "schema_hash": "0c3f7c355ed03abbba473159b4f50863479e01ff9207ceaebf78b7a98bbc6c07",
+      "state": "outcome_unknown",
+      "created_at_ms": 1792798038337,
+      "summary": "Execution observer stopped; command termination is not confirmed.",
+      "started_at_ms": 1792798038728,
+      "status": "failed",
+      "error_code": "INVALID_ARGUMENT"
+    },
+    "end_result": {
+      "task_id": "7731832d-595b-4b25-a7dc-a54d71eaa61d",
+      "request_id": "residual-interrupt-end-20261024-1",
+      "operation_id": "android.control.session.end",
+      "operation_version": 1,
+      "schema_hash": "247a4fb017d9644ff194f3b44bc7849a81c0ee83776f009fdcdcd412ccc510d5",
+      "state": "succeeded",
+      "created_at_ms": 1792798041783,
+      "summary": "Control session state returned.",
+      "started_at_ms": 1792798042174,
+      "completed_at_ms": 1792798042426,
+      "status": "succeeded",
+      "result": {
+        "status": "succeeded",
+        "summary": "Control session state returned.",
+        "data": {
+          "state": "ended",
+          "session_id": "38014777-e864-4341-a846-df977c964c80",
+          "epoch": 18,
+          "physical_resume_required": false,
+          "external_effects_undone": false
+        },
+        "stdout": "",
+        "stderr": "",
+        "output_truncated": false
+      },
+      "output_offset": 0,
+      "output_limit": 16000,
+      "offset_unit": "unicode_code_points",
+      "has_more": false
+    },
+    "trace": [
+      {
+        "correlation_id": "2816be57-4543-42f8-a344-d40549209b3e",
+        "clock_domain": "monotonic_process",
+        "total_ns": 3456176914,
+        "completed_steps": 2,
+        "in_flight_outcome_unknown": true,
+        "voice_e2e": "not_measured",
+        "aggregation": "nested spans; sum only siblings; parent minus direct children is unattributed",
+        "spans": [
+          {
+            "id": 0,
+            "parent": -1,
+            "step": 0,
+            "phase": "initial_observation",
+            "start_ns": 24531,
+            "duration_ns": 161077930,
+            "outcome": "returned"
+          },
+          {
+            "id": 1,
+            "parent": 0,
+            "step": 0,
+            "phase": "security_probe",
+            "start_ns": 2108125,
+            "duration_ns": 47000781,
+            "outcome": "returned"
+          },
+          {
+            "id": 2,
+            "parent": 1,
+            "step": 0,
+            "phase": "probe_api_spacing",
+            "start_ns": 14768711,
+            "duration_ns": 265078,
+            "outcome": "returned"
+          },
+          {
+            "id": 3,
+            "parent": 0,
+            "step": 0,
+            "phase": "fingerprint_traversal",
+            "start_ns": 59140703,
+            "duration_ns": 72867539,
+            "outcome": "returned"
+          },
+          {
+            "id": 4,
+            "parent": -1,
+            "step": 1,
+            "phase": "semantic_lookup",
+            "start_ns": 161295078,
+            "duration_ns": 72500,
+            "outcome": "returned"
+          },
+          {
+            "id": 5,
+            "parent": -1,
+            "step": 1,
+            "phase": "guarded_action",
+            "start_ns": 161426485,
+            "duration_ns": 1166622929,
+            "outcome": "returned"
+          },
+          {
+            "id": 6,
+            "parent": 5,
+            "step": 1,
+            "phase": "native_action",
+            "start_ns": 166778047,
+            "duration_ns": 829158086,
+            "outcome": "returned"
+          },
+          {
+            "id": 7,
+            "parent": 6,
+            "step": 1,
+            "phase": "security_probe",
+            "start_ns": 166813867,
+            "duration_ns": 279266172,
+            "outcome": "returned"
+          },
+          {
+            "id": 8,
+            "parent": 7,
+            "step": 1,
+            "phase": "probe_api_spacing",
+            "start_ns": 190620352,
+            "duration_ns": 224815625,
+            "outcome": "returned"
+          },
+          {
+            "id": 9,
+            "parent": 6,
+            "step": 1,
+            "phase": "intent_cue_wait",
+            "start_ns": 454421914,
+            "duration_ns": 96803946,
+            "outcome": "returned"
+          },
+          {
+            "id": 10,
+            "parent": 6,
+            "step": 1,
+            "phase": "security_probe",
+            "start_ns": 551271328,
+            "duration_ns": 298243125,
+            "outcome": "returned"
+          },
+          {
+            "id": 11,
+            "parent": 10,
+            "step": 1,
+            "phase": "probe_api_spacing",
+            "start_ns": 563588047,
+            "duration_ns": 253575508,
+            "outcome": "returned"
+          },
+          {
+            "id": 12,
+            "parent": 6,
+            "step": 1,
+            "phase": "fresh_fingerprint_and_action",
+            "start_ns": 849576328,
+            "duration_ns": 146337227,
+            "outcome": "returned"
+          },
+          {
+            "id": 13,
+            "parent": 12,
+            "step": 1,
+            "phase": "fingerprint_traversal",
+            "start_ns": 865053945,
+            "duration_ns": 87406641,
+            "outcome": "returned"
+          },
+          {
+            "id": 14,
+            "parent": 5,
+            "step": 1,
+            "phase": "post_observation",
+            "start_ns": 995975235,
+            "duration_ns": 325635781,
+            "outcome": "returned"
+          },
+          {
+            "id": 15,
+            "parent": 14,
+            "step": 1,
+            "phase": "security_probe",
+            "start_ns": 1001380352,
+            "duration_ns": 240515937,
+            "outcome": "returned"
+          },
+          {
+            "id": 16,
+            "parent": 15,
+            "step": 1,
+            "phase": "probe_api_spacing",
+            "start_ns": 1018489844,
+            "duration_ns": 198335547,
+            "outcome": "returned"
+          },
+          {
+            "id": 17,
+            "parent": 14,
+            "step": 1,
+            "phase": "fingerprint_traversal",
+            "start_ns": 1260738672,
+            "duration_ns": 37998438,
+            "outcome": "returned"
+          },
+          {
+            "id": 18,
+            "parent": 5,
+            "step": 1,
+            "phase": "result_validation",
+            "start_ns": 1323637500,
+            "duration_ns": 53320,
+            "outcome": "returned"
+          },
+          {
+            "id": 19,
+            "parent": -1,
+            "step": 2,
+            "phase": "semantic_lookup",
+            "start_ns": 1328116445,
+            "duration_ns": 33790,
+            "outcome": "returned"
+          },
+          {
+            "id": 20,
+            "parent": -1,
+            "step": 2,
+            "phase": "guarded_action",
+            "start_ns": 1328166406,
+            "duration_ns": 1203960625,
+            "outcome": "returned"
+          },
+          {
+            "id": 21,
+            "parent": 20,
+            "step": 2,
+            "phase": "native_action",
+            "start_ns": 1333989180,
+            "duration_ns": 881283437,
+            "outcome": "returned"
+          },
+          {
+            "id": 22,
+            "parent": 21,
+            "step": 2,
+            "phase": "security_probe",
+            "start_ns": 1333996680,
+            "duration_ns": 311876406,
+            "outcome": "returned"
+          },
+          {
+            "id": 23,
+            "parent": 22,
+            "step": 2,
+            "phase": "probe_api_spacing",
+            "start_ns": 1354558203,
+            "duration_ns": 262979610,
+            "outcome": "returned"
+          },
+          {
+            "id": 24,
+            "parent": 21,
+            "step": 2,
+            "phase": "intent_cue_wait",
+            "start_ns": 1654704492,
+            "duration_ns": 96594844,
+            "outcome": "returned"
+          },
+          {
+            "id": 25,
+            "parent": 21,
+            "step": 2,
+            "phase": "security_probe",
+            "start_ns": 1751341328,
+            "duration_ns": 292572188,
+            "outcome": "returned"
+          },
+          {
+            "id": 26,
+            "parent": 25,
+            "step": 2,
+            "phase": "probe_api_spacing",
+            "start_ns": 1776007031,
+            "duration_ns": 243074766,
+            "outcome": "returned"
+          },
+          {
+            "id": 27,
+            "parent": 21,
+            "step": 2,
+            "phase": "fresh_fingerprint_and_action",
+            "start_ns": 2043964649,
+            "duration_ns": 171250468,
+            "outcome": "returned"
+          },
+          {
+            "id": 28,
+            "parent": 27,
+            "step": 2,
+            "phase": "fingerprint_traversal",
+            "start_ns": 2062041797,
+            "duration_ns": 100869141,
+            "outcome": "returned"
+          },
+          {
+            "id": 29,
+            "parent": 20,
+            "step": 2,
+            "phase": "post_observation",
+            "start_ns": 2215330195,
+            "duration_ns": 310459610,
+            "outcome": "returned"
+          },
+          {
+            "id": 30,
+            "parent": 29,
+            "step": 2,
+            "phase": "security_probe",
+            "start_ns": 2225837578,
+            "duration_ns": 226305391,
+            "outcome": "returned"
+          },
+          {
+            "id": 31,
+            "parent": 30,
+            "step": 2,
+            "phase": "probe_api_spacing",
+            "start_ns": 2242389258,
+            "duration_ns": 177174023,
+            "outcome": "returned"
+          },
+          {
+            "id": 32,
+            "parent": 29,
+            "step": 2,
+            "phase": "fingerprint_traversal",
+            "start_ns": 2477685625,
+            "duration_ns": 18633945,
+            "outcome": "returned"
+          },
+          {
+            "id": 33,
+            "parent": 20,
+            "step": 2,
+            "phase": "result_validation",
+            "start_ns": 2527787031,
+            "duration_ns": 53125,
+            "outcome": "returned"
+          },
+          {
+            "id": 34,
+            "parent": -1,
+            "step": 3,
+            "phase": "semantic_lookup",
+            "start_ns": 2532339297,
+            "duration_ns": 125898,
+            "outcome": "returned"
+          },
+          {
+            "id": 35,
+            "parent": -1,
+            "step": 3,
+            "phase": "guarded_action",
+            "start_ns": 2532560860,
+            "duration_ns": 923363906,
+            "outcome": "interrupted"
+          },
+          {
+            "id": 36,
+            "parent": 35,
+            "step": 3,
+            "phase": "native_action",
+            "start_ns": 2551493828,
+            "duration_ns": 877380117,
+            "outcome": "returned"
+          },
+          {
+            "id": 37,
+            "parent": 36,
+            "step": 3,
+            "phase": "security_probe",
+            "start_ns": 2551526875,
+            "duration_ns": 304655117,
+            "outcome": "returned"
+          },
+          {
+            "id": 38,
+            "parent": 37,
+            "step": 3,
+            "phase": "probe_api_spacing",
+            "start_ns": 2564325391,
+            "duration_ns": 255938594,
+            "outcome": "returned"
+          },
+          {
+            "id": 39,
+            "parent": 36,
+            "step": 3,
+            "phase": "intent_cue_wait",
+            "start_ns": 2861511914,
+            "duration_ns": 96747500,
+            "outcome": "returned"
+          },
+          {
+            "id": 40,
+            "parent": 36,
+            "step": 3,
+            "phase": "security_probe",
+            "start_ns": 2958368047,
+            "duration_ns": 285608906,
+            "outcome": "returned"
+          },
+          {
+            "id": 41,
+            "parent": 40,
+            "step": 3,
+            "phase": "probe_api_spacing",
+            "start_ns": 2973760938,
+            "duration_ns": 247735859,
+            "outcome": "returned"
+          },
+          {
+            "id": 42,
+            "parent": 36,
+            "step": 3,
+            "phase": "fresh_fingerprint_and_action",
+            "start_ns": 3244050703,
+            "duration_ns": 184783360,
+            "outcome": "returned"
+          },
+          {
+            "id": 43,
+            "parent": 42,
+            "step": 3,
+            "phase": "fingerprint_traversal",
+            "start_ns": 3259280899,
+            "duration_ns": 112619765,
+            "outcome": "returned"
+          },
+          {
+            "id": 44,
+            "parent": 35,
+            "step": 3,
+            "phase": "post_observation",
+            "start_ns": 3428889297,
+            "duration_ns": 26883867,
+            "outcome": "interrupted"
+          },
+          {
+            "id": 45,
+            "parent": 44,
+            "step": 3,
+            "phase": "security_probe",
+            "start_ns": 3437181485,
+            "duration_ns": 18437656,
+            "outcome": "interrupted"
+          }
+        ]
+      }
+    ],
+    "events": [
+      {
+        "timestamp_ms": 1792798038979,
+        "stage": "android.ui.sequence",
+        "reason_code": "started",
+        "elapsed_ms": 0,
+        "task_id": "2816be57-4543-42f8-a344-d40549209b3e",
+        "metrics": {
+          "clock_domain": "monotonic_process",
+          "inter_operation_idle_ms": 14080
+        }
+      },
+      {
+        "timestamp_ms": 1792798042443,
+        "stage": "android.ui.sequence",
+        "reason_code": "cancelled",
+        "elapsed_ms": 3463,
+        "task_id": "2816be57-4543-42f8-a344-d40549209b3e",
+        "metrics": {}
+      },
+      {
+        "timestamp_ms": 1792798042468,
+        "stage": "android.ui.sequence",
+        "reason_code": "released",
+        "elapsed_ms": 3488,
+        "task_id": "2816be57-4543-42f8-a344-d40549209b3e",
+        "metrics": {
+          "clock_domain": "monotonic_process"
+        }
+      }
+    ]
+  },
+  "final_status": {
+    "status": "succeeded",
+    "summary": "Control session state returned.",
+    "data": {
+      "state": "ended",
+      "session_id": "38014777-e864-4341-a846-df977c964c80",
+      "epoch": 18,
+      "physical_resume_required": false,
+      "external_effects_undone": false
+    },
+    "stdout": "",
+    "stderr": "",
+    "output_truncated": false
+  },
+  "limitations": [
+    "Programmatic session.end, not physical X or locked notification action",
+    "completed_steps2; step3 native_action returned, post_observation interrupted; in-flight side effect remains unknown",
+    "No physical final calculator observation after ended; no automatic restart or replay",
+    "No lock/unlock/AOD, TalkBack, actual service recreation, Gemini detail acceptance",
+    "No performance code changes, optimized10-run comparison or Voice E2E measurement"
+  ],
+  "setup_failure": {
+    "reason": "app_selection_required",
+    "resolution": "Refresh apps.list in current session before fresh observed open_app; rejected attempt did not launch"
+  }
+}
