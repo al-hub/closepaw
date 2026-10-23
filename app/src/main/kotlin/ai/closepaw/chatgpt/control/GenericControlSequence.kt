@@ -46,7 +46,6 @@ internal class GenericControlSequence(
             initialSession.epoch == initialEpoch &&
             initialSession.refusal(sessionId, mutation = true) == null
         if (!safe()) return failure("control_session_changed", 0)
-        initialSession.sequenceProgress(labels.size, 0, "화면 확인", initialEpoch)
         val first = controlSpan("initial_observation") { control.observe() }
         if (!first.success) return failure("initial_observation_failed", 0)
         var observed = first.data
@@ -61,6 +60,7 @@ internal class GenericControlSequence(
             )) return failure("calculator_only", 0)
         val expectedWindow = observed["window_id"]?.jsonPrimitive?.intOrNull
             ?: return failure("foreground_unverified", 0)
+        initialSession.sequenceProgress(labels.size, 0, "계산기 확인 완료", initialEpoch)
         var completed = 0
         for ((index, label) in labels.withIndex()) {
             trace.step = index + 1

@@ -86,6 +86,7 @@ class AgentService : AccessibilityService() {
     private var session: AgentSession? = null
     private var overlayController: ServiceOverlayController? = null
     private var modernEmergencyXVisible = false
+    private var debugReceiversRegistered = false
     private var actionVisualizer: ActionVisualizerManager? = null
     internal val remoteControlChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
     internal val remoteControlSession: ai.closepaw.chatgpt.control.ControlSession by lazy {
@@ -361,9 +362,12 @@ class AgentService : AccessibilityService() {
         )
         Log.i(TAG, "ActionVisualizerManager initialized")
 
-        registerDebugStopReceiverIfNeeded(this, stopReceiver)
-        registerDebugExecReceiverIfNeeded(this, debugExecReceiver)
-        registerDebugMobileActionReceiverIfNeeded(this, debugMobileActionReceiver)
+        if (!debugReceiversRegistered) {
+            registerDebugStopReceiverIfNeeded(this, stopReceiver)
+            registerDebugExecReceiverIfNeeded(this, debugExecReceiver)
+            registerDebugMobileActionReceiverIfNeeded(this, debugMobileActionReceiver)
+            debugReceiversRegistered = true
+        }
         showRemoteControlActivity()
     }
 
@@ -381,6 +385,7 @@ class AgentService : AccessibilityService() {
             } else {
                 Display.DEFAULT_DISPLAY
             }
+            showRemoteControlActivity()
             overlayController?.handleWindowStateChanged(
                     packageName = event.packageName?.toString(),
                     className = event.className?.toString(),

@@ -45,7 +45,7 @@ class ControlOverlayWindowTest {
         instrumentation.waitForIdleSync()
     }
 
-    @Test fun sameLocationRecoveryAndMeasuredRecreationNeverResumeEndedSession() {
+    @Test fun sameLocationRecoveryAndHostRecreationNeverResumeEndedSession() {
         val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         automation.executeShellCommand("settings put secure enabled_accessibility_services ai.closepaw/.app.AgentService").close()
         automation.executeShellCommand("settings put secure accessibility_enabled 1").close()
@@ -79,14 +79,41 @@ class ControlOverlayWindowTest {
                 host.hide(); host.show()
             }
             instrumentation.waitForIdleSync()
+            var savedX = 0; var savedY = 0
+            lateinit var oldRoot: View
             main {
-                assertNotNull(host.observedBounds())
+                val before = requireNotNull(host.observedBounds())
+                savedX = before.x; savedY = before.y
+                oldRoot = field(requireNotNull(field(host, "composeHost")), "composeView") as View
+                AgentService::class.java.getDeclaredMethod("onServiceConnected").apply { isAccessible = true }.invoke(service)
+                controller = field(service, "overlayController") as ServiceOverlayController
+                host = field(controller, "statusIslandManager") as ai.closepaw.ui.overlay.compose.IslandOverlayHost
+            }
+            instrumentation.waitForIdleSync()
+            main {
+                val recreated = requireNotNull(host.observedBounds())
+                assertFalse("previous owner detached", oldRoot.isAttachedToWindow)
+                assertEquals(savedX, recreated.x); assertEquals(savedY, recreated.y)
+                assertEquals(epoch, service.remoteControlSession.epoch)
+            }
+            automation.setRotation(UiAutomation.ROTATION_FREEZE_90)
+            instrumentation.waitForIdleSync()
+            main { service.showRemoteControlActivity() }
+            instrumentation.waitForIdleSync()
+            main {
+                val rotated = requireNotNull(host.observedBounds())
+                assertTrue(rotated.x >= 0 && rotated.y >= 0)
+                assertTrue(rotated.x + rotated.width <= rotated.displayWidth)
+                assertTrue(rotated.y + rotated.height <= rotated.displayHeight)
                 service.stopRemoteAndLocalControl()
                 controller.handleWindowStateChanged("com.android.settings", "com.android.settings.Settings", 0)
                 assertEquals(ControlSession.State.ENDED, service.remoteControlSession.state)
                 assertFalse(host.isShowing())
             }
-        } finally { main { service.remoteControlSession.end(); service.hideRemoteControlActivity(force = true) } }
+        } finally {
+            automation.setRotation(UiAutomation.ROTATION_UNFREEZE)
+            main { service.remoteControlSession.end(); service.hideRemoteControlActivity(force = true) }
+        }
     }
 
     @Test fun realWindowsDragPersistArbitrateAndStopWithoutExposingRemoteMoveCommands() {

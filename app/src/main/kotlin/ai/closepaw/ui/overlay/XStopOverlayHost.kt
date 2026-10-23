@@ -210,7 +210,10 @@ internal class XStopOverlayHost(
         val oldY = lp.y
         clamp(lp)
         if (oldX != lp.x || oldY != lp.y) {
-            try { manager.updateViewLayout(button, lp) } catch (_: Exception) { }
+            try {
+                manager.updateViewLayout(button, lp)
+                preferences.edit().putInt("x", lp.x).putInt("y", lp.y).apply()
+            } catch (_: Exception) { lp.x = oldX; lp.y = oldY }
         }
     }
 

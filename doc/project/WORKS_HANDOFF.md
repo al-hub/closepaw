@@ -1,3 +1,11 @@
+## #145/#146/#147 통합 작업 진행 — PR #148 (2026-10-23 KST)
+
+- 기준 main7f0d5c2, 후보 v0.1.79/code80. [통합 PR #148](https://github.com/al-hub/closepaw/pull/148), [체크리스트·원인·검증 제한](../dev/issues145-146-147-v0179.md).
+- #145 같은 location unlock 재평가/이전 overlay 소유자·observer 정리/안전한 실제 라벨/숫자 sequence 상세 진행/알림 제어종료, #146 측정 크기 기반 clamp·X 우선, #147 invocation-local nested monotonic trace/중단 증거 보존.
+- 로컬 release trust/cache18 tests PASS. 로컬 Gradle 다운로드 네트워크 제한으로 Android 미실행; 필수 PR unit/lint/debug/UI 진행. 독립 리뷰 지적은 반영 중.
+- APK 아직 미발행/미설치. 필수 checks와 리뷰 후 main 병합·기존키 서명·공개 독립 검증을 진행한다. 사용자 종료 세션 자동 재개 금지.
+- #147 병목3개 및 동일조건10+10 개선율/Voice not_measured, Galaxy/폴더블/TalkBack·알림 실수용은 잔여로 OPEN 유지. 기존10회 성공 증거 반복 없음.
+
 ## v0.1.78/code79 실기기 검증 종료 및 안정화 이관 (2026-10-23 KST)
 
 - 사용자 승인에 따라 이번 **핵심 실기기 검증을 종료**하고 나머지는 #126·#140·#142 후속 안정화 범위로 이관. 코드/버전/APK/릴리스 불변, 새 세션 자동 생성 없음.
