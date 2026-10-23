@@ -15,14 +15,23 @@ internal class GenericControlSequence(
     private val session: () -> ControlSession?,
     private val ready: () -> Boolean,
 ) {
-    suspend fun run(labels: List<String>, sessionId: String?): OperationResult {
+    suspend fun run(labels: List<String>, sessionId: String?, correlationId: String = java.util.UUID.randomUUID().toString()): OperationResult {
+        val trace = ControlTrace(correlationId)
+        return try {
+            kotlinx.coroutines.withContext(trace) { runTraced(labels, sessionId, trace) }
+        } finally {
+            ControlDiagnostics.record("sequence_trace", "finished", taskId = correlationId,
+                metrics = trace.snapshot())
+        }
+    }
+    private suspend fun runTraced(labels: List<String>, sessionId: String?, trace: ControlTrace): OperationResult {
         val startedNs = System.nanoTime()
         fun elapsedMs() = ((System.nanoTime() - startedNs) / 1_000_000L).coerceAtLeast(0L)
         fun failure(reason: String, completed: Int, uncertain: Boolean = false) =
             OperationResult(success = false, summary = reason, data = buildJsonObject {
                 put("reason_code", reason); put("completed_steps", completed)
                 put("outcome_unknown", uncertain); put("goal_verified", false)
-                put("elapsed_ms", elapsedMs()); put("clock_domain", "monotonic_process")
+                put("elapsed_ms", elapsedMs()); put("clock_domain", "monotonic_process"); put("trace", trace.snapshot())
             })
         if (labels.size !in 2..9 || labels.any { it.length != 1 || it[0] !in '0'..'9' }) {
             return failure("invalid_sequence", 0)
@@ -37,7 +46,8 @@ internal class GenericControlSequence(
             initialSession.epoch == initialEpoch &&
             initialSession.refusal(sessionId, mutation = true) == null
         if (!safe()) return failure("control_session_changed", 0)
-        val first = control.observe()
+        initialSession.sequenceProgress(labels.size, 0, "화면 확인", initialEpoch)
+        val first = controlSpan("initial_observation") { control.observe() }
         if (!first.success) return failure("initial_observation_failed", 0)
         var observed = first.data
         val expectedPackage = observed["package_name"]?.jsonPrimitive?.content
@@ -52,7 +62,8 @@ internal class GenericControlSequence(
         val expectedWindow = observed["window_id"]?.jsonPrimitive?.intOrNull
             ?: return failure("foreground_unverified", 0)
         var completed = 0
-        for (label in labels) {
+        for ((index, label) in labels.withIndex()) {
+            trace.step = index + 1
             currentCoroutineContext().ensureActive()
             if (!safe()) return failure("control_session_changed", completed)
             if (observed["package_name"]?.jsonPrimitive?.content != expectedPackage ||
@@ -62,12 +73,13 @@ internal class GenericControlSequence(
             if (observed["node_actions_allowed"]?.jsonPrimitive?.booleanOrNull != true)
                 return failure("observation_not_actionable", completed)
             val nodes = observed["nodes"] as? JsonArray ?: return failure("nodes_unavailable", completed)
-            val matches = nodes.mapNotNull { it as? JsonObject }.filter { node ->
+            val matches = controlSpan("semantic_lookup") { nodes.mapNotNull { it as? JsonObject }.filter { node ->
                 node["enabled"]?.jsonPrimitive?.booleanOrNull == true &&
                     node["clickable"]?.jsonPrimitive?.booleanOrNull == true &&
                     node["editable"]?.jsonPrimitive?.booleanOrNull != true &&
                     (node["text"]?.jsonPrimitive?.content == label ||
                         node["description"]?.jsonPrimitive?.content == label)
+            }
             }
             if (matches.size != 1) return failure("target_not_unique", completed)
             val id = observed["observation_id"]?.jsonPrimitive?.content
@@ -75,15 +87,19 @@ internal class GenericControlSequence(
             val nodeId = matches.single()["node_id"]?.jsonPrimitive?.intOrNull
                 ?: return failure("target_unavailable", completed)
             if (!safe()) return failure("control_session_changed", completed)
-            val result = control.action(buildJsonObject {
+            initialSession.sequenceProgress(labels.size, completed, "터치 및 결과 확인", initialEpoch)
+            trace.inFlight = true
+            val result = controlSpan("guarded_action") { control.action(buildJsonObject {
                 put("observation_id", id); put("action", "click"); put("node_id", nodeId)
-            })
+            }) }
+            trace.inFlight = result.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
             if (!result.success) {
                 // A native action may already have taken effect. Stop and never replay.
                 val uncertain = result.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
                 return failure("step_unconfirmed", completed, uncertain)
             }
-            completed++
+            completed++; trace.completed = completed
+            initialSession.sequenceProgress(labels.size, completed, if (completed == labels.size) "입력 단계 확인 완료, 전체 목표 별도 확인 필요" else "다음 단계 준비", initialEpoch)
             if (!safe()) return failure("control_session_changed", completed)
             observed = result.data["observation"] as? JsonObject
                 ?: return failure("post_observation_missing", completed)
@@ -93,7 +109,7 @@ internal class GenericControlSequence(
             data = buildJsonObject {
                 put("completed_steps", completed); put("outcome_unknown", false)
                 put("goal_verified", false); put("observation", observed)
-                put("elapsed_ms", elapsedMs()); put("clock_domain", "monotonic_process")
+                put("elapsed_ms", elapsedMs()); put("clock_domain", "monotonic_process"); put("trace", trace.snapshot())
             })
     }
 }

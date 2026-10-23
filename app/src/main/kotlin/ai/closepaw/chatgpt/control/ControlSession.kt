@@ -20,6 +20,15 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         private set
     @Volatile var explicit = initial != "idle"
         private set
+    @Volatile var progressDetail: String? = null
+        private set
+    @Synchronized fun sequenceProgress(total: Int, completed: Int, stage: String, expectedEpoch: Long) {
+        if (epoch != expectedEpoch || state != State.ACTIVE) return
+        val current = if (completed < total) "${completed + 1}/$total" else "없음"
+        val next = if (completed + 1 < total) "${completed + 2}/$total" else "없음"
+        progressDetail = "목표: 숫자 $total 단계 입력\n대상: 허용된 계산기\n완료: $completed/$total\n현재: $current\n다음: $next\n상태: $stage"
+        changed()
+    }
     var changed: () -> Unit = {}
     var interrupt: () -> Unit = {}
     var label: String = if (state == State.PAUSED) "사용자 제어 중 · 일시정지" else "AI 제어 준비"
@@ -75,6 +84,7 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     }
     private fun transition(next: State, text: String) {
         state = next; epoch++; label = text
+        progressDetail = null
         if (next == State.ACTIVE) visualPhase = VisualPhase.PREPARING
         persist(next.name.lowercase()); changed()
     }

@@ -156,15 +156,15 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val validatedAtNs = System.nanoTime()
         val visualEpoch = port.session()?.epoch
         port.presentation(ControlSession.VisualPhase.EXECUTING, visualEpoch)
-        val effect = port.perform(frame, input, node)
+        val effect = controlSpan("native_action") { port.perform(frame, input, node) }
         val performedAtNs = System.nanoTime()
         // After an attempted action even a negative native acknowledgement is not proof of no effect.
-        val post = if (effect.attempted) port.captureAfter(frame, input) else null
+        val post = if (effect.attempted) controlSpan("post_observation") { port.captureAfter(frame, input) } else null
         val observed = if (post != null && allowed()) publish(post) else null
         val changed = post != null && post.reason == null &&
             (frame.fingerprint != post.fingerprint || frame.packageName != post.packageName || frame.windowId != post.windowId)
         noProgress = if (changed) 0 else noProgress + 1
-        val verdict = ControlResultPolicy.verify(action, frame, post, node, input)
+        val verdict = controlSpan("result_validation") { ControlResultPolicy.verify(action, frame, post, node, input) }
         val verified = effect.acknowledged && observed?.success == true && verdict.confirmed
         val resultReason = if (effect.attempted && effect.acknowledged && !verdict.confirmed) verdict.reason else effect.reason
         port.presentation(if (verified) ControlSession.VisualPhase.COMPLETED else ControlSession.VisualPhase.FAILED, visualEpoch)

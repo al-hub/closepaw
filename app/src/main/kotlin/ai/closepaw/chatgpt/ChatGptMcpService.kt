@@ -122,6 +122,10 @@ class ChatGptMcpService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_CONTROL_STOP) {
+            ai.closepaw.app.AgentService.instance?.stopRemoteAndLocalControl()
+            return START_STICKY
+        }
         if (intent?.action == ACTION_STOP) ChatGptConnectionSettings(this).enabled = false
         if (!ChatGptConnectionSettings(this).enabled) {
             stopSelf()
@@ -185,12 +189,17 @@ class ChatGptMcpService : Service() {
             this, 1, Intent(this, ChatGptMcpService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val controlStop = PendingIntent.getService(this, 2,
+            Intent(this, ChatGptMcpService::class.java).setAction(ACTION_CONTROL_STOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         return Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("ClosePaw")
             .setContentText(text)
             .setContentIntent(pendingIntent)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setOngoing(true)
+            .addAction(Notification.Action.Builder(null, "AI 제어 종료", controlStop).build())
             .addAction(Notification.Action.Builder(null, "Stop", stopIntent).build())
             .build()
     }
@@ -202,6 +211,7 @@ class ChatGptMcpService : Service() {
 
     companion object {
         private const val ACTION_START = "ai.closepaw.chatgpt.START"
+        private const val ACTION_CONTROL_STOP = "ai.closepaw.chatgpt.CONTROL_STOP"
         private const val ACTION_STOP = "ai.closepaw.chatgpt.STOP"
         private const val NOTIFICATION_CHANNEL_ID = "closepaw_chatgpt_connection"
         private const val NOTIFICATION_ID = 18424

@@ -5,8 +5,14 @@ import kotlinx.serialization.json.*
 /** Bounded metadata only: no screen strings, fingerprints, package names or exception messages. */
 internal object ControlDiagnostics {
     private val events = ArrayDeque<JsonObject>()
+    private val traces = ArrayDeque<JsonObject>()
     @Synchronized fun record(stage: String, reason: String, elapsedMs: Long = 0, taskId: String? = null,
         metrics: JsonObject = buildJsonObject {}) {
+        if (stage == "sequence_trace") {
+            if (traces.size >= 4) traces.removeFirst()
+            traces.addLast(metrics)
+            return
+        }
         if (events.size >= 64) events.removeFirst()
         events.addLast(buildJsonObject {
             put("timestamp_ms", System.currentTimeMillis()); put("stage", stage); put("reason_code", reason)
@@ -15,6 +21,6 @@ internal object ControlDiagnostics {
         })
     }
     @Synchronized fun snapshot(): JsonObject = buildJsonObject {
-        put("stored_events", events.size); put("events", JsonArray(events.toList()))
+        put("sequence_traces", JsonArray(traces.toList())); put("stored_events", events.size); put("events", JsonArray(events.toList()))
     }
 }

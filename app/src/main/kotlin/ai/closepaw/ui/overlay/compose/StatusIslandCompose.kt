@@ -42,6 +42,7 @@ fun StatusIslandCompose(
     onDrag: ((Float, Float) -> Unit)? = null,
     onDragEnd: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    expanded: Boolean = false,
 ) {
     val shape = MaterialTheme.shapes.large
     val spacing = MaterialTheme.closePaw.spacing
@@ -107,10 +108,10 @@ fun StatusIslandCompose(
             val textModifier = Modifier.widthIn(max = 220.dp)
             if (reducedMotion) {
                 Text(
-                    text = compactThought(text),
+                    text = if (expanded) text else compactThought(text),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
+                    maxLines = if (expanded) 8 else 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = textModifier,
                 )
@@ -119,7 +120,7 @@ fun StatusIslandCompose(
                     text = text,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
+                    maxLines = if (expanded) 8 else 1,
                     modifier = textModifier.basicMarquee(
                         iterations = Int.MAX_VALUE,
                         velocity = 30.dp,

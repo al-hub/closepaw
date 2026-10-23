@@ -182,7 +182,7 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                 val labels = invocation.input["labels"]?.jsonArray?.map { it.jsonPrimitive.content }
                     ?: emptyList()
                 GenericControlSequence(control, { session() }, { readiness().ready }).run(
-                    labels, invocation.input["session_id"]?.jsonPrimitive?.content
+                    labels, invocation.input["session_id"]?.jsonPrimitive?.content, invocation.taskId
                 )
             })
         registry.register(OperationDescriptor(ACTION,
