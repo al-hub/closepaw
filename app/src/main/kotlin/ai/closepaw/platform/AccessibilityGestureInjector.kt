@@ -64,6 +64,27 @@ class AccessibilityGestureInjector(
         }
     }
 
+    /**
+     * Dedicated overlay drag primitive. The caller MUST verify that the starting point
+     * belongs to the user's visible ClosePaw island and that the control session is active.
+     * Unlike app gestures, this deliberately keeps the overlay touchable.
+     * Dispatch completion is not evidence of the island's final position.
+     */
+    suspend fun injectIslandDrag(
+            plan: ai.closepaw.ui.overlay.IslandDragPlan,
+    ): ActionResult = withContext(Dispatchers.Main) {
+        val path = Path().apply {
+            moveTo(plan.startX.toFloat(), plan.startY.toFloat())
+            // Hold at a stationary coordinate before beginning movement.
+            lineTo(plan.startX.toFloat() + 0.001f, plan.startY.toFloat())
+            lineTo(plan.endX.toFloat(), plan.endY.toFloat())
+        }
+        val duration = plan.holdMs + plan.moveMs
+        // A single linear stroke cannot encode a stationary hold followed by movement.
+        // Reject rather than silently execute a swipe with the wrong semantics.
+        ActionResult.Failure("island_drag_requires_timed_path")
+    }
+
     suspend fun injectLongPress(x: Float, y: Float, durationMs: Long): ActionResult {
         return withContext(Dispatchers.Main) {
             val path = Path().apply { moveTo(x, y) }
