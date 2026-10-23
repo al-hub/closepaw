@@ -126,7 +126,8 @@ class IslandOverlayHost(
             } else {
                 val mode by holder.mode.collectAsState(initial = CapsuleMode.Hidden)
                 val turnPhase by holder.turnPhase.collectAsState(initial = null)
-                val text = modeText(mode)
+                val actionLabel by holder.actionLabel.collectAsState(initial = null)
+                val text = if (mode is CapsuleMode.Running) actionLabel ?: "AI 제어 중" else modeText(mode)
                 val glowState = deriveGlowState(mode, turnPhase)
                 StatusIslandCompose(
                     text = if (text.isBlank()) "Working..." else text,
