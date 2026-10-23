@@ -20,6 +20,16 @@ class IslandDragPlanTest {
         assertThat(IslandDragPlan.create(30, 60, 220, 300, 450, 5001)).isNull()
     }
 
+    @Test fun `total gesture duration stays below native dispatch timeout`() {
+        assertThat(IslandDragPlan.create(30, 60, 220, 300, 2000, 3000)).isNull()
+        assertThat(IslandDragPlan.create(30, 60, 220, 300, 500, 3500)).isNotNull()
+    }
+
+    @Test fun `small movements do not count as deliberate drag`() {
+        assertThat(IslandDragPlan.create(30, 60, 34, 64, 450, 500)).isNull()
+        assertThat(IslandDragPlan.create(30, 60, 38, 60, 450, 500)).isNotNull()
+    }
+
     @Test fun `returns a valid immutable plan`() {
         assertThat(IslandDragPlan.create(30, 60, 220, 300, 450, 500))
             .isEqualTo(IslandDragPlan(30, 60, 220, 300, 450, 500))
