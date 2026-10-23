@@ -20,18 +20,9 @@ Do not weaken that trust boundary.
 - No secret is needed for the gate. If an agent runner is connected in future, scope its credentials, filter issue/PR and SHA, prevent concurrent work, and prohibit self-approval and premature publishing.
 - GitHub Actions event delivery can be delayed; it replaces scheduled polling, but is not a guaranteed sub-minute SLA.
 
-## Codex coding worker (proposed alongside event gate)
-`codex-continuation.yml` now provides a bounded continuous development pipeline:
-1. On completed Security CI / Premium UX UI event, verify exact #143 draft head, same repository, and **both** green PR workflows.
-2. Limit to **three** unattended agent commits on the PR. Later commits require review.
-3. Run `openai/codex-action@v1` in a **read-only GitHub token** job. The Codex process may edit only its ephemeral workspace; no push token is available to it. Artifacts contain a patch, not secrets.
-4. In a separate apply job, re-fetch PR state and exact SHA, validate changed file paths against the allowlist, apply the patch, and use an independently scoped credential to push the new PR commit. New push invokes the regular CI gates.
-5. No production release or automatic merge is allowed; the existing reviewed main release process remains the only trusted publication path.
-
-**Before activation**, configure two repository Actions secrets:
-- `OPENAI_API_KEY`: key for the official `openai/codex-action@v1` runner. Use an appropriately funded/scoped key; ChatGPT Plus login alone does not provide this secret.
-- `CLOSEPAW_AGENT_PUSH_TOKEN`: fine-grained GitHub PAT or GitHub App installation token with **Contents: read/write** and PR branch push permission in `al-hub/closepaw`. It **must not** be the default `GITHUB_TOKEN` because a GitHub Actions commit using that token typically will not trigger the subsequent CI workflows. Scope/expire/rotate it appropriately. Prefer a short-lived GitHub App token if a token broker is available.
-
-The secrets must never be printed or placed in committed files. **Do not merge and enable until the runner/security review and secret provisioning are complete.** The mere presence of the workflow is not evidence of successful Codex execution. The worker has no automatic physical Samsung access; #126/#140/#142 physical gates remain unverified until explicitly run and recorded.
-
-See <https://learn.chatgpt.com/docs/github-action> for the official action reference.
+## API 키 없는 운영 방식 (현재 선택)
+- 추가 유료 Codex/OpenAI API 키 또는 개인 토큰을 요구하지 않는다. Codex continuation workflow는 제거했다.
+- GitHub Actions는 PR CI 완료 시 해당 SHA의 두 테스트 성공을 확인하고 PR #143에 중복 없는 인계 댓글을 남긴다.
+- ChatGPT 예약 작업은 주기적으로 최신 상태를 확인하고 연결된 GitHub 도구로 허용된 개발을 이어갈 수 있으나, 이는 무중단·무제한 코딩 런너가 아니며 매 실행별 한계가 있다.
+- 모든 이슈 완료·실측·리뷰 후 일반 PR 병합 → 기존 main Security CI → Signed Release가 APK 서명·공개 검증을 수행한다.
+- 미완료 상태에서 자동 병합/릴리스하지 않는다. 실기기 설치 및 물리 수용은 별도 결과로 표시한다.
