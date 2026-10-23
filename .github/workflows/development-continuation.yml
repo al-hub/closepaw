@@ -1,0 +1,65 @@
+name: Development Continuation Gate
+
+# CI completion is event-driven; no minute-level polling or autonomous unsafe merges.
+on:
+  workflow_run:
+    workflows: [Security CI, Premium UX UI]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  pull-requests: write
+  contents: read
+
+concurrency:
+  group: continuation-pr-143
+  cancel-in-progress: false
+
+jobs:
+  check-handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify exact PR HEAD and both successful checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TRIGGER_SHA: ${{ github.event.workflow_run.head_sha }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pr="$(gh api "repos/$REPO/pulls/143")"
+          state="$(jq -r '.state' <<<"$pr")"
+          draft="$(jq -r '.draft' <<<"$pr")"
+          head="$(jq -r '.head.sha' <<<"$pr")"
+          base="$(jq -r '.base.ref' <<<"$pr")"
+          head_repo="$(jq -r '.head.repo.full_name' <<<"$pr")"
+          if [[ "$state" != open || "$draft" != true || "$base" != main || "$head_repo" != "$REPO" ]]; then
+            echo "PR #143 no longer matches the active same-repository draft; no handoff."
+            exit 0
+          fi
+          if [[ "$TRIGGER_EVENT" == workflow_run && "$TRIGGER_SHA" != "$head" ]]; then
+            echo "Stale CI event; current PR HEAD is different. No handoff."
+            exit 0
+          fi
+          runs="$(gh api "repos/$REPO/actions/runs?head_sha=$head&per_page=100")"
+          for name in "Security CI" "Premium UX UI"; do
+            if ! jq -e --arg name "$name" '[.workflow_runs[] | select(.name == $name and .head_sha == $head and .event == "pull_request" and .status == "completed" and .conclusion == "success")] | length > 0' <<<"$runs" >/dev/null; then
+              echo "$name for exact HEAD not yet successful. Do not advance."
+              exit 0
+            fi
+          done
+          marker="<!-- closepaw-ci-ready:$head -->"
+          comments="$(gh api --paginate "repos/$REPO/issues/143/comments?per_page=100")"
+          if jq -es --arg marker "$marker" 'any(.[][]; (.body // "") | contains($marker))' <<<"$comments" >/dev/null; then
+            echo "Already handed off this HEAD. No duplicate."
+            exit 0
+          fi
+          message="$marker
+          ✅ PR #143 exact HEAD \`$head\` passed Security CI and Premium UX UI.
+          Next development stage is ready for an authorized coding agent. Remaining issues: #126 performance acceptance, #140 lock/session acceptance, #142 safe drag executor and actual movement.
+          This notification does NOT mark work complete, merge PR, change version, dispatch signing, or publish an APK."
+          gh api "repos/$REPO/issues/143/comments" -f "body=$message" >/dev/null
+          echo "Read-only completion gate reached; handoff recorded."
