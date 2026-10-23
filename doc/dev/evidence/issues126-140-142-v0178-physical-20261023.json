@@ -1,0 +1,291 @@
+{
+  "date": "2026-10-23 KST",
+  "version_name": "0.1.78",
+  "version_code": 79,
+  "device": "Connected physical Galaxy; model not independently returned in this session",
+  "session": {
+    "id": "96c2e7e0-e178-41f8-9d21-25485cf456e6",
+    "started_task": "b94eb5c3-5f40-4143-8a90-1f12723d900a",
+    "ended_task": "923ab5a1-ea76-403c-b478-23e3a709eae1",
+    "final_state": "ended",
+    "epoch": 2
+  },
+  "island": {
+    "environment": "physical connected Android; owned-window MotionEvent only",
+    "display": {
+      "width": 1440,
+      "height": 3120
+    },
+    "island_size": {
+      "width": 302,
+      "height": 168
+    },
+    "hold_ms": 500,
+    "move_ms": 150,
+    "passes": 10,
+    "failures": 0,
+    "drags": [
+      {
+        "run": 1,
+        "task_id": "e7df8f38-c655-41ef-bf09-568cc317100e",
+        "before": {
+          "x": 393,
+          "y": 309
+        },
+        "after": {
+          "x": 428,
+          "y": 344
+        },
+        "movement_verified": true
+      },
+      {
+        "run": 2,
+        "task_id": "f7b28400-a47b-46e3-ac27-46dc56d6607c",
+        "before": {
+          "x": 428,
+          "y": 344
+        },
+        "after": {
+          "x": 393,
+          "y": 309
+        },
+        "movement_verified": true
+      },
+      {
+        "run": 3,
+        "task_id": "fe9d45c9-ab5f-4b43-8d54-e99fb29fe73f",
+        "before": {
+          "x": 393,
+          "y": 309
+        },
+        "after": {
+          "x": 443,
+          "y": 309
+        },
+        "movement_verified": true
+      },
+      {
+        "run": 4,
+        "task_id": "f5faea7e-d592-4a61-ab32-daaf277cc62d",
+        "before": {
+          "x": 443,
+          "y": 309
+        },
+        "after": {
+          "x": 393,
+          "y": 309
+        },
+        "movement_verified": true
+      },
+      {
+        "run": 5,
+        "task_id": "366f1c1e-8929-4dca-b1e7-8f9fa4643589",
+        "before": {
+          "x": 393,
+          "y": 309
+        },
+        "after": {
+          "x": 393,
+          "y": 359
+        },
+        "movement_verified": true
+      },
+      {
+        "run": 6,
+        "task_id": "530e2d30-aa24-4e4f-b4ab-007984c48f45",
+        "before": {
+          "x": 393,
+          "y": 359
+        },
+        "after": {
+          "x": 393,
+          "y": 309
+        },
+        "movement_verified": true
+      },
+      {
+        "run": 7,
+        "task_id": "997446c2-b40f-42fa-afb3-0c5ecc33f30d",
+        "before": {
+          "x": 393,
+          "y": 309
+        },
+        "after": {
+          "x": 438,
+          "y": 334
+        },
+        "movement_verified": true
+      },
+      {
+        "run": 8,
+        "task_id": "720b8ec8-8b43-4e71-b4aa-7ded91d6903c",
+        "before": {
+          "x": 438,
+          "y": 334
+        },
+        "after": {
+          "x": 393,
+          "y": 309
+        },
+        "movement_verified": true
+      },
+      {
+        "run": 9,
+        "task_id": "5548a1be-27da-4128-b4ef-44fb3dd5e8b0",
+        "before": {
+          "x": 393,
+          "y": 309
+        },
+        "after": {
+          "x": 418,
+          "y": 264
+        },
+        "movement_verified": true
+      },
+      {
+        "run": 10,
+        "task_id": "e92a5651-0b2a-4d61-b082-e7d8ef76ea02",
+        "before": {
+          "x": 418,
+          "y": 264
+        },
+        "after": {
+          "x": 393,
+          "y": 309
+        },
+        "movement_verified": true
+      }
+    ],
+    "negative_tests": [
+      {
+        "task_id": "6c05b2d2-00f9-43d2-a2fd-d498123e478f",
+        "case": "consumed observation reused",
+        "reason_code": "island_observation_required",
+        "action_attempted": false
+      },
+      {
+        "task_id": "2f12ad05-faaa-4ab7-ab75-377976f15931",
+        "case": "old observation 3px attempted",
+        "reason_code": "island_observation_required",
+        "action_attempted": false
+      },
+      {
+        "task_id": "5795ba48-5a46-4f76-96ec-f2c8a8428707",
+        "case": "fresh observation dx=3 dy=3",
+        "reason_code": "invalid_island_drag",
+        "action_attempted": false
+      }
+    ]
+  },
+  "calculator": {
+    "package_name": "com.sec.android.app.popupcalculator",
+    "input": "1→2→3→4→5→6→7→8→9",
+    "clear_before_each": true,
+    "independent_screen_read_after_each": true,
+    "display": "계산기 입력란 123,456,789",
+    "pass": 10,
+    "fail": 0,
+    "samples": [
+      {
+        "run": 1,
+        "task_id": "006d3455-76c9-43fb-b233-19a2854c9985",
+        "duration_ms": 11252,
+        "steps_completed": 9,
+        "independent_display_verified": true
+      },
+      {
+        "run": 2,
+        "task_id": "091597dc-a198-43c1-ab3e-666e48d5dd3f",
+        "duration_ms": 11254,
+        "steps_completed": 9,
+        "independent_display_verified": true
+      },
+      {
+        "run": 3,
+        "task_id": "caf13450-44e4-4580-bc78-08b113d8b4a7",
+        "duration_ms": 11242,
+        "steps_completed": 9,
+        "independent_display_verified": true
+      },
+      {
+        "run": 4,
+        "task_id": "52cf0d96-b0ee-43b8-b62b-7fb7781f1e4e",
+        "duration_ms": 11286,
+        "steps_completed": 9,
+        "independent_display_verified": true
+      },
+      {
+        "run": 5,
+        "task_id": "8147c982-9f95-4bd0-b06b-b4d9af615730",
+        "duration_ms": 11226,
+        "steps_completed": 9,
+        "independent_display_verified": true
+      },
+      {
+        "run": 6,
+        "task_id": "837599fa-c133-4a1d-8683-8a20b51e9713",
+        "duration_ms": 11244,
+        "steps_completed": 9,
+        "independent_display_verified": true
+      },
+      {
+        "run": 7,
+        "task_id": "0c5d1db6-3abb-4b79-9dd4-b99a1bcb4e66",
+        "duration_ms": 11263,
+        "steps_completed": 9,
+        "independent_display_verified": true
+      },
+      {
+        "run": 8,
+        "task_id": "a87161d3-1876-49e7-b41f-0f748075577d",
+        "duration_ms": 11213,
+        "steps_completed": 9,
+        "independent_display_verified": true
+      },
+      {
+        "run": 9,
+        "task_id": "0e89646d-7fdc-4b55-96e4-29da7545e9dc",
+        "duration_ms": 11240,
+        "steps_completed": 9,
+        "independent_display_verified": true
+      },
+      {
+        "run": 10,
+        "task_id": "91a3cf92-bc1f-4fae-9ac6-97ed89291b1c",
+        "duration_ms": 11163,
+        "steps_completed": 9,
+        "independent_display_verified": true
+      }
+    ],
+    "statistics_ms": {
+      "min": 11163,
+      "max": 11286,
+      "mean": 11238.3,
+      "p50": 11243,
+      "p95": 11275.65,
+      "p99": 11283.93,
+      "percentile_method": "linear interpolation between adjacent ordered observations"
+    },
+    "measurement_boundary": "ClosePaw task started_at_ms → completed_at_ms, server-reported device-side task timestamps; independent observation occurs afterward and is excluded",
+    "clock_domain": "task timestamps in ms, device/tool time domain not independently synchronized with AI/network; no end-to-end voice latency or segment decomposition claimed",
+    "baseline_improvement": "unmeasured: no equivalent repeated baseline"
+  },
+  "regression": {
+    "single_active_session_confirmed": true,
+    "app_screen_window_diagnostics_owned_window_count": 1,
+    "physical_island_count": "not directly measured",
+    "physical_x_count": "not directly measured",
+    "visual_label_privacy": "not independently measured",
+    "physical_lock_screen_off_recreate": "not performed",
+    "network_transition": "not performed",
+    "physical_user_X": "not performed",
+    "session_end_confirmed": true,
+    "post_end_UI_removed": "not independently observed",
+    "OS_dispatchGesture": "not tested"
+  },
+  "issues_remain_open": [
+    126,
+    140,
+    142
+  ]
+}
