@@ -1,3 +1,11 @@
+## v0.1.78/code79 물리 기기 후속 검증 (2026-10-23 KST)
+
+- 앱 독립 get_status **0.1.78/code79** 정상. 재설치·재빌드·페어링 재설정 없음. 새 UI 세션 `96c2e7e0-e178-41f8-9d21-25485cf456e6` 시작 뒤 종료했고 독립 session.status **ended/epoch2** 확인.
+- #142 물리 기기 production `island.observe → island.drag` 실제 좌표 변화 **10/10 성공**, 각 500ms hold/150ms move. 302×168 island, 1440×3120 display; 전후 좌표·task ID는 [원시 후속 증거](../dev/evidence/issues126-140-142-v0178-physical-20261023.json). 재사용 관찰 거부 `island_observation_required`/action_attempted=false, 새 관찰 3px 흔들림 거부 `invalid_island_drag`/action_attempted=false. 일반 화면 `dispatchGesture`가 아닌 own-window MotionEvent 검증.
+- #126 삼성 계산기 `com.sec.android.app.popupcalculator`: 매회 C 초기화 후 1→9 로컬 sequence, 별도 screen.observe로 `123,456,789` **10/10 성공**. task 시작→완료(ms) 원시 표본 **11252,11254,11242,11286,11226,11244,11263,11213,11240,11163**; mean11238.3/P5011243/P9511275.65/P9911283.93/min11163/max11286 (percentile linear interpolation). 휴대폰 작업 실행 시간만 측정; 음성/AI/네트워크 분리 및 동등 조건 과거 10회 개선율 미측정.
+- #140 화면 관찰의 owned_window_count=1 및 같은 세션 active→ended 확인. 아일랜드/X 실제 가시 개수·문구·진동·종료 후 window 제거는 독립 시각 증거 없음. 잠금·화면 OFF/복귀·서비스 재생성·실제 X 물리 종료·네트워크 전환은 실행하지 않았으므로 **미검증**. 관찰 수단 부족을 기능 실패로 표시하지 않음.
+- #126/#140/#142 **OPEN 유지**: #126 전체 E2E 단계별 병목/네트워크/X 안전성, #140 삼성 잠금 전환 10회·UI/보안 실측, #142 물리 X/경계·잔여 수용 검증 필요. 앱 버전·APK/tag 불변, docs-only [skip ci].
+
 # ClosePaw GitHub 정합성 감사 및 Works 인계
 
 ## #143 통합 변경 완료 — v0.1.78/code79 발행·설치 (2026-10-23 KST)
