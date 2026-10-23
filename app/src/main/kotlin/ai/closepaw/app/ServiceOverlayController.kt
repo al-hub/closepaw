@@ -385,6 +385,7 @@ class ServiceOverlayController(
     }
 
     fun onActionExecuted(toolName: String, success: Boolean) {
+        stateHolder.onActionExecuted(toolName, success)
         refreshGlowState()
         // applyVisibility not needed: active task state hasn't changed
     }
