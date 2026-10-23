@@ -35,6 +35,7 @@ class OverlayComposeHost(
     fun show(
         layoutParams: WindowManager.LayoutParams,
         onTouch: ((View, MotionEvent) -> Boolean)? = null,
+        onLayout: (() -> Unit)? = null,
         content: @Composable () -> Unit,
     ) {
         if (composeView != null) return
@@ -59,6 +60,7 @@ class OverlayComposeHost(
             // The gesture wrapper is the WindowManager root, so it must carry them too.
             root.setViewTreeLifecycleOwner(lifecycleOwner)
             root.setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
+            if (onLayout != null) root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> onLayout() }
             windowManager.addView(root, layoutParams)
             composeView = root
             params = layoutParams

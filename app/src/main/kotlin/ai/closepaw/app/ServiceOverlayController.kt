@@ -143,6 +143,9 @@ class ServiceOverlayController(
     /** User preference: capsule or island while overlays are visible (A11y/VD). */
     private var showPreference = ShowPreference.ISLAND
     private var remoteStatusText: String? = null
+    private var remoteDetail: String? = null
+    private var disposed = false
+    private var modeObserver: kotlinx.coroutines.Job? = null
 
     /** Remote UI shares the existing island, including when no local agent task exists. */
     internal fun observedIsland() = statusIslandManager?.observedBounds()
@@ -150,8 +153,9 @@ class ServiceOverlayController(
         holdMs: Long, moveMs: Long, permitted: () -> Boolean): Boolean =
         statusIslandManager?.dragOwnedWindow(before, dx, dy, holdMs, moveMs, permitted) ?: false
 
-    fun setRemoteStatus(text: String?) {
-        remoteStatusText = text?.let { "AI 제어 중" }
+    fun setRemoteStatus(text: String?, detail: String? = null) {
+        remoteDetail = detail
+        remoteStatusText = text?.let { ai.closepaw.ui.overlay.RemoteStatusLabel.sanitize(it) }
         applyVisibility()
     }
 
@@ -174,7 +178,7 @@ class ServiceOverlayController(
         statusIslandManager?.startObserving(stateHolder, scope)
 
         // Observe mode for terminal transitions (Done→Hidden auto-hide) that affect visibility
-        scope.launch {
+        modeObserver = scope.launch {
             stateHolder.mode.collect { mode ->
                 if (mode is CapsuleMode.Hidden || mode is CapsuleMode.Done || mode is CapsuleMode.Error) {
                     applyVisibility()
@@ -198,6 +202,7 @@ class ServiceOverlayController(
      * Called after every state change and context change.
      */
     private fun applyVisibility() {
+        if (disposed) return
         if (context.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked ||
             !context.getSystemService(android.os.PowerManager::class.java).isInteractive) {
             hideAll()
@@ -246,10 +251,11 @@ class ServiceOverlayController(
         }
 
         val showRemoteIsland = remoteStatusText != null && !stateHolder.hasActiveTask
-        statusIslandManager?.setRemoteStatus(if (showRemoteIsland) remoteStatusText else null)
+        statusIslandManager?.setRemoteStatus(if (showRemoteIsland) remoteStatusText else null,
+            if (showRemoteIsland) remoteDetail else null)
         statusIslandManager?.setReadOnly(showSingleX || showRemoteIsland)
         if (activeSurfaces.showStatusIsland || showRemoteIsland) {
-            if (statusIslandManager?.isShowing() != true) statusIslandManager?.show()
+            statusIslandManager?.show()
         } else {
             statusIslandManager?.hide()
         }
@@ -343,6 +349,8 @@ class ServiceOverlayController(
     }
 
     fun dispose() {
+        disposed = true
+        modeObserver?.cancel()
         runCatching { context.unregisterReceiver(screenStateReceiver) }
         xStopOverlay.dispose()
         onEmergencyXVisibilityChanged(false)
@@ -529,8 +537,8 @@ class ServiceOverlayController(
             )
             userLocation = nextLocation
             updateContext()
-            applyVisibility()
         }
+        applyVisibility() // Unlock can change visibility without changing the location classification.
     }
 
     private fun updateContext() {

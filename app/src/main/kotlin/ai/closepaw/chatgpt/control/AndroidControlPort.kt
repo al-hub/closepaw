@@ -201,7 +201,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 })
         }
     }
-    private suspend fun secureWindow(service: AgentService): String? {
+    private suspend fun secureWindow(service: AgentService): String? = controlSpan("security_probe") { secureWindowChecked(service) }
+    private suspend fun secureWindowChecked(service: AgentService): String? {
         certifiedWindows = null
         windowDiagnostics = null
         if (Build.VERSION.SDK_INT < 34) return "secure_window_probe_requires_android14"
@@ -227,7 +228,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     }
     private suspend fun probeWindow(service: AgentService, id: Int): String? {
         if (Build.VERSION.SDK_INT < 34) return "secure_window_probe_requires_android14"
-        probeThrottle.awaitSlot()
+        controlSpan("probe_api_spacing") { probeThrottle.awaitSlot() }
         return withContext(Dispatchers.Main) {
             reason(service)?.let { return@withContext it }
             suspendCancellableCoroutine<String?> { continuation ->
@@ -337,7 +338,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             var traversalFailure: String? = null
             // Binder-backed node reads and fingerprint construction can be large on launchers.
             // Keep traversal off Main; all native effects still execute on Main after revalidation.
-            val fingerprint = withContext(Dispatchers.Default) {
+            val fingerprint = controlSpan("fingerprint_traversal") { withContext(Dispatchers.Default) {
                 for (id in selected.selection.members) {
                     val member = if (id == root.windowId) root else windows.single { it.id == id }.root
                     if (member == null || member.windowId != id || member.packageName?.toString() != pkg) {
@@ -349,7 +350,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     visit(member, 0, -1, id == selected.selection.target)
                 }
                 operationHash(identity.toString())
-            }
+            } }
             traversalFailure?.let { return@withContext block(denied(it, selected.diagnostics), emptyList()) }
             reason(service)?.let { return@withContext block(denied(it), emptyList()) }
             if ((runtime?.snapshot()?.revision ?: 0) != revision)
@@ -477,13 +478,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 } else false
             }
             if (previewed) {
-                kotlinx.coroutines.delay(96)
+                controlSpan("intent_cue_wait") { kotlinx.coroutines.delay(96) }
                 // FLAG_SECURE may change without tree/geometry changes during the cue.
                 // Obtain a NEW screenshot security verdict before the final native boundary.
                 secureWindow(service)?.let { return ControlEffect(false, false, it) }
             }
         }
-        val effect = withTree(service) { fresh, native ->
+        val effect = controlSpan("fresh_fingerprint_and_action") { withTree(service) { fresh, native ->
             if (service.remoteControlSession.epoch != admittedEpoch)
                 return@withTree ControlEffect(false, false, "control_session_changed_observe_again")
             val failure = GenericControlActionPolicy.refusal(frame, fresh, action)
@@ -574,6 +575,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (action == "scroll") "scroll_${input.getValue("direction").jsonPrimitive.content}" else action,
                 acknowledged)
             ControlEffect(true, acknowledged, if (acknowledged) "action_acknowledged" else "action_unconfirmed")
+        }
         }
         return effect
     }

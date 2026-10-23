@@ -45,6 +45,77 @@ class ControlOverlayWindowTest {
         instrumentation.waitForIdleSync()
     }
 
+    @Test fun sameLocationRecoveryAndHostRecreationNeverResumeEndedSession() {
+        val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        automation.executeShellCommand("settings put secure enabled_accessibility_services ai.closepaw/.app.AgentService").close()
+        automation.executeShellCommand("settings put secure accessibility_enabled 1").close()
+        val deadline = SystemClock.uptimeMillis() + 10_000
+        while (AgentService.instance == null && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(100)
+        val service = requireNotNull(AgentService.instance)
+        lateinit var controller: ServiceOverlayController
+        lateinit var host: ai.closepaw.ui.overlay.compose.IslandOverlayHost
+        try {
+            main {
+                service.remoteControlSession.end(); service.remoteControlSession.start()
+                controller = field(service, "overlayController") as ServiceOverlayController
+                host = field(controller, "statusIslandManager") as ai.closepaw.ui.overlay.compose.IslandOverlayHost
+                controller.handleWindowStateChanged("com.android.settings", "com.android.settings.Settings", 0)
+                service.showRemoteControlActivity()
+            }
+            instrumentation.waitForIdleSync()
+            val epoch = service.remoteControlSession.epoch
+            main {
+                controller.hideAll() // Simulate a lock broadcast preceding the unlock window event.
+                assertFalse(host.isShowing())
+                controller.handleWindowStateChanged("com.android.settings", "com.android.settings.Settings", 0)
+            }
+            instrumentation.waitForIdleSync()
+            main {
+                val bounds = requireNotNull(host.observedBounds())
+                assertTrue(bounds.x >= 0 && bounds.y >= 0)
+                assertTrue(bounds.x + bounds.width <= bounds.displayWidth)
+                assertTrue(bounds.y + bounds.height <= bounds.displayHeight)
+                assertEquals(epoch, service.remoteControlSession.epoch)
+                host.hide(); host.show()
+            }
+            instrumentation.waitForIdleSync()
+            var savedX = 0; var savedY = 0
+            lateinit var oldRoot: View
+            main {
+                val before = requireNotNull(host.observedBounds())
+                savedX = before.x; savedY = before.y
+                oldRoot = field(requireNotNull(field(host, "composeHost")), "composeView") as View
+                AgentService::class.java.getDeclaredMethod("onServiceConnected").apply { isAccessible = true }.invoke(service)
+                controller = field(service, "overlayController") as ServiceOverlayController
+                host = field(controller, "statusIslandManager") as ai.closepaw.ui.overlay.compose.IslandOverlayHost
+            }
+            instrumentation.waitForIdleSync()
+            main {
+                val recreated = requireNotNull(host.observedBounds())
+                assertFalse("previous owner detached", oldRoot.isAttachedToWindow)
+                assertEquals(savedX, recreated.x); assertEquals(savedY, recreated.y)
+                assertEquals(epoch, service.remoteControlSession.epoch)
+            }
+            automation.setRotation(UiAutomation.ROTATION_FREEZE_90)
+            instrumentation.waitForIdleSync()
+            main { service.showRemoteControlActivity() }
+            instrumentation.waitForIdleSync()
+            main {
+                val rotated = requireNotNull(host.observedBounds())
+                assertTrue(rotated.x >= 0 && rotated.y >= 0)
+                assertTrue(rotated.x + rotated.width <= rotated.displayWidth)
+                assertTrue(rotated.y + rotated.height <= rotated.displayHeight)
+                service.stopRemoteAndLocalControl()
+                controller.handleWindowStateChanged("com.android.settings", "com.android.settings.Settings", 0)
+                assertEquals(ControlSession.State.ENDED, service.remoteControlSession.state)
+                assertFalse(host.isShowing())
+            }
+        } finally {
+            automation.setRotation(UiAutomation.ROTATION_UNFREEZE)
+            main { service.remoteControlSession.end(); service.hideRemoteControlActivity(force = true) }
+        }
+    }
+
     @Test fun realWindowsDragPersistArbitrateAndStopWithoutExposingRemoteMoveCommands() {
         val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         automation.executeShellCommand("settings put secure enabled_accessibility_services ai.closepaw/.app.AgentService").close()

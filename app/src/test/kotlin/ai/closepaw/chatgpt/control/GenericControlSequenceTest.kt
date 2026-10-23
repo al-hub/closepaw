@@ -43,6 +43,11 @@ class GenericControlSequenceTest {
         val result = execute(port, (1..9).map(Int::toString))
         assertTrue(result.summary, result.success)
         assertEquals(9, port.writes)
+        val trace = result.data.getValue("trace").jsonObject
+        val spans = trace.getValue("spans").jsonArray.map { it.jsonObject }
+        assertEquals(9, spans.count { it["phase"]?.jsonPrimitive?.content == "semantic_lookup" })
+        assertEquals(9, trace.getValue("completed_steps").jsonPrimitive.int)
+        assertEquals("not_measured", trace.getValue("voice_e2e").jsonPrimitive.content)
         assertEquals(9, result.data.getValue("completed_steps").jsonPrimitive.int)
         assertEquals("monotonic_process", result.data.getValue("clock_domain").jsonPrimitive.content)
         assertTrue(result.data.getValue("elapsed_ms").jsonPrimitive.long >= 0L)

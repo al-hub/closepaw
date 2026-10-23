@@ -68,7 +68,7 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
             } catch (_: Exception) { hide(); session.pause(); return }
         }
         if (!testOnly && !showEmergencyX) xStopOverlay.hide()
-        if (!testOnly && showEmergencyX && !xStopOverlay.isShowing()) xStopOverlay.show()
+        if (!testOnly && showEmergencyX) xStopOverlay.show()
         // #128: Modern status island has sole ownership of the visible status
         // surface. Legacy controls retain emergency X and passive border only.
         // Do not create a second, non-draggable RemoteControlPanel window.

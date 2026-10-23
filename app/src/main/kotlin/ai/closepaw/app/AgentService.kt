@@ -86,6 +86,7 @@ class AgentService : AccessibilityService() {
     private var session: AgentSession? = null
     private var overlayController: ServiceOverlayController? = null
     private var modernEmergencyXVisible = false
+    private var debugReceiversRegistered = false
     private var actionVisualizer: ActionVisualizerManager? = null
     internal val remoteControlChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
     internal val remoteControlSession: ai.closepaw.chatgpt.control.ControlSession by lazy {
@@ -167,13 +168,19 @@ class AgentService : AccessibilityService() {
     internal fun showRemoteControlTarget(rect: android.graphics.Rect) { runCatching { remoteControlIndicator.target(rect) } }
     internal fun remoteControlCovers(rect: android.graphics.Rect) = remoteControlIndicator.controlCovers(rect) ||
         overlayController?.controlCovers(rect) == true
+    internal fun stopRemoteAndLocalControl() {
+        remoteControlSession.end()
+        hideRemoteControlActivity(force = true)
+        submitOp(Op.Shutdown)
+    }
     internal fun showRemoteControlActivity() {
         val unlocked = !getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
             getSystemService(android.os.PowerManager::class.java).isInteractive
         val active = remoteControlSession.state !in setOf(
             ai.closepaw.chatgpt.control.ControlSession.State.IDLE,
             ai.closepaw.chatgpt.control.ControlSession.State.ENDED)
-        overlayController?.setRemoteStatus(if (unlocked && active) remoteControlSession.label else null)
+        overlayController?.setRemoteStatus(if (active) remoteControlSession.label else null,
+            if (unlocked && active) remoteControlSession.progressDetail else null)
         if (!unlocked) { remoteControlIndicator.hide(); return }
         remoteControlIndicator.show(showEmergencyX = !modernEmergencyXVisible)
         if (remoteControlSession.state == ai.closepaw.chatgpt.control.ControlSession.State.PAUSED)
@@ -282,6 +289,10 @@ class AgentService : AccessibilityService() {
 
         updateStatus("Accessibility Service connected")
 
+        overlayController?.dispose()
+        overlayController = null
+        actionVisualizer?.dispose()
+        actionVisualizer = null
         val controller =
                 ServiceOverlayController(
                         context = this,
@@ -351,9 +362,12 @@ class AgentService : AccessibilityService() {
         )
         Log.i(TAG, "ActionVisualizerManager initialized")
 
-        registerDebugStopReceiverIfNeeded(this, stopReceiver)
-        registerDebugExecReceiverIfNeeded(this, debugExecReceiver)
-        registerDebugMobileActionReceiverIfNeeded(this, debugMobileActionReceiver)
+        if (!debugReceiversRegistered) {
+            registerDebugStopReceiverIfNeeded(this, stopReceiver)
+            registerDebugExecReceiverIfNeeded(this, debugExecReceiver)
+            registerDebugMobileActionReceiverIfNeeded(this, debugMobileActionReceiver)
+            debugReceiversRegistered = true
+        }
         showRemoteControlActivity()
     }
 
@@ -371,6 +385,7 @@ class AgentService : AccessibilityService() {
             } else {
                 Display.DEFAULT_DISPLAY
             }
+            showRemoteControlActivity()
             overlayController?.handleWindowStateChanged(
                     packageName = event.packageName?.toString(),
                     className = event.className?.toString(),

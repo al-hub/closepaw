@@ -61,9 +61,14 @@ class IslandOverlayHost(
         dragGesture.cancel()
     }
     private var remoteStatusText by mutableStateOf<String?>(null)
+    private var remoteDetail by mutableStateOf<String?>(null)
+    private var detailVisible by mutableStateOf(false)
 
     /** Same window serves bridge-only sessions; never create another status surface. */
-    fun setRemoteStatus(text: String?) { remoteStatusText = text }
+    fun setRemoteStatus(text: String?, detail: String? = null) {
+        remoteStatusText = text; remoteDetail = detail
+        if (text == null || detail == null) detailVisible = false
+    }
     private val positions = service.getSharedPreferences("closepaw_island_position", android.content.Context.MODE_PRIVATE)
     private var islandX = positions.getInt("x", -1)
     private var islandY = positions.getInt("y", -1)
@@ -111,19 +116,34 @@ class IslandOverlayHost(
         readOnlyMode = enabled
     }
 
+    private fun correctMeasuredPosition() {
+        val size = composeHost.measuredSize() ?: return
+        val metrics = service.resources.displayMetrics
+        val stop = service.getSharedPreferences("x_stop_overlay", 0)
+        val point = ai.closepaw.ui.overlay.OverlayPositionPolicy.place(islandX, islandY, size.first, size.second,
+            metrics.widthPixels, metrics.heightPixels,
+            stop.getInt("x", metrics.widthPixels - dp(68)).coerceIn(0, (metrics.widthPixels - dp(56)).coerceAtLeast(0)),
+            stop.getInt("y", dp(40)).coerceIn(0, (metrics.heightPixels - dp(56)).coerceAtLeast(0)), dp(56))
+        if (point == null) { hide(); return } // No safe room: preserve X and fail closed.
+        if ((point.first != islandX || point.second != islandY) &&
+            composeHost.updateLayoutParams { it.x = point.first; it.y = point.second }) {
+            islandX = point.first; islandY = point.second; persistPosition()
+        }
+    }
     fun show() {
-        if (composeHost.isShowing()) return
+        if (composeHost.isShowing()) { correctMeasuredPosition(); return }
         val layout = createLayoutParams()
         islandX = layout.x; islandY = layout.y
-        composeHost.show(layout, onTouch = ::handleTouch) {
+        composeHost.show(layout, onTouch = ::handleTouch, onLayout = ::correctMeasuredPosition) {
             val holder = stateHolder
             val remote = remoteStatusText
             if (remote != null || holder == null) {
                 StatusIslandCompose(
-                    text = remote ?: "Working...",
+                    text = if (detailVisible) remoteDetail ?: remote ?: "AI 제어 중 - 실행" else remote ?: "AI 제어 중 - 실행",
                     dotColor = MaterialTheme.colorScheme.primary,
                     pulsing = true,
-                    onClick = if (readOnlyMode) null else onExpandCapsule,
+                    expanded = detailVisible,
+                    onClick = if (readOnlyMode) ({ if (remoteDetail != null) detailVisible = !detailVisible }) else onExpandCapsule,
                     onDrag = if (readOnlyMode) null else ::dragBy,
                     onDragEnd = ::persistPosition,
                 )
@@ -170,11 +190,14 @@ class IslandOverlayHost(
                     }
                     dragBy(it.dx, it.dy)
                 }
-                if (event.actionMasked == MotionEvent.ACTION_UP) { persistPosition(); cancelTouch() }
+                if (event.actionMasked == MotionEvent.ACTION_UP) {
+                    if (!holdVibrated && remoteDetail != null) detailVisible = !detailVisible
+                    persistPosition(); cancelTouch()
+                }
             }
             MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> cancelTouch()
         }
-        return true // A short tap never expands or terminates the read-only status island.
+        return true // Short tap toggles only trusted progress details; never terminates or controls underlying apps.
     }
 
     fun hide() {
@@ -280,8 +303,10 @@ class IslandOverlayHost(
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            val maxX = (service.resources.displayMetrics.widthPixels - dp(280)).coerceAtLeast(0)
-            val maxY = (service.resources.displayMetrics.heightPixels - dp(64)).coerceAtLeast(0)
+            // Initial placement is provisional until the real Compose root is measured.
+            val size = composeHost.measuredSize() ?: (0 to 0)
+            val maxX = (service.resources.displayMetrics.widthPixels - size.first).coerceAtLeast(0)
+            val maxY = (service.resources.displayMetrics.heightPixels - size.second).coerceAtLeast(0)
             x = (if (islandX < 0) maxX / 2 else islandX).coerceIn(0, maxX)
             y = (if (islandY < 0) statusBarHeight + dp(88) else islandY).coerceIn(0, maxY)
         }
