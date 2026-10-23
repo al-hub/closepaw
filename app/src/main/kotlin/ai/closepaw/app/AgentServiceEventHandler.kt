@@ -37,6 +37,7 @@ internal class AgentServiceEventHandler(
             // ===== Task Events (for SmartCapsule streaming) =====
             is TaskStarted -> {
                 val currentTask = islandEvents.start(event.sessionId.value, event.taskId, event.timestamp)
+                if (!currentTask) return
                 recordingService?.onTaskStarted()
                 recordingService?.recordUserMessage(
                     UUID.randomUUID().toString(),
@@ -78,6 +79,7 @@ internal class AgentServiceEventHandler(
             }
             is TaskCompleted -> {
                 val currentTask = islandEvents.end(event.sessionId.value, event.taskId)
+                if (!currentTask) return
                 Log.i(logTag, "Task completed: ${event.taskId}, outcome: ${event.outcome}")
                 // Stash outcome BEFORE finalize so the recorder can derive
                 // rowState ("error" vs "complete") on the persisted row.
@@ -132,6 +134,7 @@ internal class AgentServiceEventHandler(
             // ===== Session Lifecycle Events =====
             is SessionCompleted -> {
                 val currentSession = islandEvents.end(event.sessionId.value)
+                if (!currentSession) return
                 Log.i(logTag, "Session completed: ${event.sessionId}, reason: ${event.reason}")
                 recordingService?.completeSession()
                 val statusMessage = when (event.reason) {
