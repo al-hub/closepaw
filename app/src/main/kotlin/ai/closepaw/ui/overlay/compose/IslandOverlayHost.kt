@@ -179,6 +179,17 @@ class IslandOverlayHost(
         composeHost.hide()
     }
 
+    /**
+     * A post-gesture observation, never an acknowledgement of movement.
+     * Null when the island window is detached or no measured layout exists.
+     */
+    fun observedPosition(): ai.closepaw.ui.overlay.IslandPosition? {
+        if (!composeHost.isShowing()) return null
+        val bounds = composeHost.measuredSize() ?: return null
+        if (bounds.first <= 0 || bounds.second <= 0 || islandX < 0 || islandY < 0) return null
+        return ai.closepaw.ui.overlay.IslandPosition(islandX, islandY)
+    }
+
     fun isShowing(): Boolean = composeHost.isShowing()
     fun ownsWindow(id: Int): Boolean = composeHost.ownsWindow(id)
     fun covers(rect: android.graphics.Rect): Boolean = composeHost.covers(rect)
