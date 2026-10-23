@@ -41,7 +41,7 @@ class AccessibilityGestureInjector(
             val stroke = GestureDescription.StrokeDescription(path, 0, tapDuration)
             val gesture = buildGesture(stroke)
 
-            dispatchGesture(gesture) { visualizer?.showClick(x.toFloat(), y.toFloat()) }
+            dispatchGesture(gesture, onSubmitted = { visualizer?.showClick(x.toFloat(), y.toFloat()) })
         }
     }
 
@@ -60,7 +60,7 @@ class AccessibilityGestureInjector(
                     }
             val stroke = GestureDescription.StrokeDescription(path, 0, durationMs)
             val gesture = buildGesture(stroke)
-            dispatchGesture(gesture) { visualizer?.showSwipe(startX, startY, endX, endY, durationMs) }
+            dispatchGesture(gesture, onSubmitted = { visualizer?.showSwipe(startX, startY, endX, endY, durationMs) })
         }
     }
 
@@ -69,7 +69,7 @@ class AccessibilityGestureInjector(
             val path = Path().apply { moveTo(x, y) }
             val stroke = GestureDescription.StrokeDescription(path, 0, durationMs)
             val gesture = buildGesture(stroke)
-            dispatchGesture(gesture) { visualizer?.showClick(x, y, longPress = true, holdDurationMs = durationMs) }
+            dispatchGesture(gesture, onSubmitted = { visualizer?.showClick(x, y, longPress = true, holdDurationMs = durationMs) })
         }
     }
 

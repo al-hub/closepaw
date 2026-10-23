@@ -18,6 +18,7 @@ internal class AgentServiceEventHandler(
     private val sessionCleared: () -> Unit,
     private val overlayController: () -> ServiceOverlayController?
 ) {
+    private val islandEvents = ai.closepaw.ui.overlay.IslandEventGate()
     fun handleEvent(
         event: AgentEvent,
         recordingService: SessionRecordingService? = null
@@ -35,6 +36,8 @@ internal class AgentServiceEventHandler(
 
             // ===== Task Events (for SmartCapsule streaming) =====
             is TaskStarted -> {
+                val currentTask = islandEvents.start(event.sessionId.value, event.taskId, event.timestamp)
+                if (!currentTask) return
                 recordingService?.onTaskStarted()
                 recordingService?.recordUserMessage(
                     UUID.randomUUID().toString(),
@@ -42,7 +45,7 @@ internal class AgentServiceEventHandler(
                     event.input
                 )
                 recordingService?.startAgentMessage(event.taskId, event.timestamp)
-                overlay?.onTaskStarted(event.taskId, event.input)
+                if (currentTask) overlay?.onTaskStarted(event.taskId, event.input)
             }
             is MessageDelta -> {
                 recordingService?.appendTextDelta(event.delta)
@@ -61,7 +64,8 @@ internal class AgentServiceEventHandler(
                     ActionOutcome.SKIPPED -> "skipped"
                 }
                 recordingService?.updateActionState(event.actionId, state, event.result)
-                overlay?.onActionExecuted(event.toolName, event.outcome == ActionOutcome.SUCCESS)
+                if (islandEvents.completed(event.sessionId.value, event.actionId, event.timestamp))
+                    overlay?.onActionExecuted(event.toolName, event.outcome == ActionOutcome.SUCCESS)
             }
             is SubAgentStarted -> {
                 updateStatus("🤖 Delegating to ${event.agentName}...")
@@ -74,6 +78,8 @@ internal class AgentServiceEventHandler(
                 updateStatus("🤖 ${event.agentName} $status")
             }
             is TaskCompleted -> {
+                val currentTask = islandEvents.end(event.sessionId.value, event.taskId)
+                if (!currentTask) return
                 Log.i(logTag, "Task completed: ${event.taskId}, outcome: ${event.outcome}")
                 // Stash outcome BEFORE finalize so the recorder can derive
                 // rowState ("error" vs "complete") on the persisted row.
@@ -95,9 +101,10 @@ internal class AgentServiceEventHandler(
                 // Finalize the agent message buffer so the session file
                 // is complete before Hot Idle.
                 recordingService?.completeAgentMessage()
-                overlay?.onTaskCompleted(event.outcome, event.result)
+                if (currentTask) overlay?.onTaskCompleted(event.outcome, event.result)
             }
             is ActionProposed -> {
+                islandEvents.proposed(event.sessionId.value, event.actionId, event.timestamp)
                 recordingService?.recordAction(
                     actionId = event.actionId,
                     toolName = event.toolName,
@@ -126,6 +133,8 @@ internal class AgentServiceEventHandler(
 
             // ===== Session Lifecycle Events =====
             is SessionCompleted -> {
+                val currentSession = islandEvents.end(event.sessionId.value)
+                if (!currentSession) return
                 Log.i(logTag, "Session completed: ${event.sessionId}, reason: ${event.reason}")
                 recordingService?.completeSession()
                 val statusMessage = when (event.reason) {
@@ -134,7 +143,7 @@ internal class AgentServiceEventHandler(
                     SessionEndReason.IDLE_TIMEOUT -> "💤 Session timed out"
                 }
                 updateStatus(statusMessage)
-                overlay?.onSessionCompleted(event.reason)
+                if (currentSession) overlay?.onSessionCompleted(event.reason)
                 sessionCleared()
             }
             is SessionError -> {

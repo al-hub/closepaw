@@ -45,6 +45,7 @@ class AgentServiceEventHandlerTest {
 
     @Test
     fun `TaskCompleted finalizes recording and updates overlay`() {
+        handler.handleEvent(TaskStarted(sessionId, 1_000L, "t1", "Do the thing"), recording)
         val event = TaskCompleted(
             sessionId = sessionId,
             timestamp = 2_000L,
@@ -72,5 +73,28 @@ class AgentServiceEventHandlerTest {
 
         assertThat(statusUpdates).containsExactly("❌ Error: boom")
         verify { overlay.onSessionError("boom") }
+    }
+    @Test
+    fun `late completion from prior task cannot finalize current recording or overlay`() {
+        handler.handleEvent(TaskStarted(sessionId, 100L, "old", "one"), recording)
+        handler.handleEvent(TaskStarted(sessionId, 200L, "current", "two"), recording)
+        handler.handleEvent(TaskCompleted(sessionId, 300L, "old", "stale", TaskOutcome.GOAL_ACHIEVED), recording)
+        verify(exactly = 0) { recording.completeAgentMessage() }
+        verify(exactly = 0) { overlay.onTaskCompleted(any(), any()) }
+        handler.handleEvent(TaskCompleted(sessionId, 400L, "current", "ok", TaskOutcome.GOAL_ACHIEVED), recording)
+        verify(exactly = 1) { recording.completeAgentMessage() }
+        verify(exactly = 1) { overlay.onTaskCompleted(TaskOutcome.GOAL_ACHIEVED, "ok") }
+    }
+
+    @Test
+    fun `duplicate task start and unbound completion do not produce UI or recording effects`() {
+        handler.handleEvent(TaskCompleted(sessionId, 50L, "unknown", "late", TaskOutcome.GOAL_ACHIEVED), recording)
+        val started = TaskStarted(sessionId, 100L, "current", "one")
+        handler.handleEvent(started, recording)
+        handler.handleEvent(started, recording)
+        verify(exactly = 1) { recording.onTaskStarted() }
+        verify(exactly = 1) { overlay.onTaskStarted("current", "one") }
+        verify(exactly = 0) { recording.completeAgentMessage() }
+        verify(exactly = 0) { overlay.onTaskCompleted(any(), any()) }
     }
 }

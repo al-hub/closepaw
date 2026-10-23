@@ -219,6 +219,46 @@ class CapsuleStateHolderTest {
         assertThat(holder.isStopPending.value).isFalse()
     }
 
+    // ── Status island action feedback ──
+
+    @Test
+    fun `acknowledged touch updates safe island label`() {
+        holder.onTaskStarted("task1", "sensitive input")
+        holder.onActionExecuted("click", true)
+        assertThat(holder.actionLabel.value).isEqualTo("AI 제어 중 - 터치")
+    }
+
+    @Test
+    fun `failed operation does not claim success`() {
+        holder.onTaskStarted("task1", "input")
+        holder.onActionExecuted("click", false)
+        assertThat(holder.actionLabel.value).isEqualTo("AI 작업 오류")
+    }
+
+    @Test
+    fun `new task and emergency stop clear previous action label`() {
+        holder.onTaskStarted("task1", "input")
+        holder.onActionExecuted("scroll", true)
+        holder.onTaskStarted("task2", "input")
+        assertThat(holder.actionLabel.value).isNull()
+        holder.onActionExecuted("type", true)
+        holder.onStopRequested()
+        assertThat(holder.actionLabel.value).isNull()
+        holder.onActionExecuted("click", true)
+        assertThat(holder.actionLabel.value).isNull()
+    }
+
+    @Test
+    fun `terminal and hidden states reject late action labels`() {
+        holder.onTaskStarted("task1", "input")
+        holder.onTaskCompleted(TaskOutcome.GOAL_ACHIEVED)
+        holder.onActionExecuted("click", true)
+        assertThat(holder.actionLabel.value).isNull()
+        holder.onSessionEnded(SessionEndReason.USER_STOPPED)
+        holder.onActionExecuted("scroll", true)
+        assertThat(holder.actionLabel.value).isNull()
+    }
+
     // ── Task completion ──
 
     @Test

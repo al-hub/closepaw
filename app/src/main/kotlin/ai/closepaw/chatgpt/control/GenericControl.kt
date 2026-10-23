@@ -28,7 +28,10 @@ internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expec
     (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
 
 internal data class ControlEffect(val attempted: Boolean, val acknowledged: Boolean, val reason: String)
-internal interface ControlPort {
+internal interface ControlPort : IslandControlPort {
+    override fun islandRefusal(sessionId: String): String? = "island_control_unavailable"
+    override suspend fun observeIsland(): IslandBounds? = null
+    override suspend fun dragIsland(before: IslandBounds, dx: Int, dy: Int, holdMs: Long, moveMs: Long, sessionId: String): Boolean = false
     /** Only adapters that enforce the complete freshness policy inside perform may opt in. */
     val validatesAtNativeBoundary: Boolean get() = false
     fun session(): ControlSession? = null

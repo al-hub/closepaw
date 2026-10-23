@@ -68,6 +68,9 @@ class CapsuleStateHolder(private val scope: CoroutineScope) {
      * until a terminal/new-task event clears it.
      */
     private val _isStopPending = MutableStateFlow(false)
+
+    private val _actionLabel = MutableStateFlow<String?>(null)
+    val actionLabel: StateFlow<String?> = _actionLabel.asStateFlow()
     val isStopPending: StateFlow<Boolean> = _isStopPending.asStateFlow()
 
     /** The mode before the current one, for transition animations. */
@@ -111,6 +114,7 @@ class CapsuleStateHolder(private val scope: CoroutineScope) {
     fun onTaskStarted(taskId: String, input: String) {
         cancelAutoHide()
         _isStopPending.value = false
+        _actionLabel.value = null
         _turnPhase.value = null
         setMode(CapsuleMode.Running(compactThought(input)))
     }
@@ -158,6 +162,12 @@ class CapsuleStateHolder(private val scope: CoroutineScope) {
     }
 
     // ── Guarded events (specific states only) ──
+
+    /** Only acknowledged operations are shown; tool arguments never enter the island. */
+    fun onActionExecuted(toolName: String, success: Boolean) {
+        if (_mode.value !is CapsuleMode.Running || _isStopPending.value) return
+        _actionLabel.value = if (success) IslandActionLabel.running(toolName) else IslandActionLabel.failed()
+    }
 
     fun onThoughtUpdate(thought: String) {
         if (_mode.value !is CapsuleMode.Running) return
@@ -230,6 +240,7 @@ class CapsuleStateHolder(private val scope: CoroutineScope) {
         }
         if (_isStopPending.value) return false
         _isStopPending.value = true
+        _actionLabel.value = null
         return true
     }
 
@@ -276,6 +287,7 @@ class CapsuleStateHolder(private val scope: CoroutineScope) {
     // ── Internal ──
 
     private fun setMode(new: CapsuleMode) {
+        if (new !is CapsuleMode.Running) _actionLabel.value = null
         previousMode = _mode.value
         _mode.value = new
     }

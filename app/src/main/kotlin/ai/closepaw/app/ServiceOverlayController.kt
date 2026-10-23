@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
  *   D. WaitingFor* / Error force capsule visibility regardless preference.
  */
 class ServiceOverlayController(
-    context: AccessibilityService,
+    private val context: AccessibilityService,
     lifecycleOwner: LifecycleOwner,
     savedStateRegistryOwner: SavedStateRegistryOwner,
     private val scope: CoroutineScope,
@@ -145,15 +145,32 @@ class ServiceOverlayController(
     private var remoteStatusText: String? = null
 
     /** Remote UI shares the existing island, including when no local agent task exists. */
+    internal fun observedIsland() = statusIslandManager?.observedBounds()
+    internal suspend fun dragIsland(before: ai.closepaw.chatgpt.control.IslandBounds, dx: Int, dy: Int,
+        holdMs: Long, moveMs: Long, permitted: () -> Boolean): Boolean =
+        statusIslandManager?.dragOwnedWindow(before, dx, dy, holdMs, moveMs, permitted) ?: false
+
     fun setRemoteStatus(text: String?) {
-        remoteStatusText = text
+        remoteStatusText = text?.let { "AI 제어 중" }
         applyVisibility()
     }
 
     internal fun ownsControlWindow(id: Int) = xStopOverlay.ownsWindow(id) || statusIslandManager?.ownsWindow(id) == true
     internal fun controlCovers(rect: android.graphics.Rect) = xStopOverlay.covers(rect) || statusIslandManager?.covers(rect) == true
 
+    private val screenStateReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
+            if (intent?.action == android.content.Intent.ACTION_SCREEN_OFF) hideAll() else applyVisibility()
+        }
+    }
     init {
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_SCREEN_OFF)
+            addAction(android.content.Intent.ACTION_SCREEN_ON)
+            addAction(android.content.Intent.ACTION_USER_PRESENT)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 33) context.registerReceiver(screenStateReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+        else { @Suppress("DEPRECATION") context.registerReceiver(screenStateReceiver, filter) }
         statusIslandManager?.startObserving(stateHolder, scope)
 
         // Observe mode for terminal transitions (Done→Hidden auto-hide) that affect visibility
@@ -181,6 +198,11 @@ class ServiceOverlayController(
      * Called after every state change and context change.
      */
     private fun applyVisibility() {
+        if (context.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked ||
+            !context.getSystemService(android.os.PowerManager::class.java).isInteractive) {
+            hideAll()
+            return
+        }
         val mode = stateHolder.mode.value
         val decision = deriveOverlayVisibility(
             platformMode = platformMode,
@@ -321,6 +343,7 @@ class ServiceOverlayController(
     }
 
     fun dispose() {
+        runCatching { context.unregisterReceiver(screenStateReceiver) }
         xStopOverlay.dispose()
         onEmergencyXVisibilityChanged(false)
         edgeGlowManager.dispose()
@@ -385,6 +408,7 @@ class ServiceOverlayController(
     }
 
     fun onActionExecuted(toolName: String, success: Boolean) {
+        stateHolder.onActionExecuted(toolName, success)
         refreshGlowState()
         // applyVisibility not needed: active task state hasn't changed
     }

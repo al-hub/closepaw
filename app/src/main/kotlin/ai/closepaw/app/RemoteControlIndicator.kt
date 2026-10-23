@@ -49,7 +49,7 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
         service.getSystemService(android.os.PowerManager::class.java).isInteractive
     private val guard = object : Runnable {
         override fun run() {
-            if (!unlocked()) { session.pause(); hide(); return }
+            if (!unlocked()) { hide(); return } // lock changes visibility, never session ownership
             placePanel(); border?.postDelayed(this, 500)
         }
     }
