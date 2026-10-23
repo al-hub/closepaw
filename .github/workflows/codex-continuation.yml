@@ -112,7 +112,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: codex-pr143-patch-${{ needs.authorize.outputs.head }}
-          path: "$RUNNER_TEMP/patch-in"
+          path: patch-in
       - name: Revalidate SHA, patch scope and commit exactly once
         env:
           GH_TOKEN: ${{ github.token }}
@@ -126,7 +126,7 @@ jobs:
           pr="$(gh api "repos/$REPO/pulls/143")"
           [[ "$(jq -r '.head.sha' <<< "$pr")" == "$EXPECTED_SHA" ]] || exit 1
           [[ "$(jq -r '.state' <<< "$pr")" == open && "$(jq -r '.draft' <<< "$pr")" == true ]] || exit 1
-          patch="$RUNNER_TEMP/patch-in/codex.patch"
+          patch="patch-in/codex.patch"
           test -f "$patch"
           if [[ ! -s "$patch" ]]; then echo 'No patch; no push.'; exit 0; fi
           # Reject unexpected modifications (including workflow, build, secrets, symlinks).
