@@ -55,7 +55,20 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
             "failed" -> Triple("결과 미확인 · 재관찰 필요", "응답 또는 제출 확인 실패 · 자동 재전송 금지", VisualPhase.FAILED)
             else -> return
         }
-        val detail = "목표: Gemini 질문 및 새 응답 확인\n대상: Gemini\n상태: $status"
+        // Expected next work is a plan, never proof that submission or generation completed.
+        val next = when (stage) {
+            "launching" -> "대상 화면과 기존 입력 확인 예정"
+            "observing" -> "빈 입력란 확인 후 질문 입력 예정"
+            "inputting" -> "입력 일치 확인 후 전송 요청 예정"
+            "submitting" -> "새 답변 관찰 예정 · 제출 성공 미확정"
+            "waiting", "collecting" -> "새 답변 완료·수집 범위 확인 예정"
+            "scrolling" -> "다음 답변 영역 확인 예정"
+            "completed" -> "없음"
+            else -> "자동 재실행 없음 · 사용자 확인 필요"
+        }
+        val completion = if (stage == "completed") "새 답변과 전체 수집 범위 확인" else
+            "전체 목표 완료 미확정"
+        val detail = "목표: Gemini 질문 및 새 응답 확인\n대상: Gemini\n완료: $completion\n현재: $status\n다음: $next\n상태: $status"
         if (label == action && progressDetail == detail && visualPhase == phase) return
         label = action; progressDetail = detail; visualPhase = phase; changed()
     }
