@@ -36,6 +36,8 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
         Rect.intersects(Rect(point[0], point[1], point[0] + it.width, point[1] + it.height), rect)
     }
     fun isAttached() = border?.isAttachedToWindow == true
+    internal fun emergencyStopBounds() = xStopOverlay.screenBounds()
+    fun emergencyXAttached() = xStopOverlay.isAttached()
     /** Modern task UI owns the emergency X while it is visible. */
     fun hideEmergencyXOnly() { xStopOverlay.hide() }
     /** Rebuild a missing control panel without changing the user-owned session state. */

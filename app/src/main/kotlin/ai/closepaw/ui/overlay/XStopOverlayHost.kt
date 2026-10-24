@@ -54,6 +54,14 @@ internal class XStopOverlayHost(
     }
 
     fun isShowing(): Boolean = view != null
+    fun isAttached(): Boolean = view?.isAttachedToWindow == true
+
+    /** Actual physical-screen hit area, independent of OEM LayoutParams frame offsets. */
+    fun screenBounds(): Rect? {
+        val button = view?.takeIf { it.isAttachedToWindow && it.width > 0 && it.height > 0 } ?: return null
+        val xy = IntArray(2); button.getLocationOnScreen(xy)
+        return Rect(xy[0], xy[1], xy[0] + button.width, xy[1] + button.height)
+    }
 
     fun show() {
         if (view != null) {

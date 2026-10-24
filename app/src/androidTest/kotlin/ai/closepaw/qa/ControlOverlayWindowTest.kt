@@ -223,4 +223,56 @@ class ControlOverlayWindowTest {
             }
         }
     }
+    @Test fun userPresentRestoresWithoutAnotherAccessibilityEventAndNeverRestartsEndedControl() {
+        val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        automation.executeShellCommand("settings put secure enabled_accessibility_services ai.closepaw/.app.AgentService").close()
+        automation.executeShellCommand("settings put secure accessibility_enabled 1").close()
+        val deadline = SystemClock.uptimeMillis() + 10_000
+        while (AgentService.instance == null && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(100)
+        val service = requireNotNull(AgentService.instance)
+        lateinit var controller: ServiceOverlayController
+        lateinit var receiver: android.content.BroadcastReceiver
+        var epoch = 0L
+        try {
+            main {
+                service.remoteControlSession.end(); service.remoteControlSession.start()
+                epoch = service.remoteControlSession.epoch
+                controller = field(service, "overlayController") as ServiceOverlayController
+                receiver = field(service, "controlScreenReceiver") as android.content.BroadcastReceiver
+                controller.handleWindowStateChanged("com.android.settings", "com.android.settings.Settings", 0)
+                service.showRemoteControlActivity()
+            }
+            instrumentation.waitForIdleSync()
+            main {
+                service.hideRemoteControlActivity(force = true)
+                controller.hideAll()
+                assertNull(controller.observedIsland())
+                // Direct receiver invocation simulates the notification only, never unlocks the device.
+                receiver.onReceive(service, android.content.Intent(android.content.Intent.ACTION_USER_PRESENT))
+            }
+            val restoredBy = SystemClock.uptimeMillis() + 2_500
+            var restored = false
+            while (!restored && SystemClock.uptimeMillis() < restoredBy) {
+                instrumentation.waitForIdleSync()
+                main { restored = controller.observedIsland() != null }
+                if (!restored) SystemClock.sleep(25)
+            }
+            main {
+                assertTrue("restored from USER_PRESENT without a window callback", restored)
+                assertEquals(epoch, service.remoteControlSession.epoch)
+                service.remoteControlSession.end()
+                service.hideRemoteControlActivity(force = true)
+                receiver.onReceive(service, android.content.Intent(android.content.Intent.ACTION_USER_PRESENT))
+            }
+            instrumentation.waitForIdleSync()
+            main {
+                assertEquals(ControlSession.State.ENDED, service.remoteControlSession.state)
+                assertNull(controller.observedIsland())
+                assertFalse(service.isRemoteControlActivityAttached())
+            }
+        } finally {
+            main { service.remoteControlSession.end(); service.hideRemoteControlActivity(force = true) }
+        }
+    }
+
 }

@@ -1,3 +1,13 @@
+## #150 자동 수용 검증 + #145/#146/#147 통합 후보 v0.1.80/code81 (2026-10-24 KST)
+
+- 현 Work 기준 main `aa24bb145a9a9e318c19fd3284091ad8d8323412`. 운영 설치본 v0.1.79/code80의 기존 증거는 보존한다.
+- #145 bounded unlock UI restore/monotonic attachment telemetry, 실제 phase/Gemini 단계 상세 표시. #146 명시적 full-display screen 좌표·실제 X 우선/cutout 보호 및43,59 원시 창 회귀. #147 동일 SHA hex 최적화·structured cancellation→durable task handoff, local stop과 외부 효과 불확실성 구분.
+- #150 신규 단일 QA 이슈: 변경 영향·의존성 테스트 선택, 역사 증거와 새 검증 분리, XML 누락/skip fail-closed 보고서,10+10 host benchmark/통계. 전체 Security CI 및 기존 UI 릴리스 게이트 유지.
+- 초기 get_status0.1.79/code80 reachable. session.status는 기기 로컬 실행 권한 OFF로 거부되어 세션/조작/설치 재시도 없음. 로컬 Gradle 다운로드 네트워크 불가; Kotlin/Android 검증은 GitHub CI에서 수행.
+- #117 TalkBack/장기 반복·알림, #76 별도 기기/폴더블 이관 이미 반영. 중복 이슈/전송/새 키 생성 없음.
+- [구현·증거 경계·최종 게이트](../dev/issues145-147-acceptance-v0180.md), [자동 QA 운영](../../qa/acceptance/README.md).
+- **후보 상태**: exact HEAD CI/서명 공개 APK/설치·Galaxy 최소 수용을 확인하기 전 완료 선언하지 않는다. #145/#146/#147 OPEN 유지. 아래 v0.1.79 발행 이력은 역사 기록이다.
+
 ## #145/#146/#147 통합 수정·계측 v0.1.79/code80 발행·설치 (2026-10-23 KST)
 
 - [PR #148](https://github.com/al-hub/closepaw/pull/148), 최종 HEAD d8640b1458b4490ce4443ec108fb9ed594d7fc24; merged main/APK/tag 정확 source **ed46c6a7e39b04e10483e4c501e4b1530fd2026d**.

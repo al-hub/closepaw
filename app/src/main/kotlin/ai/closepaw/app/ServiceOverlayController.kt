@@ -159,6 +159,9 @@ class ServiceOverlayController(
         applyVisibility()
     }
 
+    internal fun emergencyStopBounds() = xStopOverlay.screenBounds()
+    internal fun emergencyXAttached() = xStopOverlay.isAttached()
+
     internal fun ownsControlWindow(id: Int) = xStopOverlay.ownsWindow(id) || statusIslandManager?.ownsWindow(id) == true
     internal fun controlCovers(rect: android.graphics.Rect) = xStopOverlay.covers(rect) || statusIslandManager?.covers(rect) == true
 

@@ -71,4 +71,39 @@ class ControlSessionTest {
         org.junit.Assert.assertEquals("AI 제어 중", session.label)
         org.junit.Assert.assertEquals(ControlSession.VisualPhase.PREPARING, session.visualPhase)
     }
+
+    @Test fun visualPhaseUpdatesTruthfulLabelAndDeduplicatesUnchangedEvents() {
+        val session = ControlSession(); session.start()
+        var changes = 0; session.changed = { changes++ }
+        session.present(ControlSession.VisualPhase.OBSERVING, session.epoch)
+        assertEquals("화면 확인 중", session.label)
+        session.present(ControlSession.VisualPhase.OBSERVING, session.epoch)
+        assertEquals(1, changes)
+        session.present(ControlSession.VisualPhase.WAITING, session.epoch)
+        assertEquals("응답 대기 중", session.label)
+        session.present(ControlSession.VisualPhase.COMPLETED, session.epoch)
+        assertEquals("실행 단계 확인 완료", session.label)
+        session.present(ControlSession.VisualPhase.FAILED, session.epoch)
+        assertEquals("결과 미확인 · 재관찰 필요", session.label)
+        val epoch = session.epoch
+        session.end()
+        session.present(ControlSession.VisualPhase.COMPLETED, epoch)
+        assertEquals("AI 제어 종료", session.label)
+    }
+    @Test fun geminiProgressHasOnlyObservedStageAndNoInventedStepCount() {
+        val session = ControlSession(); session.start(); val epoch = session.epoch
+        session.geminiProgress("waiting", epoch)
+        assertEquals("응답 대기 중", session.label)
+        assertTrue(session.progressDetail!!.contains("제출/완료 별도 확인"))
+        assertFalse(session.progressDetail!!.contains("1/"))
+        session.geminiProgress("completed", epoch)
+        assertEquals("Gemini 응답 확인 완료", session.label)
+        session.geminiProgress("interrupted", epoch)
+        assertTrue(session.progressDetail!!.contains("Gemini 생성 취소 미확인"))
+        session.end()
+        session.geminiProgress("completed", epoch)
+        assertEquals("AI 제어 종료", session.label)
+        assertNull(session.progressDetail)
+    }
+
 }

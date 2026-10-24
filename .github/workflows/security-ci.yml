@@ -28,6 +28,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -81,8 +82,37 @@ jobs:
           runtime: cloudflared
           save-cache: 'false'
 
+      - name: Plan impact-based acceptance (full release gates retained)
+        env:
+          ACCEPTANCE_BASE: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+        run: |
+          base="$ACCEPTANCE_BASE"
+          if [[ "$base" =~ ^0+$ ]]; then base="$(git rev-parse HEAD^)"; fi
+          python3 scripts/acceptance.py plan --base "$base" --head HEAD --output build/acceptance/plan.json
+
       - name: Android unit tests, lint and debug APK
         run: bash scripts/ci-gradle.sh security :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+
+      - name: Build acceptance evidence report
+        if: always()
+        env:
+          ACCEPTANCE_BASE: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+        run: |
+          base="$ACCEPTANCE_BASE"
+          if [[ "$base" =~ ^0+$ ]]; then base="$(git rev-parse HEAD^)"; fi
+          python3 scripts/acceptance.py report --base "$base" --head HEAD --output build/acceptance/report.json
+          python3 scripts/acceptance.py performance app/build/reports/benchmarks/operation-hash.json --output build/acceptance/hash-performance.json
+
+      - name: Upload acceptance evidence and raw host benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-evidence-${{ github.run_id }}
+          path: |
+            build/acceptance
+            app/build/reports/benchmarks
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Reject extended icons in resolved production dependencies
         run: python3 scripts/verify-vendored-material-icons.py --resolved-license-report app/src/main/assets/open_source_licenses.json

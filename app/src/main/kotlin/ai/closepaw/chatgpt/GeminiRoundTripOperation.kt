@@ -11,10 +11,11 @@ internal class GeminiRoundTripOperation(
     private val ui: GeminiRoundTripUi,
     private val allowed: () -> Boolean,
     private val record: (taskId: String, stage: String, reason: String) -> Unit,
-    private val collectorFactory: (Long) -> GeminiReplyCollector = { timeout ->
-        GeminiReplyCollector(ui, allowed, timeoutMs = timeout, maxPolls = 650)
-    },
+    private val collectorFactory: ((Long) -> GeminiReplyCollector)? = null,
+    private val progress: (String) -> Unit = {},
 ) : OperationHandler {
+    private fun emit(stage: String) { runCatching { progress(stage) } }
+
     private val cancellations = ConcurrentHashMap<String, AtomicBoolean>()
 
     companion object {
@@ -79,6 +80,7 @@ internal class GeminiRoundTripOperation(
                 else -> "not_sent"
             }
             event(finalStage, reason)
+            emit(when { completed -> "completed"; stopped -> "interrupted"; else -> "failed" })
             return OperationResult(success = completed, stdout = answer.orEmpty(), summary = when {
                 completed -> "Collected the new Gemini reply."
                 stopped && sent -> "ClosePaw stopped observing the submitted question. Gemini generation was not cancelled. Do not resend automatically."
@@ -111,7 +113,7 @@ internal class GeminiRoundTripOperation(
             if (text.isBlank()) return finish("invalid_text")
             val timeout = invocation.input["timeout_ms"]?.jsonPrimitive?.longOrNull ?: 60_000L
             if (!event("not_sent", required = true)) return finish("task_storage_failed")
-            val submission = GeminiQuestionSubmitter(ui, { allowed() && !cancelled.get() }).submit(text) {
+            val submission = GeminiQuestionSubmitter(ui, { allowed() && !cancelled.get() }, progress = progress).submit(text) {
                 // Persist this boundary BEFORE the UI primitive. A failed write prevents all sends.
                 if (cancelled.get()) false else event("submitting", required = true)
             }
@@ -132,7 +134,10 @@ internal class GeminiRoundTripOperation(
                         return finish("task_storage_failed")
                     }
                     event("waiting")
-                    val reply = collectorFactory(timeout).collect(text, submission.baseline) { cancelled.get() }
+                    emit("waiting")
+                    val collector = collectorFactory?.invoke(timeout) ?: GeminiReplyCollector(ui, allowed,
+                        timeoutMs = timeout, maxPolls = 650, progress = progress)
+                    val reply = collector.collect(text, submission.baseline) { cancelled.get() }
                     collectionMetrics = reply
                     sent = reply.submissionObserved
                     unknown = !sent

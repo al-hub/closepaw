@@ -1,6 +1,8 @@
 package ai.closepaw.chatgpt.control
 
 import ai.closepaw.chatgpt.operations.OperationResult
+import ai.closepaw.chatgpt.operations.OperationInterruptionEvidence
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.*
@@ -19,6 +21,31 @@ internal class GenericControlSequence(
         val trace = ControlTrace(correlationId)
         return try {
             kotlinx.coroutines.withContext(trace) { runTraced(labels, sessionId, trace) }
+        } catch (cancelled: CancellationException) {
+            currentCoroutineContext()[OperationInterruptionEvidence]?.snapshot = buildJsonObject {
+                put("correlation_id", correlationId)
+                put("cancel_requested", true)
+                put("terminal_reason", when {
+                    cancelled is kotlinx.coroutines.TimeoutCancellationException -> "operation_timeout"
+                    session()?.state == ControlSession.State.ENDED -> "control_session_ended"
+                    session()?.state == ControlSession.State.PAUSED -> "user_control_paused"
+                    else -> "execution_cancelled"
+                })
+                session()?.let { put("terminal_session_epoch", it.epoch) }
+                put("completed_verified_steps", trace.completed)
+                put("verification_scope", "guarded_click_and_post_observation; goal_not_verified")
+                // The loop advances its step index before the cancellation/safety checks.
+                // Only an entered guarded action removes that step from the unstarted suffix.
+                if (trace.inFlight && trace.step > trace.completed) put("interrupted_step", trace.step)
+                put("interrupted_step_action_started", trace.inFlight)
+                val startedPrefix = if (trace.inFlight) maxOf(trace.step, trace.completed) else trace.completed
+                put("pending_steps_not_started", (labels.size - startedPrefix).coerceAtLeast(0))
+                put("external_effect_uncertain", trace.inFlight)
+                put("outcome_unknown", trace.inFlight)
+                put("goal_verified", false)
+                put("trace_diagnostics_ref", correlationId)
+            }
+            throw cancelled
         } finally {
             ControlDiagnostics.record("sequence_trace", "finished", taskId = correlationId,
                 metrics = trace.snapshot())

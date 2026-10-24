@@ -27,7 +27,10 @@ internal class GeminiReplyCollector(
     private val stableMs: Long = 400,
     private val maxAnswerChars: Int = 16_000,
     private val maxPolls: Int = 650,
+    private val progress: (String) -> Unit = {},
 ) {
+    private fun emit(stage: String) { runCatching { progress(stage) } }
+
     init {
         require(timeoutMs > 0 && pollMs > 0 && stableMs > 0 && maxAnswerChars > 0 && maxPolls > 0)
     }
@@ -73,9 +76,10 @@ internal class GeminiReplyCollector(
                 if (isCancelled()) return finish("observer_cancelled", cancelled = true)
                 if (!allowed()) return finish("gemini_question_disabled")
                 if (ui.isLocked()) return finish("device_locked")
+                if (snapshot.generating == true) emit("waiting")
                 if (snapshot.replyPage != null) {
                     return GeminiPagedReplyCollector(ui, allowed, clockMillis, pause,
-                        (timeoutMs - (clockMillis() - start)).coerceAtLeast(1), pollMs, stableMs, maxAnswerChars)
+                        (timeoutMs - (clockMillis() - start)).coerceAtLeast(1), pollMs, stableMs, maxAnswerChars, progress = progress)
                         .collect(question, baseline, snapshot, isCancelled)
                 }
                 if (snapshot.submittedQuestion == question) {
@@ -89,6 +93,7 @@ internal class GeminiReplyCollector(
                     if (candidates.size > 1) return finish("reply_ambiguous")
                     val candidate = candidates.singleOrNull()
                     if (candidate != null) {
+                        emit(if (snapshot.generating == true) "waiting" else "collecting")
                         if (replyId != null && replyId != candidate.id) return finish("reply_changed")
                         val text = candidate.text
                         if (text != answer) stableSince = clockMillis()
@@ -112,6 +117,7 @@ internal class GeminiReplyCollector(
                                 completionObservedMs = completionAt?.let { (it - start).coerceAtLeast(0) })
                         }
                     } else {
+                        emit("waiting")
                         // A disappearing response cannot accumulate stability time across missing frames.
                         stableSince = clockMillis()
                     }

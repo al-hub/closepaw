@@ -281,4 +281,50 @@ class GenericControlOperationsTest {
         assertTrue(metrics.getValue("inter_operation_idle_ms").jsonPrimitive.long >= 0L)
         assertFalse(entry.toString().contains("stable-"))
     }
+    @Test fun physicalSessionEndPersistsVerifiedPrefixOnlyAfterExecutorUnwinds() = kotlinx.coroutines.test.runTest {
+        val session = ControlSession().also { check(it.start()) }
+        var writes = 0
+        val port = object : ControlPort {
+            override fun session() = session
+            override suspend fun capture() = ControlFrame("com.sec.android.app.popupcalculator", 7,
+                "digits-$writes", (0..9).map { ControlNode(it, it.toString(), clickable = true) })
+            override suspend fun apps(filter: String) = JsonArray(emptyList())
+            override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
+                writes++
+                if (writes == 3) { session.end(); currentCoroutineContext().ensureActive() }
+                return ControlEffect(true, true, "acknowledged")
+            }
+        }
+        val registry = OperationRegistry()
+        val mutex = Mutex()
+        GenericControlOperations(GenericControl(port, { true }), port, mutex) { OperationReadiness() }.register(registry)
+        val descriptor = registry.get(GenericControlOperations.SEQUENCE)!!.descriptor
+        val file = File.createTempFile("sequence-stop", ".json").apply { delete() }
+        try {
+            val store = OperationTaskStore(file)
+            val dispatcher = OperationDispatcher(registry, store, this, operationEpoch = { session.epoch })
+            val args = buildJsonObject {
+                put("operation_id", descriptor.id); put("operation_version", descriptor.version)
+                put("schema_hash", descriptor.schemaHash); put("request_id", "physical-x")
+                put("input", buildJsonObject {
+                    put("session_id", session.id); put("labels", JsonArray((1..9).map { JsonPrimitive(it.toString()) }))
+                })
+            }
+            val accepted = dispatcher.execute(args)
+            testScheduler.advanceUntilIdle()
+            val task = dispatcher.getTask(buildJsonObject { put("task_id", accepted.getValue("task_id")) })
+            assertEquals("outcome_unknown", task["state"]?.jsonPrimitive?.content)
+            val data = task.getValue("result").jsonObject.getValue("data").jsonObject
+            assertEquals(JsonPrimitive(2), data["completed_verified_steps"])
+            assertEquals(JsonPrimitive(3), data["interrupted_step"])
+            assertEquals(JsonPrimitive(6), data["pending_steps_not_started"])
+            assertEquals(JsonPrimitive(true), data["executor_stopped_confirmed"])
+            assertEquals(JsonPrimitive(true), data["external_effect_uncertain"])
+            assertEquals(JsonPrimitive("control_session_ended"), data["terminal_reason"])
+            assertEquals(3, writes); assertFalse(mutex.isLocked)
+            assertEquals(accepted["task_id"], dispatcher.execute(args)["task_id"])
+            assertEquals(3, writes)
+        } finally { file.delete() }
+    }
+
 }

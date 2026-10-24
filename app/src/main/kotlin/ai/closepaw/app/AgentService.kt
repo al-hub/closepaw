@@ -33,6 +33,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class AgentService : AccessibilityService() {
 
@@ -343,6 +345,8 @@ class AgentService : AccessibilityService() {
                                         service = this,
                                         lifecycleOwner = serviceLifecycleOwner,
                                         savedStateRegistryOwner = serviceLifecycleOwner,
+                                        emergencyStopBounds = { overlayController?.emergencyStopBounds()
+                                            ?: remoteControlIndicator.emergencyStopBounds() },
                                         onExpandCapsule = {
                                             // Tap island → expand Smart Capsule overlay, hide island
                                             overlayController?.onIslandTapped()
@@ -368,7 +372,7 @@ class AgentService : AccessibilityService() {
             registerDebugMobileActionReceiverIfNeeded(this, debugMobileActionReceiver)
             debugReceiversRegistered = true
         }
-        showRemoteControlActivity()
+        requestControlUiRestore("service_connected")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -402,6 +406,7 @@ class AgentService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        controlUiRestoreJob?.cancel()
         runCatching { unregisterReceiver(controlScreenReceiver) }
         remoteControlSession.end()
         hideRemoteControlActivity(force = true)
@@ -448,12 +453,63 @@ class AgentService : AccessibilityService() {
         serviceScope.cancel()
     }
 
+    private var controlUiRestoreJob: Job? = null
+    private var controlUiRestoreSequence = 0L
+
+    /** Visibility recovery is independent of execution and cannot reactivate an ended session. */
+    private fun requestControlUiRestore(trigger: String) {
+        controlUiRestoreJob?.cancel()
+        val admitted = remoteControlSession
+        val epoch = admitted.epoch
+        val restoreId = ++controlUiRestoreSequence
+        controlUiRestoreJob = serviceScope.launch {
+            ControlUiRestore(
+                now = android.os.SystemClock::elapsedRealtime,
+                unlocked = {
+                    !getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
+                        getSystemService(android.os.PowerManager::class.java).isInteractive
+                },
+                eligible = {
+                    isServiceActive && remoteControlSession === admitted && admitted.epoch == epoch &&
+                        (admitted.state !in setOf(ai.closepaw.chatgpt.control.ControlSession.State.IDLE,
+                            ai.closepaw.chatgpt.control.ControlSession.State.ENDED) ||
+                            overlayController?.stateHolder?.hasActiveTask == true)
+                },
+                restore = { showRemoteControlActivity() },
+                attached = {
+                    val controller = overlayController
+                    controller?.observedIsland() != null &&
+                        (controller.emergencyXAttached() || remoteControlIndicator.emergencyXAttached())
+                },
+                record = { reason, elapsed ->
+                    ai.closepaw.chatgpt.control.ControlDiagnostics.record("ui_restore", reason, elapsed,
+                        metrics = buildJsonObject {
+                            put("trigger", trigger); put("epoch", epoch)
+                            put("restore_id", restoreId)
+                            put("service_owner_id", Integer.toHexString(System.identityHashCode(this@AgentService)))
+                            put("keyguard_locked", getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked)
+                            put("interactive", getSystemService(android.os.PowerManager::class.java).isInteractive)
+                            put("clock_domain", "android_elapsed_realtime")
+                            put("event_elapsed_realtime_ms", android.os.SystemClock.elapsedRealtime())
+                            put("island_attached", overlayController?.observedIsland() != null)
+                            put("x_attached", overlayController?.emergencyXAttached() == true || remoteControlIndicator.emergencyXAttached())
+                        })
+                },
+            ).run()
+        }
+    }
+
     private val controlScreenReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
             if (intent?.action == android.content.Intent.ACTION_SCREEN_OFF) {
+                controlUiRestoreJob?.cancel()
                 remoteControlIndicator.hide()
                 actionVisualizer?.clear()
-            } else showRemoteControlActivity()
+            } else {
+                // Do not rely on a later accessibility event to clear an OEM keyguard race.
+                requestControlUiRestore(if (intent?.action == android.content.Intent.ACTION_USER_PRESENT)
+                    "user_present" else "screen_on")
+            }
         }
     }
 

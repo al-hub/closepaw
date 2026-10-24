@@ -34,3 +34,11 @@ dispatch 도구가 없는 경우의 예약 fallback과 수동 실행, 실패 진
 - UI 읽기/실행은 꼭 필요한 범위에서만 하고, `User control has priority`면 사용자 작업을 침범하지 않고 중단한다. 화면 멈춤·지연 호소 시 추가 조작보다 안전한 상태조회와 원인 진단을 우선한다.
 - AI가 시작한 세션은 작업 완료 시 `android.control.session.end`로 종료하고 결과를 확인한다. 사용자가 이미 종료한 세션은 다시 열거나 반복 종료하지 않는다.
 - 2026-10-22 실제 Gemini read_app 전 `ended` 세션을 시작해 읽기에 성공한 기록은 **사용자가 이후 휴대폰이 멈춘 듯하여 직접 세션 화면을 닫았다는 사실**과 별개이다. 현재 사용자 종료 의도를 우선하며 새 세션을 만들지 않는다.
+
+## 변경 영향 기반 수용 증거 (#150)
+
+새 기능 개발은 [자동 QA catalog와 실행서](qa/acceptance/README.md)를 참고한다.
+`python3 scripts/acceptance.py plan --base <기준SHA> --head HEAD --output build/acceptance/plan.json`으로
+빠른 로컬 회귀 범위를 선택하되 전체 Security CI/필수 UI/서명·공개 검증 게이트는 유지한다.
+이전 실기기 PASS는 원 source/version 조건의 역사 증거다. REUSED_EVIDENCE와 새 APK PASS를
+혼동하지 않는다. 변경된 공통 안전 경로 및 OEM 물리 동작의 최소 수용은 미검증이면 OPEN이다.

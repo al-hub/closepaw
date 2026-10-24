@@ -1,0 +1,379 @@
+{
+  "schema_version": 1,
+  "mandatory": [
+    "security",
+    "cancellation"
+  ],
+  "groups": {
+    "security": {
+      "jvm": [
+        "ai.closepaw.chatgpt.control.GenericControlTest",
+        "ai.closepaw.chatgpt.control.ControlSessionTest",
+        "ai.closepaw.chatgpt.control.ControlWindowPolicyTest",
+        "ai.closepaw.chatgpt.control.GenericControlActionPolicyTest",
+        "ai.closepaw.chatgpt.control.ControlResultPolicyTest"
+      ],
+      "depends_on": [],
+      "issues": [
+        145,
+        146,
+        147
+      ]
+    },
+    "cancellation": {
+      "jvm": [
+        "ai.closepaw.chatgpt.control.GenericControlOperationsTest",
+        "ai.closepaw.chatgpt.control.GenericControlSequenceTest",
+        "ai.closepaw.chatgpt.control.IslandControlTest",
+        "ai.closepaw.chatgpt.operations.OperationDispatcherTest"
+      ],
+      "depends_on": [
+        "security"
+      ],
+      "issues": [
+        146,
+        147
+      ]
+    },
+    "lifecycle": {
+      "jvm": [
+        "ai.closepaw.ui.overlay.*Test",
+        "ai.closepaw.app.*Test"
+      ],
+      "ui": [
+        "ai.closepaw.qa.ControlOverlayWindowTest"
+      ],
+      "depends_on": [
+        "security",
+        "cancellation"
+      ],
+      "issues": [
+        145
+      ]
+    },
+    "geometry": {
+      "jvm": [
+        "ai.closepaw.chatgpt.control.IslandControlTest",
+        "ai.closepaw.ui.overlay.*Test"
+      ],
+      "ui": [
+        "ai.closepaw.qa.IslandOperationTest",
+        "ai.closepaw.qa.ControlOverlayWindowTest"
+      ],
+      "depends_on": [
+        "lifecycle"
+      ],
+      "issues": [
+        146
+      ]
+    },
+    "performance": {
+      "jvm": [
+        "ai.closepaw.chatgpt.control.ControlLatencyStatsTest",
+        "ai.closepaw.chatgpt.control.ControlTraceTest",
+        "ai.closepaw.chatgpt.control.GenericControlSequenceTest",
+        "ai.closepaw.chatgpt.operations.OperationHashTest",
+        "ai.closepaw.chatgpt.operations.OperationHashBenchmarkTest"
+      ],
+      "depends_on": [
+        "security",
+        "cancellation"
+      ],
+      "issues": [
+        147
+      ]
+    }
+  },
+  "rules": [
+    {
+      "paths": [
+        "*.md",
+        "doc/*"
+      ],
+      "groups": []
+    },
+    {
+      "paths": [
+        "qa/*",
+        "scripts/*"
+      ],
+      "groups": [],
+      "full_jvm": true
+    },
+    {
+      "paths": [
+        "app/src/main/kotlin/ai/closepaw/ui/overlay/*",
+        "app/src/main/kotlin/ai/closepaw/app/*",
+        "app/src/main/kotlin/ai/closepaw/service/*"
+      ],
+      "groups": [
+        "lifecycle",
+        "geometry"
+      ]
+    },
+    {
+      "paths": [
+        "app/src/main/kotlin/ai/closepaw/chatgpt/control/*",
+        "app/src/main/kotlin/ai/closepaw/chatgpt/operations/*"
+      ],
+      "groups": [
+        "security",
+        "cancellation",
+        "performance",
+        "lifecycle"
+      ]
+    },
+    {
+      "paths": [
+        "app/src/test/*",
+        "app/src/androidTest/*"
+      ],
+      "groups": [
+        "security",
+        "cancellation",
+        "lifecycle",
+        "geometry",
+        "performance"
+      ],
+      "full_jvm": true
+    },
+    {
+      "paths": [
+        ".github/*",
+        "gradle*",
+        "app/build.gradle.kts",
+        "app/src/main/AndroidManifest.xml",
+        "build.gradle.kts",
+        "settings.gradle.kts"
+      ],
+      "groups": [
+        "security",
+        "cancellation",
+        "lifecycle",
+        "geometry",
+        "performance"
+      ],
+      "full_jvm": true
+    }
+  ],
+  "physical": [
+    {
+      "issue": 145,
+      "groups": [
+        "lifecycle"
+      ],
+      "check": "Unlock once after screen OFF; exactly one X/island, correlate restore latency"
+    },
+    {
+      "issue": 146,
+      "groups": [
+        "geometry"
+      ],
+      "check": "Galaxy top-boundary target screen Y59 matches actual Y59; safe clamp"
+    },
+    {
+      "issue": 147,
+      "groups": [
+        "performance",
+        "lifecycle"
+      ],
+      "check": "Matched Android local 10+10 latency and current-version X cancellation on affected shared safety path"
+    }
+  ],
+  "historical_evidence": [
+    {
+      "source_commit": "ed46c6a7e39b04e10483e4c501e4b1530fd2026d",
+      "apk": {
+        "version_name": "0.1.79",
+        "version_code": 80,
+        "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba"
+      },
+      "environment": {
+        "device": "Galaxy SM-S926N",
+        "os": "Android/OneUI; exact build not recorded",
+        "network": "not fixed or independently measured"
+      },
+      "status": "PASS",
+      "dependencies": [
+        "app/src/main/*",
+        "app/build.gradle.kts",
+        ".github/*",
+        "scripts/*"
+      ],
+      "test_id": "physical-v0179-calculator-baseline10",
+      "issues": [
+        147
+      ],
+      "feature": "local sequence accuracy and historical baseline only",
+      "input": "Samsung Calculator clear, enter digits1..9; ten trials",
+      "expected": "123,456,789 each trial",
+      "observed": "10/10 correct; mean10963.9ms; Voice E2E not measured",
+      "raw_logs": [
+        "doc/dev/evidence/issues145-147-v0179-baseline10.json"
+      ],
+      "raw_log_sha256": {
+        "doc/dev/evidence/issues145-147-v0179-baseline10.json": "6154641306d51fd50e64704015cbb662f285b3f109305587ae099f0d5ce97dce"
+      }
+    },
+    {
+      "source_commit": "ed46c6a7e39b04e10483e4c501e4b1530fd2026d",
+      "apk": {
+        "version_name": "0.1.79",
+        "version_code": 80,
+        "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba"
+      },
+      "environment": {
+        "device": "Galaxy SM-S926N",
+        "os": "Android/OneUI; exact build not recorded",
+        "network": "not fixed or independently measured"
+      },
+      "status": "PASS",
+      "dependencies": [
+        "app/src/main/*",
+        "app/build.gradle.kts",
+        ".github/*",
+        "scripts/*"
+      ],
+      "test_id": "physical-v0179-X-stop",
+      "issues": [
+        147
+      ],
+      "feature": "physical stop partial-effect uncertainty preserved",
+      "input": "User short X during digits1..9",
+      "expected": "Stop remaining steps; no replay",
+      "observed": "User confirmed stop; completed2, step3 uncertain, no traces4..9. Durable queue/external effect not fully proven.",
+      "raw_logs": [
+        "https://github.com/al-hub/closepaw/issues/147#issuecomment-6377278349"
+      ],
+      "raw_log_sha256": {}
+    },
+    {
+      "source_commit": "ed46c6a7e39b04e10483e4c501e4b1530fd2026d",
+      "apk": {
+        "version_name": "0.1.79",
+        "version_code": 80,
+        "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba"
+      },
+      "environment": {
+        "device": "Galaxy SM-S926N",
+        "os": "Android/OneUI; exact build not recorded",
+        "network": "not fixed or independently measured"
+      },
+      "status": "PASS",
+      "dependencies": [
+        "app/src/main/*",
+        "app/build.gradle.kts",
+        ".github/*",
+        "scripts/*"
+      ],
+      "test_id": "physical-v0179-lock-restore",
+      "issues": [
+        145
+      ],
+      "feature": "historical ordinary unlock restoration only",
+      "input": "Lock/unlock without going Home",
+      "expected": "X and island visible",
+      "observed": "User immediate visibility PASS; separate screen-OFF trial had delay and is not covered by this PASS",
+      "raw_logs": [
+        "https://github.com/al-hub/closepaw/issues/145#issuecomment-6377151810"
+      ],
+      "raw_log_sha256": {}
+    },
+    {
+      "source_commit": "ed46c6a7e39b04e10483e4c501e4b1530fd2026d",
+      "apk": {
+        "version_name": "0.1.79",
+        "version_code": 80,
+        "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba"
+      },
+      "environment": {
+        "device": "Galaxy SM-S926N",
+        "os": "Android/OneUI; exact build not recorded",
+        "network": "not fixed or independently measured"
+      },
+      "status": "PASS",
+      "dependencies": [
+        "app/src/main/*",
+        "app/build.gradle.kts",
+        ".github/*",
+        "scripts/*"
+      ],
+      "test_id": "physical-v0179-island-position",
+      "issues": [
+        146
+      ],
+      "feature": "Historical v79 island movement and session position persistence",
+      "input": "Owned-window drag (+40,+40) and return; separate session replacement trial",
+      "expected": "Requested delta matches observed screen movement; session replacement preserves position",
+      "observed": "v79 (393,309)->(433,349)->(393,309), verified true; session replacement preserved (473,369). Does not prove service/process recreation.",
+      "raw_logs": [
+        "https://github.com/al-hub/closepaw/issues/146#issuecomment-6367326404",
+        "https://github.com/al-hub/closepaw/issues/146#issuecomment-6367380753"
+      ]
+    },
+    {
+      "source_commit": "ed46c6a7e39b04e10483e4c501e4b1530fd2026d",
+      "apk": {
+        "version_name": "0.1.79",
+        "version_code": 80,
+        "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba"
+      },
+      "environment": {
+        "device": "Galaxy SM-S926N",
+        "os": "Android/OneUI; exact build not recorded",
+        "network": "not fixed or independently measured"
+      },
+      "status": "FAIL",
+      "dependencies": [
+        "app/src/main/*",
+        "app/build.gradle.kts",
+        ".github/*",
+        "scripts/*"
+      ],
+      "test_id": "physical-v0179-screen-off-delay",
+      "issues": [
+        145
+      ],
+      "feature": "Screen-OFF unlock UI timing",
+      "input": "Screen OFF -> wake -> unlock",
+      "expected": "Immediate X/island restore",
+      "observed": "User reported display after a short delay; delay milliseconds not measured",
+      "raw_logs": [
+        "https://github.com/al-hub/closepaw/issues/145#issuecomment-6377622172"
+      ]
+    },
+    {
+      "source_commit": "ed46c6a7e39b04e10483e4c501e4b1530fd2026d",
+      "apk": {
+        "version_name": "0.1.79",
+        "version_code": 80,
+        "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba"
+      },
+      "environment": {
+        "device": "Galaxy SM-S926N",
+        "os": "Android/OneUI; exact build not recorded",
+        "network": "not fixed or independently measured"
+      },
+      "status": "FAIL",
+      "dependencies": [
+        "app/src/main/*",
+        "app/build.gradle.kts",
+        ".github/*",
+        "scripts/*"
+      ],
+      "test_id": "physical-v0179-island-top-67px",
+      "issues": [
+        146
+      ],
+      "feature": "Top-boundary screen-coordinate mismatch",
+      "input": "From (393,309) request dx=-350,dy=-250 twice",
+      "expected": "Observed target (43,59)",
+      "observed": "Observed (43,126), Y+67px twice; movement unconfirmed; root cause not physically measured",
+      "raw_logs": [
+        "https://github.com/al-hub/closepaw/issues/146#issuecomment-6367455722",
+        "https://github.com/al-hub/closepaw/issues/146#issuecomment-6367525994"
+      ]
+    }
+  ],
+  "production_signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba"
+}

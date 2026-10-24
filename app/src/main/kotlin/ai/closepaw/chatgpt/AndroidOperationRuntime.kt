@@ -60,7 +60,8 @@ internal class AndroidOperationRuntime(
                 block()
             } finally {
                 session.interrupt = {}
-                session.feedback("작업 종료 · 결과 확인")
+                // Keep the executor's truthful final stage; cleanup must not replace failure
+                // or cancelled observation with a generic execution label.
                 withContext(NonCancellable + Dispatchers.Main) { service.hideRemoteControlActivity() }
             }
         }
@@ -185,6 +186,9 @@ internal class AndroidOperationRuntime(
                             // Logging is best-effort and cannot turn a durable submission into a retry.
                             runCatching { roundTripDiagnostics.record(DraftDiagnostic(taskId, stage, reason,
                                 (android.os.SystemClock.elapsedRealtime() - started).coerceAtLeast(0), ui.evidence())) }
+                        }, progress = { stage ->
+                            // UI feedback is best effort and cannot alter the durable send boundary.
+                            runCatching { service.remoteControlSession.geminiProgress(stage, executionEpoch) }
                         })
                         activeQuestions[invocation.taskId] = operation
                         try { operation.invoke(invocation) } finally { activeQuestions.remove(invocation.taskId, operation) }
