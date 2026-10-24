@@ -234,4 +234,41 @@ class OperationDispatcherTest {
         registry.register(OperationDescriptor("one", "One", inputSchema = schema), handler)
         try { registry.register(OperationDescriptor("one", "One", inputSchema = schema), handler); fail("duplicate accepted") } catch (_: IllegalArgumentException) {}
     }
+    @Test fun structuredInterruptionPersistsStoppedExecutorSeparatelyFromExternalEffect() = kotlinx.coroutines.test.runTest {
+        for (uncertain in listOf(false, true)) {
+            var cleanupFinished = false
+            val registry = OperationRegistry()
+            registry.register(OperationDescriptor("sequence", "Sequence", inputSchema = schema, readOnly = false), object : OperationHandler {
+                override suspend fun invoke(invocation: OperationInvocation): OperationResult {
+                    try {
+                        currentCoroutineContext()[OperationInterruptionEvidence]!!.snapshot = buildJsonObject {
+                            put("external_effect_uncertain", uncertain)
+                            put("outcome_unknown", uncertain)
+                            put("completed_verified_steps", 2)
+                            put("interrupted_step", 3)
+                            put("pending_steps_not_started", 6)
+                        }
+                        throw CancellationException("test")
+                    } finally { withContext(NonCancellable) { delay(1); cleanupFinished = true } }
+                }
+            })
+            val file = File.createTempFile("interruption", ".json").apply { delete() }
+            val store = OperationTaskStore(file)
+            try {
+                val dispatcher = OperationDispatcher(registry, store, this)
+                val accepted = dispatcher.execute(args("sequence"))
+                testScheduler.advanceUntilIdle()
+                assertTrue(cleanupFinished)
+                val task = dispatcher.getTask(buildJsonObject { put("task_id", accepted.getValue("task_id")) })
+                assertEquals(if (uncertain) "outcome_unknown" else "interrupted", task["state"]?.jsonPrimitive?.content)
+                val data = task.getValue("result").jsonObject.getValue("data").jsonObject
+                assertEquals(JsonPrimitive(true), data["executor_stopped_confirmed"])
+                assertEquals(JsonPrimitive(uncertain), data["external_effect_uncertain"])
+                assertEquals(JsonPrimitive(6), data["pending_steps_not_started"])
+                assertEquals(accepted["task_id"], dispatcher.execute(args("sequence"))["task_id"])
+                assertEquals(task["result"], OperationTaskStore(file).get(accepted.getValue("task_id").jsonPrimitive.content)?.get("result"))
+            } finally { file.delete() }
+        }
+    }
+
 }

@@ -31,6 +31,7 @@ class IslandOverlayHost(
     lifecycleOwner: LifecycleOwner,
     savedStateRegistryOwner: SavedStateRegistryOwner,
     private val onExpandCapsule: () -> Unit,
+    private val emergencyStopBounds: () -> android.graphics.Rect? = { null },
 ) {
     companion object {
         private const val TAG = "IslandOverlayHost"
@@ -89,11 +90,9 @@ class IslandOverlayHost(
         val nextY = ((if (islandY < 0) getStatusBarHeight() + dp(88) else islandY) + stepY).coerceIn(0, maxY)
         if (nextX == islandX && nextY == islandY) return
         // Keep the emergency X's real persisted hit area unobstructed.
-        val stop = service.getSharedPreferences("x_stop_overlay", 0)
-        val stopX = stop.getInt("x", metrics.widthPixels - dp(68))
-        val stopY = stop.getInt("y", dp(40))
-        if (nextX < stopX + dp(56) && nextX + size.first > stopX &&
-            nextY < stopY + dp(56) && nextY + size.second > stopY) return
+        val stop = stopBounds()
+        val candidate = android.graphics.Rect(nextX, nextY, nextX + size.first, nextY + size.second)
+        if (android.graphics.Rect.intersects(candidate, stop) || overlapsCutout(candidate)) return
         try {
             if (!composeHost.updateLayoutParams { it.x = nextX; it.y = nextY }) return
             islandX = nextX
@@ -119,12 +118,16 @@ class IslandOverlayHost(
     private fun correctMeasuredPosition() {
         val size = composeHost.measuredSize() ?: return
         val metrics = service.resources.displayMetrics
-        val stop = service.getSharedPreferences("x_stop_overlay", 0)
-        val point = ai.closepaw.ui.overlay.OverlayPositionPolicy.place(islandX, islandY, size.first, size.second,
-            metrics.widthPixels, metrics.heightPixels,
-            stop.getInt("x", metrics.widthPixels - dp(68)).coerceIn(0, (metrics.widthPixels - dp(56)).coerceAtLeast(0)),
-            stop.getInt("y", dp(40)).coerceIn(0, (metrics.heightPixels - dp(56)).coerceAtLeast(0)), dp(56))
-        if (point == null) { hide(); return } // No safe room: preserve X and fail closed.
+        val stop = stopBounds()
+        val rect = android.graphics.Rect(islandX, islandY, islandX + size.first, islandY + size.second)
+        val cutouts = composeHost.attachedRoot()?.rootWindowInsets?.displayCutout?.boundingRects.orEmpty()
+        val safeY = cutouts.filter { android.graphics.Rect.intersects(rect, it) }.maxOfOrNull { it.bottom }
+            ?.coerceAtLeast(islandY) ?: islandY
+        val point = ai.closepaw.ui.overlay.OverlayPositionPolicy.place(islandX, safeY, size.first, size.second,
+            metrics.widthPixels, metrics.heightPixels, stop.left, stop.top,
+            stop.width(), stop.height())
+        if (point == null || overlapsCutout(android.graphics.Rect(point.first, point.second,
+                point.first + size.first, point.second + size.second))) { hide(); return } // No safe room: preserve X and fail closed.
         if ((point.first != islandX || point.second != islandY) &&
             composeHost.updateLayoutParams { it.x = point.first; it.y = point.second }) {
             islandX = point.first; islandY = point.second; persistPosition()
@@ -217,6 +220,7 @@ class IslandOverlayHost(
         if (!readOnlyMode || !root.isShown) return null
         val xy = IntArray(2); root.getLocationOnScreen(xy)
         val metrics = service.resources.displayMetrics
+        recordGeometry(root, xy)
         return ai.closepaw.chatgpt.control.IslandBounds(xy[0], xy[1], root.width, root.height,
             metrics.widthPixels, metrics.heightPixels, "$hostId:${System.identityHashCode(root)}:$physicalInputEpoch:${root.display?.rotation}")
     }
@@ -302,7 +306,13 @@ class IslandOverlayHost(
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
+            gravity = Gravity.TOP or Gravity.LEFT
+            // Operation bounds and saved positions are physical screen pixels. The default
+            // fitInsetsTypes fits system bars even with FLAG_LAYOUT_IN_SCREEN, moving the
+            // frame origin by the OEM status inset (67px on the reported Galaxy). Explicit
+            // full-display layout prevents double-applying that origin to requested y.
+            setFitInsetsTypes(0)
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             // Initial placement is provisional until the real Compose root is measured.
             val size = composeHost.measuredSize() ?: (0 to 0)
             val maxX = (service.resources.displayMetrics.widthPixels - size.first).coerceAtLeast(0)
@@ -310,6 +320,45 @@ class IslandOverlayHost(
             x = (if (islandX < 0) maxX / 2 else islandX).coerceIn(0, maxX)
             y = (if (islandY < 0) statusBarHeight + dp(88) else islandY).coerceIn(0, maxY)
         }
+    }
+
+    /** X may retain an inset-fitted window: never compare its LayoutParams with screen pixels. */
+    private fun stopBounds(): android.graphics.Rect {
+        emergencyStopBounds()?.let { return it }
+        val metrics = service.resources.displayMetrics
+        val stop = service.getSharedPreferences("x_stop_overlay", 0)
+        // Before X's first traversal reserve both the requested and inset-shifted hit area.
+        val x = stop.getInt("x", metrics.widthPixels - dp(68))
+        val y = stop.getInt("y", dp(40))
+        return android.graphics.Rect(x, y, x + dp(56), y + dp(56) + getStatusBarHeight())
+    }
+
+    private fun overlapsCutout(rect: android.graphics.Rect): Boolean =
+        composeHost.attachedRoot()?.rootWindowInsets?.displayCutout?.boundingRects.orEmpty()
+            .any { android.graphics.Rect.intersects(rect, it) }
+
+    private var lastGeometry: String? = null
+    private fun recordGeometry(root: View, xy: IntArray) {
+        val lp = root.layoutParams as? WindowManager.LayoutParams ?: return
+        val bars = root.rootWindowInsets?.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.systemBars())
+        val cutout = root.rootWindowInsets?.displayCutout
+        val key = "${lp.x}:${lp.y}:${xy[0]}:${xy[1]}:${root.width}:${root.height}:$bars:${root.display?.rotation}"
+        if (lastGeometry == key) return
+        lastGeometry = key
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record("island_geometry", "screen_coordinates",
+            metrics = kotlinx.serialization.json.buildJsonObject {
+                put("elapsed_realtime_ms", kotlinx.serialization.json.JsonPrimitive(android.os.SystemClock.elapsedRealtime()))
+                put("layout_x", kotlinx.serialization.json.JsonPrimitive(lp.x)); put("layout_y", kotlinx.serialization.json.JsonPrimitive(lp.y))
+                put("screen_x", kotlinx.serialization.json.JsonPrimitive(xy[0])); put("screen_y", kotlinx.serialization.json.JsonPrimitive(xy[1]))
+                put("frame_offset_x", kotlinx.serialization.json.JsonPrimitive(xy[0] - lp.x))
+                put("frame_offset_y", kotlinx.serialization.json.JsonPrimitive(xy[1] - lp.y))
+                put("width", kotlinx.serialization.json.JsonPrimitive(root.width)); put("height", kotlinx.serialization.json.JsonPrimitive(root.height))
+                put("inset_top", kotlinx.serialization.json.JsonPrimitive(bars?.top ?: 0))
+                put("inset_bottom", kotlinx.serialization.json.JsonPrimitive(bars?.bottom ?: 0))
+                put("cutout_top", kotlinx.serialization.json.JsonPrimitive(cutout?.safeInsetTop ?: 0))
+                put("fit_insets_types", kotlinx.serialization.json.JsonPrimitive(lp.fitInsetsTypes))
+                put("rotation", kotlinx.serialization.json.JsonPrimitive(root.display?.rotation ?: -1))
+            })
     }
 
     private fun getStatusBarHeight(): Int {

@@ -43,12 +43,12 @@ class GeminiRoundTripOperationTest {
     }
     private fun input(extra: JsonObject = buildJsonObject {}) = JsonObject(mapOf("text" to JsonPrimitive(QUESTION)) + extra)
     private fun invocation(extra: JsonObject = buildJsonObject {}) = OperationInvocation("task", input(extra))
-    private fun operation(ui: Ui, events: MutableList<String> = mutableListOf(), record: ((String,String,String)->Unit)? = null): GeminiRoundTripOperation {
+    private fun operation(ui: Ui, events: MutableList<String> = mutableListOf(), record: ((String,String,String)->Unit)? = null, progress: (String) -> Unit = {}): GeminiRoundTripOperation {
         return GeminiRoundTripOperation(ui, { ui.enabled }, record ?: { _, stage, reason -> events.add("$stage:$reason"); Unit }, { timeout ->
             var time = 0L
             GeminiReplyCollector(ui, { ui.enabled }, clockMillis = { time }, pause = { time += it },
-                timeoutMs = timeout, pollMs = 100, stableMs = 100, maxPolls = 100)
-        })
+                timeoutMs = timeout, pollMs = 100, stableMs = 100, maxPolls = 100, progress = progress)
+        }, progress)
     }
     @Test fun successPersistsSubmittingBeforeSingleClickAndReturnsOnlyNewAnswer() = runBlocking {
         val ui = Ui(); val events = mutableListOf<String>()
@@ -168,4 +168,36 @@ class GeminiRoundTripOperationTest {
         } finally { scope.cancel(); file.parentFile.deleteRecursively() }
     }
     companion object { private const val QUESTION = "private question" }
+    @Test fun actualExecutorStagesDriveProgressAndOnlyVerifiedReplyCompletes() = runBlocking {
+        val stages = mutableListOf<String>()
+        val ui = Ui()
+        assertThat(operation(ui, progress = { stages += it }).invoke(invocation()).success).isTrue()
+        assertThat(stages).containsAtLeast("launching", "observing", "inputting", "submitting", "waiting", "collecting", "completed").inOrder()
+        assertThat(stages.last()).isEqualTo("completed")
+        val failedStages = mutableListOf<String>()
+        val blocked = Ui().apply { draft = "existing" }
+        operation(blocked, progress = { failedStages += it }).invoke(invocation())
+        assertThat(blocked.clicks).isEqualTo(0)
+        assertThat(failedStages.last()).isEqualTo("failed")
+        assertThat(failedStages).doesNotContain("inputting")
+        assertThat(failedStages).doesNotContain("completed")
+    }
+
+    @Test fun cancelledObservationProgressNeverClaimsGenerationStoppedOrCompleted() = runBlocking {
+        val stages = mutableListOf<String>()
+        val ui = Ui().apply { onSnapshot = { if (clicks > 0) throw CancellationException("observer stopped") } }
+        val result = operation(ui, progress = { stages += it }).invoke(invocation())
+        assertThat(result.success).isFalse()
+        assertThat(result.data["generation_cancelled"]!!.jsonPrimitive.boolean).isFalse()
+        assertThat(stages.last()).isEqualTo("interrupted")
+        assertThat(stages).doesNotContain("completed")
+    }
+
+    @Test fun displayCallbackFailureCannotChangeTheSubmissionOrReplayIt() = runBlocking {
+        val ui = Ui()
+        val result = operation(ui, progress = { error("display unavailable") }).invoke(invocation())
+        assertThat(result.success).isTrue()
+        assertThat(ui.clicks).isEqualTo(1)
+    }
+
 }

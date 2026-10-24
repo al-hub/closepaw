@@ -10,7 +10,17 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         private set
     @Synchronized fun present(phase: VisualPhase, expectedEpoch: Long?) {
         if (state != State.ACTIVE || (expectedEpoch != null && epoch != expectedEpoch)) return
-        visualPhase = phase; changed()
+        if (visualPhase == phase) return
+        visualPhase = phase
+        label = when (phase) {
+            VisualPhase.PREPARING -> "AI 제어 준비"
+            VisualPhase.OBSERVING -> "화면 확인 중"
+            VisualPhase.EXECUTING -> "AI 제어 중"
+            VisualPhase.WAITING -> "응답 대기 중"
+            VisualPhase.COMPLETED -> "실행 단계 확인 완료"
+            VisualPhase.FAILED -> "결과 미확인 · 재관찰 필요"
+        }
+        changed()
     }
     @Volatile var state = when (initial) { "paused" -> State.PAUSED; "ended", "active", "waiting", "reobserving" -> State.ENDED; else -> State.IDLE }
         private set
@@ -28,6 +38,26 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         val next = if (completed + 1 < total) "${completed + 2}/$total" else "없음"
         progressDetail = "목표: 숫자 $total 단계 입력\n대상: 허용된 계산기\n완료: $completed/$total\n현재: $current\n다음: $next\n상태: $stage"
         changed()
+    }
+    /** Fixed stage vocabulary only: never display prompt, response, package or raw errors. */
+    @Synchronized fun geminiProgress(stage: String, expectedEpoch: Long) {
+        if (epoch != expectedEpoch || state != State.ACTIVE) return
+        val (action, status, phase) = when (stage) {
+            "launching" -> Triple("앱을 실행하고 있습니다", "Gemini 실행 요청 중", VisualPhase.EXECUTING)
+            "observing" -> Triple("화면 확인 중", "기존 입력·대상 화면 확인 중", VisualPhase.OBSERVING)
+            "inputting" -> Triple("입력란에 글자를 입력하고 있습니다", "빈 입력란에 질문 입력 중", VisualPhase.EXECUTING)
+            "submitting" -> Triple("선택한 항목을 누르고 있습니다", "입력 일치 확인 완료 · 전송 동작 요청 중", VisualPhase.EXECUTING)
+            "waiting" -> Triple("응답 대기 중", "전송 동작 요청 후 새 답변 관찰 중 · 제출/완료 별도 확인", VisualPhase.WAITING)
+            "collecting" -> Triple("화면 확인 중", "새 답변과 완료·범위 확인 중", VisualPhase.OBSERVING)
+            "scrolling" -> Triple("화면을 스크롤하고 있습니다", "검증된 답변 영역의 다음 범위 확인 중", VisualPhase.EXECUTING)
+            "completed" -> Triple("Gemini 응답 확인 완료", "새 답변과 전체 수집 범위 확인 완료", VisualPhase.COMPLETED)
+            "interrupted" -> Triple("응답 관찰 중단", "ClosePaw 관찰 중단 · Gemini 생성 취소 미확인 · 자동 재전송 금지", VisualPhase.FAILED)
+            "failed" -> Triple("결과 미확인 · 재관찰 필요", "응답 또는 제출 확인 실패 · 자동 재전송 금지", VisualPhase.FAILED)
+            else -> return
+        }
+        val detail = "목표: Gemini 질문 및 새 응답 확인\n대상: Gemini\n상태: $status"
+        if (label == action && progressDetail == detail && visualPhase == phase) return
+        label = action; progressDetail = detail; visualPhase = phase; changed()
     }
     var changed: () -> Unit = {}
     var interrupt: () -> Unit = {}
@@ -80,6 +110,7 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     }
     @Synchronized fun feedback(text: String, expectedEpoch: Long? = null) {
         if (state != State.ACTIVE || (expectedEpoch != null && epoch != expectedEpoch)) return
+        if (label == text) return
         label = text; changed()
     }
     private fun transition(next: State, text: String) {

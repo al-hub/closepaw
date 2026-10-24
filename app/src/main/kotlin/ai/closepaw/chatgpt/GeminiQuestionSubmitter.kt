@@ -14,7 +14,10 @@ internal class GeminiQuestionSubmitter(
     private val ui: GeminiRoundTripUi,
     private val allowed: () -> Boolean,
     private val pause: suspend (Long) -> Unit = { delay(it) },
+    private val progress: (String) -> Unit = {},
 ) {
+    private fun emit(stage: String) { runCatching { progress(stage) } }
+
     suspend fun submit(text: String, beforeSend: suspend () -> Boolean): GeminiSubmissionResult {
         var clickAttempted = false
         fun no(reason: String) = GeminiSubmissionResult.NotSent(reason)
@@ -22,7 +25,9 @@ internal class GeminiQuestionSubmitter(
             if (text.isBlank() || text.length > 8000) return no("invalid_text")
             if (!allowed()) return no("gemini_question_disabled")
             if (ui.isLocked()) return no("device_locked")
+            emit("launching")
             if (!ui.launch()) return no(ui.launchFailureReason)
+            emit("observing")
             val baseline = ui.snapshot()
             if (!baseline.foreground) return no("target_not_foreground")
             if (!baseline.traversalComplete) return no("traversal_incomplete")
@@ -31,6 +36,7 @@ internal class GeminiQuestionSubmitter(
             if (baseline.submittedQuestion == text) return no("submission_correlation_ambiguous")
             if (baseline.generating == true) return no("generation_in_progress")
             if (!allowed() || ui.isLocked()) return no("target_changed")
+            emit("inputting")
             when (ui.setIfEmpty(text)) {
                 DraftWriteResult.EXISTING_DRAFT -> return no("existing_draft")
                 DraftWriteResult.TARGET_CHANGED -> return no("target_changed")
@@ -62,6 +68,7 @@ internal class GeminiQuestionSubmitter(
             if (!allowed() || ui.isLocked()) return no("target_changed")
             if (!beforeSend()) return no("submission_not_persisted")
             if (!allowed() || ui.isLocked()) return no("target_changed")
+            emit("submitting")
             clickAttempted = true
             return when (ui.sendIfMatches(text, baseline.targetKey)) {
                 GeminiSendResult.CLICKED -> GeminiSubmissionResult.Sent(ready)

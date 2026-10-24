@@ -70,6 +70,7 @@ internal class OperationDispatcher(
         val claimed = try { store.claim(task) } catch (_: Exception) { return error("task_storage_failed", "Unable to durably record request; operation was not started.") }
         if (!claimed.created) return if (claimed.conflict) error("request_id_conflict", "request_id was already used with different input or operation schema.") else page(claimed.task, 0, DEFAULT_PAGE)
         scope.launch {
+            val interruption = OperationInterruptionEvidence()
             try {
                 val shouldStart = synchronized(this@OperationDispatcher) {
                     if (store.get(taskId)?.get("state")?.jsonPrimitive?.content == "cancelled") false
@@ -88,7 +89,9 @@ internal class OperationDispatcher(
                         "summary" to JsonPrimitive("control_session_changed_before_start")))
                     return@launch
                 }
-                val result = operation.handler.invoke(OperationInvocation(taskId, arguments.getValue("input").jsonObject))
+                val result = withContext(interruption) {
+                    operation.handler.invoke(OperationInvocation(taskId, arguments.getValue("input").jsonObject))
+                }
                 val bounded = resultJson(result)
                 if (OperationSchemaValidator.validate(operation.descriptor.outputSchema, bounded) != null) {
                     val invalid = error("invalid_output", "Operation may have executed, but its returned output does not match the registered schema. Do not automatically retry.")
@@ -100,7 +103,20 @@ internal class OperationDispatcher(
                     store.updateActive(taskId, mapOf("state" to JsonPrimitive(terminalState(result)), "result" to bounded, "summary" to bounded.getValue("summary"), "completed_at_ms" to JsonPrimitive(System.currentTimeMillis())))
                 }
             } catch (_: CancellationException) {
-                store.updateActive(taskId, mapOf("state" to JsonPrimitive("outcome_unknown"), "summary" to JsonPrimitive("Execution observer stopped; command termination is not confirmed.")))
+                val evidence = interruption.snapshot
+                if (evidence != null) {
+                    // The structured handler has unwound, including NonCancellable cleanup.
+                    // Local executor stop does not imply an app's in-flight effect was undone.
+                    val uncertain = evidence["external_effect_uncertain"]?.jsonPrimitive?.booleanOrNull != false
+                    val result = resultJson(OperationResult(success = false,
+                        summary = "Local executor stopped; external effect uncertainty is reported separately. Do not replay.",
+                        data = JsonObject(evidence + mapOf("executor_stopped_confirmed" to JsonPrimitive(true)))))
+                    store.updateActive(taskId, mapOf("state" to JsonPrimitive(if (uncertain) "outcome_unknown" else "interrupted"),
+                        "result" to result, "summary" to result.getValue("summary"),
+                        "completed_at_ms" to JsonPrimitive(System.currentTimeMillis())))
+                } else {
+                    store.updateActive(taskId, mapOf("state" to JsonPrimitive("outcome_unknown"), "summary" to JsonPrimitive("Execution observer stopped; command termination is not confirmed.")))
+                }
             } catch (_: Exception) {
                 store.updateActive(taskId, mapOf("state" to JsonPrimitive("outcome_unknown"), "summary" to JsonPrimitive("Execution failed to return a confirmed outcome; do not automatically retry.")))
             }

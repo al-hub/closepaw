@@ -15,6 +15,7 @@ class GenericControlSequenceTest {
         var duplicateDigit = false
         var unknownEffect = false
         var changeAppAfterFirst = false
+        var cancelOnThird = false
 
         override suspend fun capture(): ControlFrame {
             val digits = (0..9).map { ControlNode(it, it.toString(), clickable = true) }
@@ -23,6 +24,7 @@ class GenericControlSequenceTest {
         }
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
             writes++
+            if (cancelOnThird && writes == 3) throw kotlinx.coroutines.CancellationException("test_interrupt")
             if (changeAppAfterFirst) packageName = "example.other.app"
             if (endAfterFirst) sessionValue.end()
             return if (unknownEffect) ControlEffect(true, false, "unknown")
@@ -109,4 +111,46 @@ class GenericControlSequenceTest {
         assertEquals("control_session_changed", result.data["reason_code"]?.jsonPrimitive?.content)
         assertEquals(1, port.writes)
     }
+    @Test fun interruptionKeepsVerifiedPrefixAndUncertainStepWithoutReplaying() = runBlocking {
+        val port = CalculatorPort().apply { cancelOnThird = true }
+        val handoff = ai.closepaw.chatgpt.operations.OperationInterruptionEvidence()
+        try {
+            kotlinx.coroutines.withContext(handoff) { execute(port, (1..9).map(Int::toString)) }
+            fail("Cancellation must propagate")
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            val evidence = handoff.snapshot!!
+            assertEquals(JsonPrimitive(2), evidence["completed_verified_steps"])
+            assertEquals(JsonPrimitive(3), evidence["interrupted_step"])
+            assertEquals(JsonPrimitive(6), evidence["pending_steps_not_started"])
+            assertEquals(JsonPrimitive(true), evidence["external_effect_uncertain"])
+            assertEquals(JsonPrimitive(true), evidence["outcome_unknown"])
+            assertNull("Only the dispatcher after unwind can confirm stop", evidence["executor_stopped_confirmed"])
+        }
+        assertEquals(3, port.writes)
+    }
+
+    @Test fun cancellationAtNextStepAdmissionKeepsThatStepInUnstartedSuffix() = runBlocking {
+        val port = CalculatorPort()
+        val handoff = ai.closepaw.chatgpt.operations.OperationInterruptionEvidence()
+        var checksAfterSecond = 0
+        try {
+            kotlinx.coroutines.withContext(handoff) {
+                execute(port, (1..9).map(Int::toString), ready = {
+                    if (port.writes == 2 && ++checksAfterSecond == 2)
+                        throw kotlinx.coroutines.CancellationException("between_steps")
+                    true
+                })
+            }
+            fail("Cancellation must propagate")
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            val evidence = handoff.snapshot!!
+            assertEquals(JsonPrimitive(2), evidence["completed_verified_steps"])
+            assertEquals(JsonPrimitive(7), evidence["pending_steps_not_started"])
+            assertEquals(JsonPrimitive(false), evidence["interrupted_step_action_started"])
+            assertEquals(JsonPrimitive(false), evidence["external_effect_uncertain"])
+            assertNull(evidence["interrupted_step"])
+        }
+        assertEquals(2, port.writes)
+    }
+
 }

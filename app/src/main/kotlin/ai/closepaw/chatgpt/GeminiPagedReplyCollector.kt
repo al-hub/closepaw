@@ -11,7 +11,10 @@ internal class GeminiPagedReplyCollector(
     private val stableMs: Long,
     private val maxChars: Int,
     private val maxScrolls: Int = 24,
+    private val progress: (String) -> Unit = {},
 ) {
+    private fun emit(stage: String) { runCatching { progress(stage) } }
+
     suspend fun collect(question: String, baseline: GeminiUiSnapshot, initial: GeminiUiSnapshot,
                         isCancelled: () -> Boolean): GeminiReplyCollection {
         val start = clockMillis(); var frame = initial
@@ -32,6 +35,7 @@ internal class GeminiPagedReplyCollector(
             if (isCancelled()) return "observer_cancelled"
             if (!allowed()) return "gemini_question_disabled"
             if (ui.isLocked()) return "device_locked"
+            emit("scrolling")
             if (!ui.scrollReply(baseline.targetKey, page.containerKey, forward)) return "reply_scroll_unavailable"
             scrolls++; movingForward = forward; lastScrolledText = page.text; stableSince = clockMillis()
             return null
@@ -45,6 +49,7 @@ internal class GeminiPagedReplyCollector(
             if (frame.composerText.isNotBlank()) return result("input_changed")
             if (frame.submittedQuestion != null && frame.submittedQuestion != question &&
                 frame.submittedQuestion != baseline.submittedQuestion) return result("submitted_question_changed")
+            emit(if (frame.generating == true) "waiting" else "collecting")
             val page = frame.replyPage
             if (page == null) {
                 // A submitted turn can temporarily replace its scroll tree before any body arrives.

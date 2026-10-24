@@ -64,4 +64,16 @@ internal fun canonicalJson(value: JsonElement): String = when(value) {
     is JsonArray -> value.joinToString(",", "[", "]") { canonicalJson(it) }
     else -> value.toString()
 }
-internal fun operationHash(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+/** Same SHA-256 and lowercase hex contract, without 32 locale formatter allocations per digest.
+ * Digest instances remain invocation-local: concurrent callers never share mutable state. */
+internal fun operationHash(value: String): String {
+    val digest = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
+    val hex = "0123456789abcdef"
+    return CharArray(digest.size * 2).also { output ->
+        for (index in digest.indices) {
+            val byte = digest[index].toInt() and 0xff
+            output[index * 2] = hex[byte ushr 4]
+            output[index * 2 + 1] = hex[byte and 0xf]
+        }
+    }.concatToString()
+}
