@@ -52,6 +52,13 @@ internal object GeminiReplyPageParser {
         } }
         fun within(n: GeminiUiNode, root: GeminiUiNode) = chain(n).any { it.index == root.index }
         fun key(n: GeminiUiNode) = chain(n).asReversed().joinToString("/") { "${it.resourceId}:${it.className}" }
+        // A short native turn may expose no vertical scroll actions at all. Read only
+        // its exact native history contract; this does not authorize any scroll action.
+        val nativeRoots = nodes.filter { safe(it) && it.id() == "assistant_robin_chat_history_list" }
+        if (nativeRoots.size == 1) {
+            val nativeRoot = nativeRoots.single()
+            GeminiNativeReplyPageParser.parse(nodes, question, nativeRoot, key(nativeRoot))?.let { return it }
+        }
         val containers = nodes.filter { n -> safe(n) && (n.scrollable || key(n) == trustedKey) &&
             (n.scrollForward || n.scrollBackward || key(n) == trustedKey) && !n.className.contains("Horizontal", true) &&
             nodes.none { (it.composer || it.editable) && within(it, n) } &&
