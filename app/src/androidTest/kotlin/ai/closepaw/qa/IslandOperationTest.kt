@@ -73,8 +73,17 @@ class IslandOperationTest {
             val host = field(controller, "statusIslandManager") as ai.closepaw.ui.overlay.compose.IslandOverlayHost
             suspend fun awaitCondition(description: String, condition: suspend () -> Boolean) {
                 val until = SystemClock.uptimeMillis() + 5_000
-                while (!condition() && SystemClock.uptimeMillis() < until) delay(50)
-                assertTrue(description, condition())
+                // Keep sampling within the original deadline instead of checking once
+                // to leave the loop and again to assert (a transient window reattach
+                // could flip between those calls and fail before the deadline).
+                // Two observations 50ms apart require stable restoration, not a flicker.
+                var consecutive = 0
+                while (SystemClock.uptimeMillis() < until) {
+                    consecutive = if (condition()) consecutive + 1 else 0
+                    if (consecutive >= 2) break
+                    delay(50)
+                }
+                assertTrue(description, consecutive >= 2)
             }
             repeat(10) {
                 shell("input keyevent 223")

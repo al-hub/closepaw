@@ -106,4 +106,34 @@ class ControlSessionTest {
         assertNull(session.progressDetail)
     }
 
+    @Test fun geminiDetailCoversEveryStageWithoutClaimingUnverifiedCompletion() {
+        val session = ControlSession(); session.start(); val epoch = session.epoch
+        val stages = listOf("launching", "observing", "inputting", "submitting", "waiting",
+            "collecting", "scrolling", "completed", "interrupted", "failed")
+        for (stage in stages) {
+            session.geminiProgress(stage, epoch)
+            val detail = requireNotNull(session.progressDetail)
+            for (field in listOf("목표:", "대상:", "완료:", "현재:", "다음:", "상태:"))
+                assertTrue("$stage missing $field", detail.contains(field))
+            assertFalse("unknown total must not be invented", detail.contains("1/"))
+            if (stage != "completed") assertTrue(detail.contains("전체 목표 완료 미확정"))
+            if (stage in listOf("interrupted", "failed")) {
+                assertTrue(detail.contains("자동 재전송 금지"))
+                assertTrue(detail.contains("자동 재실행 없음"))
+            }
+        }
+        session.geminiProgress("submitting", epoch)
+        assertTrue(session.progressDetail!!.contains("제출 성공 미확정"))
+        session.geminiProgress("interrupted", epoch)
+        assertTrue(session.progressDetail!!.contains("Gemini 생성 취소 미확인"))
+        val detail = session.progressDetail
+        var changes = 0; session.changed = { changes++ }
+        session.geminiProgress("interrupted", epoch)
+        session.geminiProgress("unsupported", epoch)
+        assertEquals(0, changes); assertEquals(detail, session.progressDetail)
+        session.end(); session.start()
+        session.geminiProgress("completed", epoch)
+        assertNull(session.progressDetail)
+    }
+
 }
