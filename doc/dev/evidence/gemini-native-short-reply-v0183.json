@@ -86,5 +86,44 @@
       "id": 12561855215,
       "sha256": "154bf99ac5d531d4678adad8ef8e9640c4c5c895c8a156ee896c6363a75f57e9"
     }
+  },
+  "subsequent_user_requested_verification": {
+    "status": "PASS",
+    "task_id": "2635ac82-5ff5-4322-a1b6-78699f9beb0c",
+    "request_count": 1,
+    "expected_answer_match": true,
+    "result": {
+      "app": "gemini",
+      "state": "completed",
+      "reason_code": "reply_completed",
+      "submission_state": "sent",
+      "sent": true,
+      "send_action_invoked": true,
+      "outcome_unknown": false,
+      "partial": false,
+      "timed_out": false,
+      "observation_stopped": false,
+      "cancel_confirmed": false,
+      "generation_cancelled": false,
+      "diagnostics_persisted": true,
+      "collection_ms": 5788,
+      "pages_collected": 1,
+      "coverage": "complete",
+      "completion_evidence": "paged_start_overlap_end_and_stable"
+    },
+    "collection_clock_domain": "System.nanoTime-derived milliseconds",
+    "diagnostic_clock_domain": "Android SystemClock.elapsedRealtime",
+    "roundtrip_elapsed_ms": 9021,
+    "voice_e2e": "NOT_TESTED",
+    "intermittent_failure_root_cause": "NOT_TESTED",
+    "previous_failed_samples_unchanged": true,
+    "resends": 0,
+    "reinstalls": 0,
+    "session": {
+      "id": "04320b0d-f608-4c3c-b472-6ca65ff701b5",
+      "end_task": "620f352b-211e-4e0e-86ef-258fe2487853",
+      "state": "ended",
+      "epoch": 4
+    }
   }
 }
