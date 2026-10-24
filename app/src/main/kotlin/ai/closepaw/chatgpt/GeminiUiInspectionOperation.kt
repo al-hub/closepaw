@@ -25,6 +25,15 @@ internal class GeminiUiInspectionOperation(private val inspect: suspend () -> Js
                 "Current Gemini control metadata collected. No UI action was invoked."
                 else "Current Gemini screen could not be verified. No UI action was invoked.")
         } catch (cancel: CancellationException) { throw cancel }
-        catch (_: Exception) { OperationResult(success=false,summary="Gemini metadata inspection failed. No UI action was invoked.") }
+        catch (error: Exception) {
+            val reason = when (error) {
+                is SecurityException -> "snapshot_security_exception"
+                is IllegalArgumentException -> "snapshot_invalid_argument"
+                is IllegalStateException -> "snapshot_illegal_state"
+                else -> "snapshot_failed"
+            }
+            OperationResult(success=false,summary="Gemini metadata inspection failed. No UI action was invoked.",
+                data=buildJsonObject { put("foreground", false); put("reason_code", reason) })
+        }
     }
 }

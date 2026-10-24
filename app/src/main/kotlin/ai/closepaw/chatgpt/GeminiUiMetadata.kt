@@ -6,6 +6,8 @@ import kotlinx.serialization.json.*
 internal object GeminiUiMetadata {
     private const val MAX_NODES = 160
     private const val MAX_NODE_JSON = 26000
+    private val observationReasons = setOf("unclassified", "permission_or_session_revoked", "device_locked",
+        "active_root_missing", "hosted_composer_missing", "wrong_package", "recognized_hosted_composer", "recognized_native")
     private val targetPackages = setOf("com.google.android.apps.bard", "com.google.android.googlequicksearchbox")
     private val packages = targetPackages + "android"
     private val resourceName = Regex("[a-z][a-z0-9_]{0,79}")
@@ -79,6 +81,7 @@ internal object GeminiUiMetadata {
                 put("page_start_visible", page.questionVisible); put("page_end_visible", page.endVisible)
                 put("page_can_forward", page.canForward); put("page_can_backward", page.canBackward)
             }
+            put("observation_reason", snapshot.observationReason.takeIf { it in observationReasons } ?: "unclassified")
             put("foreground",verified); put("reason_code",reason)
             put("window",buildJsonObject {
                 window.observedPackage?.takeIf { it in packages }?.let { put("observed_package",it) }

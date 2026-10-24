@@ -1,0 +1,34 @@
+{
+  "source_file": "doc/dev/evidence/issue147-v0180-sequence-trace.json",
+  "source_sha256": "48eaaab23ea5b05ef96bc77da63c7736601efb2b06dd9d6afd953e6845085be6",
+  "classification": "REUSED_EVIDENCE; historical code81, not a new phone test",
+  "clock_domain": "monotonic_process",
+  "total_ms": 10953.098164,
+  "spacing_exclusive_ms": 6439.104063,
+  "span_counts": {
+    "initial_observation": 1,
+    "security_probe": 28,
+    "probe_api_spacing": 28,
+    "fingerprint_traversal": 19,
+    "semantic_lookup": 9,
+    "guarded_action": 9,
+    "native_action": 9,
+    "intent_cue_wait": 9,
+    "fresh_fingerprint_and_action": 9,
+    "post_observation": 9,
+    "result_validation": 9
+  },
+  "spacing_span_exit_gaps_ms": {
+    "min": 399.814609,
+    "max": 403.982774,
+    "mean": 401.1930497407407
+  },
+  "nominal_policy_budget": {
+    "formula": "(28 - 1) * 400",
+    "ms": 10800,
+    "clock_domain": "Android SystemClock.elapsedRealtime, nominal contract arithmetic only",
+    "limitation": "Not a measured duration or a speedup bound. Do not subtract from the independent trace clock."
+  },
+  "candidate_speedup": "NOT_TESTED",
+  "voice_e2e": "NOT_TESTED"
+}

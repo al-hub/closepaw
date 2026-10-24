@@ -42,4 +42,18 @@ class GeminiUiInspectionOperationTest {
         catch (_: CancellationException) { cancelled=true }
         assertThat(cancelled).isTrue()
     }
+    @Test fun snapshotExceptionReasonsNeverExposeExceptionMessagesOrTypes() = runBlocking {
+        val errors = listOf(SecurityException("private account") to "snapshot_security_exception",
+            IllegalArgumentException("private account") to "snapshot_invalid_argument",
+            IllegalStateException("private account") to "snapshot_illegal_state",
+            RuntimeException("private account") to "snapshot_failed")
+        for ((error, reason) in errors) {
+            val result = GeminiUiInspectionOperation { throw error }.invoke(OperationInvocation("inspect", buildJsonObject {}))
+            assertThat(result.success).isFalse()
+            assertThat(result.data["reason_code"]!!.jsonPrimitive.content).isEqualTo(reason)
+            assertThat(result.toString()).doesNotContain("private account")
+            assertThat(result.stdout).isEmpty()
+        }
+    }
+
 }

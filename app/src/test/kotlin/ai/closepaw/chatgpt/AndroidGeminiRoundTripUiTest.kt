@@ -339,4 +339,27 @@ class AndroidGeminiRoundTripUiTest {
         assertEquals(GeminiSendResult.TARGET_CHANGED, ui.sendIfMatches("question", baseline.targetKey))
         verify(exactly = 0) { send.performAction(any()) }
     }
+    @Test fun readOnlyObservationDistinguishesMissingRootComposerAndWrongPackage() = runBlocking {
+        val ui = adapter()
+        root = null
+        assertEquals("active_root_missing", ui.snapshot().observationReason)
+        root = node(pkg = google)
+        assertFalse(ui.snapshot().foreground)
+        assertEquals("hosted_composer_missing", ui.metadataSnapshot()["observation_reason"]!!.jsonPrimitive.content)
+        root = node(pkg = "other.app")
+        assertEquals("wrong_package", ui.snapshot().observationReason)
+        assertTrue(ui.metadataSnapshot()["nodes"]!!.jsonArray.isEmpty())
+        root = node(children = listOf(composer(google)), pkg = google)
+        assertTrue(ui.snapshot().foreground)
+        assertEquals("recognized_hosted_composer", ui.metadataSnapshot()["observation_reason"]!!.jsonPrimitive.content)
+    }
+    @Test fun observationGuardReasonIsFreshWithoutReadingOrActingOnNodes() = runBlocking {
+        val ui = AndroidGeminiRoundTripUi(service, { false }, draft)
+        assertEquals("permission_or_session_revoked", ui.snapshot().observationReason)
+        verify(exactly = 0) { draft.foregroundRoot() }
+        coEvery { draft.isLocked() } returns true
+        assertEquals("device_locked", adapter().snapshot().observationReason)
+        verify(exactly = 0) { draft.foregroundRoot() }
+    }
+
 }

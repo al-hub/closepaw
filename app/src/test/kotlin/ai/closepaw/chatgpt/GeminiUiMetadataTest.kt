@@ -65,4 +65,15 @@ class GeminiUiMetadataTest {
         val result = metadata(history + control)
         assertThat(result.getValue("nodes").jsonArray.map { it.jsonObject.getValue("index").jsonPrimitive.int }).contains(201)
     }
+    @Test fun observationReasonUsesFixedVocabularyEvenForUnverifiedScreens() {
+        val result = GeminiUiMetadata.build(listOf(node()), DraftWindowEvidence(rootPackage = pkg),
+            snapshot.copy(foreground = false, observationReason = "hosted_composer_missing"))
+        assertThat(result["observation_reason"]!!.jsonPrimitive.content).isEqualTo("hosted_composer_missing")
+        assertThat(result["nodes"]!!.jsonArray).isEmpty()
+        val poisoned = GeminiUiMetadata.build(listOf(node()), DraftWindowEvidence(rootPackage = pkg),
+            snapshot.copy(observationReason = "private account secret"))
+        assertThat(poisoned["observation_reason"]!!.jsonPrimitive.content).isEqualTo("unclassified")
+        assertThat(poisoned.toString()).doesNotContain("private account secret")
+    }
+
 }

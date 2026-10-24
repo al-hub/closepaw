@@ -12,9 +12,9 @@ class GeminiReplyCollectorTest {
                             submitted: String? = question, traversal: Boolean = true) =
         baseline.copy(submittedQuestion = submitted, generating = generating,
             replies = baseline.replies + GeminiReply("new", text, complete), traversalComplete = traversal)
-    private class FakeUi(val frames: List<GeminiUiSnapshot>) : GeminiRoundTripUi {
+    private class FakeUi(val frames: List<GeminiUiSnapshot>, val afterRead: () -> Unit = {}) : GeminiRoundTripUi {
         var polls = 0; var locked = false; var writes = 0
-        override suspend fun snapshot() = frames[(polls++).coerceAtMost(frames.lastIndex)]
+        override suspend fun snapshot() = frames[(polls++).coerceAtMost(frames.lastIndex)].also { afterRead() }
         override suspend fun isLocked() = locked
         override suspend fun launch(): Boolean { writes++; error("collector cannot launch") }
         override suspend fun inspect(): DraftComposerState = error("collector cannot inspect composer")
@@ -201,6 +201,29 @@ class GeminiReplyCollectorTest {
         val (result, _) = collect(listOf(observation(complete = true).copy(replyCoverageComplete = false)))
         assertThat(result.state).isEqualTo("partial")
         assertThat(result.reason).isEqualTo("reply_scroll_region_unverified")
+    }
+
+    @Test fun revocationDuringUnverifiedReadIsNotMisreportedAsTargetSwitch() = runBlocking {
+        var allowed = true
+        val ui = FakeUi(listOf(baseline.copy(foreground = false))) { allowed = false }
+        val result = GeminiReplyCollector(ui, allowed = { allowed }).collect(question, baseline)
+        assertThat(result.reason).isEqualTo("gemini_question_disabled")
+        assertThat(result.answer).isNull(); assertThat(ui.writes).isEqualTo(0)
+    }
+    @Test fun lockDuringUnverifiedReadIsNotMisreportedAsTargetSwitch() = runBlocking {
+        lateinit var ui: FakeUi
+        ui = FakeUi(listOf(baseline.copy(foreground = false))) { ui.locked = true }
+        val result = GeminiReplyCollector(ui).collect(question, baseline)
+        assertThat(result.reason).isEqualTo("device_locked")
+        assertThat(result.answer).isNull(); assertThat(ui.writes).isEqualTo(0)
+    }
+    @Test fun cancellationDuringUnverifiedReadIsNotMisreportedAsTargetSwitch() = runBlocking {
+        var cancelled = false
+        val ui = FakeUi(listOf(baseline.copy(foreground = false))) { cancelled = true }
+        val result = GeminiReplyCollector(ui).collect(question, baseline) { cancelled }
+        assertThat(result.state).isEqualTo("cancelled")
+        assertThat(result.reason).isEqualTo("observer_cancelled")
+        assertThat(result.answer).isNull(); assertThat(ui.writes).isEqualTo(0)
     }
 
 }
