@@ -1,0 +1,135 @@
+{
+  "date": "2026-10-24",
+  "version": "0.1.82",
+  "code": 83,
+  "pr": 155,
+  "head": "2b11ff9ffd0c9f9db626aa9b05e91f2e428d6b68",
+  "source": "19382f9a1e7502d5db452dcd7c4ea610121826ea",
+  "runs": {
+    "pr_security": 40086586708,
+    "pr_ui": 40086587217,
+    "main_security": 40087024516,
+    "main_ui": 40087024566,
+    "signed": 40087550035
+  },
+  "apk": {
+    "sha256": "dac1049eaa0e3284b932ed7a7f4fc270134f8971e27f43c716effd7929848086",
+    "bytes": 116642415,
+    "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+    "public_binary_checks": "PASS: SHA256, RSA-SHA512 v3 signed data, chunked content digest, binary manifest ai.closepaw/0.1.82/83, two arm64 native runtimes, immutable source tag"
+  },
+  "jvm": {
+    "count": 2737,
+    "failed": 0,
+    "skipped": 0,
+    "exact_main_xml_and_report": "PASS"
+  },
+  "ui": {
+    "count": 10,
+    "failed": 0,
+    "skipped": 0,
+    "png": 4,
+    "independent_xml": "PASS"
+  },
+  "failure_retained": {
+    "run": 40086057482,
+    "artifact": 12557087087,
+    "digest": "sha256:10d00d6bfad20fdf89085c1dfaa1497d069ffecbb02708df09cbc5a664795e38",
+    "assertion": "same session restores island after unlock",
+    "fixture_fix": "avoid immediate double-read TOCTOU; within unchanged5s deadline require2 true samples50ms apart; no app security changes"
+  },
+  "artifacts": {
+    "main_report": {
+      "id": 12557358141,
+      "digest": "sha256:12de03bab9bf78a75763073c827cbc8d20a6fd6fbc69dcdea0da0aca92258435"
+    },
+    "main_xml": {
+      "id": 12558135266,
+      "digest": "sha256:cb496dabf68e82ec3ccc4af1df8e0e44ea5c410e6afd42fdafa59a9f162b2d92"
+    },
+    "main_ui": {
+      "id": 12557741936,
+      "name": "premium-ux-ui-40087024566",
+      "size_in_bytes": 535086,
+      "url": "https://api.github.com/repos/al-hub/closepaw/actions/artifacts/12557741936",
+      "archive_download_url": "https://api.github.com/repos/al-hub/closepaw/actions/artifacts/12557741936/zip",
+      "expired": false,
+      "created_at": "2026-10-24T10:49:28Z",
+      "expires_at": "2026-11-07T10:49:27Z",
+      "updated_at": "2026-10-24T10:49:28Z",
+      "digest": "sha256:1bdd876e42a32a914c6fb327aa12506c8ef074c22ac56ae1f586782a23226d50",
+      "workflow_run": {
+        "id": 40087024566,
+        "repository_id": 1403973261,
+        "head_repository_id": 1403973261,
+        "head_branch": "main",
+        "head_sha": "19382f9a1e7502d5db452dcd7c4ea610121826ea"
+      }
+    },
+    "public_verification": {
+      "id": 12556849354,
+      "digest": "sha256:1c4ebbca722981ad1f8a33424055594cb612e34f3fcb367b8aa90277e9617f81"
+    }
+  },
+  "installation": {
+    "task_id": "6c9e0c84-f093-4980-8c80-4f3983a50e53",
+    "request_count": 1,
+    "state": "installed",
+    "target_version": "0.1.82",
+    "session_id": 166550464,
+    "target_code": 83,
+    "installed_version": "0.1.82",
+    "current_version": "0.1.82",
+    "current_code": 83,
+    "install_source_allowed": true,
+    "remote_update_enabled": true,
+    "independent_status": {
+      "status": "succeeded",
+      "summary": "ClosePaw is reachable and responding.",
+      "app": "ClosePaw",
+      "version_name": "0.1.82",
+      "version_code": 83,
+      "capability": "status",
+      "operation_contract_version": 1,
+      "operation_discovery_tool": "discover_operations",
+      "supported_read_apps": [
+        {
+          "id": "samsung_internet",
+          "package_name": "com.sec.android.app.sbrowser",
+          "display_name": "Samsung Internet"
+        },
+        {
+          "id": "chrome",
+          "package_name": "com.android.chrome",
+          "display_name": "Chrome"
+        },
+        {
+          "id": "gemini",
+          "package_name": "com.google.android.apps.bard",
+          "display_name": "Gemini"
+        }
+      ],
+      "mcp_tool_count": 9,
+      "runtime_info_tool": "get_runtime_info",
+      "tool_list_refresh_verified": false
+    },
+    "session_after": {
+      "state": "ended",
+      "session_id": "2c59d492-3f60-4f6d-a19e-7c3d6f41cb46",
+      "epoch": 0,
+      "physical_resume_required": false,
+      "external_effects_undone": false
+    }
+  },
+  "physical": {
+    "new_trials": 0,
+    "old_lock_rotation_recreation_x_y59": "REUSED_EVIDENCE",
+    "gemini_detail_panel": "NOT_TESTED"
+  },
+  "issues": {
+    "145": "OPEN: detailed panel physical rendering acceptance pending",
+    "146": "CLOSED: prior v0.1.81 physical and auto acceptance reused",
+    "147": "OPEN: actual execution speedup/Voice E2E unproven; no perf change in this release",
+    "150": "CLOSED"
+  }
+}

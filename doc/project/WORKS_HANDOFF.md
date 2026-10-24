@@ -1,3 +1,14 @@
+## 2026-10-24 PR #155 발행·설치 완료 — v0.1.82/code83
+
+- [PR155](https://github.com/al-hub/closepaw/pull/155) 병합. main/APK/tag source `19382f9a1e7502d5db452dcd7c4ea610121826ea`. [발행 보고서](../dev/issue145-v0182-release.md), [metadata](../dev/evidence/issue145-v0182-release.json).
+- Gemini 상세 진행 완료·현재·다음 표시 및 모든 stage/실패/중단/dedup/stale 회귀 추가. 속도 개선 변경은 없음.
+- 첫 code83 UI1건 실패 후 로그에서 awaitCondition 이중 관찰 TOCTOU를 확인해 fixture만 보완: 같은5초 기한,50ms 간격2회 연속true. 최종 PR Security40086586708/UI40086587217, main Security40087024516/UI40087024566/Signed40087550035 success. 원시2737 JVM/10 UI 실패·skip0 및 PNG4 독립 확인.
+- 공개 APK116642415bytes, SHA256 `dac1049eaa0e3284b932ed7a7f4fc270134f8971e27f43c716effd7929848086`. 기존 signer/v3 RSA-SHA512 signed data·content digest, binary manifest0.1.82/83, 두 runtime, tag/source 독립 PASS.
+- 설치1회 task6c9e0c84-f093-4980-8c80-4f3983a50e53: durable installed/current0.1.82/code83 → 독립get_status 정상. UI세션 ended/epoch0(2c59d492-3f60-4f6d-a19e-7c3d6f41cb46). 재설치/새 물리시험/임의재개 없음.
+- **최신 이슈 상태:** #146과#150 CLOSED. #145 OPEN(새 상세 패널 실제 완료/실패/취소 표시 수용 미확인), #147 OPEN(실제 속도 개선/Voice E2E 미입증). 아래 v0.1.81 인계 당시의 #146 OPEN/잠금 미확인 문구는 역사 기록이다.
+- 이후 확보한 v0.1.81 실기기 PASS: 잠금 해제 즉시 X/아일랜드 표시(145 댓글6382726940), 회전 정상·접근성OFF/ON 전후 동일 위치·복원 좌표393,309(146 댓글6382801637). 기존 X/Y59/잠금/회전/재생성 시험 반복 금지. #117/#76 분리 유지.
+- 다음 검증은 실제 Gemini 상세 패널의 미확인 표시만 필요하다. 기존 일반 기능 전체 재검증이나 같은 APK 재설치는 불필요. 이 기록은 docs-only, APK source/tag/키는 불변.
+
 ## 2026-10-24 후속 발행·설치 완료 — v0.1.81/code82
 
 - [PR154](https://github.com/al-hub/closepaw/pull/154) merged, immutable APK/tag source`c14b8883f5a659cba851412ce2c53fa90b32d22e`. [최종 보고서](../dev/issues145-150-v0181.md),[metadata](../dev/evidence/issues145-150-v0181-release.json).
