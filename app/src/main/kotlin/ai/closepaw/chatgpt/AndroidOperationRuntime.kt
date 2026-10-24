@@ -205,8 +205,10 @@ internal class AndroidOperationRuntime(
         registry.register(GeminiUiInspectionOperation.descriptor(readiness = {
             OperationReadiness(AgentService.instance != null,
                 if (AgentService.instance == null) "accessibility_permission_missing" else null)
-        }), GeminiUiInspectionOperation {
-            screenMutex.withRemoteActivity {
+        }), GeminiUiInspectionOperation { sessionId ->
+            val refusal = GeminiUiInspectionOperation.sessionRefusal(AgentService.instance?.remoteControlSession, sessionId)
+            if (refusal != null) buildJsonObject { put("foreground", false); put("reason_code", refusal) }
+            else screenMutex.withRemoteActivity(sessionId) {
                 genericControl.invalidate()
                 val service = AgentService.instance
                 if (service == null) buildJsonObject { put("foreground", false); put("reason_code", "accessibility_permission_missing") }

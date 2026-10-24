@@ -61,3 +61,53 @@ move the already publishedv0.1.83 tag or reuse its assets as candidate proof. In
 must be submitted once. Only a read-only installed-candidate diagnosis is needed;
 do not repeat successful question/X/unlock/rotation/drag tests. #145/#147 stay OPEN
 until their actual remaining acceptance conditions pass; #146/#150 remain CLOSED.
+
+## Release and independent CI verification (2026-10-25)
+
+PR158 exact headb4323aa9db628f893e4f016edfaa2272378e2dc8: Security40142089464/
+UI40142089520 success. Independent raw XML:2750 JVM (all7 new named regressions
+present),11 UI, failure/error/skip0,8 PNG outputs. PR XML12579765129 SHA256
+9cb21578aae4e74691576e005d45aa0876e27a3c8585887150a83a51dc1a35d9;
+PR UI12578919739 SHA256c00669422c4c84809b51e5554b8d32d9a050ec334d7d68a2758c716c2b6261f4.
+
+Merged main/APK/tag sourcefe5863bfea48a323431db1eca8bb6501cad2ab26.
+Main Security40142615725/UI40142615660/Signed40143180227 success. Independent
+main raw XML2750 JVM/11 UI failure/error/skip0,8 PNG outputs. Main XML12579426863
+SHA256458ef7e6ebfa5d0ccc1e0aeac8673ae4921b0fbedacb4d3fb4008d64e3ff4647;
+main UI12579546453 SHA25677a4be09dc12da4d7acbdf9002ab3ffeba5e5d357a38efd45c573e43e35f0df5.
+Public CI verification artifact12579038703 SHA256
+823ccd2eb5811f7578d6d8050850f690d909fa78bcead19cf518319f1507d37a.
+
+[Release0.1.84/code85](https://github.com/al-hub/closepaw/releases/tag/v0.1.84):
+116642415bytes, SHA256ea2cdd46796d68a73b6444829109fb8015a8b9ad82a7e20125ab0f14dc57f859.
+Anonymous public APK/checksum independently downloaded. Existing operating signer
+SHA256d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba,
+v3 RSA-SHA512 signature and full chunked content digest, binary manifest
+ai.closepaw/0.1.84/85, arm64 openaitunnel/cloudflared, annotated tag
+da947507cbd058da15de5602d64d5b9cfc0233bc→sourcefe5863... independently PASS.
+
+Installation submitted exactly once: taskcd1b5b2d-df67-4e80-8027-187f6d82f1d9.
+Its durable installed/current and independent connectivity results are recorded
+separately below; accepted/installing alone is not installation acceptance.
+
+## Installed read-only diagnosis and confirmed follow-up contract defect
+
+Durable installed/current0.1.84/code85 and independent reachable status PASS.
+New read-only diagnostic sessionc365743f-2eb2-4525-aa8f-9041cce571f8, start task
+0d697be0-0d6a-4626-9a92-e4c351128d53. One gemini.ui.inspect returned **FAIL** with
+snapshot_illegal_state. This confirms the new bounded exception code is emitted,
+not successful Gemini observation. No question, launch, text input or retry occurred.
+End task02125429-2d1d-4166-a39f-2d6d37688140 success, independent ended/epoch2.
+
+Static call-chain comparison identified a deterministic contract defect:
+gemini.ui.inspect accepts only{}, but its Android runtime calls
+screenMutex.withRemoteActivity() with the default null sessionId. The explicit
+active session guard requires the actual ID and throws IllegalStateException via
+session.refusal(null). Thus this inspection path cannot pass the guard in an
+explicit session. This explains the contract-level inspection refusal; it is not
+proof of the cause of the separate historical question collector target_changed.
+
+A follow-up must accept/forward a validated session_id and require an explicitly
+active matching session without starting/resuming one. Preserve epoch checks and
+wrong/missing/stale-token rejection; never bypass the shared guard. v0.1.84 contains
+diagnostics only, so the contract correction requires its own new immutable version.
