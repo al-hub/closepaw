@@ -307,7 +307,7 @@ class ControlOverlayWindowTest {
             send(root, MotionEvent.ACTION_DOWN, down, x, y)
             send(root, MotionEvent.ACTION_UP, down, x, y)
             instrumentation.waitForIdleSync()
-            main { assertEquals(true, field(host, "detailVisible")) }
+            main { assertEquals(true, (field(host, "detailVisible\$delegate") as androidx.compose.runtime.State<*>).value) }
             for (stage in listOf("waiting", "completed", "failed", "interrupted")) {
                 main {
                     service.remoteControlSession.geminiProgress(stage, service.remoteControlSession.epoch)
@@ -329,7 +329,7 @@ class ControlOverlayWindowTest {
                 main {
                     val xy = IntArray(2); root.getLocationOnScreen(xy)
                     left = xy[0]; top = xy[1]; width = root.width; height = root.height
-                    assertTrue(root.isAttachedToWindow); assertEquals(true, field(host, "detailVisible"))
+                    assertTrue(root.isAttachedToWindow); assertEquals(true, (field(host, "detailVisible\$delegate") as androidx.compose.runtime.State<*>).value)
                     assertEquals(ControlSession.State.ACTIVE, service.remoteControlSession.state)
                 }
                 assertTrue(left >= 0 && top >= 0 && left + width <= screen.width && top + height <= screen.height)
