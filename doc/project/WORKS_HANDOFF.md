@@ -1,3 +1,10 @@
+## 2026-10-24 v0.1.83 후속 사용자 요청 검증 — 신규 단회 PASS
+
+- [#145 증거](https://github.com/al-hub/closepaw/issues/145#issuecomment-6385036279), [보고서](../dev/gemini-native-short-reply-v0183.md). 현재0.1.83/code84 연결 확인 후 다른 무해한 질문1회 task `2635ac82-5ff5-4322-a1b6-78699f9beb0c`: **succeeded/completed**, 기대 숫자 일치, sent=true, outcome_unknown/partial/timed_out=false, coverage=complete, pages1, paged_start_overlap_end_and_stable. 신규 PASS이며 아래 이전 FAIL/unknown 결과는 불변.
+- collection_ms5788(System.nanoTime), roundtrip completed elapsed_ms9021(Android SystemClock.elapsedRealtime). 별도 clock 차감/Voice E2E·성능 개선 주장0. 실제 최초 답변 생성시각은 미측정.
+- 새 세션04320b0d-f608-4c3c-b472-6ca65ff701b5, 시작59669d14-0bca-4960-b149-38fd3d0d872d, 종료620f352b-211e-4e0e-86ef-258fe2487853 success→독립 ended/epoch4. 재전송/재설치/코드변경/기존 X·잠금·회전·드래그 물리 재시험0.
+- **#145 OPEN**: 상세 진행 패널 실제 렌더 NOT_TESTED, 간헐적 target_changed 원인·빈도 미확정. **#147 OPEN**: matched 성능 개선/Voice E2E 미입증. #146/#150 CLOSED 불변. 다음은 기존 실패 진단 분석과 상세 패널 표시의 최소 관찰이며, 현재 종료 세션을 임의 재개하거나 단회 성공을 반복 안정성/전체 완료로 일반화하지 않는다.
+
 ## 2026-10-24 v0.1.83 발행·설치 및 단회 Gemini 실검증
 
 - [PR156](https://github.com/al-hub/closepaw/pull/156) 병합, APK/tag source `430f42290d2f8bdc3d10c0c451d677ae7f6f6407`. [보고서](../dev/gemini-native-short-reply-v0183.md), [검증 metadata](../dev/evidence/gemini-native-short-reply-v0183.json).
