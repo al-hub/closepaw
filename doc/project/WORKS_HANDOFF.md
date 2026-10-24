@@ -1,3 +1,12 @@
+## 2026-10-24 #145 실제 에뮬레이터 상세 패널 렌더 PASS — PR157
+
+- [PR157](https://github.com/al-hub/closepaw/pull/157), main `e6b19eedd3fee6a5ea68e1e656352d6564b0eb6f`. [보고서·artifact digest](../dev/issue145-expanded-island-qa.md). production 코드/버전 변경0, 휴대폰 조작/질문/설치/기존 물리시험 반복0.
+- 기존 CI의 기본 상태 바 캡처만으로 상세 뷰를 입증할 수 없었던 공백 보완: 실제 AgentService/WindowManager Compose 아일랜드를 짧게 탭해 펼치고 waiting/completed/failed/interrupted 합성 진행을 표시, 실제 화면 crop4장 추가. attached/expanded/화면 경계/세션 활성·종료 정리 검사. 기존 렌더4장 유지→PNG8 필수.
+- PR Security40100437644/UI40100437720 success, raw JVM2743/UI11 failure/error/skip0 독립 파싱. 4개 상세 이미지에서 목표·대상·완료·현재·다음·상태와 취소 미확인/재전송 금지 문구 모두 가시 확인. **PASS는 에뮬레이터 실제 overlay의 합성 상태 렌더이며 Galaxy 물리/실제 Gemini 취소 수용은 아님.**
+- main Security40100977135/UI40100977086 success; main UI raw11 failure/error/skip0 PNG8 확인. UI artifact12562747930 SHA256a30580f0ac95096301a92080c8e9d4ddb560878886b034a424c0b992cfa00953.
+- 자동 Signed40101449801은 기존 v0.1.83 태그가 다른 APK source를 가리켜 Validate main/CI 단계에서 **FAIL/보호 차단**. 기존 release skip보다 태그검사가 먼저다. test-only 소스이므로 새 APK 불필요; 태그/키/공개 APK 변경·우회·재실행·버전 증가0. 이 실패를 PASS로 바꾸지 않음. 기존 설치0.1.83/code84, APK source430f422... 불변.
+- #145 OPEN: Galaxy expanded 상세 뷰는 다음 정상 사용 중 단회 관찰로 보완 가능, 간헐적 target_changed 원인 미확정. #147 OPEN(실제 성능 개선 미입증). #146/#150 CLOSED 유지. 아래 기존 Gemini 단회 PASS와 과거 FAIL/unknown은 각각 보존. 새 질문이나 기기 세션을 임의로 반복하지 않는다.
+
 ## 2026-10-24 v0.1.83 후속 사용자 요청 검증 — 신규 단회 PASS
 
 - [#145 증거](https://github.com/al-hub/closepaw/issues/145#issuecomment-6385036279), [보고서](../dev/gemini-native-short-reply-v0183.md). 현재0.1.83/code84 연결 확인 후 다른 무해한 질문1회 task `2635ac82-5ff5-4322-a1b6-78699f9beb0c`: **succeeded/completed**, 기대 숫자 일치, sent=true, outcome_unknown/partial/timed_out=false, coverage=complete, pages1, paged_start_overlap_end_and_stable. 신규 PASS이며 아래 이전 FAIL/unknown 결과는 불변.
