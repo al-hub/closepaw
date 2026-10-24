@@ -1,3 +1,21 @@
+## 2026-10-24 11시 이후 — 새 Work 개발 실행 인계 (#145/#146/#147/#150)
+
+**현재 확정된 기기 기준:** ClosePaw v0.1.80 / versionCode81, 앱 응답 정상, self-update 설치 확인. 마지막 UI 세션 `622b622c-4d0c-4708-a690-d845e10e90c0`은 **ended/epoch8** (종료 성공). 다른 Work는 새로운 사용자 명시 승인 없이 재개하지 않는다. 태그/APK/서명 원본은 운영 runbook에서 재검증한다.
+
+**완료·재시험 금지:** #146 Galaxy 실제 아일랜드 (393,309)→(43,59) 오차 X0/Y0 및 원위치 복원 (393,309), 과거 Y+67px 결함 이번 버전 재현 안 됨 ([증거](https://github.com/al-hub/closepaw/issues/146#issuecomment-6378386878)). #147 삼성 계산기 1→9 단회 성공 및 결과 `123,456,789`, 물리 X 3 표시 시 직접 누름, 완료 2단계·3단계 중단·후속 6단계 미실행·실행기 중단 확인 ([증거](https://github.com/al-hub/closepaw/issues/147#issuecomment-6378595204)); 3번째 클릭의 최종 외부 효과는 불확실, no-replay 유지. 기존 v0.1.79 실기기 성공과 10회 정확도 등은 원 버전 역사 증거.
+
+**#147 미완료:** v0.1.80 로컬 단회 약11.239초; v0.1.79 역사 10회 평균 약10.964초와 단순 비교 +2.5%, 성능 개선/회귀 인과 추정 불가. 사용자는 **신규 간소화 기기 시험 3회 상한**을 요청. 이전 3회 자동 시도에서 최종 표시 `123,456,789`는 확인했으나 3회별 완료·시간 원시 증거 미확보: PASS로 승격 금지. #150 README/performance validator의 원래 **동등 조건 baseline/candidate 각10회 이상** 엄격 통계 요건과 3회 smoke는 별도 범주로 명시하고, 무단으로 기준 낮춰 전체 PASS 선언하지 않는다. main `GenericControlSequence.kt`의 초기 관찰→각 digit fresh guarded action 및 trace, `GenericControlOperations.kt`의 local monotonic/idle 계측 대조; Voice 요청→AI 계획/대기→도구 전송→Android 수신→검증/실행→결과 반환→음성 응답의 clock domain별 병목 실측 및 top stage 최적화 필요. [정적 분석](https://github.com/al-hub/closepaw/issues/147#issuecomment-6378690694), [3회 정책](https://github.com/al-hub/closepaw/issues/147#issuecomment-6378675374).
+
+**#145 미완료:** 잠금 해제 직후 X/아일랜드가 **잠시 후 표시**됨(사용자 v0.1.80 재관찰); UI eventually restored지만 즉시 표시 FAIL. `ControlUiRestore.kt`의 [0,16,32,64,128,256,500,1000]ms backoff(최대 누적 1996ms+작업시간), `AgentService.kt`의 trigger/restore_id/keyguard_wait/unlocked/restore_requested/attached 타임스탬프를 상관 분석. 실제 delay가 keyguard 대기인지 attachment인지 또는 broadcast 지연인지 원시 로그 없이 단정 금지. 상세 진행 UI·서비스 재생성 단회 회귀도 이슈 본문 기준 확인. [정적 분석](https://github.com/al-hub/closepaw/issues/145#issuecomment-6378690333). 인증 입력 보호·epoch/ended/no auto resume 유지.
+
+**#146 미완료:** 위치 영속화(서비스 재생성/회전), 현 Galaxy 경계/clamp, 드래그 stale·취소·시간초과·실물 터치 경쟁 fail-closed의 코드·자동 회귀와 문서 증거. 위에 통과한 Y59 물리 시험·일반 드래그 10회는 반복하지 않는다.
+
+**#150 미완료:** `scripts/acceptance.py` / `qa/acceptance/catalog.json` 계획·증거 검증/보안 필수 회귀 및 CI artifact 독립 파싱, missing/skipped/failure/미분류 변경/위조 샘플 실패 주입, signer/source/version 분리, REUSED_EVIDENCE 정확성 확인. 코드/README 정적 검토만으로 자동 체계 수용 완료 주장 금지. [검토](https://github.com/al-hub/closepaw/issues/150#issuecomment-6378675692).
+
+**다른 이슈로 이미 이관:** TalkBack ON, 알림/잠금화면 알림·장기 반복/재부팅 내구성 → #117; 다른 기기·폴더블 → #76. 재이관/중복 생성 금지. #145/#146/#147/#150은 현재 OPEN. 우선 구현 순서: #147 관측 구간 분리 및 실제 최대 병목 수선 → #145 unlock UI 지연 진단/개선 → #146 남은 자동 안전 회귀 → #150 독립 QA 실패 주입. 상호 연관된 코드 수정은 하나의 PR에 모으고 PR CI→main CI→기존 운영 서명키 단 1회 APK 발행→독립 signer/SHA/manifest 검증→설치 단 1회→영향받은 최소 물리 수용만 수행. Android 실기기 작업은 필요한 경우에만 사용자 명시 제어 허가; X·잠금 보안 정책 우회 금지.
+
+**즉시 실행 지침:** `AI.md`, `AGENTS.md`, 본 인계, `doc/dev/github-signed-release.md`, 각 이슈·최근 댓글을 읽은 후 위 잔여만 구현. 완료 판정은 증거가 있는 수용 항목만; 더 이상 같은 설명만 반복하지 말고 가능한 독립 정적·자동 작업을 끝까지 진행. 현재 docs-only 인계 커밋은 배포 후보 새 APK/버전 변경이 아니므로 운영 Release 재발행 불필요.
+
 ## #150 자동 수용 검증 + #145/#146/#147 통합 후보 v0.1.80/code81 (2026-10-24 KST)
 
 - 현 Work 기준 main `aa24bb145a9a9e318c19fd3284091ad8d8323412`. 운영 설치본 v0.1.79/code80의 기존 증거는 보존한다.
