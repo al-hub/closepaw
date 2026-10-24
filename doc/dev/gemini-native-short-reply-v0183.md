@@ -126,3 +126,28 @@ same-window settling path only if justified; keep wrong app/window, lock, revoca
 user intervention, cancellation and stale data fail-closed. Never recover by sending
 again or marking unknown outcomes successful. No further device question is authorized
 by this completed acceptance attempt. #145 and #147 remain OPEN; #146/#150 CLOSED.
+
+
+## Subsequent explicitly requested verification — one new PASS
+
+On the user's new verification request, installed0.1.83/code84 was confirmed reachable.
+Task2635ac82-5ff5-4322-a1b6-78699f9beb0c sent a different harmless arithmetic question
+once and returned the expected numeric result: succeeded/completed/reply_completed,
+sent=true, outcome_unknown=false, partial=false, timed_out=false, coverage=complete,
+pages1, completion_evidence=paged_start_overlap_end_and_stable. Both page start/end
+were visible, generating=false, composer1, foreground=true, traversal_complete=true.
+Raw prompt/answer/screenshot are not published. No resend, code change or reinstall.
+
+collection_ms5788 is the collector's System.nanoTime-derived duration. Roundtrip
+elapsed_ms uses Android SystemClock.elapsedRealtime: not_sent300, submitting1690,
+send_action_invoked2196, waiting2484, sent8695, completed9021. These clock domains
+are not subtracted; neither duration establishes Voice E2E latency or matched speedup.
+
+Start task59669d14-0bca-4960-b149-38fd3d0d872d, session04320b0d-f608-4c3c-b472-6ca65ff701b5.
+End task620f352b-211e-4e0e-86ef-258fe2487853 succeeded and independent session.status
+confirmed ended/epoch4. Existing physical PASS tests were not repeated.
+
+This new sample is PASS; earlier failed/unknown samples retain their original status.
+Intermittent target_changed frequency/cause remains unconfirmed. Expanded detail-panel
+rendering remains NOT_TESTED and #147 performance acceptance remains incomplete.
+#145/#147 stay OPEN; #146/#150 remain CLOSED. [Issue evidence](https://github.com/al-hub/closepaw/issues/145#issuecomment-6385036279).
