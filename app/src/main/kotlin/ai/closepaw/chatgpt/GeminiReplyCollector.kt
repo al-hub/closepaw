@@ -71,11 +71,11 @@ internal class GeminiReplyCollector(
                 }
                 val snapshot = ui.snapshot()
                 polls++
-                if (!snapshot.foreground || snapshot.targetKey != baseline.targetKey) return finish("target_changed")
                 // Revalidate after the suspended read: revocation/lock must never return success.
                 if (isCancelled()) return finish("observer_cancelled", cancelled = true)
                 if (!allowed()) return finish("gemini_question_disabled")
                 if (ui.isLocked()) return finish("device_locked")
+                if (!snapshot.foreground || snapshot.targetKey != baseline.targetKey) return finish("target_changed")
                 if (snapshot.generating == true) emit("waiting")
                 if (snapshot.replyPage != null) {
                     return GeminiPagedReplyCollector(ui, allowed, clockMillis, pause,

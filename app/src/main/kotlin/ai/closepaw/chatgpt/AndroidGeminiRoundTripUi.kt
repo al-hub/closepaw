@@ -27,8 +27,13 @@ internal class AndroidGeminiRoundTripUi(
     }
 
     override suspend fun snapshot(): GeminiUiSnapshot = withContext(Dispatchers.Main) {
-        if (!allowed() || draft.isLocked()) {
-            lastNodes = emptyList(); lastInspection = GeminiUiSnapshot(false, "")
+        val refusal = when {
+            !allowed() -> "permission_or_session_revoked"
+            draft.isLocked() -> "device_locked"
+            else -> null
+        }
+        if (refusal != null) {
+            lastNodes = emptyList(); lastInspection = GeminiUiSnapshot(false, "", observationReason = refusal)
             return@withContext lastInspection
         }
         withTree { _, nodes, complete -> observe(nodes, complete).also { lastSnapshot = it } }
@@ -95,16 +100,20 @@ internal class AndroidGeminiRoundTripUi(
     private fun observe(nodes: List<GeminiUiNode>, complete: Boolean): GeminiUiSnapshot {
         lastNodes = nodes
         val root = nodes.firstOrNull()
-        if (root == null) return GeminiUiSnapshot(false, "", traversalComplete = complete).also { lastInspection = it }
+        if (root == null) return GeminiUiSnapshot(false, "", traversalComplete = complete, observationReason = "active_root_missing").also { lastInspection = it }
         val composers = nodes.filter { it.composer && it.packageName == root.packageName }
         val recognized = GeminiDraftTargetPolicy.recognized(root.packageName, composers.size)
-        if (!recognized) return GeminiUiSnapshot(false, key(root), traversalComplete = complete).also { lastInspection = it }
+        if (!recognized) return GeminiUiSnapshot(false, key(root), traversalComplete = complete,
+            observationReason = if (root.packageName == AndroidGeminiDraftUi.GOOGLE_HOST)
+                "hosted_composer_missing" else "wrong_package").also { lastInspection = it }
         val sends = GeminiUiControlResolver.sendTargets(nodes)
         val conversation = GeminiConversationParser.parse(nodes, expectedQuestion, complete)
         val page = GeminiReplyPageParser.parse(nodes, expectedQuestion, complete, pagingContainerKey)
         if (page != null) pagingContainerKey = page.containerKey
         return GeminiUiSnapshot(
             replyPage = page,
+            observationReason = if (root.packageName == AndroidGeminiDraftUi.GOOGLE_HOST)
+                "recognized_hosted_composer" else "recognized_native",
             // Exact visible question + complete response/footer already proves a short turn's scope.
             // An unrelated or composer-containing scroller must not downgrade that verified reply.
             replyCoverageComplete = page != null || (conversation.submittedQuestion == expectedQuestion &&

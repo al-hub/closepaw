@@ -16,6 +16,7 @@ internal data class GeminiUiSnapshot(
     val replyCoverageComplete: Boolean = true,
     val replyPage: GeminiReplyPage? = null,
     val observedTextEvidence: Set<String> = emptySet(),
+    val observationReason: String = "unclassified",
 )
 internal enum class GeminiSendResult { CLICKED, TARGET_CHANGED, INPUT_CHANGED, REJECTED }
 internal interface GeminiRoundTripUi : GeminiDraftUi {
