@@ -7,6 +7,13 @@ import org.junit.Test
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ControlUiRestoreTest {
+    @Test fun lateKeyguardClearNeverWaitsForExponentialBackoff() = runTest {
+        val events = mutableListOf<Pair<String, Long>>()
+        assertTrue(ControlUiRestore({ currentTime }, { currentTime >= 1_001 }, { true },
+            {}, { true }, { code, elapsed -> events += code to elapsed }).run())
+        assertTrue("restore must follow unlock within one 16ms poll", events.last().second <= 1_017)
+    }
+
     @Test fun broadcastBeforeKeyguardClearsRestoresWithoutAnotherWindowEvent() = runTest {
         var calls = 0
         val events = mutableListOf<Pair<String, Long>>()

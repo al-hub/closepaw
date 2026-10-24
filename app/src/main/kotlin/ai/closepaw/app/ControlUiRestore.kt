@@ -19,19 +19,26 @@ internal class ControlUiRestore(
         val started = now()
         record("trigger", 0)
         var requested = false
-        // Fast first traversal, then bounded backoff. No polling survives screen-off/disposal.
-        for (pause in longArrayOf(0, 16, 32, 64, 128, 256, 500, 1_000)) {
-            if (pause > 0) delay(pause)
+        // Backoff could miss a late OEM unlock for up to 1s. Keep the same bounded
+        // visibility-only budget, but check cheap keyguard state once per frame.
+        // No polling survives screen-off/disposal and no session is resumed here.
+        while (true) {
             if (!eligible()) { record("ineligible", now() - started); return false }
-            if (!unlocked()) { record("keyguard_wait", now() - started); continue }
-            if (!requested) {
-                record("unlocked", now() - started)
-                record("restore_requested", now() - started)
-                requested = true
+            if (!unlocked()) {
+                record("keyguard_wait", now() - started)
+            } else {
+                if (!requested) {
+                    record("unlocked", now() - started)
+                    record("restore_requested", now() - started)
+                    requested = true
+                }
+                restore()
+                if (attached()) { record("attached", now() - started); return true }
+                record("attachment_wait", now() - started)
             }
-            restore()
-            if (attached()) { record("attached", now() - started); return true }
-            record("attachment_wait", now() - started)
+            val remaining = 2_000L - (now() - started)
+            if (remaining <= 0) break
+            delay(minOf(16L, remaining))
         }
         record("timeout", now() - started)
         return false

@@ -1,0 +1,37 @@
+{
+  "correlation_id": "834ff88f-b399-4f43-81f0-a8d2b01171ce",
+  "clock_domain": "monotonic_process",
+  "total_ms": 10953.098164,
+  "span_count": 139,
+  "untraced_ms": 11.069924,
+  "exclusive_ms": {
+    "probe_api_spacing": 6439.104063,
+    "security_probe": 1358.483908,
+    "fingerprint_traversal": 888.909571,
+    "intent_cue_wait": 874.550662,
+    "fresh_fingerprint_and_action": 619.902031,
+    "post_observation": 470.359722,
+    "guarded_action": 196.042851,
+    "native_action": 59.333714,
+    "initial_observation": 34.307149,
+    "semantic_lookup": 0.75914,
+    "result_validation": 0.275429
+  },
+  "inclusive_ms": {
+    "initial_observation": 85.096758,
+    "security_probe": 7797.587971,
+    "probe_api_spacing": 6439.104063,
+    "fingerprint_traversal": 888.909571,
+    "semantic_lookup": 0.75914,
+    "guarded_action": 10856.172342,
+    "native_action": 7756.183828,
+    "intent_cue_wait": 874.550662,
+    "fresh_fingerprint_and_action": 1292.32449,
+    "post_observation": 2903.670234,
+    "result_validation": 0.275429
+  },
+  "voice_e2e": "NOT_TESTED",
+  "transport": "NOT_TESTED",
+  "ai_planning": "NOT_TESTED",
+  "limitation": "Single historical invocation, not a matched performance comparison. Inclusive phases overlap; sum exclusive only."
+}
