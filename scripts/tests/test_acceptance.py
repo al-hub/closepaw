@@ -16,6 +16,17 @@ def cohort(samples=None):
                 samples=samples or [dict(duration_ms=1, correct=True, calls=1, retries=0)]*10)
 
 class AcceptanceTests(unittest.TestCase):
+    def test_forged_signer_and_boolean_version_reject(self):
+        for changed in [dict(signer_sha256='0'*64), dict(version_code=True)]:
+            record = dict(a.load_config()['historical_evidence'][0])
+            record['apk'] = dict(record['apk'], **changed)
+            with self.assertRaises(ValueError): a.validate_record(record)
+
+    def test_boolean_duration_is_not_a_measurement(self):
+        valid = cohort()
+        bad = cohort([dict(duration_ms=True, correct=True, calls=1, retries=0)]*10)
+        with self.assertRaises(ValueError): a.performance(valid, bad)
+
     def test_full_inventory_requires_each_class_and_test_count(self):
         config = a.load_config()
         inventory = {'ai.closepaw.ui.overlay.OldTest': 2, 'ai.closepaw.ui.overlay.NewTest': 3}

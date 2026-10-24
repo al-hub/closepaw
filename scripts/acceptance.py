@@ -98,7 +98,8 @@ def validate_record(record):
     if not required <= record.keys(): raise ValueError('incomplete evidence record')
     if not SHA.fullmatch(record['source_commit']): raise ValueError('immutable source SHA required')
     if record['status'] not in {'PASS', 'FAIL', 'NOT_TESTED', 'REUSED_EVIDENCE'}: raise ValueError('invalid evidence status')
-    if not isinstance(record['apk']['version_code'], int) or not SIGNER.fullmatch(record['apk']['signer_sha256']): raise ValueError('APK provenance required')
+    if type(record['apk']['version_code']) is not int or record['apk']['version_code'] <= 0 or record['apk']['signer_sha256'] != load_config()['production_signer_sha256']:
+        raise ValueError('Positive APK version and expected production signer required')
     if not record['raw_logs'] or not record['environment'] or not record['issues']: raise ValueError('raw logs, issues, environment required')
     hashes = record.get('raw_log_sha256', {})
     for reference in record['raw_logs']:
@@ -179,11 +180,11 @@ def performance(baseline, candidate):
         samples = cohort['samples']
         if len(samples) < 10: raise ValueError('At least 10 raw trials per cohort required')
         for s in samples:
-            if type(s['correct']) is not bool or not math.isfinite(s['duration_ms']) or s['duration_ms'] < 0:
+            if type(s['correct']) is not bool or type(s['duration_ms']) not in (int, float) or not math.isfinite(s['duration_ms']) or s['duration_ms'] < 0:
                 raise ValueError('Invalid duration/correctness sample')
             if any(type(s[k]) is not int or s[k] < 0 for k in ('calls', 'retries')): raise ValueError('Invalid call/retry count')
             for value in s.get('stage_ms', {}).values():
-                if not math.isfinite(value) or value < 0: raise ValueError('Invalid stage duration')
+                if type(value) not in (int, float) or not math.isfinite(value) or value < 0: raise ValueError('Invalid stage duration')
         values = sorted(s['duration_ms'] for s in samples)
         def p(v): return values[math.ceil(len(values)*v)-1]
         stage_names = set.intersection(*(set(s.get('stage_ms', {})) for s in samples))

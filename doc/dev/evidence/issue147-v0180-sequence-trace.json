@@ -1,0 +1,1276 @@
+{
+  "task_id": "834ff88f-b399-4f43-81f0-a8d2b01171ce",
+  "operation_id": "android.ui.sequence",
+  "state": "succeeded",
+  "source_version": "0.1.80/code81",
+  "provenance": "durable get_task; source tag v0.1.80",
+  "timestamps": {
+    "clock_domain": "android_wall_clock; not monotonic",
+    "created_at_ms": 1792807513173,
+    "started_at_ms": 1792807513540,
+    "completed_at_ms": 1792807524779
+  },
+  "elapsed_ms": 10952,
+  "trace": {
+    "correlation_id": "834ff88f-b399-4f43-81f0-a8d2b01171ce",
+    "clock_domain": "monotonic_process",
+    "total_ns": 10953098164,
+    "completed_steps": 9,
+    "in_flight_outcome_unknown": false,
+    "voice_e2e": "not_measured",
+    "aggregation": "nested spans; sum only siblings; parent minus direct children is unattributed",
+    "spans": [
+      {
+        "id": 0,
+        "parent": -1,
+        "step": 0,
+        "phase": "initial_observation",
+        "start_ns": 1028125,
+        "duration_ns": 85096758,
+        "outcome": "returned"
+      },
+      {
+        "id": 1,
+        "parent": 0,
+        "step": 0,
+        "phase": "security_probe",
+        "start_ns": 3576368,
+        "duration_ns": 43381718,
+        "outcome": "returned"
+      },
+      {
+        "id": 2,
+        "parent": 1,
+        "step": 0,
+        "phase": "probe_api_spacing",
+        "start_ns": 13043594,
+        "duration_ns": 17149,
+        "outcome": "returned"
+      },
+      {
+        "id": 3,
+        "parent": 0,
+        "step": 0,
+        "phase": "fingerprint_traversal",
+        "start_ns": 57150625,
+        "duration_ns": 7407891,
+        "outcome": "returned"
+      },
+      {
+        "id": 4,
+        "parent": -1,
+        "step": 1,
+        "phase": "semantic_lookup",
+        "start_ns": 93543477,
+        "duration_ns": 39101,
+        "outcome": "returned"
+      },
+      {
+        "id": 5,
+        "parent": -1,
+        "step": 1,
+        "phase": "guarded_action",
+        "start_ns": 93677774,
+        "duration_ns": 1219115390,
+        "outcome": "returned"
+      },
+      {
+        "id": 6,
+        "parent": 5,
+        "step": 1,
+        "phase": "native_action",
+        "start_ns": 99581250,
+        "duration_ns": 931621875,
+        "outcome": "returned"
+      },
+      {
+        "id": 7,
+        "parent": 6,
+        "step": 1,
+        "phase": "security_probe",
+        "start_ns": 99589102,
+        "duration_ns": 352277226,
+        "outcome": "returned"
+      },
+      {
+        "id": 8,
+        "parent": 7,
+        "step": 1,
+        "phase": "probe_api_spacing",
+        "start_ns": 111752461,
+        "duration_ns": 301970782,
+        "outcome": "returned"
+      },
+      {
+        "id": 9,
+        "parent": 6,
+        "step": 1,
+        "phase": "intent_cue_wait",
+        "start_ns": 459825313,
+        "duration_ns": 97821172,
+        "outcome": "returned"
+      },
+      {
+        "id": 10,
+        "parent": 6,
+        "step": 1,
+        "phase": "security_probe",
+        "start_ns": 557714102,
+        "duration_ns": 282571797,
+        "outcome": "returned"
+      },
+      {
+        "id": 11,
+        "parent": 10,
+        "step": 1,
+        "phase": "probe_api_spacing",
+        "start_ns": 568408399,
+        "duration_ns": 246777226,
+        "outcome": "returned"
+      },
+      {
+        "id": 12,
+        "parent": 6,
+        "step": 1,
+        "phase": "fresh_fingerprint_and_action",
+        "start_ns": 840320743,
+        "duration_ns": 190642148,
+        "outcome": "returned"
+      },
+      {
+        "id": 13,
+        "parent": 12,
+        "step": 1,
+        "phase": "fingerprint_traversal",
+        "start_ns": 857255860,
+        "duration_ns": 101874218,
+        "outcome": "returned"
+      },
+      {
+        "id": 14,
+        "parent": 5,
+        "step": 1,
+        "phase": "post_observation",
+        "start_ns": 1031248711,
+        "duration_ns": 269874688,
+        "outcome": "returned"
+      },
+      {
+        "id": 15,
+        "parent": 14,
+        "step": 1,
+        "phase": "security_probe",
+        "start_ns": 1038028750,
+        "duration_ns": 207701680,
+        "outcome": "returned"
+      },
+      {
+        "id": 16,
+        "parent": 15,
+        "step": 1,
+        "phase": "probe_api_spacing",
+        "start_ns": 1059814297,
+        "duration_ns": 156026172,
+        "outcome": "returned"
+      },
+      {
+        "id": 17,
+        "parent": 14,
+        "step": 1,
+        "phase": "fingerprint_traversal",
+        "start_ns": 1260773086,
+        "duration_ns": 15459766,
+        "outcome": "returned"
+      },
+      {
+        "id": 18,
+        "parent": 5,
+        "step": 1,
+        "phase": "result_validation",
+        "start_ns": 1308474610,
+        "duration_ns": 10000,
+        "outcome": "returned"
+      },
+      {
+        "id": 19,
+        "parent": -1,
+        "step": 2,
+        "phase": "semantic_lookup",
+        "start_ns": 1312925547,
+        "duration_ns": 36328,
+        "outcome": "returned"
+      },
+      {
+        "id": 20,
+        "parent": -1,
+        "step": 2,
+        "phase": "guarded_action",
+        "start_ns": 1313018868,
+        "duration_ns": 1187564882,
+        "outcome": "returned"
+      },
+      {
+        "id": 21,
+        "parent": 20,
+        "step": 2,
+        "phase": "native_action",
+        "start_ns": 1327145938,
+        "duration_ns": 889981914,
+        "outcome": "returned"
+      },
+      {
+        "id": 22,
+        "parent": 21,
+        "step": 2,
+        "phase": "security_probe",
+        "start_ns": 1327153243,
+        "duration_ns": 325289414,
+        "outcome": "returned"
+      },
+      {
+        "id": 23,
+        "parent": 22,
+        "step": 2,
+        "phase": "probe_api_spacing",
+        "start_ns": 1344974024,
+        "duration_ns": 271877226,
+        "outcome": "returned"
+      },
+      {
+        "id": 24,
+        "parent": 21,
+        "step": 2,
+        "phase": "intent_cue_wait",
+        "start_ns": 1663463282,
+        "duration_ns": 97062343,
+        "outcome": "returned"
+      },
+      {
+        "id": 25,
+        "parent": 21,
+        "step": 2,
+        "phase": "security_probe",
+        "start_ns": 1760653750,
+        "duration_ns": 293980586,
+        "outcome": "returned"
+      },
+      {
+        "id": 26,
+        "parent": 25,
+        "step": 2,
+        "phase": "probe_api_spacing",
+        "start_ns": 1777733125,
+        "duration_ns": 239888164,
+        "outcome": "returned"
+      },
+      {
+        "id": 27,
+        "parent": 21,
+        "step": 2,
+        "phase": "fresh_fingerprint_and_action",
+        "start_ns": 2055340821,
+        "duration_ns": 161716406,
+        "outcome": "returned"
+      },
+      {
+        "id": 28,
+        "parent": 27,
+        "step": 2,
+        "phase": "fingerprint_traversal",
+        "start_ns": 2075819961,
+        "duration_ns": 89596992,
+        "outcome": "returned"
+      },
+      {
+        "id": 29,
+        "parent": 20,
+        "step": 2,
+        "phase": "post_observation",
+        "start_ns": 2217166407,
+        "duration_ns": 276379921,
+        "outcome": "returned"
+      },
+      {
+        "id": 30,
+        "parent": 29,
+        "step": 2,
+        "phase": "security_probe",
+        "start_ns": 2220774688,
+        "duration_ns": 222345976,
+        "outcome": "returned"
+      },
+      {
+        "id": 31,
+        "parent": 30,
+        "step": 2,
+        "phase": "probe_api_spacing",
+        "start_ns": 2233998086,
+        "duration_ns": 183878360,
+        "outcome": "returned"
+      },
+      {
+        "id": 32,
+        "parent": 29,
+        "step": 2,
+        "phase": "fingerprint_traversal",
+        "start_ns": 2460135039,
+        "duration_ns": 15331993,
+        "outcome": "returned"
+      },
+      {
+        "id": 33,
+        "parent": 20,
+        "step": 2,
+        "phase": "result_validation",
+        "start_ns": 2497191328,
+        "duration_ns": 12891,
+        "outcome": "returned"
+      },
+      {
+        "id": 34,
+        "parent": -1,
+        "step": 3,
+        "phase": "semantic_lookup",
+        "start_ns": 2500708399,
+        "duration_ns": 77578,
+        "outcome": "returned"
+      },
+      {
+        "id": 35,
+        "parent": -1,
+        "step": 3,
+        "phase": "guarded_action",
+        "start_ns": 2500831289,
+        "duration_ns": 1259738164,
+        "outcome": "returned"
+      },
+      {
+        "id": 36,
+        "parent": 35,
+        "step": 3,
+        "phase": "native_action",
+        "start_ns": 2514040430,
+        "duration_ns": 877938984,
+        "outcome": "returned"
+      },
+      {
+        "id": 37,
+        "parent": 36,
+        "step": 3,
+        "phase": "security_probe",
+        "start_ns": 2514049727,
+        "duration_ns": 354150000,
+        "outcome": "returned"
+      },
+      {
+        "id": 38,
+        "parent": 37,
+        "step": 3,
+        "phase": "probe_api_spacing",
+        "start_ns": 2530891055,
+        "duration_ns": 288530977,
+        "outcome": "returned"
+      },
+      {
+        "id": 39,
+        "parent": 36,
+        "step": 3,
+        "phase": "intent_cue_wait",
+        "start_ns": 2871331446,
+        "duration_ns": 97331640,
+        "outcome": "returned"
+      },
+      {
+        "id": 40,
+        "parent": 36,
+        "step": 3,
+        "phase": "security_probe",
+        "start_ns": 2968788047,
+        "duration_ns": 274921250,
+        "outcome": "returned"
+      },
+      {
+        "id": 41,
+        "parent": 40,
+        "step": 3,
+        "phase": "probe_api_spacing",
+        "start_ns": 2984398946,
+        "duration_ns": 236528476,
+        "outcome": "returned"
+      },
+      {
+        "id": 42,
+        "parent": 36,
+        "step": 3,
+        "phase": "fresh_fingerprint_and_action",
+        "start_ns": 3243756055,
+        "duration_ns": 148151484,
+        "outcome": "returned"
+      },
+      {
+        "id": 43,
+        "parent": 42,
+        "step": 3,
+        "phase": "fingerprint_traversal",
+        "start_ns": 3263703399,
+        "duration_ns": 73770351,
+        "outcome": "returned"
+      },
+      {
+        "id": 44,
+        "parent": 35,
+        "step": 3,
+        "phase": "post_observation",
+        "start_ns": 3392007618,
+        "duration_ns": 352581210,
+        "outcome": "returned"
+      },
+      {
+        "id": 45,
+        "parent": 44,
+        "step": 3,
+        "phase": "security_probe",
+        "start_ns": 3398304532,
+        "duration_ns": 257033242,
+        "outcome": "returned"
+      },
+      {
+        "id": 46,
+        "parent": 45,
+        "step": 3,
+        "phase": "probe_api_spacing",
+        "start_ns": 3420281758,
+        "duration_ns": 204628438,
+        "outcome": "returned"
+      },
+      {
+        "id": 47,
+        "parent": 44,
+        "step": 3,
+        "phase": "fingerprint_traversal",
+        "start_ns": 3690810469,
+        "duration_ns": 28807031,
+        "outcome": "returned"
+      },
+      {
+        "id": 48,
+        "parent": 35,
+        "step": 3,
+        "phase": "result_validation",
+        "start_ns": 3751468555,
+        "duration_ns": 136133,
+        "outcome": "returned"
+      },
+      {
+        "id": 49,
+        "parent": -1,
+        "step": 4,
+        "phase": "semantic_lookup",
+        "start_ns": 3760774766,
+        "duration_ns": 109609,
+        "outcome": "returned"
+      },
+      {
+        "id": 50,
+        "parent": -1,
+        "step": 4,
+        "phase": "guarded_action",
+        "start_ns": 3760950274,
+        "duration_ns": 1170513711,
+        "outcome": "returned"
+      },
+      {
+        "id": 51,
+        "parent": 50,
+        "step": 4,
+        "phase": "native_action",
+        "start_ns": 3778556680,
+        "duration_ns": 821202461,
+        "outcome": "returned"
+      },
+      {
+        "id": 52,
+        "parent": 51,
+        "step": 4,
+        "phase": "security_probe",
+        "start_ns": 3778561953,
+        "duration_ns": 286057969,
+        "outcome": "returned"
+      },
+      {
+        "id": 53,
+        "parent": 52,
+        "step": 4,
+        "phase": "probe_api_spacing",
+        "start_ns": 3798797852,
+        "duration_ns": 225926953,
+        "outcome": "returned"
+      },
+      {
+        "id": 54,
+        "parent": 51,
+        "step": 4,
+        "phase": "intent_cue_wait",
+        "start_ns": 4074653399,
+        "duration_ns": 96601015,
+        "outcome": "returned"
+      },
+      {
+        "id": 55,
+        "parent": 51,
+        "step": 4,
+        "phase": "security_probe",
+        "start_ns": 4171303711,
+        "duration_ns": 283904766,
+        "outcome": "returned"
+      },
+      {
+        "id": 56,
+        "parent": 55,
+        "step": 4,
+        "phase": "probe_api_spacing",
+        "start_ns": 4191239180,
+        "duration_ns": 235333008,
+        "outcome": "returned"
+      },
+      {
+        "id": 57,
+        "parent": 51,
+        "step": 4,
+        "phase": "fresh_fingerprint_and_action",
+        "start_ns": 4455288946,
+        "duration_ns": 143847422,
+        "outcome": "returned"
+      },
+      {
+        "id": 58,
+        "parent": 57,
+        "step": 4,
+        "phase": "fingerprint_traversal",
+        "start_ns": 4474910743,
+        "duration_ns": 73350312,
+        "outcome": "returned"
+      },
+      {
+        "id": 59,
+        "parent": 50,
+        "step": 4,
+        "phase": "post_observation",
+        "start_ns": 4600170977,
+        "duration_ns": 326417461,
+        "outcome": "returned"
+      },
+      {
+        "id": 60,
+        "parent": 59,
+        "step": 4,
+        "phase": "security_probe",
+        "start_ns": 4623200000,
+        "duration_ns": 229922813,
+        "outcome": "returned"
+      },
+      {
+        "id": 61,
+        "parent": 60,
+        "step": 4,
+        "phase": "probe_api_spacing",
+        "start_ns": 4648100235,
+        "duration_ns": 178764297,
+        "outcome": "returned"
+      },
+      {
+        "id": 62,
+        "parent": 59,
+        "step": 4,
+        "phase": "fingerprint_traversal",
+        "start_ns": 4867921289,
+        "duration_ns": 46515469,
+        "outcome": "returned"
+      },
+      {
+        "id": 63,
+        "parent": 50,
+        "step": 4,
+        "phase": "result_validation",
+        "start_ns": 4929439063,
+        "duration_ns": 17070,
+        "outcome": "returned"
+      },
+      {
+        "id": 64,
+        "parent": -1,
+        "step": 5,
+        "phase": "semantic_lookup",
+        "start_ns": 4931588594,
+        "duration_ns": 33047,
+        "outcome": "returned"
+      },
+      {
+        "id": 65,
+        "parent": -1,
+        "step": 5,
+        "phase": "guarded_action",
+        "start_ns": 4931666758,
+        "duration_ns": 1193869922,
+        "outcome": "returned"
+      },
+      {
+        "id": 66,
+        "parent": 65,
+        "step": 5,
+        "phase": "native_action",
+        "start_ns": 4938212344,
+        "duration_ns": 860868750,
+        "outcome": "returned"
+      },
+      {
+        "id": 67,
+        "parent": 66,
+        "step": 5,
+        "phase": "security_probe",
+        "start_ns": 4938215547,
+        "duration_ns": 318879571,
+        "outcome": "returned"
+      },
+      {
+        "id": 68,
+        "parent": 67,
+        "step": 5,
+        "phase": "probe_api_spacing",
+        "start_ns": 4950920625,
+        "duration_ns": 277093828,
+        "outcome": "returned"
+      },
+      {
+        "id": 69,
+        "parent": 66,
+        "step": 5,
+        "phase": "intent_cue_wait",
+        "start_ns": 5259451289,
+        "duration_ns": 96889024,
+        "outcome": "returned"
+      },
+      {
+        "id": 70,
+        "parent": 66,
+        "step": 5,
+        "phase": "security_probe",
+        "start_ns": 5356456953,
+        "duration_ns": 295819415,
+        "outcome": "returned"
+      },
+      {
+        "id": 71,
+        "parent": 70,
+        "step": 5,
+        "phase": "probe_api_spacing",
+        "start_ns": 5372344610,
+        "duration_ns": 256836718,
+        "outcome": "returned"
+      },
+      {
+        "id": 72,
+        "parent": 66,
+        "step": 5,
+        "phase": "fresh_fingerprint_and_action",
+        "start_ns": 5652320196,
+        "duration_ns": 146682031,
+        "outcome": "returned"
+      },
+      {
+        "id": 73,
+        "parent": 72,
+        "step": 5,
+        "phase": "fingerprint_traversal",
+        "start_ns": 5671104063,
+        "duration_ns": 68926836,
+        "outcome": "returned"
+      },
+      {
+        "id": 74,
+        "parent": 65,
+        "step": 5,
+        "phase": "post_observation",
+        "start_ns": 5799120078,
+        "duration_ns": 314194493,
+        "outcome": "returned"
+      },
+      {
+        "id": 75,
+        "parent": 74,
+        "step": 5,
+        "phase": "security_probe",
+        "start_ns": 5819118203,
+        "duration_ns": 243264024,
+        "outcome": "returned"
+      },
+      {
+        "id": 76,
+        "parent": 75,
+        "step": 5,
+        "phase": "probe_api_spacing",
+        "start_ns": 5848254219,
+        "duration_ns": 182008672,
+        "outcome": "returned"
+      },
+      {
+        "id": 77,
+        "parent": 74,
+        "step": 5,
+        "phase": "fingerprint_traversal",
+        "start_ns": 6075393399,
+        "duration_ns": 18767929,
+        "outcome": "returned"
+      },
+      {
+        "id": 78,
+        "parent": 65,
+        "step": 5,
+        "phase": "result_validation",
+        "start_ns": 6119149297,
+        "duration_ns": 24375,
+        "outcome": "returned"
+      },
+      {
+        "id": 79,
+        "parent": -1,
+        "step": 6,
+        "phase": "semantic_lookup",
+        "start_ns": 6125720625,
+        "duration_ns": 116211,
+        "outcome": "returned"
+      },
+      {
+        "id": 80,
+        "parent": -1,
+        "step": 6,
+        "phase": "guarded_action",
+        "start_ns": 6125910586,
+        "duration_ns": 1199329453,
+        "outcome": "returned"
+      },
+      {
+        "id": 81,
+        "parent": 80,
+        "step": 6,
+        "phase": "native_action",
+        "start_ns": 6136068086,
+        "duration_ns": 880973008,
+        "outcome": "returned"
+      },
+      {
+        "id": 82,
+        "parent": 81,
+        "step": 6,
+        "phase": "security_probe",
+        "start_ns": 6136084883,
+        "duration_ns": 317705938,
+        "outcome": "returned"
+      },
+      {
+        "id": 83,
+        "parent": 82,
+        "step": 6,
+        "phase": "probe_api_spacing",
+        "start_ns": 6161294453,
+        "duration_ns": 269604532,
+        "outcome": "returned"
+      },
+      {
+        "id": 84,
+        "parent": 81,
+        "step": 6,
+        "phase": "intent_cue_wait",
+        "start_ns": 6460386602,
+        "duration_ns": 96669336,
+        "outcome": "returned"
+      },
+      {
+        "id": 85,
+        "parent": 81,
+        "step": 6,
+        "phase": "security_probe",
+        "start_ns": 6557105235,
+        "duration_ns": 308647968,
+        "outcome": "returned"
+      },
+      {
+        "id": 86,
+        "parent": 85,
+        "step": 6,
+        "phase": "probe_api_spacing",
+        "start_ns": 6569814258,
+        "duration_ns": 263353125,
+        "outcome": "returned"
+      },
+      {
+        "id": 87,
+        "parent": 81,
+        "step": 6,
+        "phase": "fresh_fingerprint_and_action",
+        "start_ns": 6865893985,
+        "duration_ns": 151109531,
+        "outcome": "returned"
+      },
+      {
+        "id": 88,
+        "parent": 87,
+        "step": 6,
+        "phase": "fingerprint_traversal",
+        "start_ns": 6896552813,
+        "duration_ns": 74117656,
+        "outcome": "returned"
+      },
+      {
+        "id": 89,
+        "parent": 80,
+        "step": 6,
+        "phase": "post_observation",
+        "start_ns": 7017061602,
+        "duration_ns": 293006133,
+        "outcome": "returned"
+      },
+      {
+        "id": 90,
+        "parent": 89,
+        "step": 6,
+        "phase": "security_probe",
+        "start_ns": 7022206211,
+        "duration_ns": 238934766,
+        "outcome": "returned"
+      },
+      {
+        "id": 91,
+        "parent": 90,
+        "step": 6,
+        "phase": "probe_api_spacing",
+        "start_ns": 7050831758,
+        "duration_ns": 183087695,
+        "outcome": "returned"
+      },
+      {
+        "id": 92,
+        "parent": 89,
+        "step": 6,
+        "phase": "fingerprint_traversal",
+        "start_ns": 7283017110,
+        "duration_ns": 9251875,
+        "outcome": "returned"
+      },
+      {
+        "id": 93,
+        "parent": 80,
+        "step": 6,
+        "phase": "result_validation",
+        "start_ns": 7319331602,
+        "duration_ns": 17656,
+        "outcome": "returned"
+      },
+      {
+        "id": 94,
+        "parent": -1,
+        "step": 7,
+        "phase": "semantic_lookup",
+        "start_ns": 7325388125,
+        "duration_ns": 102149,
+        "outcome": "returned"
+      },
+      {
+        "id": 95,
+        "parent": -1,
+        "step": 7,
+        "phase": "guarded_action",
+        "start_ns": 7325555586,
+        "duration_ns": 1238036211,
+        "outcome": "returned"
+      },
+      {
+        "id": 96,
+        "parent": 95,
+        "step": 7,
+        "phase": "native_action",
+        "start_ns": 7330122305,
+        "duration_ns": 848630391,
+        "outcome": "returned"
+      },
+      {
+        "id": 97,
+        "parent": 96,
+        "step": 7,
+        "phase": "security_probe",
+        "start_ns": 7330132032,
+        "duration_ns": 329339882,
+        "outcome": "returned"
+      },
+      {
+        "id": 98,
+        "parent": 97,
+        "step": 7,
+        "phase": "probe_api_spacing",
+        "start_ns": 7342546328,
+        "duration_ns": 292572071,
+        "outcome": "returned"
+      },
+      {
+        "id": 99,
+        "parent": 96,
+        "step": 7,
+        "phase": "intent_cue_wait",
+        "start_ns": 7662150469,
+        "duration_ns": 96628672,
+        "outcome": "returned"
+      },
+      {
+        "id": 100,
+        "parent": 96,
+        "step": 7,
+        "phase": "security_probe",
+        "start_ns": 7758903633,
+        "duration_ns": 291335742,
+        "outcome": "returned"
+      },
+      {
+        "id": 101,
+        "parent": 100,
+        "step": 7,
+        "phase": "probe_api_spacing",
+        "start_ns": 7774718203,
+        "duration_ns": 260765274,
+        "outcome": "returned"
+      },
+      {
+        "id": 102,
+        "parent": 96,
+        "step": 7,
+        "phase": "fresh_fingerprint_and_action",
+        "start_ns": 8050262657,
+        "duration_ns": 128424882,
+        "outcome": "returned"
+      },
+      {
+        "id": 103,
+        "parent": 102,
+        "step": 7,
+        "phase": "fingerprint_traversal",
+        "start_ns": 8060831797,
+        "duration_ns": 64729414,
+        "outcome": "returned"
+      },
+      {
+        "id": 104,
+        "parent": 95,
+        "step": 7,
+        "phase": "post_observation",
+        "start_ns": 8178824610,
+        "duration_ns": 377151562,
+        "outcome": "returned"
+      },
+      {
+        "id": 105,
+        "parent": 104,
+        "step": 7,
+        "phase": "security_probe",
+        "start_ns": 8187753750,
+        "duration_ns": 271237891,
+        "outcome": "returned"
+      },
+      {
+        "id": 106,
+        "parent": 105,
+        "step": 7,
+        "phase": "probe_api_spacing",
+        "start_ns": 8207680313,
+        "duration_ns": 229750351,
+        "outcome": "returned"
+      },
+      {
+        "id": 107,
+        "parent": 104,
+        "step": 7,
+        "phase": "fingerprint_traversal",
+        "start_ns": 8484258008,
+        "duration_ns": 39932852,
+        "outcome": "returned"
+      },
+      {
+        "id": 108,
+        "parent": 95,
+        "step": 7,
+        "phase": "result_validation",
+        "start_ns": 8558217032,
+        "duration_ns": 11132,
+        "outcome": "returned"
+      },
+      {
+        "id": 109,
+        "parent": -1,
+        "step": 8,
+        "phase": "semantic_lookup",
+        "start_ns": 8564189610,
+        "duration_ns": 174961,
+        "outcome": "returned"
+      },
+      {
+        "id": 110,
+        "parent": -1,
+        "step": 8,
+        "phase": "guarded_action",
+        "start_ns": 8564648282,
+        "duration_ns": 1162469140,
+        "outcome": "returned"
+      },
+      {
+        "id": 111,
+        "parent": 110,
+        "step": 8,
+        "phase": "native_action",
+        "start_ns": 8582260352,
+        "duration_ns": 791151172,
+        "outcome": "returned"
+      },
+      {
+        "id": 112,
+        "parent": 111,
+        "step": 8,
+        "phase": "security_probe",
+        "start_ns": 8582271485,
+        "duration_ns": 293626797,
+        "outcome": "returned"
+      },
+      {
+        "id": 113,
+        "parent": 112,
+        "step": 8,
+        "phase": "probe_api_spacing",
+        "start_ns": 8608907188,
+        "duration_ns": 229090078,
+        "outcome": "returned"
+      },
+      {
+        "id": 114,
+        "parent": 111,
+        "step": 8,
+        "phase": "intent_cue_wait",
+        "start_ns": 8879898868,
+        "duration_ns": 98559882,
+        "outcome": "returned"
+      },
+      {
+        "id": 115,
+        "parent": 111,
+        "step": 8,
+        "phase": "security_probe",
+        "start_ns": 8978950274,
+        "duration_ns": 286548242,
+        "outcome": "returned"
+      },
+      {
+        "id": 116,
+        "parent": 115,
+        "step": 8,
+        "phase": "probe_api_spacing",
+        "start_ns": 8997352305,
+        "duration_ns": 241638828,
+        "outcome": "returned"
+      },
+      {
+        "id": 117,
+        "parent": 111,
+        "step": 8,
+        "phase": "fresh_fingerprint_and_action",
+        "start_ns": 9265544297,
+        "duration_ns": 107831914,
+        "outcome": "returned"
+      },
+      {
+        "id": 118,
+        "parent": 117,
+        "step": 8,
+        "phase": "fingerprint_traversal",
+        "start_ns": 9283247891,
+        "duration_ns": 66059648,
+        "outcome": "returned"
+      },
+      {
+        "id": 119,
+        "parent": 110,
+        "step": 8,
+        "phase": "post_observation",
+        "start_ns": 9373433633,
+        "duration_ns": 344685313,
+        "outcome": "returned"
+      },
+      {
+        "id": 120,
+        "parent": 119,
+        "step": 8,
+        "phase": "security_probe",
+        "start_ns": 9385729375,
+        "duration_ns": 280673243,
+        "outcome": "returned"
+      },
+      {
+        "id": 121,
+        "parent": 120,
+        "step": 8,
+        "phase": "probe_api_spacing",
+        "start_ns": 9405836446,
+        "duration_ns": 234280742,
+        "outcome": "returned"
+      },
+      {
+        "id": 122,
+        "parent": 119,
+        "step": 8,
+        "phase": "fingerprint_traversal",
+        "start_ns": 9683424453,
+        "duration_ns": 11774649,
+        "outcome": "returned"
+      },
+      {
+        "id": 123,
+        "parent": 110,
+        "step": 8,
+        "phase": "result_validation",
+        "start_ns": 9722199297,
+        "duration_ns": 14063,
+        "outcome": "returned"
+      },
+      {
+        "id": 124,
+        "parent": -1,
+        "step": 9,
+        "phase": "semantic_lookup",
+        "start_ns": 9727271016,
+        "duration_ns": 70156,
+        "outcome": "returned"
+      },
+      {
+        "id": 125,
+        "parent": -1,
+        "step": 9,
+        "phase": "guarded_action",
+        "start_ns": 9727401953,
+        "duration_ns": 1225535469,
+        "outcome": "returned"
+      },
+      {
+        "id": 126,
+        "parent": 125,
+        "step": 9,
+        "phase": "native_action",
+        "start_ns": 9734991680,
+        "duration_ns": 853815273,
+        "outcome": "returned"
+      },
+      {
+        "id": 127,
+        "parent": 126,
+        "step": 9,
+        "phase": "security_probe",
+        "start_ns": 9734999727,
+        "duration_ns": 355191289,
+        "outcome": "returned"
+      },
+      {
+        "id": 128,
+        "parent": 127,
+        "step": 9,
+        "phase": "probe_api_spacing",
+        "start_ns": 9751964102,
+        "duration_ns": 288847656,
+        "outcome": "returned"
+      },
+      {
+        "id": 129,
+        "parent": 126,
+        "step": 9,
+        "phase": "intent_cue_wait",
+        "start_ns": 10097970430,
+        "duration_ns": 96987578,
+        "outcome": "returned"
+      },
+      {
+        "id": 130,
+        "parent": 126,
+        "step": 9,
+        "phase": "security_probe",
+        "start_ns": 10195066953,
+        "duration_ns": 279727110,
+        "outcome": "returned"
+      },
+      {
+        "id": 131,
+        "parent": 130,
+        "step": 9,
+        "phase": "probe_api_spacing",
+        "start_ns": 10214387188,
+        "duration_ns": 228334531,
+        "outcome": "returned"
+      },
+      {
+        "id": 132,
+        "parent": 126,
+        "step": 9,
+        "phase": "fresh_fingerprint_and_action",
+        "start_ns": 10474836953,
+        "duration_ns": 113918672,
+        "outcome": "returned"
+      },
+      {
+        "id": 133,
+        "parent": 132,
+        "step": 9,
+        "phase": "fingerprint_traversal",
+        "start_ns": 10483080000,
+        "duration_ns": 59997032,
+        "outcome": "returned"
+      },
+      {
+        "id": 134,
+        "parent": 125,
+        "step": 9,
+        "phase": "post_observation",
+        "start_ns": 10588840274,
+        "duration_ns": 349379453,
+        "outcome": "returned"
+      },
+      {
+        "id": 135,
+        "parent": 134,
+        "step": 9,
+        "phase": "security_probe",
+        "start_ns": 10594502305,
+        "duration_ns": 273117656,
+        "outcome": "returned"
+      },
+      {
+        "id": 136,
+        "parent": 135,
+        "step": 9,
+        "phase": "probe_api_spacing",
+        "start_ns": 10613580352,
+        "duration_ns": 231692734,
+        "outcome": "returned"
+      },
+      {
+        "id": 137,
+        "parent": 134,
+        "step": 9,
+        "phase": "fingerprint_traversal",
+        "start_ns": 10882368086,
+        "duration_ns": 23237657,
+        "outcome": "returned"
+      },
+      {
+        "id": 138,
+        "parent": 125,
+        "step": 9,
+        "phase": "result_validation",
+        "start_ns": 10946490430,
+        "duration_ns": 32109,
+        "outcome": "returned"
+      }
+    ]
+  }
+}

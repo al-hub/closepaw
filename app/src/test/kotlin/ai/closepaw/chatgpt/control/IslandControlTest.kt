@@ -7,6 +7,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IslandControlTest {
+    @Test fun userTouchDuringHoldStopsAndConsumesObservationWithoutReplay() = runTest {
+        val p = Port().apply { waitMs = 100 }; val c = IslandControl(p)
+        val id = c.observe("s").data.getValue("observation_id").toString().trim('"')
+        val pending = async { c.drag("s", id, 20, 20, 450, 100) }
+        yield(); p.refusal = "user_control_paused"
+        val result = pending.await()
+        assertFalse(result.success)
+        assertEquals("true", result.data["outcome_unknown"].toString())
+        p.refusal = null
+        assertFalse(c.drag("s", id, 20, 20, 450, 100).success)
+        assertEquals(1, p.writes)
+    }
+
     private class Port : IslandControlPort {
         var bounds: IslandBounds? = IslandBounds(100, 100, 200, 60, 1080, 1920)
         var refusal: String? = null

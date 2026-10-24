@@ -1,3 +1,12 @@
+## 2026-10-24 후속 개발 후보 v0.1.81/code82 (#145/#146/#147/#150)
+
+- 기준 main43ed3b9. [상세 분석·검증 경계](../dev/issues145-150-v0181.md). 물리 X/Y59 PASS 재사용, 새 기기 시험0회; 사용자 ended 세션 재개 없음.
+- #147 기존 task834ff88f 원시139span 확보: monotonic total10953.098ms, exclusive API spacing6439.104ms(58.8%) 최대. 보안 간격400ms/신선성/취소 유지. Voice/AI/transport 미측정, 개선율 미입증이므로 OPEN.
+- #145 exponential 최대1초 감지 공백을16ms visibility poll/2초 budget으로 교체, ended/epoch 보호 유지. Galaxy 즉시 표시 해결 판정은 단회 후속 확인까지 NOT_TESTED.
+- #146 사용자 touch 중 hold 차단·no-replay 테스트 추가. 기존 host 재생성/회전 UI 회귀 필수, X/Y59 물리 재시험 금지.
+- #150 위조 signer/Boolean duration 허용을 실패 주입으로 재현 후 수정. Python39 PASS. 역사 PR artifact digest·보고서2734건 파싱 완료, merge-checkout SHA와 PR HEAD 구분. raw XML 독립 재파싱은 별도 test-reports artifact 필요.
+- 로컬 Kotlin Gradle network unreachable, pytest 미설치. exact-source CI 검증 전 병합/릴리스 완료 주장 금지. 네 이슈 OPEN; #117/#76 분리 유지. 다음: 통합 PR Security/UI→main→기존키 서명→공개검증→설치1회→영향 최소 물리 수용. 3회 smoke와10+10 통계 구분.
+
 ## 2026-10-24 11시 이후 — 새 Work 개발 실행 인계 (#145/#146/#147/#150)
 
 **현재 확정된 기기 기준:** ClosePaw v0.1.80 / versionCode81, 앱 응답 정상, self-update 설치 확인. 마지막 UI 세션 `622b622c-4d0c-4708-a690-d845e10e90c0`은 **ended/epoch8** (종료 성공). 다른 Work는 새로운 사용자 명시 승인 없이 재개하지 않는다. 태그/APK/서명 원본은 운영 runbook에서 재검증한다.
