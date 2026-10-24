@@ -55,18 +55,26 @@ internal object GeminiNativeReplyPageParser {
             scope.none { it.index != n.index && it.id() == BODY && belongs(n, it) }
         }.map { it.body() }
         if (fragments.isEmpty()) return page()
-        // The native response body and its action toolbar may be siblings in
-        // one RecyclerView row. Require the SAME non-history row and a known
-        // native actions container; never borrow controls from another turn.
+        // Native layouts either wrap body+toolbar in one row or attach the
+        // toolbar as the immediately following history item. Only known actions
+        // containers in that bounded interval may prove completion.
         fun row(n: GeminiUiNode) = path(n).zipWithNext().firstOrNull { it.second.index == root.index }?.first
         val responseRow = row(reply)
-        val siblingToolbar = if (responseRow == null || responseRow.index == reply.index) emptyList() else
-            owned.filter { n ->
-                row(n)?.index == responseRow.index && positions.getValue(n.index) > positions.getValue(reply.index) &&
-                    path(n).any { a -> a.id() in setOf(
-                        "assistant_robin_content_actions_scroll_view", "assistant_robin_content_actions_container") } &&
-                    path(n).none { a -> a.id() == RESPONSE && a.index != reply.index }
-            }
+        val directRows = nodes.filter { it.parent == root.index }
+        val nextRow = responseRow?.let { directRows.getOrNull(directRows.indexOf(it) + 1) }
+        val separateToolbarRow = nextRow?.takeIf { candidate ->
+            responseRow?.index == reply.index && owned.any { n ->
+                belongs(n, candidate) && n.id() == "assistant_robin_message_content_actions_section"
+            } && owned.none { n -> belongs(n, candidate) && n.id() in setOf(QUESTION, RESPONSE, BODY) }
+        }
+        val siblingToolbar = owned.filter { n ->
+            val sameWrappedRow = responseRow != null && responseRow.index != reply.index && row(n)?.index == responseRow.index
+            val separateRow = separateToolbarRow != null && belongs(n, separateToolbarRow)
+            (sameWrappedRow || separateRow) && positions.getValue(n.index) > positions.getValue(reply.index) &&
+                path(n).any { a -> a.id() in setOf(
+                    "assistant_robin_content_actions_scroll_view", "assistant_robin_content_actions_container") } &&
+                path(n).none { a -> a.id() == RESPONSE && a.index != reply.index }
+        }
         val controls = (scope + siblingToolbar).distinctBy { it.index }.filter(::visible)
         fun target(n: GeminiUiNode) = path(n).take(4).firstOrNull { a ->
             a.index != reply.index && a.index != root.index && visible(a) && !a.scrollable && (a.clickable || a.clickAction)
