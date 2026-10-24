@@ -1,3 +1,11 @@
+## 2026-10-24 v0.1.82 Gemini 단회 실검증 — 자동 응답 수집 FAIL
+
+- [#145 원시 판정](https://github.com/al-hub/closepaw/issues/145#issuecomment-6383810155). 설치본0.1.82/code83 응답 정상. 명시적 새 세션에서 무해한 짧은 질문1회 task `8ef8ab53-ba0b-4edf-8163-3b1a3323747e` 실행.
+- 결과 timed_out/reply_timeout, sent=true, coverage=unconfirmed, collection_ms45239. 자동 재전송0. 이후 read_app text+JPEG에서 기대 정답이 보였지만45초 이전 생성 여부는 미확인. 후속 화면 관찰을 원 task PASS로 승격하지 않음. 지연 생성인지 자동 수집기 인식 문제인지 미확정.
+- gemini.ui.inspect는 메타데이터 검사 실패(INVALID_ARGUMENT/세부 원인 없음), 재시도 없음. 기본 아일랜드 캡처만 확보했으며 완료·현재·다음 상세 패널의 실제 렌더는 NOT_TESTED. #145 OPEN, 실제 속도 개선 #147 OPEN 유지. #146/#150 CLOSED 불변.
+- 검증 종료 task `292199f7-fa47-4198-8a7f-2f9368c1c913` success 및 독립 ended/epoch2 확인(세션ad6c7098-2c1f-45de-b35d-7d714bf7e6bb). 새 질문/임의 재개/기존 물리 시험 반복/코드·APK 변경 없음.
+- 다음은 기존 task·진단 기반 응답 인식/수집 경로 분석과 상세 패널 관찰 수단 확보다. 원인 분석 전 동일 질문 재전송 금지. 시간값의 구현 clock domain을 이번에 독립 확인하지 않았으므로 Voice/네트워크 구성비나 교차 clock 차감 결과를 주장하지 않는다.
+
 ## 2026-10-24 PR #155 발행·설치 완료 — v0.1.82/code83
 
 - [PR155](https://github.com/al-hub/closepaw/pull/155) 병합. main/APK/tag source `19382f9a1e7502d5db452dcd7c4ea610121826ea`. [발행 보고서](../dev/issue145-v0182-release.md), [metadata](../dev/evidence/issue145-v0182-release.json).
