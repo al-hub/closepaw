@@ -1,0 +1,90 @@
+{
+  "version": "0.1.83",
+  "version_code": 84,
+  "source_commit": "430f42290d2f8bdc3d10c0c451d677ae7f6f6407",
+  "pr": 156,
+  "pr_head": "45c5609a7d2a752ebb26d970c5a375607dcdfd5f",
+  "pr_ci": {
+    "security": 40096550298,
+    "ui": 40096550287,
+    "jvm_tests": 2743,
+    "new_regressions": 6,
+    "ui_tests": 10,
+    "failures": 0,
+    "skips": 0
+  },
+  "local_python_tests": 39,
+  "pr_artifacts": {
+    "ui": {
+      "id": 12561386762,
+      "sha256": "e4bf9136c11d03f5748f2e657232db00c44bfdcbabc522241b98dd0fb3697334"
+    },
+    "xml": {
+      "id": 12561346181,
+      "sha256": "754fc3fefc9728b0e1559d5151105c9e63beb4f5a59bec4f0449fe2027f3f648"
+    }
+  },
+  "old_task": {
+    "task_id": "8ef8ab53-ba0b-4edf-8163-3b1a3323747e",
+    "status": "FAIL",
+    "reason": "reply_timeout",
+    "collection_ms": 45239,
+    "answer_first_visible_time": "NOT_TESTED"
+  },
+  "expanded_detail_panel": "NOT_TESTED",
+  "android_voice_performance_improvement": "NOT_TESTED",
+  "new_physical_x_unlock_rotation_drag_tests": 0,
+  "main_ci": {
+    "security": 40097087564,
+    "ui": 40097087636,
+    "signed": 40097583090,
+    "result": "PASS",
+    "jvm_tests": 2743,
+    "failures": 0,
+    "skips": 0
+  },
+  "apk": {
+    "url": "https://github.com/al-hub/closepaw/releases/download/v0.1.83/closepaw-aa-bridge.apk",
+    "bytes": 116642415,
+    "sha256": "c55a6b402d6f04513f72b73bcf77cd38ae1356cc3f1fa0925a26c0e084065b15",
+    "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+    "independent_signature_content_manifest_runtimes_tag": "PASS"
+  },
+  "install_task_id": "78bb9aa8-daec-45a7-a259-bc87482f85ba",
+  "install": {
+    "status": "PASS",
+    "requests": 1,
+    "durable": "installed/current 0.1.83/code84",
+    "independent_get_status": "reachable 0.1.83/code84",
+    "first_status_timeout": true
+  },
+  "device_acceptance": {
+    "status": "FAIL",
+    "task_id": "9cf42b92-ae35-4c7b-bbdc-9040e550ad83",
+    "reason_code": "target_changed",
+    "outcome_unknown": true,
+    "send_action_invoked": true,
+    "collection_ms": 80,
+    "clock_domain": "System.nanoTime-derived monotonic milliseconds; not Voice E2E",
+    "later_expected_answer_visible": true,
+    "original_task_promoted_to_pass": false,
+    "resends": 0,
+    "diagnostic_elapsed_clock_domain": "Android SystemClock.elapsedRealtime; separate from collector System.nanoTime"
+  },
+  "session": {
+    "id": "85c9019e-13d5-4eab-a04e-1492b96032b1",
+    "end_task": "57a506c3-7273-42fd-bf69-1d3bad235304",
+    "confirmed_state": "ended",
+    "epoch": 2
+  },
+  "main_artifacts": {
+    "xml": {
+      "id": 12561133926,
+      "sha256": "35303061554d2f220c248a7ea182304e2462a4cda62a556f9a11e308f62e2ba6"
+    },
+    "public_verification": {
+      "id": 12561855215,
+      "sha256": "154bf99ac5d531d4678adad8ef8e9640c4c5c895c8a156ee896c6363a75f57e9"
+    }
+  }
+}

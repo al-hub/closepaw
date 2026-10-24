@@ -1,3 +1,15 @@
+## 2026-10-24 v0.1.83 발행·설치 및 단회 Gemini 실검증
+
+- [PR156](https://github.com/al-hub/closepaw/pull/156) 병합, APK/tag source `430f42290d2f8bdc3d10c0c451d677ae7f6f6407`. [보고서](../dev/gemini-native-short-reply-v0183.md), [검증 metadata](../dev/evidence/gemini-native-short-reply-v0183.json).
+- 기존 code83 실패 메타데이터에서 non-scrollable native history와 별도 다음 toolbar row를 확인. 정확한 native 소유권 구조를 지원하며 generic parser/완료역할3개/안정성/prior text/세션/잠금/취소 보호 유지. 실제 정답 최초 생성시각은 미측정.
+- 신규6 포함 JVM2743, UI10 실패/error/skip0 독립 XML 확인. Python39 PASS, PR Security40096550298/UI40096550287 및 main Security40097087564/UI40097087636/Signed40097583090 success. 로컬 Gradle unavailable는 RED assertion 아님.
+- 공개 APK0.1.83/code84,116642415bytes,SHA256 `c55a6b402d6f04513f72b73bcf77cd38ae1356cc3f1fa0925a26c0e084065b15`. 익명 download+checksum, 기존 signer/v3 RSA-SHA512 signed-data·content digest, binary manifest, 두 runtime, annotated tag/source 독립 PASS.
+- 설치1회 task `78bb9aa8-daec-45a7-a259-bc87482f85ba`. 교체 중 첫 status timeout 후 간격을 두고 durable installed/current0.1.83/code84→독립get_status 정상. 재설치0.
+- 새 무해한 질문1회 task `9cf42b92-ae35-4c7b-bbdc-9040e550ad83`: **FAIL/수용 미완료**, outcome_unknown/target_changed, send_action_invoked=true, collection_ms80. foreground=false/target_not_verified로 조기 종료; 동일 Google package/window 정보만 남아 실제 앱전환/사용자개입/composer 일시소실 중 무엇인지는 미확정. 단회 read_app에서 새 질문과 기대 정답 확인했지만 원 task PASS 승격0/재전송0. parser 수정의 실기기 수용은 미입증.
+- 진단 elapsed_ms는 Android SystemClock.elapsedRealtime, collection_ms는 System.nanoTime 기반 별도 시작점, timestamp_ms는 wall clock. 교차 clock 차감/Voice 성능 개선 주장 금지.
+- 종료 task `57a506c3-7273-42fd-bf69-1d3bad235304` success, 독립 ended/epoch2(session85c9019e-13d5-4eab-a04e-1492b96032b1). 완료된 단회 시험을 근거로 새 질문/임의재개 금지. 기존 X/잠금/회전/드래그 물리 시험 반복0.
+- **#145 OPEN**(expanded 상세 패널 실제 수용 NOT_TESTED 및 새 foreground 검증 실패), **#147 OPEN**(Android/Voice 개선 미입증); #146/#150 CLOSED 유지. #117/#76 분리 불변. 다음: privacy-safe root/composer/window 상태 구분 후 bounded READ-ONLY same-window settling 설계·회귀. wrong app/window/lock/revocation/cancel/user intervention fail-closed 유지; 질문 재전송으로 복구 금지.
+
 ## 2026-10-24 v0.1.82 Gemini 단회 실검증 — 자동 응답 수집 FAIL
 
 - [#145 원시 판정](https://github.com/al-hub/closepaw/issues/145#issuecomment-6383810155). 설치본0.1.82/code83 응답 정상. 명시적 새 세션에서 무해한 짧은 질문1회 task `8ef8ab53-ba0b-4edf-8163-3b1a3323747e` 실행.
