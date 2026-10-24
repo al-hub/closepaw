@@ -275,4 +275,80 @@ class ControlOverlayWindowTest {
         }
     }
 
+    /** Actual Compose accessibility overlay, synthetic progress only; no app launch/send. */
+    @Test fun expandedGeminiStagesRenderInTheRealOwnedIsland() {
+        val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        automation.executeShellCommand("settings put secure enabled_accessibility_services ai.closepaw/.app.AgentService").close()
+        automation.executeShellCommand("settings put secure accessibility_enabled 1").close()
+        val deadline = SystemClock.uptimeMillis() + 10_000
+        while (AgentService.instance == null && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(100)
+        val service = requireNotNull(AgentService.instance)
+        lateinit var host: ai.closepaw.ui.overlay.compose.IslandOverlayHost
+        lateinit var root: View
+        var collapsedHeight = 0
+        try {
+            main {
+                service.remoteControlSession.end(); service.remoteControlSession.start()
+                val controller = field(service, "overlayController") as ServiceOverlayController
+                host = field(controller, "statusIslandManager") as ai.closepaw.ui.overlay.compose.IslandOverlayHost
+                controller.handleWindowStateChanged("com.android.settings", "com.android.settings.Settings", 0)
+                service.remoteControlSession.geminiProgress("waiting", service.remoteControlSession.epoch)
+                service.showRemoteControlActivity()
+            }
+            instrumentation.waitForIdleSync()
+            main {
+                root = field(requireNotNull(field(host, "composeHost")), "composeView") as View
+                assertTrue(root.isAttachedToWindow)
+                collapsedHeight = root.height
+            }
+            var x = 0f; var y = 0f
+            main { val xy = IntArray(2); root.getLocationOnScreen(xy); x = xy[0] + root.width / 2f; y = xy[1] + root.height / 2f }
+            val down = SystemClock.uptimeMillis()
+            send(root, MotionEvent.ACTION_DOWN, down, x, y)
+            send(root, MotionEvent.ACTION_UP, down, x, y)
+            instrumentation.waitForIdleSync()
+            main { assertEquals(true, field(host, "detailVisible")) }
+            for (stage in listOf("waiting", "completed", "failed", "interrupted")) {
+                main {
+                    service.remoteControlSession.geminiProgress(stage, service.remoteControlSession.epoch)
+                    service.showRemoteControlActivity()
+                    val detail = requireNotNull(service.remoteControlSession.progressDetail)
+                    for (heading in listOf("목표:", "대상:", "완료:", "현재:", "다음:", "상태:")) assertTrue(detail.contains(heading))
+                }
+                instrumentation.waitForIdleSync()
+                // Allow a bounded pair of frames for Compose measurement and WindowManager layout.
+                val layoutDeadline = SystemClock.uptimeMillis() + 3_000
+                var stable = 0; var lastHeight = -1
+                while (stable < 2 && SystemClock.uptimeMillis() < layoutDeadline) {
+                    main { stable = if (root.height > collapsedHeight && root.height == lastHeight) stable + 1 else 0; lastHeight = root.height }
+                    SystemClock.sleep(50)
+                }
+                assertTrue("expanded layout must attach and settle", stable >= 2)
+                val screen = requireNotNull(automation.takeScreenshot())
+                var left = 0; var top = 0; var width = 0; var height = 0
+                main {
+                    val xy = IntArray(2); root.getLocationOnScreen(xy)
+                    left = xy[0]; top = xy[1]; width = root.width; height = root.height
+                    assertTrue(root.isAttachedToWindow); assertEquals(true, field(host, "detailVisible"))
+                    assertEquals(ControlSession.State.ACTIVE, service.remoteControlSession.state)
+                }
+                assertTrue(left >= 0 && top >= 0 && left + width <= screen.width && top + height <= screen.height)
+                val crop = android.graphics.Bitmap.createBitmap(screen, left, top, width, height)
+                val file = java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "island-detail-$stage.png")
+                file.outputStream().use { assertTrue(crop.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
+                crop.recycle(); screen.recycle()
+                fun shell(command: String) = android.os.ParcelFileDescriptor.AutoCloseInputStream(
+                    automation.executeShellCommand(command)).use { it.bufferedReader().readText() }
+                shell("mkdir -p /sdcard/Download/closepaw-premium-ux-qa")
+                val destination = "/sdcard/Download/closepaw-premium-ux-qa/${file.name}"
+                shell("cp ${file.absolutePath} $destination")
+                assertTrue((shell("stat -c %s $destination").trim().toLongOrNull() ?: 0L) > 0L)
+            }
+        } finally {
+            main { service.remoteControlSession.end(); service.hideRemoteControlActivity(force = true) }
+        }
+        instrumentation.waitForIdleSync()
+        main { assertFalse(host.isShowing()); assertEquals(ControlSession.State.ENDED, service.remoteControlSession.state) }
+    }
+
 }
