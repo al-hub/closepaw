@@ -1,0 +1,112 @@
+{
+  "version": "0.1.84",
+  "version_code": 85,
+  "pr": 158,
+  "pr_head": "b4323aa9db628f893e4f016edfaa2272378e2dc8",
+  "purpose": "Failure classification and bounded private observation diagnostics; no performance optimization",
+  "expected_jvm_inventory": 2750,
+  "new_regressions": 7,
+  "local_python": {
+    "status": "PASS",
+    "tests": 39
+  },
+  "local_gradle": "NOT_TESTED; previously unavailable distribution; no repeated retry",
+  "device_questions": 0,
+  "physical_x_unlock_rotation_drag_retests": 0,
+  "security_interval_ms": 400,
+  "previous_task_results_preserved": true,
+  "performance": {
+    "historical_task": "834ff88f-b399-4f43-81f0-a8d2b01171ce",
+    "classification": "REUSED_EVIDENCE",
+    "probe_count": 28,
+    "nominal_intervals": 27,
+    "nominal_budget_ms": 10800,
+    "limitation": "Contract arithmetic only in elapsedRealtime domain; never subtract from nanoTime trace. No measured speedup.",
+    "candidate_speedup": "NOT_TESTED",
+    "voice_e2e": "NOT_TESTED",
+    "strict_matched_10_plus_10": "NOT_TESTED"
+  },
+  "issue_status": {
+    "145": "OPEN",
+    "146": "CLOSED",
+    "147": "OPEN",
+    "150": "CLOSED"
+  },
+  "pr_ci": {
+    "security": 40142089464,
+    "ui": 40142089520,
+    "jvm_tests": 2750,
+    "ui_tests": 11,
+    "png": 8,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0,
+    "xml": {
+      "artifact_id": 12579765129,
+      "sha256": "9cb21578aae4e74691576e005d45aa0876e27a3c8585887150a83a51dc1a35d9"
+    },
+    "ui_artifact": {
+      "id": 12578919739,
+      "sha256": "c00669422c4c84809b51e5554b8d32d9a050ec334d7d68a2758c716c2b6261f4"
+    }
+  },
+  "source_commit": "fe5863bfea48a323431db1eca8bb6501cad2ab26",
+  "main_ci": {
+    "security": 40142615725,
+    "ui": 40142615660,
+    "signed": 40143180227,
+    "result": "PASS",
+    "jvm_tests": 2750,
+    "ui_tests": 11,
+    "png": 8,
+    "failures": 0,
+    "skips": 0,
+    "main_xml": {
+      "artifact_id": 12579426863,
+      "sha256": "458ef7e6ebfa5d0ccc1e0aeac8673ae4921b0fbedacb4d3fb4008d64e3ff4647"
+    },
+    "main_ui": {
+      "artifact_id": 12579546453,
+      "sha256": "77a4be09dc12da4d7acbdf9002ab3ffeba5e5d357a38efd45c573e43e35f0df5"
+    },
+    "public_verification": {
+      "artifact_id": 12579038703,
+      "sha256": "823ccd2eb5811f7578d6d8050850f690d909fa78bcead19cf518319f1507d37a"
+    }
+  },
+  "apk": {
+    "status": "PASS",
+    "bytes": 116642415,
+    "sha256": "ea2cdd46796d68a73b6444829109fb8015a8b9ad82a7e20125ab0f14dc57f859",
+    "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+    "independent_checks": [
+      "anonymous download",
+      "checksum",
+      "RSA-SHA512 v3 signed data",
+      "full APK chunked content digest",
+      "binary manifest ai.closepaw/0.1.84/85",
+      "two arm64 runtimes",
+      "annotated tag/source"
+    ]
+  },
+  "install_task_id": "cd1b5b2d-df67-4e80-8027-187f6d82f1d9",
+  "install": {
+    "status": "PASS",
+    "requests": 1,
+    "installed": "0.1.84/code85",
+    "independent_reachable": true,
+    "task_id": "cd1b5b2d-df67-4e80-8027-187f6d82f1d9"
+  },
+  "read_only_diagnosis": {
+    "status": "FAIL",
+    "reason_code": "snapshot_illegal_state",
+    "questions_sent": 0,
+    "retries": 0,
+    "exception_reason_emission": "PASS; static error type only",
+    "session_id": "c365743f-2eb2-4525-aa8f-9041cce571f8",
+    "start_task": "0d697be0-0d6a-4626-9a92-e4c351128d53",
+    "end_task": "02125429-2d1d-4166-a39f-2d6d37688140",
+    "final_state": "ended",
+    "epoch": 2
+  }
+}
