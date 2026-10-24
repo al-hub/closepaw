@@ -1,3 +1,15 @@
+## 2026-10-24 후속 발행·설치 완료 — v0.1.81/code82
+
+- [PR154](https://github.com/al-hub/closepaw/pull/154) merged, immutable APK/tag source`c14b8883f5a659cba851412ce2c53fa90b32d22e`. [최종 보고서](../dev/issues145-150-v0181.md),[metadata](../dev/evidence/issues145-150-v0181-release.json).
+- PR Security40071331377/UI40071331372,main Security40071795852/UI40071795881/Signed40072145174 success. 독립 main XML2736 실패/skip0,PR UI10 실패/skip0·PNG4,Python39 PASS.
+- APK116642415bytes,SHA256`68eec6d1aa6831f0a15cc9cce2d3f83a81005738f0af668941382b9b05e0972b`. 공개 download,기존v3 signer/RSA-SHA512 signature·content digest,binary manifest82/0.1.81,두runtime,tag/source 독립 PASS.
+- 설치단1회 task664e8d7e-5d8f-4332-b28d-b0eb9530c772:durable installed/current0.1.81/code82→독립get_status 정상. UI세션 ended/epoch0(72db083c-f596-4240-a5a3-cc168e05dc80) 유지. 임의재개0,새물리시험0. 같은APK 재설치금지.
+- #145 OPEN:최대1초 keyguard 감지공백→16ms/2초bounded polling,JVM PASS. 실제Galaxy first-visible/단회OFF-unlock NOT_TESTED.
+- #146 OPEN:touch중hold→unknown/관찰소비/no-replay 신규PASS,기존emulator 재생성/회전/clamp PASS. 현재Galaxy 재생성·회전 물리미검증. X/Y59 기존PASS 재시험금지.
+- #147 OPEN:기존raw139span local10953.098ms 중API spacing6439.104ms(58.8%) 최대.400ms보안간격/모든fresh검사 유지,개선미입증. 과거완료task2개복구→code81의3표본10952/11032/10979ms(mean10987.667) 확보;신규3회가 아님. strict10+10/Voice E2E NOT_TESTED.
+- #150 자동체계 수용완료:위조signer·Boolean time RED→수정,독립historical/current XML/report/artifact digest/source/version/signer 검증. 기존PASS와현재PASS 구분. #117TalkBack/알림/장기반복,#76다른기기/폴더블 유지.
+- 다음최소사용자협조:새로허가한세션에서 단회OFF/unlock 표시확인 및 필요시현재Galaxy 재생성·회전. ended무단재개금지. #147은 안전한실제최적화와client timing 경로가 더필요. 이기록은docs-only,태그/키/APK 불변.
+
 ## 2026-10-24 후속 개발 후보 v0.1.81/code82 (#145/#146/#147/#150)
 
 - 기준 main43ed3b9. [상세 분석·검증 경계](../dev/issues145-150-v0181.md). 물리 X/Y59 PASS 재사용, 새 기기 시험0회; 사용자 ended 세션 재개 없음.

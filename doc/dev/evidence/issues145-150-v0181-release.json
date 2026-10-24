@@ -1,0 +1,79 @@
+{
+  "source_commit": "c14b8883f5a659cba851412ce2c53fa90b32d22e",
+  "version": "0.1.81",
+  "version_code": 82,
+  "pr": 154,
+  "pr_head": "9bf6e87c6373343931958aab54aa4b4cb4d0a4b9",
+  "runs": {
+    "pr_security": 40071331377,
+    "pr_ui": 40071331372,
+    "main_security": 40071795852,
+    "main_ui": 40071795881,
+    "signed_release": 40072145174
+  },
+  "apk": {
+    "bytes": 116642415,
+    "sha256": "68eec6d1aa6831f0a15cc9cce2d3f83a81005738f0af668941382b9b05e0972b",
+    "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+    "independent_checks": [
+      "anonymous download SHA256",
+      "APK v3 certificate production anchor",
+      "RSA SHA512 signed data",
+      "chunked APK content digest SHA512",
+      "binary AndroidManifest package/versionCode/versionName",
+      "two arm64 native runtimes",
+      "annotated tag resolves source_commit"
+    ]
+  },
+  "main_tests": {
+    "count": 2736,
+    "failures": 0,
+    "skips": 0,
+    "xml_independent_parse": "PASS"
+  },
+  "pr_ui": {
+    "count": 10,
+    "failures": 0,
+    "skips": 0,
+    "png": 4
+  },
+  "python_tests": 39,
+  "physical": {
+    "new_trials": 0,
+    "x": "REUSED_EVIDENCE v0.1.80; not repeated",
+    "island_y59": "REUSED_EVIDENCE v0.1.80; not repeated",
+    "unlock_candidate": "NOT_TESTED",
+    "current_device_recreation_rotation": "NOT_TESTED"
+  },
+  "performance": {
+    "status": "NOT_TESTED matched candidate improvement",
+    "historical_code81_ms": [
+      10952,
+      11032,
+      10979
+    ],
+    "historical_mean_ms": 10987.666666666666,
+    "voice": "NOT_TESTED",
+    "api_spacing_exclusive_ms": 6439.104063,
+    "total_monotonic_ms": 10953.098164
+  },
+  "installation": {
+    "task_id": "664e8d7e-5d8f-4332-b28d-b0eb9530c772",
+    "submitted_once": true,
+    "last_confirmed_state": "installed",
+    "independent_installed": "PASS: get_status reachable0.1.81/code82",
+    "installed_version": "0.1.81",
+    "installed_code": 82,
+    "session_after": {
+      "state": "ended",
+      "epoch": 0,
+      "session_id": "72db083c-f596-4240-a5a3-cc168e05dc80"
+    }
+  },
+  "issue_status": {
+    "145": "OPEN: Galaxy unlock immediate first-visible NOT_TESTED",
+    "146": "OPEN: new automatic safety tests PASS; current Galaxy recreation/rotation NOT_TESTED",
+    "147": "OPEN: top local bottleneck measured; performance improvement/Voice E2E NOT_TESTED",
+    "150": "COMPLETE: independent negative tests/report/XML/provenance gates verified"
+  }
+}
