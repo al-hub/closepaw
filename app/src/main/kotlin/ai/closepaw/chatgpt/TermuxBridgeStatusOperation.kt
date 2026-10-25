@@ -42,7 +42,10 @@ internal class TermuxBridgeStatusOperation(
         fun descriptor(enabled: () -> Boolean) = OperationDescriptor(
             id = "linux.bridge.status",
             description = "Read passive Local Bridge health, authenticated jobs readiness and installed Termux RUN_COMMAND service support, including while offline. No command, recovery, token changes or UI session. Process and supervisor state remain unobserved.",
-            inputSchema = schema(),
+            inputSchema = buildJsonObject {
+                put("type", "object"); put("properties", buildJsonObject {})
+                put("additionalProperties", false); put("required", buildJsonArray {})
+            },
             permissions = listOf("remote_execution", "termux_local_bridge"),
             readiness = { OperationReadiness(enabled(), if (enabled()) null else "remote_execution_disabled") },
         )
