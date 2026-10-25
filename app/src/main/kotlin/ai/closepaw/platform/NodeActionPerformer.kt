@@ -140,6 +140,37 @@ class NodeActionPerformer(
         }
     }
 
+    /**
+     * Execute the framework Paste action on an already focused editable node.
+     * This method never writes or reads the system clipboard. The caller must
+     * separately verify consent, foreground window, clipboard provenance and
+     * target freshness before calling it. No gesture fallback or retries.
+     */
+    suspend fun performPasteOnFocused(authorized: Boolean): ActionResult {
+        if (!authorized) return ActionResult.Failure("Paste not authorized")
+        return onMain {
+            withRoot { root ->
+                val node = AccessibilityNodeFinder.findFocusedEditableNode(root)
+                    ?: return@withRoot ActionResult.Failure("No focused editable node for Paste")
+                try {
+                    if (!node.isEditable || node.isPassword || !node.isFocused) {
+                        return@withRoot ActionResult.Failure("Paste target not eligible")
+                    }
+                    if (node.actionList.none { it.id == AccessibilityNodeInfo.ACTION_PASTE }) {
+                        return@withRoot ActionResult.Failure("Paste unsupported by target")
+                    }
+                    if (node.performAction(AccessibilityNodeInfo.ACTION_PASTE)) {
+                        ActionResult.Success("Paste action dispatched; effect unverified")
+                    } else {
+                        ActionResult.Failure("Paste outcome unknown; do not replay")
+                    }
+                } finally {
+                    if (node !== root) node.recycleCompat()
+                }
+            }
+        }
+    }
+
     @Suppress("DEPRECATION")
     suspend fun performEnterKey(): ActionResult {
         return onMain {
