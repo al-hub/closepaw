@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ai.closepaw.termux.HttpTermuxHealthProbeTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-25T05:38:26" hostname="runnervmtai0g" time="5.136">
+  <properties/>
+  <testcase name="busy bridge defers upgrade without another command" classname="ai.closepaw.termux.HttpTermuxHealthProbeTest" time="0.008"/>
+  <testcase name="total call timeout while response trickles is not daemon absence" classname="ai.closepaw.termux.HttpTermuxHealthProbeTest" time="3.008"/>
+  <testcase name="health probe requires authenticated job readiness before Ready" classname="ai.closepaw.termux.HttpTermuxHealthProbeTest" time="0.046"/>
+  <testcase name="health response timeout does not imply daemon absence" classname="ai.closepaw.termux.HttpTermuxHealthProbeTest" time="2.007"/>
+  <testcase name="health probe reports AuthMismatch on authenticated 401" classname="ai.closepaw.termux.HttpTermuxHealthProbeTest" time="0.045"/>
+  <testcase name="foreign or rejected health never sends credentials or starts an auth probe" classname="ai.closepaw.termux.HttpTermuxHealthProbeTest" time="0.012"/>
+  <testcase name="unverified health endpoint 401 does not prove token mismatch" classname="ai.closepaw.termux.HttpTermuxHealthProbeTest" time="0.005"/>
+  <testcase name="recovery upgrade uses existing authenticated transport without token file writes" classname="ai.closepaw.termux.HttpTermuxHealthProbeTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

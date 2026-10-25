@@ -66,3 +66,78 @@ reusing that version. Main is still34b602a4. No #161 branch, timing code, tests 
 is modified. Recheck exact latest main and release state before merging PR160; do not advance
 main during another signing run. Code may be validated independently now. Installation and
 Termux recovery tests require confirming no active #161 device experiment first.
+
+## 2026-10-25 final release and installed-device checkpoint
+
+**Development/CI/release/installation COMPLETE; outage restoration and recovery acceptance BLOCKED.**
+#152 remains OPEN. Neither CI nor diagnostic success is a successful shell command.
+
+- PR [#160](https://github.com/al-hub/closepaw/pull/160) merged.
+  APK/tag source `e454e066f6ad27b319895c061ea11d8ab2e64561`.
+- PR Security [40165492845](https://github.com/al-hub/closepaw/actions/runs/40165492845) /
+  UI [40165492943](https://github.com/al-hub/closepaw/actions/runs/40165492943): success.
+  Main Security [40165899152](https://github.com/al-hub/closepaw/actions/runs/40165899152) /
+  UI [40165899208](https://github.com/al-hub/closepaw/actions/runs/40165899208): success.
+  Each exact-source raw archive independently parsed: JVM2775/UI11, failure/error/skip0, PNG8.
+  Local43 release/analysis unittest PASS after incorporating #161.
+- Initial RED2756/3 failures remains recorded. The first integrated candidate failed compilation
+  because its schema helper belonged to AndroidOperationRuntime; d0cbaa7 defined an owned schema
+  and passed final CI. Independent review found and corrected unsafe auth probing, unauthenticated
+  health401 misclassification and total-call-timeout handling; final review found no remaining blocker.
+- [Signed Release40166307998](https://github.com/al-hub/closepaw/actions/runs/40166307998): success.
+  [v0.1.87/code88](https://github.com/al-hub/closepaw/releases/tag/v0.1.87) publishes both
+  `closepaw-aa-bridge.apk` and `.sha256`. APK116654703bytes;
+  SHA256 `90550ca783c00e41f3dffa91bd64b43809337e62ce7847ad3f3f28065e91f8c5`.
+  Existing signer `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`;
+  public apksigner v3 verification, package ai.closepaw/version/code/source all match.
+  Evidence archive12588547283 SHA256272eb292c4bc5f03dba024e60c5096ee5825195e6769920d25de63bb3a3b4f65.
+  Additional anonymous host APK download/hash/size/two native-runtime entries match.
+  No key generation, tag move or existing-asset overwrite.
+- Single install task `f468e34b-00e9-4130-8ee1-8069c8277fba`,
+  request `issue152-install-v0187-20261025-once`. The first reconnect status timed out.
+  After a spaced retry: durable state installed, installed/current0.1.87/code88; independent
+  get_status reachable0.1.87/code88. Install request was not repeated, no physical approval needed.
+- New `linux.bridge.status` works while shell is offline:
+  termux_installed=true, run_command_supported=false (installed-package permission/action/exported
+  service check), health_status=unavailable, authenticated_jobs_ready=false.
+  process_state/supervisor_state=not_observed. recovery_attempted/command_submitted/pairing_changed=false.
+  This confirms absence of the supported external service path and unavailable health, **not**
+  a proved Android process kill or daemon-loss trigger.
+- Fresh shell discovery: ready=false, readiness_reason=`bridge_offline_no_run_command`.
+  The prior misleading termux_not_running reason no longer appears in this installed path.
+  No failing shell command or arbitrary terminal UI input was submitted.
+- UI session remains ended/epoch0; this Work started/resumed/ended no UI session and changed no
+  accessibility settings, revision13 app tiers, token or known_hosts. No active #161 experiment was interrupted.
+
+### Acceptance and remaining minimal action
+
+| Condition | Final result |
+| --- | --- |
+| Passive installed-device diagnostics / corrected readiness reason | PASS on87/code88 |
+| Official signed APK, public verification, actual installation/independent response | PASS |
+| #161 integration | Preserved timing/sequence/test files; version-only overlap resolved87/code88 |
+| Authenticated bridge health / harmless shell read/exit0/output | BLOCKED, NOT_TESTED |
+| Existing token retained across an actual recovery | NOT_TESTED; no pairing write performed |
+| Controlled daemon disappearance / unattended recovery / subsequent command | NOT_TESTED |
+| Existing strict known_hosts PC SSH read/exit0/output | NOT_TESTED |
+| UI-ended shell execution / user-stop no-replay after recovery | NOT_TESTED on new APK |
+| Original daemon disappearance cause, whole-Termux Android lifecycle cause | UNCONFIRMED |
+
+Minimum user action, now justified by actual installed diagnostics: open Termux and run once:
+
+```sh
+~/.termux/boot/10-closepaw-bridge
+```
+
+Do not print the token. If that hook is missing/fails, retain its non-secret error and use the
+existing Settings Copy recovery command only if necessary; do not re-pair by default.
+
+After that action, this same87 APK is sufficient for the next validation: passive authenticated
+health, one harmless read with exit0/output and whitelisted recovery/boot metadata, strict existing
+SSH alias/known_hosts read, then one controlled owned-daemon disappearance only after confirming
+the singleton supervisor and no unrelated active jobs. Re-observe health without replaying an
+unknown command, compare token file metadata, and execute one new harmless read. Preserve the
+ended UI state and #161 session ownership. Stop if authentication/foreign listener/unknown outcome
+requires diagnosis. Do not expand into #117 soak/reboot coverage or reopen #139.
+
+[Machine-readable audit and selected raw main regression XML](evidence/issue152/audit.json).

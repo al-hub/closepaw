@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ai.closepaw.termux.TermuxBridgeManagerTest" tests="21" skipped="0" failures="0" errors="0" timestamp="2026-10-25T05:38:31" hostname="runnervmtai0g" time="0.035">
+  <properties/>
+  <testcase name="setup starts persistent bridge without idle self shutdown" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.005"/>
+  <testcase name="ensureReadyForSession missing bridge returns passive needs setup without start or deploy" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="ensureReadyForSession restarts deployed idle bridge without install or deploy" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="diagnostics are passive even for a ready bridge" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="start exports persisted token to Python rather than mkdir" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="ensureReadyForSession during in flight setup runs start only block" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.002"/>
+  <testcase name="setup during in flight ensureReadyForSession runs bootstrap block" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="setup does not report RUN_COMMAND unavailable for F-Droid compatible Termux" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.004"/>
+  <testcase name="install probe requires explicit RunCommandService component to resolve" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="healthy Local Bridge remains ready when RUN_COMMAND is unavailable" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="concurrent setup calls share one in flight bootstrap" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.002"/>
+  <testcase name="setup maps probe failures to refined setup reasons" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="offline Play Termux does not ask for new pairing or use RUN_COMMAND" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="setup during bridge outdated ensureReadyForSession still bootstraps" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.002"/>
+  <testcase name="offline unsupported service is not evidence Termux process stopped" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.002"/>
+  <testcase name="ensureReadyForSession returns ready without RUN_COMMAND when health is ready" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="restricted restart never falls through to bootstrap or rewrites pairing" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="cancelled setup awaiter does not cancel in flight bootstrap" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.002"/>
+  <testcase name="restart never kills healthy or mismatched or foreign listener" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="health check reports auth mismatch before RUN_COMMAND availability" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.001"/>
+  <testcase name="detectInstalled reports unavailable when either RUN_COMMAND signal is missing" classname="ai.closepaw.termux.TermuxBridgeManagerTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

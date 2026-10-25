@@ -1,0 +1,128 @@
+{
+  "base_main": "34b602a469ef3325bf13c73517c4338c7b224adf",
+  "tests_first_head": "82cda75afcfbb8500d1bc90c27abc70b4ecb6ed6",
+  "pr_head": "d0cbaa7df6bb465a145e3ac4fb444daa89e27318",
+  "main_apk_source": "e454e066f6ad27b319895c061ea11d8ab2e64561",
+  "pr": 160,
+  "parallel_pr": 162,
+  "version": "0.1.87",
+  "version_code": 88,
+  "signed_run": 40166307998,
+  "pr_security_run": 40165492845,
+  "pr_ui_run": 40165492943,
+  "main_security_run": 40165899152,
+  "main_ui_run": 40165899208,
+  "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+  "archives": {
+    "red-reports": {
+      "sha256": "aa498150630386be763cfe1bd8b90de7e7a4da7603cd117f7f7d1d15c577e7ed",
+      "totals": {
+        "tests": 2756,
+        "failures": 3,
+        "errors": 0,
+        "skipped": 0
+      },
+      "png_count": 0
+    },
+    "pr-jvm": {
+      "sha256": "ebe2435aed0d77070bfbceb66a053bd4ae53cc11f8ad8ef41443aa2cc00b02c2",
+      "totals": {
+        "tests": 2775,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "png_count": 0
+    },
+    "pr-ui": {
+      "sha256": "7ee03f45de8c0caf2f858864c6a390f63ff0a8931521ab31675a0525e40f3b8b",
+      "totals": {
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "png_count": 8
+    },
+    "main-jvm": {
+      "sha256": "29369f812af2cc9cfd9c6b0df73dc6ce3d5bdda13536a5b265286e58551735e0",
+      "totals": {
+        "tests": 2775,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "png_count": 0
+    },
+    "main-ui": {
+      "sha256": "828c52804297adf755a9894f00b58c04a95acd0b9c00b5cf375a0574c8c1b112",
+      "totals": {
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "png_count": 8
+    },
+    "public-verification": {
+      "sha256": "272eb292c4bc5f03dba024e60c5096ee5825195e6769920d25de63bb3a3b4f65",
+      "totals": {
+        "tests": 0,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "png_count": 0
+    }
+  },
+  "public_download": {
+    "sha256": "90550ca783c00e41f3dffa91bd64b43809337e62ce7847ad3f3f28065e91f8c5",
+    "size": 116654703,
+    "anonymous_download": true,
+    "native_runtimes_present": true
+  },
+  "device": {
+    "installed": {
+      "state": "installed",
+      "task_id": "f468e34b-00e9-4130-8ee1-8069c8277fba",
+      "target_version": "0.1.87",
+      "session_id": 1143440318,
+      "target_code": 88,
+      "installed_version": "0.1.87",
+      "current_version": "0.1.87",
+      "current_code": 88,
+      "install_source_allowed": true,
+      "remote_update_enabled": true
+    },
+    "diagnostic": {
+      "termux_installed": true,
+      "run_command_supported": false,
+      "run_command_check": "installed_package_permission_action_exported_service",
+      "health_status": "unavailable",
+      "authenticated_jobs_ready": false,
+      "process_state": "not_observed",
+      "supervisor_state": "not_observed",
+      "recommended_action": "run_existing_recovery_hook_once_in_termux",
+      "recovery_attempted": false,
+      "command_submitted": false,
+      "pairing_changed": false
+    },
+    "ui_session_state": "ended",
+    "ui_session_epoch": 0,
+    "ui_session_started_by_this_work": false,
+    "revision13_changed": false,
+    "shell_read": "NOT_TESTED",
+    "daemon_recovery": "NOT_TESTED",
+    "ssh_read": "NOT_TESTED",
+    "original_outage_cause": "UNCONFIRMED",
+    "user_action": "run_existing_recovery_hook_once_in_termux",
+    "shell_readiness_reason": "bridge_offline_no_run_command"
+  },
+  "validation_scope": {
+    "signature": "official anonymous-public-download apksigner artifact; existing signer match",
+    "download": "additional independent anonymous host download hash and native entries match",
+    "process_death": "NOT_OBSERVED",
+    "original_outage_cause": "UNCONFIRMED",
+    "full_recovery_acceptance": "NOT_TESTED"
+  }
+}

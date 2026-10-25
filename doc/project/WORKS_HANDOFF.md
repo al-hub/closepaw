@@ -1,3 +1,11 @@
+## 2026-10-25 #152 v0.1.87/code88 released and installed — one local recovery action needed
+
+- [Final report/acceptance matrix](../dev/issue152-bridge-diagnostics.md#2026-10-25-final-release-and-installed-device-checkpoint), [audit/raw XML](../dev/evidence/issue152/audit.json). PR160 merged; immutable APK/tag source e454e066f6ad27b319895c061ea11d8ab2e64561. Main Security40165899152/UI40165899208/Signed40166307998 success. PR/main raw JVM2775/UI11 failure/error/skip0, PNG8; local43 PASS.
+- Public87/code88 APK116654703bytes SHA25690550ca783c00e41f3dffa91bd64b43809337e62ce7847ad3f3f28065e91f8c5; existing signer/v3/package/version/source verified. Anonymous independent host download matches. Installation submitted once f468e34b-00e9-4130-8ee1-8069c8277fba; first status timed out, spaced status installed/current87/code88 then independent get_status reachable. No reinstall retry.
+- New passive linux.bridge.status on installed87: Termux installed, RUN_COMMAND support=false by installed service metadata; health unavailable/authenticated_jobs_ready=false; process/supervisor not_observed. Shell ready=false now accurately bridge_offline_no_run_command. No proof of original daemon-loss cause.
+- **#152 OPEN**. Development/release/install complete; bridge read/exit0, token-retaining actual recovery, autonomous daemon recovery, strict known_hosts SSH and post-recovery stop/no-replay are NOT_TESTED/BLOCKED. Minimum actual user action: once in Termux run `~/.termux/boot/10-closepaw-bridge`. Then continue minimum acceptance using the same APK; no new APK needed merely to run the hook. No token printing/re-pairing/arbitrary keyboard automation.
+- UI ended/epoch0 retained; no UI session started/resumed or service reset, revision13 com.termux=interact unchanged. #161 PR162 timing/test files preserved; only gradle.properties overlap resolved with87/code88. #161 actual performance not tested here; #139 CLOSED/#147 separate/#117 long coverage unchanged. Earlier pending sections below are historical checkpoints.
+
 ## 2026-10-25 #152 bridge diagnostics — PR160, device acceptance pending
 
 - [Change/acceptance record](../dev/issue152-bridge-diagnostics.md). Installed baseline0.1.85/code86 evidence is REUSED_EVIDENCE; original daemon-loss cause remains unconfirmed.
