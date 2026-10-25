@@ -69,7 +69,7 @@ class NodeActionPerformerTest {
         val result = performer.performSetTextOnNodeAt(1, 2, "hello", clear = true)
 
         assertThat(result).isEqualTo(ActionResult.Success("Text entered"))
-        verify(exactly = 2) { node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, any()) }
+        verify(exactly = 1) { node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, any()) }
         verify(exactly = 0) { node.performAction(AccessibilityNodeInfo.ACTION_CLEAR_FOCUS) }
         verify(exactly = 1) { node.recycle() }
         verify(exactly = 1) { root.recycle() }
