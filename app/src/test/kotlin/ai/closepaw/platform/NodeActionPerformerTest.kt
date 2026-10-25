@@ -96,6 +96,48 @@ class NodeActionPerformerTest {
     }
 
     @Test
+    fun `paste without authorization never fetches root`() = runTest {
+        val performer = NodeActionPerformer(rootProvider = { error("root must not be accessed") })
+        assertThat(performer.performPasteOnFocused(false))
+            .isEqualTo(ActionResult.Failure("Paste not authorized"))
+    }
+
+    @Test
+    fun `paste dispatches exactly once only for eligible focused editable node`() = runTest {
+        val root = mockk<AccessibilityNodeInfo>(relaxed = true)
+        val focused = mockk<AccessibilityNodeInfo>(relaxed = true)
+        every { AccessibilityNodeFinder.findFocusedEditableNode(root) } returns focused
+        every { focused.isEditable } returns true
+        every { focused.isPassword } returns false
+        every { focused.isFocused } returns true
+        every { focused.actionList } returns listOf(
+            AccessibilityNodeInfo.AccessibilityAction.ACTION_PASTE
+        )
+        every { focused.performAction(AccessibilityNodeInfo.ACTION_PASTE) } returns true
+        val result = NodeActionPerformer(rootProvider = { root }).performPasteOnFocused(true)
+        assertThat(result).isEqualTo(ActionResult.Success("Paste action dispatched; effect unverified"))
+        verify(exactly = 1) { focused.performAction(AccessibilityNodeInfo.ACTION_PASTE) }
+        verify(exactly = 1) { focused.recycle() }
+        verify(exactly = 1) { root.recycle() }
+    }
+
+    @Test
+    fun `paste refuses password and unsupported targets without action`() = runTest {
+        for (password in listOf(true, false)) {
+            val root = mockk<AccessibilityNodeInfo>(relaxed = true)
+            val focused = mockk<AccessibilityNodeInfo>(relaxed = true)
+            every { AccessibilityNodeFinder.findFocusedEditableNode(root) } returns focused
+            every { focused.isEditable } returns true
+            every { focused.isPassword } returns password
+            every { focused.isFocused } returns true
+            every { focused.actionList } returns emptyList()
+            val result = NodeActionPerformer(rootProvider = { root }).performPasteOnFocused(true)
+            assertThat(result).isInstanceOf(ActionResult.Failure::class.java)
+            verify(exactly = 0) { focused.performAction(AccessibilityNodeInfo.ACTION_PASTE) }
+        }
+    }
+
+    @Test
     fun `performEnterKey falls back to click when IME action is unavailable`() = runTest {
         val root = mockk<AccessibilityNodeInfo>(relaxed = true)
         val focusedNode = mockk<AccessibilityNodeInfo>(relaxed = true)
