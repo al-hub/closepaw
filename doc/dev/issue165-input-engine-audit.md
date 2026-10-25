@@ -41,3 +41,11 @@ Do not touch #152 bridge recovery, #161 benchmarks/experimental branch, or activ
 - `AccessibilityPlatform.performAction(UIAction.TapAt)` exposes low-level gestures, but this does not establish that external ChatGPT surface has permission/freshness for any arbitrary IME coordinate. The shared action adapter must not bypass `GenericControlActionPolicy`, security and session controls.
 - Clipboard writing and restoration remain OS-policy dependent and are **NOT_IMPLEMENTED**. No automatic clipboard fallback is enabled.
 - Release, PR merge and close remain prohibited until implementation + CI + signed source + installed phone acceptance are proven.
+
+
+## 2026-10-25 native Paste primitive checkpoint
+
+- `NodeActionPerformer.performPasteOnFocused(authorized)` now invokes Android Accessibility `ACTION_PASTE` only for explicitly authorized, focused, editable, non-password nodes advertising that action. Single dispatch only; a false result is UNKNOWN and must never cause automatic replay. Added tests for unauthorized, supported, password and unsupported node cases.
+- **Not exposed to remote tools.** The method does not read/write/restore clipboard contents, has not been connected to `UnifiedTextInputPolicy`, and does not establish full foreground/window/session consent by itself. An approved higher-level orchestrator must provide that security contract before calling this primitive.
+- `Success` reports dispatch only and explicitly labels effect unverified; it is not an assertion that text was pasted.
+- No phone or active UI session touched, no release or main merge authorized by this partial step.
