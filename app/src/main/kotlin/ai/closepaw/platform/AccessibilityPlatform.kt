@@ -329,7 +329,12 @@ class AccessibilityPlatform(
                 nodeActionPerformer.performPasteOnFocused(authorized = allowedNow()) is ActionResult.Success
             }
         )
-        return sequence.execute(text, beforeStage = { allowedNow() }, beforePaste = { allowedNow() })
+        return sequence.execute(
+            text,
+            beforeStage = { allowedNow() },
+            beforePaste = { allowedNow() },
+            preflightTarget = { allowedNow() && nodeActionPerformer.canPasteOnFocused() }
+        )
     }
 
     override suspend fun performAction(action: UIAction): ActionResult {
