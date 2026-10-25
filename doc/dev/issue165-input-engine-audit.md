@@ -49,3 +49,9 @@ Do not touch #152 bridge recovery, #161 benchmarks/experimental branch, or activ
 - **Not exposed to remote tools.** The method does not read/write/restore clipboard contents, has not been connected to `UnifiedTextInputPolicy`, and does not establish full foreground/window/session consent by itself. An approved higher-level orchestrator must provide that security contract before calling this primitive.
 - `Success` reports dispatch only and explicitly labels effect unverified; it is not an assertion that text was pasted.
 - No phone or active UI session touched, no release or main merge authorized by this partial step.
+
+
+## 2026-10-25 internal AccessibilityPlatform integration checkpoint
+
+- `AccessibilityPlatform.stageAndPasteWithFreshGuards` now assembles existing guarded clipboard staging + native Paste. It enforces explicit operation and target predicates at the stage and paste boundaries, rechecks accessibility permission, foreground package and blocked windows, and is intentionally **internal / not remotely exposed**.
+- This is **not end-to-end completion**. The consent/target predicates have no wired authoritative caller, the method has not been exercised on a physical device, clipboard cannot safely be restored on unknown interruption, and no exact post-paste text verification or dynamic IME observation is present. Keep #165 open and PR draft.
