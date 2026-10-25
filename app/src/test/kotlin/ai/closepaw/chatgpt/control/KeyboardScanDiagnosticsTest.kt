@@ -24,4 +24,13 @@ class KeyboardScanDiagnosticsTest {
         repeat(100) { scan.record("a", "", "Button", true, true, true, false, false) }
         assertEquals(40, scan.json().getValue("candidates").jsonArray.size)
     }
+    @Test fun missingClickFlagsAreDiagnosedWithoutMakingAnActionableKey() {
+        val scan = KeyboardScanDiagnostics()
+        scan.record("ㄱ", "", "KeyboardKey", true, true, false, false, false)
+        val candidate = scan.json().getValue("candidates").jsonArray.single().jsonObject
+        assertFalse(candidate.getValue("clickable").jsonPrimitive.boolean)
+        assertFalse(candidate.getValue("recognized").jsonPrimitive.boolean)
+        assertNull(KeyboardKeyPolicy.identify("ㄱ", "", "KeyboardKey", false, false))
+        assertEquals(1, scan.json().getValue("classes").jsonObject.getValue("KeyboardKey").jsonPrimitive.int)
+    }
 }
