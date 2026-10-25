@@ -110,9 +110,9 @@ class NodeActionPerformerTest {
         every { focused.isEditable } returns true
         every { focused.isPassword } returns false
         every { focused.isFocused } returns true
-        every { focused.actionList } returns listOf(
-            AccessibilityNodeInfo.AccessibilityAction.ACTION_PASTE
-        )
+        val pasteAction = mockk<AccessibilityNodeInfo.AccessibilityAction>()
+        every { pasteAction.id } returns AccessibilityNodeInfo.ACTION_PASTE
+        every { focused.actionList } returns listOf(pasteAction)
         every { focused.performAction(AccessibilityNodeInfo.ACTION_PASTE) } returns true
         val result = NodeActionPerformer(rootProvider = { root }).performPasteOnFocused(true)
         assertThat(result).isEqualTo(ActionResult.Success("Paste action dispatched; effect unverified"))
