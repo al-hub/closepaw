@@ -75,6 +75,23 @@ No planned functional development placeholder is hidden behind a permissive
 callback: each new public path is connected to its guarded native implementation.
 Any defects found by the pending independent/device verification must still be fixed.
 
+## Independent review fixes before device delivery
+
+The independent GitHub Codex review of f727d89 found two P1 defects; that revision
+must not be released. Terminal submission now requires a single-use, 60-second
+in-memory proof issued only after this engine's own verified insertion. The full
+pending echo, command, binding generation/field, app/window/target and session
+epoch must match. An arbitrary existing command or a dollar-terminated shell
+comment is never submission authority. Only plain default `$` / `~ $` / path
+prompts are recognized; customized ambiguous prompts refuse.
+
+Cached screenshot retrieval rechecks the native device lock/interactive and
+service/session/app-policy/configuration guards, and SCREEN_OFF clears the cache.
+Unlock cannot resurrect a revoked image. Regression tests cover the suffix-command
+attack, unissued submission, full issued-command success/no replay, and image
+retrieval denial while the session remains active; the native fixture also locks
+and unlocks its throwaway emulator to verify cache revocation.
+
 ## Primary contracts consulted
 
 - https://developer.android.com/reference/android/accessibilityservice/InputMethod

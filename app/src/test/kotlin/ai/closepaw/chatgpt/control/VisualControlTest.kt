@@ -5,6 +5,26 @@ import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 class VisualControlTest {
+    @Test fun cachedTaskImageIsRevokedWhenNativeDisclosureFailsEvenWithActiveSession() = runBlocking {
+        var locked=false
+        val session=ControlSession().also { it.start() }
+        val port=object:ControlPort {
+            override fun session()=session
+            override fun visualDisclosureAllowed(frame:ControlFrame)=!locked
+            override suspend fun capture()=ControlFrame("example",1,"same",emptyList(),touchContext="geometry")
+            override suspend fun apps(filter:String)=JsonArray(emptyList())
+            override suspend fun perform(frame:ControlFrame,input:JsonObject,node:ControlNode?)=ControlEffect(false,false,"unused")
+            override suspend fun visual(frame:ControlFrame)=VisualTargetProof(ScreenImage(10,10,"image/jpeg",byteArrayOf(1),ScreenImageSource.ACCESSIBILITY_SCREENSHOT),"pixels",TapBounds(0,0,10,10),"geometry",System.currentTimeMillis())
+        }
+        val control=GenericControl(port,{true});val observed=control.observe(includeImage=true)
+        val task=buildJsonObject { put("result",buildJsonObject { put("data",observed.data) }) }
+        assertNotNull(VisualImageCache.imageFor(task))
+        locked=true
+        assertEquals(ControlSession.State.ACTIVE,session.state)
+        assertNull(VisualImageCache.imageFor(task))
+        locked=false
+        assertNull(VisualImageCache.imageFor(task)) // Unlock cannot resurrect the revoked image.
+    }
     @Test fun actualVisualActionRequiresItsOwnFreshImageAndNeverReplays() = runBlocking {
         class Port : ControlPort {
             val session = ControlSession().also { it.start() }; var calls=0

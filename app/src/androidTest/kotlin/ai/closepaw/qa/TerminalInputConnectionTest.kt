@@ -116,6 +116,20 @@ class TerminalInputConnectionTest {
             val tapped=control.action(buildJsonObject { put("action","visual_tap");put("session_id",session.id);put("observation_id",visual.data.getValue("observation_id"));put("visual_id",visualMeta.getValue("visual_id"));put("visual_target_confirmed",true)
                 put("image_rect",JsonArray(listOf(ix-2,iy-2,ix+2,iy+2).map{JsonPrimitive(it)})) })
             assertTrue(tapped.toString(),tapped.success)
+            val cached=control.observe(includeImage=true);assertTrue(cached.toString(),cached.success)
+            val task=buildJsonObject { put("result",buildJsonObject { put("data",cached.data) }) }
+            assertNotNull(VisualImageCache.imageFor(task))
+            try {
+                shell("input keyevent 26")
+                await { !service.getSystemService(android.os.PowerManager::class.java).isInteractive }
+                assertNull("Locked device must never disclose an earlier screenshot",VisualImageCache.imageFor(task))
+            } finally {
+                shell("input keyevent 224")
+                shell("wm dismiss-keyguard")
+            }
+            await { service.getSystemService(android.os.PowerManager::class.java).isInteractive &&
+                !service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked }
+            assertNull("Unlock must not resurrect a revoked screenshot",VisualImageCache.imageFor(task))
             launch(true)
             await {
                 var denied = false

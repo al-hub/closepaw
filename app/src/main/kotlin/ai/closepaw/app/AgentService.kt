@@ -508,6 +508,7 @@ class AgentService : AccessibilityService() {
     private val controlScreenReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
             if (intent?.action == android.content.Intent.ACTION_SCREEN_OFF) {
+                ai.closepaw.chatgpt.control.VisualImageCache.clear()
                 controlUiRestoreJob?.cancel()
                 remoteControlIndicator.hide()
                 actionVisualizer?.clear()

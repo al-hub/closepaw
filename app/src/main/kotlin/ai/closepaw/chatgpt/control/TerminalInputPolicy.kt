@@ -4,6 +4,8 @@ package ai.closepaw.chatgpt.control
  * image or a generic canvas never establishes this contract. Entire echo stays
  * in operation memory; only capability metadata is exported. */
 internal data class TerminalEvidence(val echo: String, val generation: Long, val fieldId: Int)
+/** Issued only after this engine verified a complete insertion at a known prompt. */
+internal data class TerminalSubmission(val prompt: TerminalEvidence, val pending: TerminalEvidence, val command: String)
 internal object TerminalInputPolicy {
     // Termux's documented Samsung char-based mode omits TYPE_CLASS_TEXT (0x1),
     // so this exact class-NULL value is not a standard password editor. Package,
@@ -16,8 +18,12 @@ internal object TerminalInputPolicy {
         it.none { c -> c.isISOControl() && c != '\n' && c != '\r' } }?.replace("\r\n", "\n")?.trimEnd()
     fun emptyPrompt(echo: String): Boolean {
         val line = echo.substringAfterLast('\n')
-        return line.length in 1..160 && line.endsWith('$') &&
-            line.none { it.isISOControl() } && !InputPayloadPolicy.sensitive(line)
+        // A trailing dollar alone cannot separate a prompt from pending shell input.
+        // Only the documented default plain Termux prompt is recognized; customized
+        // prompts require manual input rather than guessing where the command starts.
+        return line.length in 1..160 &&
+            (line == "$" || Regex("(?:~(?:/[A-Za-z0-9._/-]+)?|/[A-Za-z0-9._/-]*) \\$").matches(line)) &&
+            !InputPayloadPolicy.sensitive(line)
     }
     fun refusal(node: ControlNode, text: String, authorized: Boolean): String? {
         val proof = node.terminal ?: return "terminal_binding_unverified"
@@ -30,13 +36,16 @@ internal object TerminalInputPolicy {
         if (InputPayloadPolicy.sensitive(text)) return "sensitive_input_refused"
         return null
     }
-    fun submitRefusal(node: ControlNode, command: String, terminalAuthorized: Boolean, submitAuthorized: Boolean): String? {
+    fun submission(prompt: TerminalEvidence, pending: TerminalEvidence, command: String): TerminalSubmission? =
+        if (emptyPrompt(prompt.echo) && inserted(prompt,pending,command)) TerminalSubmission(prompt,pending,command) else null
+    fun submitRefusal(node: ControlNode, command: String, terminalAuthorized: Boolean, submitAuthorized: Boolean,
+        issued: TerminalSubmission? = null): String? {
         val proof = node.terminal ?: return "terminal_binding_unverified"
         if (!terminalAuthorized || !submitAuthorized) return "terminal_submission_authorization_required"
         if (!node.focused || !node.enabled || node.password || !supported(node.sourcePackage,node.resourceId,node.className)) return "terminal_target_unverified"
         if (hiddenFormat(command) || command.isEmpty() || command.length > 256 || command.any { it.isISOControl() } || InputPayloadPolicy.sensitive(command)) return "terminal_command_invalid"
-        val line = proof.echo.substringAfterLast('\n')
-        if (!line.endsWith(command) || !emptyPrompt(line.removeSuffix(command).trimEnd())) return "terminal_command_changed"
+        if (issued == null || issued.command != command || issued.pending != proof ||
+            submission(issued.prompt,issued.pending,command) != issued) return "terminal_command_changed"
         return null
     }
     fun submitted(before: TerminalEvidence, after: TerminalEvidence?, command: String, expectedOutput: String): Boolean {

@@ -162,6 +162,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private var windowDiagnostics: JsonObject? = null
     private val probeThrottle = ScreenProbeThrottle({ SystemClock.elapsedRealtime() })
     override fun clearSelections() { appSelections.clear() }
+    override fun visualDisclosureAllowed(frame: ControlFrame): Boolean = reason(AgentService.instance) == null &&
+        packageAllowed(frame.packageName, operation = "read") && (runtime?.snapshot()?.revision ?: 0L) == frame.configurationRevision
     override fun invalidate() { probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
     private fun reason(service: AgentService?): String? = when {
         localAuthority?.refusal() != null -> localAuthority?.refusal()
@@ -699,7 +701,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             if (action in setOf("terminal_input", "terminal_submit")) {
                 val text = input["text"]?.jsonPrimitive?.content.orEmpty()
                 val refusal = if (action == "terminal_submit") TerminalInputPolicy.submitRefusal(expected,text,
-                    input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true, input["submit_authorized"]?.jsonPrimitive?.booleanOrNull == true)
+                    input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true, input["submit_authorized"]?.jsonPrimitive?.booleanOrNull == true, frame.terminalSubmission)
                     else TerminalInputPolicy.refusal(expected,text,input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true)
                 refusal?.let {
                     return@withTree ControlEffect(false, false, it)
