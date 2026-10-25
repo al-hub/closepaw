@@ -81,6 +81,16 @@ class HttpTermuxHealthProbeTest {
         }
     }
 
+    @Test
+    fun `health endpoint 401 is authentication failure not absent daemon`() = runTest {
+        withServer { server ->
+            server.enqueue(MockResponse().setResponseCode(401))
+            val probe = HttpTermuxHealthProbe(server.url("/v1/health").toString(), "closepaw-bridge", "2", TOKEN)
+            assertThat(probe.fetch()).isEqualTo(HealthProbe.AuthMismatch)
+            assertThat(server.requestCount).isEqualTo(1)
+        }
+    }
+
     private suspend fun withServer(block: suspend (MockWebServer) -> Unit) {
         val server = MockWebServer().apply { start() }
         try {
