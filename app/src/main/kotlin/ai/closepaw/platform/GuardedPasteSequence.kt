@@ -20,7 +20,10 @@ internal class GuardedPasteSequence(
         beforePaste: () -> Boolean
     ): Outcome {
         if (text.isEmpty() || !beforeStage()) return Outcome.DENIED
-        when (stage(text)) {
+        // Runtime failure from the platform may occur after staging.
+        // Treat it as unknown and never attempt Paste or automatic recovery.
+        val stageOutcome = try { stage(text) } catch (_: Exception) { return Outcome.STAGE_UNKNOWN }
+        when (stageOutcome) {
             GuardedClipboardWriter.Outcome.DENIED -> return Outcome.DENIED
             GuardedClipboardWriter.Outcome.UNKNOWN -> return Outcome.STAGE_UNKNOWN
             GuardedClipboardWriter.Outcome.STAGED_UNVERIFIED -> Unit
@@ -29,7 +32,7 @@ internal class GuardedPasteSequence(
         // while the clipboard was being staged. Never Paste based on stale consent.
         if (!beforePaste()) return Outcome.STOPPED_AFTER_STAGING
         // A false return can be a post-dispatch failure. Do not replay.
-        paste()
+        try { paste() } catch (_: Exception) { /* Post-dispatch status is unknown. */ }
         return Outcome.PASTE_UNKNOWN
     }
 }
