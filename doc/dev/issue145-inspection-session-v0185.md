@@ -94,3 +94,28 @@ active-session inspection with its current token; preserve earlier failed/unknow
 results and do not resend their questions. Galaxy expanded panel can be observed
 once during normal authorized use. No more signing/reinstallation is needed just
 to validate the already installed candidate.
+
+
+## Subsequent newly authorized device verification — PASS
+
+The user explicitly requested testing the installed fix now. Reachable0.1.85/code86
+confirmed. New session start8fe91320-a81d-45c2-aecd-924499d7f66f,
+id76a50082-4903-4a9a-9e48-1dca10a07246 active/epoch3.
+The first current-screen inspect safely refused wrong_package with exported nodes0,
+without the previous snapshot_illegal_state. After active-session confirmation,
+read_app(gemini) succeeded/ok with one screenshot attempt to prepare the foreground.
+No new question, draft write or send occurred. No raw captured content is published.
+
+A second inspect in that different, correct foreground with the exact current token
+**succeeded**: recognized_hosted_composer, foreground=true, active/focused application
+window2576, root com.google.android.googlequicksearchbox, composer1,
+traversal_complete=true. Diagnostic105 nodes/export80/truncated=true is the bounded
+metadata export, not incomplete source traversal. send_control_missing describes
+controls only; a read-only inspection does not require a send button.
+This is positive installed-device acceptance of the session-token contract correction.
+
+End task6582776d-d1ef-490b-a6f6-ce4ea0da5364 succeeded; independent status confirmed
+ended/epoch4. No reinstall/code change/question replay/old physical test repetition.
+Previous blocked/failed/unknown samples retain their status. Historical question
+failure causation, Galaxy expanded panel and #147 matched/Voice performance remain
+unproven; #145/#147 stay OPEN, #146/#150 CLOSED unchanged.
