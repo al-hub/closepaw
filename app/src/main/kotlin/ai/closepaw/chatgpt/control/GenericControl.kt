@@ -1,6 +1,8 @@
 package ai.closepaw.chatgpt.control
 
 import ai.closepaw.chatgpt.operations.*
+import ai.closepaw.tool.action.TypeExecutor
+import ai.closepaw.tool.action.UnifiedTextInputPolicy
 import java.util.UUID
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.*
@@ -135,8 +137,6 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }, summary = "Current accessibility screen observed; node IDs belong only to this observation.")
     }
     suspend fun action(input: JsonObject): OperationResult {
-        val started = now()
-        val startedNs = System.nanoTime()
         if (!allowed()) { current = null; return failure("generic_control_disabled") }
         val observation = current ?: return failure("observation_required")
         if (input["observation_id"]?.jsonPrimitive?.content != observation.id) return failure("stale_observation")
@@ -148,9 +148,35 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 val plan = UnifiedInputPolicy.plan(field, input["text"]?.jsonPrimitive?.content.orEmpty(),
                     input["method"]?.jsonPrimitive?.content ?: "auto", input["mode"]?.jsonPrimitive?.content ?: "empty",
                     input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true)
-                if (plan.refusal == null && plan.method == "keyboard") return keyboardInput(input, observation, field, plan.resultText)
+                if (plan.refusal == null) {
+                    val keyboard = observation.frame.keyboard
+                    return TypeExecutor().executeObservedInput(
+                        UnifiedTextInputPolicy.Evidence(
+                            fresh = now() - observation.at in 0L..60_000L && observation.epoch == (port.session()?.epoch ?: 0L),
+                            allowed = allowed(), targetVerified = field.focused && field.editable && field.enabled,
+                            directSupported = plan.method == "direct" && field.setText,
+                            clipboardAllowed = plan.method == "clipboard" && input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true,
+                            pasteSupported = field.paste,
+                            imeKeysVerified = plan.method == "keyboard" && keyboard?.readAllowed == true && keyboard.interactAllowed &&
+                                observation.frame.inputTargetId == field.id,
+                            sensitive = field.password,
+                            // Production native boundary independently requires explicit ACTIVE+ID;
+                            // ports without a session are pure test adapters, never Android executors.
+                            sessionActive = port.session()?.let { it.explicit && it.state == ControlSession.State.ACTIVE &&
+                                input["session_id"]?.jsonPrimitive?.content == it.id } ?: !port.validatesAtNativeBoundary
+                        ), dispatch = { channel ->
+                            if (channel == UnifiedTextInputPolicy.Channel.VISIBLE_IME) keyboardInput(input, observation, field, plan.resultText)
+                            else actionNative(input, observation)
+                        }, denied = { current = null; failure("input_evidence_unavailable") }
+                    )
+                }
             }
         }
+        return actionNative(input, observation)
+    }
+    private suspend fun actionNative(input: JsonObject, observation: Observation): OperationResult {
+        val started = now()
+        val startedNs = System.nanoTime()
         // Consume before any native side effect, including failure, cancellation and lost transport.
         current = null
         if (observation.epoch != (port.session()?.epoch ?: 0L)) return failure("control_session_changed_observe_again")
@@ -253,7 +279,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 put("outcome_unknown", attempted); put("completed_keys", completed); put("input_method", "keyboard") })
         // Bounded operation. Preflight every literal against the current observed layout before
         // the first effect. Unknown layouts are never guessed or toggled speculatively.
-        if (labels.isEmpty() || labels.size > 32) { current = null; return stop("keyboard_input_limit", false, 0) }
+        if (labels.isEmpty() || labels.size > 20) { current = null; return stop("keyboard_input_limit", false, 0) }
         if (field.selectionStart != field.selectionEnd || field.selectionEnd != field.text.length) {
             current = null; return stop("keyboard_end_caret_required", false, 0)
         }

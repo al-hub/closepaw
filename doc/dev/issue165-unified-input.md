@@ -1,3 +1,5 @@
+> Current continuation: [integration and remaining gates](issue165-integration-20261025.md). Historical absence/CI statements below refer to their original checkpoint.
+
 # #165 guarded input foundation — implementation checkpoint
 
 Baseline source: d2c6c449fce684e2db4f8763167a46c1a1127d33 (0.1.87/code88).

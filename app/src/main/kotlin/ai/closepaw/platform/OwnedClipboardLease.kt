@@ -8,7 +8,8 @@ import java.util.UUID
 
 /** Holds clipboard data only for this operation, never logs or persists it.
  * Android null/false is ambiguous: refuse without writing. This deliberately
- * supports only a readable single plain-text clip, preserving its full ClipData.
+ * supports only a readable single plain-text clip. Denial leaves that clip untouched;
+ * successful staging requires explicit authorization to replace it.
  * Every Paste requires re-reading our exact unpredictable marker AND payload.
  * Restore is conditional; unavailable access or competing content means no write.
  * Android has no clipboard CAS: conditional restoration is disabled to avoid a

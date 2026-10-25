@@ -47,7 +47,8 @@ internal object ControlResultPolicy {
                 input["method"]?.jsonPrimitive?.content ?: "auto", input["mode"]?.jsonPrimitive?.content ?: "empty",
                 input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true)
             return Verdict(plan.refusal == null && after.packageName == before.packageName && after.windowId == before.windowId &&
-                target?.text == plan.resultText, "input_unconfirmed", true)
+                target?.text == plan.resultText && target.focused && target.editable && !target.password,
+                "input_unconfirmed", true)
         }
         if (action == "type") return Verdict(after.packageName == before.packageName && target?.text == input["text"]?.jsonPrimitive?.content, "input_unconfirmed", true)
         if (action in setOf("click", "tap") && node?.checkable == true) return Verdict(

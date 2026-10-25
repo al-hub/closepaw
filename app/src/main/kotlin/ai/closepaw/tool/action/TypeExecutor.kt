@@ -26,6 +26,19 @@ import kotlinx.coroutines.delay
 class TypeExecutor(
     private val targetResolver: TargetResolver = TargetResolver
 ) {
+    /** Shared observed-input dispatch for the remote control adapter. Each channel callback
+     * owns native freshness/consent checks and exact effect verification. Selecting support
+     * is not an attempted write: once dispatched, even a false/unknown result is returned
+     * unchanged and never causes another channel to execute. */
+    internal suspend fun <R> executeObservedInput(
+        evidence: UnifiedTextInputPolicy.Evidence,
+        dispatch: suspend (UnifiedTextInputPolicy.Channel) -> R,
+        denied: () -> R
+    ): R {
+        val channel = UnifiedTextInputPolicy.first(evidence) ?: return denied()
+        return dispatch(channel)
+    }
+
     companion object {
         private const val FOCUS_DELAY_MS = 150L
         private const val UI_SETTLE_DELAY_MS = 300L

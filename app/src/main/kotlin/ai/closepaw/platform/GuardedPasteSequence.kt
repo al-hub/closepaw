@@ -1,5 +1,7 @@
 package ai.closepaw.platform
 
+import kotlinx.coroutines.CancellationException
+
 /**
  * Guarded one-shot clipboard/Paste sequence. The caller owns app/session/window
  * inspection and supplies a fresh guard for each irreversible boundary.
@@ -24,7 +26,9 @@ internal class GuardedPasteSequence(
         if (!preflightTarget() || !beforeStage()) return Outcome.DENIED
         // Runtime failure from the platform may occur after staging.
         // Treat it as unknown and never attempt Paste or automatic recovery.
-        val stageOutcome = try { stage(text) } catch (_: Exception) { return Outcome.STAGE_UNKNOWN }
+        val stageOutcome = try { stage(text) }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { return Outcome.STAGE_UNKNOWN }
         when (stageOutcome) {
             GuardedClipboardWriter.Outcome.DENIED -> return Outcome.DENIED
             GuardedClipboardWriter.Outcome.UNKNOWN -> return Outcome.STAGE_UNKNOWN
@@ -34,7 +38,9 @@ internal class GuardedPasteSequence(
         // while the clipboard was being staged. Never Paste based on stale consent.
         if (!beforePaste()) return Outcome.STOPPED_AFTER_STAGING
         // A false return can be a post-dispatch failure. Do not replay.
-        try { paste() } catch (_: Exception) { /* Post-dispatch status is unknown. */ }
+        try { paste() }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { /* Post-dispatch status is unknown. */ }
         return Outcome.PASTE_UNKNOWN
     }
 }

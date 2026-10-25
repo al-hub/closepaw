@@ -1,3 +1,5 @@
+> Current continuation: [integration and remaining gates](issue165-integration-20261025.md). Historical absence/CI statements below refer to their original checkpoint.
+
 # #165 unified screen-input engine — source audit and implementation checkpoint
 
 Status: PARTIAL IMPLEMENTATION ONLY. This document is not device acceptance evidence.
