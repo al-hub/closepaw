@@ -56,4 +56,32 @@ class UnifiedTextInputPolicyTest {
         assertThat(p.first(evidence().copy(directSupported = false, pasteSupported = false)))
             .isEqualTo(UnifiedTextInputPolicy.Channel.VISIBLE_IME)
     }
+    @Test fun clipboardMustNotRunWhenOnlyPasteOrOnlyPermissionIsPresent() {
+        val p = UnifiedTextInputPolicy
+        listOf(
+            evidence().copy(directSupported = false, clipboardAllowed = false, pasteSupported = true),
+            evidence().copy(directSupported = false, clipboardAllowed = true, pasteSupported = false)
+        ).forEach { e ->
+            assertThat(p.first(e)).isEqualTo(UnifiedTextInputPolicy.Channel.VISIBLE_IME)
+            assertThat(p.next(UnifiedTextInputPolicy.Channel.DIRECT, UnifiedTextInputPolicy.Result.DEFINITELY_UNSUPPORTED, e))
+                .isEqualTo(UnifiedTextInputPolicy.Channel.VISIBLE_IME)
+        }
+    }
+
+    @Test fun freshObservationMustBeRevalidatedAtEveryFallbackBoundary() {
+        val p = UnifiedTextInputPolicy
+        val started = evidence()
+        assertThat(p.first(started)).isEqualTo(UnifiedTextInputPolicy.Channel.DIRECT)
+        listOf(
+            started.copy(fresh = false),
+            started.copy(targetVerified = false),
+            started.copy(sessionActive = false),
+            started.copy(sensitive = true),
+            started.copy(allowed = false)
+        ).forEach { changed ->
+            assertThat(p.next(UnifiedTextInputPolicy.Channel.DIRECT, UnifiedTextInputPolicy.Result.DEFINITELY_UNSUPPORTED, changed)).isNull()
+            assertThat(p.next(UnifiedTextInputPolicy.Channel.CLIPBOARD_PASTE, UnifiedTextInputPolicy.Result.DEFINITELY_UNSUPPORTED, changed)).isNull()
+        }
+    }
+
 }
