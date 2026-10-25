@@ -241,9 +241,8 @@ Actions:
             "click" -> "Click $targetDesc"
             "long_press" -> "Long press $targetDesc for ${params.optLong("duration_ms", 1000)}ms"
             "type" -> {
-                val input = params.optString("input_text", "").take(30)
                 val clear = if (params.optBoolean("clear", false)) " (clear first)" else ""
-                "Type \"$input\" into $targetDesc$clear"
+                "Type [redacted] into $targetDesc$clear"
             }
             "scroll" -> {
                 val dir = params.optString("direction", "")
