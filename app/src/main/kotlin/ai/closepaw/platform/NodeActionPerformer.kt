@@ -182,15 +182,8 @@ class NodeActionPerformer(
     private fun setTextOnNode(node: AccessibilityNodeInfo, text: String, clear: Boolean): ActionResult {
         val combined: String
         if (clear) {
-            // clear=true: replace entire field content
-            val clearArgs =
-                    Bundle().apply {
-                        putCharSequence(
-                                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
-                                ""
-                        )
-                    }
-            node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, clearArgs)
+            // ACTION_SET_TEXT replaces the content atomically from the caller's perspective.
+            // Clearing first can destroy the original text even if the next write fails.
             combined = text
         } else {
             // clear=false: insert text at cursor position, preserving existing content
