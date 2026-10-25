@@ -68,7 +68,7 @@ class NodeActionPerformerTest {
         val performer = NodeActionPerformer(rootProvider = { root })
         val result = performer.performSetTextOnNodeAt(1, 2, "hello", clear = true)
 
-        assertThat(result).isEqualTo(ActionResult.Success("Text entered: hello"))
+        assertThat(result).isEqualTo(ActionResult.Success("Text entered"))
         verify(exactly = 2) { node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, any()) }
         verify(exactly = 0) { node.performAction(AccessibilityNodeInfo.ACTION_CLEAR_FOCUS) }
         verify(exactly = 1) { node.recycle() }
@@ -90,7 +90,7 @@ class NodeActionPerformerTest {
         val result = performer.performSetTextOnNodeAt(5, 10, "27", clear = false)
 
         assertThat(result).isInstanceOf(ActionResult.Failure::class.java)
-        assertThat((result as ActionResult.Failure).reason).contains("value did not change")
+        assertThat((result as ActionResult.Failure).reason).contains("value did not match requested update")
         verify(exactly = 1) { node.recycle() }
         verify(exactly = 1) { root.recycle() }
     }
@@ -391,7 +391,7 @@ class NodeActionPerformerTest {
         val result = performer.performSetTextOnNodeAt(100, 200, "Ultimate Fails Series", clear = false)
 
         // With the fix, existing="" so combined="Ultimate Fails Series" — matches post-verification
-        assertThat(result).isEqualTo(ActionResult.Success("Text entered: Ultimate Fails Series"))
+        assertThat(result).isEqualTo(ActionResult.Success("Text entered"))
     }
 
     @Test
@@ -415,7 +415,7 @@ class NodeActionPerformerTest {
         val performer = NodeActionPerformer(rootProvider = { root })
         val result = performer.performSetTextOnNodeAt(100, 200, "World", clear = false)
 
-        assertThat(result).isEqualTo(ActionResult.Success("Text entered: World"))
+        assertThat(result).isEqualTo(ActionResult.Success("Text entered"))
     }
 
     @Test
@@ -433,7 +433,7 @@ class NodeActionPerformerTest {
         val performer = NodeActionPerformer(rootProvider = { root })
         val result = performer.performSetTextOnNodeAt(100, 200, "My Playlist", clear = true)
 
-        assertThat(result).isEqualTo(ActionResult.Success("Text entered: My Playlist"))
+        assertThat(result).isEqualTo(ActionResult.Success("Text entered"))
     }
 
     @Test
@@ -457,7 +457,7 @@ class NodeActionPerformerTest {
         val performer = NodeActionPerformer(rootProvider = { root })
         val result = performer.performSetTextOnNodeAt(100, 200, "typed text", clear = false)
 
-        assertThat(result).isEqualTo(ActionResult.Success("Text entered: typed text"))
+        assertThat(result).isEqualTo(ActionResult.Success("Text entered"))
     }
 
     @Test
