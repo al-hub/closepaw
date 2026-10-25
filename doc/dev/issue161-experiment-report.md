@@ -1,3 +1,7 @@
+# 2026-10-25 후속: 계측 APK 배포·설치 완료
+
+사용자의 새 준비 요청으로 PR#162를 병합하고 v0.1.86/code87을 기존키 서명·공개검증·단일설치했다. durable와 독립 실행버전·진단export·sequence ready 확인. [준비보고서](issue161-device-preparation-v0186.md)와 [근거](evidence/issue161/device-preparation-v0186.json)를 우선 참조한다. 기존 실행경로의 상세계측 준비는 READY이나 병렬 Worker는 여전히 src/test 전용이며 A~F/실제10+10/실제성능/새경로X는 미검증. #161 PARTIAL/OPEN 및 #147 OPEN. 아래 배포미수행 문구는 최초 보고 당시 기록으로 보존한다.
+
 # #161 계측·제한 검증 Worker 선행 실험
 
 ## 현재 판정: PARTIAL, #161/#147 OPEN
