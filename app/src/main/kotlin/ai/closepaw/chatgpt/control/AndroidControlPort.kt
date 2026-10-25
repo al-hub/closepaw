@@ -325,12 +325,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     put("resource", resource); put("class", node.className?.toString().orEmpty()); put("bounds", rect.flattenToString())
                     put("visible", node.isVisibleToUser); put("enabled", node.isEnabled); put("clickable", node.isClickable)
                     put("long_clickable", node.isLongClickable); put("editable", node.isEditable); put("scrollable", node.isScrollable); put("password", node.isPassword)
+                    put("focused", node.isFocused); put("selection_start", node.textSelectionStart); put("selection_end", node.textSelectionEnd)
                     put("selected", node.isSelected); put("checkable", node.isCheckable); put("checked", node.isChecked)
                     put("child_count", node.childCount); put("actions", node.actionList.joinToString { it.id.toString() })
                 }
                 identity.append(json.toString()).append('\n')
                 if (expose && node.isVisibleToUser && !rect.isEmpty &&
-                    (text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable ||
+                    (text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable || node.isFocusable ||
                         node.actionList.any { it.id in setOf(AccessibilityNodeInfo.ACTION_CLICK, AccessibilityNodeInfo.ACTION_EXPAND, AccessibilityNodeInfo.ACTION_COLLAPSE) })) {
                     run {
                         nodes.add(ControlNode(index, if (node.isShowingHintText) "" else text.take(2001), description.take(100), resource.take(100),
@@ -338,7 +339,17 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                             node.isEnabled, node.isPassword, node.isShowingHintText || text.isEmpty(), rect.flattenToString(), parent, node.isLongClickable,
                             node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_EXPAND },
                             node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_COLLAPSE },
-                            node.className?.toString().orEmpty(), node.isSelected, node.isCheckable, node.isChecked))
+                            node.className?.toString().orEmpty(), node.isSelected, node.isCheckable, node.isChecked,
+                            focused = node.isFocused, selectionStart = node.textSelectionStart, selectionEnd = node.textSelectionEnd,
+                            setText = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT },
+                            paste = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_PASTE }, focusable = node.isFocusable,
+                            scrollDirections = node.actionList.mapNotNull { action -> when (action.id) {
+                                AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_UP.id -> "up"
+                                AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_DOWN.id -> "down"
+                                AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_LEFT.id -> "left"
+                                AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_RIGHT.id -> "right"
+                                else -> null
+                            } }.toSet()))
                         native.add(node)
                     }
                 }
@@ -488,6 +499,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val admittedEpoch = service.remoteControlSession.epoch
         secureWindow(service)?.let { return ControlEffect(false, false, it) }
         val action = input.getValue("action").jsonPrimitive.content
+        if (action in setOf("input", "focus")) {
+            islandRefusal(input["session_id"]?.jsonPrimitive?.content.orEmpty())?.let {
+                return ControlEffect(false, false, it)
+            }
+        }
         // This is an explicitly planned region from the consumed observation, never a touch.
         // Yield a few frames for the intent cue, then run the full native validation below.
         // No node/effect is retained across this delay and no security check is bypassed.
@@ -554,7 +570,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val expected = fresh.nodes[at]
             val rect = Rect(); target.getBoundsInScreen(rect)
             val currentText = if (target.isShowingHintText) "" else target.text?.toString().orEmpty().take(2001)
-            if (currentText != expected.text || target.contentDescription?.toString().orEmpty().take(100) != expected.description ||
+            if (currentText != expected.text || target.isFocused != expected.focused ||
+                target.textSelectionStart != expected.selectionStart || target.textSelectionEnd != expected.selectionEnd || target.contentDescription?.toString().orEmpty().take(100) != expected.description ||
                 target.viewIdResourceName.orEmpty().take(100) != expected.resourceId || rect.flattenToString() != expected.bounds ||
                 (Build.VERSION.SDK_INT >= 34 && target.isAccessibilityDataSensitive))
                 return@withTree ControlEffect(false, false, "target_changed")
@@ -563,7 +580,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             service.showRemoteControlTarget(rect)
             session()?.feedback(when (action) {
                 "scroll" -> "화면을 스크롤하고 있습니다"
-                "type" -> "입력란에 글자를 입력하고 있습니다"
+                "type", "input" -> "입력란에 글자를 입력하고 있습니다"
+                "focus" -> "입력란에 초점을 맞추고 있습니다"
                 "expand" -> "선택한 내용을 펼치고 있습니다"
                 "collapse" -> "선택한 내용을 접고 있습니다"
                 "long_press" -> "선택한 항목의 길게 누르기 기능을 실행합니다"
@@ -591,8 +609,47 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     target.performAction(nativeAction)
                 }
                 "long_press" -> target.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)
-                "scroll" -> target.performAction(if (input.getValue("direction").jsonPrimitive.content == "down")
-                    AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                "scroll" -> {
+                    val direction = input.getValue("direction").jsonPrimitive.content
+                    val directional = when (direction) {
+                        "up" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_UP.id
+                        "down" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_DOWN.id
+                        "left" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_LEFT.id
+                        "right" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_RIGHT.id
+                        else -> return@withTree ControlEffect(false, false, "scroll_direction_invalid")
+                    }
+                    val supported = target.actionList.any { it.id == directional }
+                    if (!supported && direction in setOf("left", "right"))
+                        return@withTree ControlEffect(false, false, "directional_scroll_unsupported")
+                    target.performAction(if (supported) directional else if (direction == "down")
+                        AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                }
+                "focus" -> {
+                    if (!target.isFocusable || target.actionList.none { it.id == AccessibilityNodeInfo.ACTION_FOCUS })
+                        return@withTree ControlEffect(false, false, "native_focus_unsupported")
+                    target.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                }
+                "input" -> {
+                    val plan = UnifiedInputPolicy.plan(expected, input["text"]?.jsonPrimitive?.content.orEmpty(),
+                        input["method"]?.jsonPrimitive?.content ?: "auto", input["mode"]?.jsonPrimitive?.content ?: "empty",
+                        input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true)
+                    plan.refusal?.let { return@withTree ControlEffect(false, false, it) }
+                    if (!target.isEditable || !target.isFocused) return@withTree ControlEffect(false, false, "focused_editable_required")
+                    if (plan.method == "direct") {
+                        if (target.actionList.none { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT })
+                            return@withTree ControlEffect(false, false, "direct_input_unsupported")
+                        target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, plan.resultText)
+                        })
+                    } else {
+                        if (target.actionList.none { it.id == AccessibilityNodeInfo.ACTION_PASTE })
+                            return@withTree ControlEffect(false, false, "paste_unsupported")
+                        // Accessibility service has no general foreground/default-IME clipboard grant.
+                        // hasPrimaryClip()==false may mean DENIED, not EMPTY. No writes or restoration
+                        // are attempted until a foreground, explicitly authorized clipboard broker exists.
+                        return@withTree ControlEffect(false, false, "clipboard_read_access_unproven")
+                    }
+                }
                 "type" -> {
                     if (!target.isEditable || (!target.isShowingHintText && !target.text.isNullOrEmpty()))
                         return@withTree ControlEffect(false, false, "draft_not_empty")

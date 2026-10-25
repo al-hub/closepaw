@@ -9,8 +9,14 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
     val enabled: Boolean = true, val password: Boolean = false, val empty: Boolean = true,
     val bounds: String = "", val parent: Int = -1, val longClickable: Boolean = false,
     val expandable: Boolean = false, val collapsible: Boolean = false, val className: String = "", val selected: Boolean = false,
-    val checkable: Boolean = false, val checked: Boolean = false) {
+    val checkable: Boolean = false, val checked: Boolean = false,
+    val focused: Boolean = false, val selectionStart: Int = -1, val selectionEnd: Int = -1,
+    val setText: Boolean = false, val paste: Boolean = false, val focusable: Boolean = false,
+    val scrollDirections: Set<String> = emptySet()) {
     fun json() = buildJsonObject {
+        put("focused", focused); put("focusable", focusable); put("set_text_supported", setText); put("paste_supported", paste)
+        put("selection_start", selectionStart); put("selection_end", selectionEnd)
+        put("scroll_directions", JsonArray(scrollDirections.sorted().map { JsonPrimitive(it) }))
         put("expandable", expandable); put("collapsible", collapsible); put("class_name", className.take(100)); put("selected", selected)
         put("checkable", checkable); put("checked", checked)
         put("node_id", id); put("text", text.take(100)); put("description", description.take(100)); put("resource_id", resourceId.take(100))
@@ -133,7 +139,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (chainActions >= 20 || now() - chainStarted !in 0L..180_000L || noProgress >= 3)
             return failure("control_chain_limit_observe_again")
         val action = input["action"]?.jsonPrimitive?.content.orEmpty()
-        if (action !in setOf("click", "tap", "long_press", "type", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
+        if (action !in setOf("click", "tap", "long_press", "type", "input", "focus", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
         val frame = observation.frame
         if (!port.validatesAtNativeBoundary) {
             val fresh = port.capture()
@@ -143,11 +149,18 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
-        if (action in setOf("click", "tap", "long_press", "type", "scroll", "expand", "collapse")) {
+        if (action in setOf("click", "tap", "long_press", "type", "input", "focus", "scroll", "expand", "collapse")) {
             if (node == null || !node.enabled || node.password) return failure("target_unavailable")
             if ((action in setOf("click", "tap") && !node.clickable) || (action == "long_press" && !node.longClickable)) return failure("target_not_clickable")
             if ((action == "expand" && !node.expandable) || (action == "collapse" && !node.collapsible)) return failure("native_action_unavailable")
-            if (action == "scroll" && (!node.scrollable || input["direction"]?.jsonPrimitive?.content !in setOf("up", "down"))) return failure("target_not_scrollable")
+            if (action == "scroll" && (!node.scrollable || input["direction"]?.jsonPrimitive?.content !in (node.scrollDirections + setOf("up", "down")))) return failure("target_not_scrollable")
+            if (action == "focus" && !node.focusable) return failure("target_not_focusable")
+            if (action == "input") {
+                val plan = UnifiedInputPolicy.plan(node, input["text"]?.jsonPrimitive?.content.orEmpty(),
+                    input["method"]?.jsonPrimitive?.content ?: "auto", input["mode"]?.jsonPrimitive?.content ?: "empty",
+                    input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true)
+                plan.refusal?.let { return failure(it) }
+            }
             if (action == "type" && (!node.editable || !node.empty || input["text"]?.jsonPrimitive?.content.isNullOrBlank())) return failure("draft_not_empty_or_not_editable")
         }
         if (action == "open_app" && input["package_name"]?.jsonPrimitive?.content.isNullOrBlank()) return failure("package_required")
@@ -175,6 +188,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             if (verdict.goalVerified) "Observed action postcondition confirmed." else
                 "Screen transition observed; the wider task result remains unverified." else resultReason,
             data = buildJsonObject {
+                if (action == "input" && node != null) put("input_method", UnifiedInputPolicy.plan(node,
+                    input["text"]?.jsonPrimitive?.content.orEmpty(), input["method"]?.jsonPrimitive?.content ?: "auto",
+                    input["mode"]?.jsonPrimitive?.content ?: "empty", input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true).method)
                 put("observation_age_ms", (started - observation.at).coerceAtLeast(0))
                 put("validation_scope", GenericControlActionPolicy.validationScope(action))
                 put("reason_code", resultReason)

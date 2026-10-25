@@ -42,4 +42,9 @@ class UnifiedInputPolicyTest {
         assertNotNull(UnifiedInputPolicy.plan(field(), "abc", "magic", "empty", false).refusal)
         assertNotNull(UnifiedInputPolicy.plan(field(), "abc", "auto", "replace", false).refusal)
     }
+
+    @Test fun insertedFragmentsCannotAssembleOrReapplyKnownSecrets() {
+        assertEquals("sensitive_input_refused", UnifiedInputPolicy.plan(field("pass"), "word=123", "direct", "insert", false).refusal)
+        assertEquals("sensitive_input_refused", UnifiedInputPolicy.plan(field("token=abc"), " safe", "direct", "insert", false).refusal)
+    }
 }
