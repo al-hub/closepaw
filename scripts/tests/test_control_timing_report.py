@@ -42,3 +42,10 @@ class ControlTimingReportTest(unittest.TestCase):
         self.assertEqual(probe['callback'], 'NOT_OBSERVED')
         self.assertIsNone(probe['api_callback_ms'])
         self.assertTrue(probe['cancelled'])
+
+    def test_nine_command_snapshots_and_final_event_use_distinct_lifecycle_ids(self):
+        raw = self.fixture()
+        raw['events'].extend(dict(event='GUARDED_SNAPSHOT_AVAILABLE', id=step+1, step=step,
+            at_ns=432000000 + step) for step in range(1, 10))
+        raw['events'].append(dict(event='INVOCATION_FINISHED', id=0, step=9, at_ns=500000000))
+        self.assertEqual(1, m.summarize(raw)['probe_count'])

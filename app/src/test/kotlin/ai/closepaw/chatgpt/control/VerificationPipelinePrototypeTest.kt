@@ -48,12 +48,14 @@ class VerificationPipelinePrototypeTest {
         val task = async { pipeline.run(executeAndSnapshot = { executed.add(it); proof(it) }, verify = { delay(1000); true }) }
         runCurrent()
         assertEquals(listOf(1, 2), executed)
+        assertEquals(1, pipeline.result().residualQueue)
         pipeline.stop("x")
         advanceUntilIdle()
         val result = task.await()
         assertEquals(listOf(1, 2), executed)
         assertEquals(0, result.verifiedPrefix)
         assertEquals("x", result.reason)
+        assertEquals(0, result.residualQueue)
         try { pipeline.run(executeAndSnapshot = { proof(it) }); fail("restarted") }
         catch (_: IllegalStateException) { }
     }

@@ -1,6 +1,7 @@
 package ai.closepaw.chatgpt.control
 
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Semaphore
@@ -24,6 +25,7 @@ internal class VerificationPipelinePrototype(private val limit: Int) {
     private var queue: Channel<Proof>? = null
     private var peak = 0
     private var used = false
+    private val queued = AtomicInteger()
     init { require(limit in 1..2) }
 
     @Synchronized fun stop(reason: String) {
@@ -47,7 +49,7 @@ internal class VerificationPipelinePrototype(private val limit: Int) {
     @Synchronized fun result(): Result {
         var prefix = 0
         while (ledger[prefix + 1] == State.VERIFIED) prefix++
-        return Result(ledger.map { Entry(it.key, it.value) }, prefix, peak, terminal, 0)
+        return Result(ledger.map { Entry(it.key, it.value) }, prefix, peak, terminal, queued.get())
     }
 
     suspend fun run(epoch: Long = 1, generation: Long = 1,
@@ -56,7 +58,7 @@ internal class VerificationPipelinePrototype(private val limit: Int) {
         verify: suspend (Proof) -> Boolean = { it.actual == it.expected },
     ): Result = coroutineScope {
         check(!used) { "A terminated experiment cannot restart or replay" }; used = true
-        val pending = Channel<Proof>(limit)
+        val pending = Channel<Proof>(limit, onUndeliveredElement = { queued.decrementAndGet() })
         queue = pending
         val slots = Semaphore(limit)
         fun safe(): Boolean {
@@ -81,6 +83,7 @@ internal class VerificationPipelinePrototype(private val limit: Int) {
                     }
                     if (stopped.get()) break
                     update(id, State.SNAPSHOT)
+                    queued.incrementAndGet()
                     pending.send(proof)
                 }
             } catch (cancelled: CancellationException) { stop("cancelled"); throw cancelled }
@@ -90,6 +93,7 @@ internal class VerificationPipelinePrototype(private val limit: Int) {
         verifier = launch(start = CoroutineStart.LAZY) {
             try {
                 for (proof in pending) {
+                    queued.decrementAndGet()
                     if (!safe()) break
                     val valid = verify(proof)
                     ensureActive()

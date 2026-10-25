@@ -46,7 +46,7 @@ python3 -m unittest discover -s scripts/tests -v
 python3 scripts/control_timing_report.py trace-with-android-timing.json --output build/issue161/timing.json
 ```
 
-로컬 Python42개 PASS. 로컬 JVM 실행은 Gradle 배포 다운로드의 `Network is unreachable`로 BLOCKED;
+로컬 Python43개 PASS. 로컬 JVM 실행은 Gradle 배포 다운로드의 `Network is unreachable`로 BLOCKED;
 SDK도 없다. 같은 실패를 재시도하지 않고 PR Security CI/full JVM/lint/debug 및 기존 UI gate를 사용한다.
 Kotlin 시험의 실제 성공 여부는 정확한 PR HEAD의 CI 결과를 확인한 뒤 #161에 기록한다.
 
@@ -96,6 +96,7 @@ Main 진입 전에 slot시각을 갱신하므로 API 간격은 새 dispatch 계�
 발견한 child 자체취소시 교착 위험은 stop(cancelled)+sibling 취소 및 회귀시험으로 수정했다.
 complete 의미와 취소 시각 오표시는 buffer_complete/CANCEL_OBSERVED로 수정했다.
 계산기 click 경로와 gesture 경로를 혼동하지 않도록 native click 직접 계측을 추가했다.
+snapshot별 고유ID 및 정상9단계 분석 회귀도 추가했고, 대기proof 계수를 실제 send/receive/미전달폐기와 연결하여 X중단전1→중단후0을 시험한다. 이 계수는 전체 in-flight 또는 폐기 명령 수가 아니다. 두 추가 수정도 독립 재검토했다.
 독립 리뷰어가 세 수정과 새 click 계측을 재확인했고 선언된 실험 범위에서 추가 blocking 결함은 발견하지 못했다. CI 증거는 이슈 댓글에 추가한다. 이 검토는 Android 보안 동등성 실증이 아니다.
 
 ## 완료 판정과 다음 최소 작업

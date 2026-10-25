@@ -112,7 +112,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val service = AgentService.instance ?: return capture()
         return ControlPostObserver({ SystemClock.elapsedRealtime() }, service.remoteControlChanges::version,
             service.remoteControlChanges::awaitAfter, ::capture).observe(frame, input, actionChangeVersion).also {
-                currentCoroutineContext()[ControlTiming]?.mark(ControlTiming.Event.GUARDED_SNAPSHOT_AVAILABLE,
+                val timing = currentCoroutineContext()[ControlTiming]
+                timing?.mark(ControlTiming.Event.GUARDED_SNAPSHOT_AVAILABLE, id = timing.nextId(),
                     step = currentCoroutineContext()[ControlTrace]?.step ?: 0)
             }
     }
