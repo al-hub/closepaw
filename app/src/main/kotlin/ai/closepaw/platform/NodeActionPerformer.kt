@@ -244,7 +244,7 @@ class NodeActionPerformer(
             }
         }
 
-        return ActionResult.Success("Text entered: $text")
+        return ActionResult.Success("Text entered")
     }
 
     private inline fun withRoot(block: (AccessibilityNodeInfo) -> ActionResult): ActionResult {
