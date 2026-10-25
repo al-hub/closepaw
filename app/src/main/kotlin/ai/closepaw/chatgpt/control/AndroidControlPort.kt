@@ -46,30 +46,31 @@ import kotlin.coroutines.resume
 
 /** Native adapter: semantic targets only; explicit guarded node tap, never automatic gesture fallback. */
 internal class AndroidControlPort(context: Context, private val mutationBlock: (String) -> String? = { null },
-    private val runtime: RuntimeControlSettings? = null, private val allowed: () -> Boolean) : ControlPort {
+    private val runtime: RuntimeControlSettings? = null, private val localAuthority: LocalInputAuthority? = null, private val allowed: () -> Boolean) : ControlPort {
     override val validatesAtNativeBoundary = true
     override fun islandRefusal(sessionId: String): String? {
         val service = AgentService.instance ?: return "accessibility_permission_missing"
-        val session = service.remoteControlSession
+        val session = sessionFor(service)
         if (!session.explicit || session.state != ControlSession.State.ACTIVE) return "explicit_active_session_required"
         session.refusal(sessionId, mutation = true)?.let { return it }
         return reason(service)
     }
     override suspend fun observeIsland(): IslandBounds? = withContext(Dispatchers.Main) {
         val service = AgentService.instance ?: return@withContext null
-        if (islandRefusal(service.remoteControlSession.id) != null) return@withContext null
+        if (islandRefusal(sessionFor(service).id) != null) return@withContext null
         service.observedIsland()
     }
     override suspend fun dragIsland(before: IslandBounds, dx: Int, dy: Int, holdMs: Long, moveMs: Long, sessionId: String): Boolean =
         withContext(Dispatchers.Main) {
             val service = AgentService.instance ?: return@withContext false
-            val epoch = service.remoteControlSession.epoch
+            val epoch = sessionFor(service).epoch
             if (islandRefusal(sessionId) != null) return@withContext false
             service.dragIsland(before, dx, dy, holdMs, moveMs) {
-                AgentService.instance === service && service.remoteControlSession.epoch == epoch && islandRefusal(sessionId) == null
+                AgentService.instance === service && sessionFor(service).epoch == epoch && islandRefusal(sessionId) == null
             }
         }
-    override fun session() = AgentService.instance?.remoteControlSession
+    private fun sessionFor(service: AgentService): ControlSession = localAuthority?.session ?: service.remoteControlSession
+    override fun session() = AgentService.instance?.let(::sessionFor)
     override fun bindResume(check: suspend () -> Boolean) { AgentService.instance?.remoteResumeCheck = check }
     override suspend fun feedback(label: String) { withContext(Dispatchers.Main) { session()?.feedback(label) } }
     override suspend fun feedbackAtEpoch(label: String, expectedEpoch: Long?) {
@@ -163,13 +164,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     override fun clearSelections() { appSelections.clear() }
     override fun invalidate() { probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
     private fun reason(service: AgentService?): String? = when {
+        localAuthority?.refusal() != null -> localAuthority?.refusal()
         !allowed() -> "generic_control_disabled"
         session()?.refusal(session()?.id) != null -> session()?.refusal(session()?.id)
         service == null -> "accessibility_permission_missing"
         AgentService.instance !== service -> "accessibility_service_changed"
         context.getSystemService(KeyguardManager::class.java).isKeyguardLocked ||
             !context.getSystemService(PowerManager::class.java).isInteractive -> "device_locked"
-        service.getActiveSession()?.state?.value in setOf(SessionState.Running, SessionState.TakeoverPending) -> "local_agent_busy"
+        localAuthority == null && service.getActiveSession()?.state?.value in setOf(SessionState.Running, SessionState.TakeoverPending) -> "local_agent_busy"
         else -> null
     }
     private fun denied(code: String, diagnostics: JsonObject? = null) = ControlFrame("", -1, "", emptyList(), reason = code, windowDiagnostics = diagnostics)
@@ -273,7 +275,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             suspendCancellableCoroutine<String?> { continuation ->
                 continuation.invokeOnCancellation { mark(ControlTiming.Event.PROBE_CANCELLED) }
                 try {
-                    service.remoteControlSession.feedback("보안 확인용 화면 캡처 중")
+                    sessionFor(service).feedback("보안 확인용 화면 캡처 중")
                     mark(ControlTiming.Event.PROBE_DISPATCH)
                     service.takeScreenshotOfWindow(id, service.mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
                         override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
@@ -320,6 +322,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val scanStarted = SystemClock.elapsedRealtime()
             val nodes = mutableListOf<ControlNode>()
             val native = mutableListOf<AccessibilityNodeInfo>()
+            val terminalBinding = try { TerminalInputBinding.capture(service) } catch (_: Exception) { null }
             val identity = StringBuilder("configuration=$revision\n").append(selected.signature).append('\n')
             var truncated = false
             var protected = false
@@ -379,7 +382,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                                 AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_RIGHT.id -> "right"
                                 else -> null
                             } }.toSet(), sourceWindowId = node.windowId, sourcePackage = node.packageName?.toString().orEmpty(),
-                            keyboardKey = key?.label.orEmpty(), textEntryKey = node.isTextEntryKey))
+                            keyboardKey = key?.label.orEmpty(), textEntryKey = node.isTextEntryKey,
+                            terminal = terminalBinding?.evidence(node)))
                         native.add(node)
                     }
                 }
@@ -486,7 +490,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private suspend fun tap(service: AgentService, frame: ControlFrame, targetBounds: Rect, targetWindowId: Int = frame.windowId, finalGuard: () -> String? = { null }): ControlEffect {
         // Reacquire windows immediately before dispatch, while still on Main. No suspension between
         // these checks and dispatchGesture; the gesture has no caller-controlled coordinates.
-        val expectedEpoch = service.remoteControlSession.epoch
+        val expectedEpoch = sessionFor(service).epoch
         val windows = service.windows.orEmpty()
         try {
             val root = service.rootInActiveWindow ?: return ControlEffect(false, false, "active_root_missing")
@@ -498,7 +502,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val selected = controlledWindows(service, frame.foregroundWindowId, frame.packageName, windows)
             if (selected.selection.reason != null || selected.selection.target != frame.windowId ||
                 selected.signature != frame.windowContext || frame.touchContext.isEmpty() ||
-                touchContext(service, window, windows) != frame.touchContext)
+                touchContext(service, windows.single { it.id == frame.windowId }, windows) != frame.touchContext)
                 return ControlEffect(false, false, "touch_window_changed")
             val covering = windows.filter { it.id != window.id && it.displayId == window.displayId && it.layer >= window.layer &&
                 !(it.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY && service.ownsRemoteControlIndicatorWindow(it.id)) }
@@ -542,7 +546,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         if (continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_cancelled"))
                     }
                 }, null)
-                if (submitted && service.remoteControlSession.epoch == eventEpoch)
+                if (submitted && sessionFor(service).epoch == eventEpoch)
                     service.showRemoteControlTap(targetBounds, point.first.toFloat(), point.second.toFloat())
                 // Even a negative dispatch acknowledgement is conservatively not replayable.
                 if (!submitted && continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_unconfirmed"))
@@ -551,10 +555,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     }
     override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
         val service = AgentService.instance ?: return ControlEffect(false, false, "accessibility_permission_missing")
-        val admittedEpoch = service.remoteControlSession.epoch
+        val admittedEpoch = sessionFor(service).epoch
         secureWindow(service)?.let { return ControlEffect(false, false, it) }
         val action = input.getValue("action").jsonPrimitive.content
-        if (action in setOf("input", "focus", "key")) {
+        if (action in setOf("input", "terminal_input", "focus", "key")) {
             islandRefusal(input["session_id"]?.jsonPrimitive?.content.orEmpty())?.let {
                 return ControlEffect(false, false, it)
             }
@@ -579,7 +583,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
         }
         val effect = controlSpan("fresh_fingerprint_and_action") { withTree(service) { fresh, native ->
-            if (service.remoteControlSession.epoch != admittedEpoch)
+            if (sessionFor(service).epoch != admittedEpoch)
                 return@withTree ControlEffect(false, false, "control_session_changed_observe_again")
             val failure = GenericControlActionPolicy.refusal(frame, fresh, action)
             if (failure != null) {
@@ -644,6 +648,23 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 "long_press" -> "선택한 항목의 길게 누르기 기능을 실행합니다"
                 else -> "선택한 항목을 누르고 있습니다"
             }, admittedEpoch)
+            if (action == "terminal_input") {
+                val text = input["text"]?.jsonPrimitive?.content.orEmpty()
+                TerminalInputPolicy.refusal(expected, text, input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true)?.let {
+                    return@withTree ControlEffect(false, false, it)
+                }
+                val binding = TerminalInputBinding.capture(service)
+                    ?: return@withTree ControlEffect(false, false, "terminal_binding_unverified")
+                if (binding.evidence(target) != expected.terminal)
+                    return@withTree ControlEffect(false, false, "terminal_target_changed")
+                currentCoroutineContext().ensureActive()
+                reason(service)?.let { return@withTree ControlEffect(false, false, it) }
+                islandRefusal(input["session_id"]?.jsonPrimitive?.content.orEmpty())?.let { return@withTree ControlEffect(false, false, it) }
+                return@withTree try {
+                    binding.commit(text)
+                    ControlEffect(true, true, "terminal_input_dispatched")
+                } catch (_: Exception) { ControlEffect(true, false, "terminal_input_unknown") }
+            }
             if (action == "key") {
                 if (fresh.keyboard == null || !fresh.keyboard.readAllowed || !fresh.keyboard.interactAllowed || fresh.keyboard != frame.keyboard || fresh.inputTargetId == null ||
                     fresh.inputTargetId != frame.inputTargetId || !target.isTextEntryKey || expected.keyboardKey.isEmpty())
@@ -777,7 +798,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                                 secureWindow(service)?.let { return@guardedPaste ControlEffect(false, false, it) }
                                 withTree(service) paste@ { latest, latestNative ->
                                     currentCoroutineContext().ensureActive()
-                                    if (service.remoteControlSession.epoch != admittedEpoch)
+                                    if (sessionFor(service).epoch != admittedEpoch)
                                         return@paste ControlEffect(false, false, "control_session_changed_observe_again")
                                     islandRefusal(input["session_id"]?.jsonPrimitive?.content.orEmpty())?.let {
                                         return@paste ControlEffect(false, false, it)

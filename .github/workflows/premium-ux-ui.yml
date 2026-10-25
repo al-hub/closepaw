@@ -37,7 +37,7 @@ jobs:
         run: python3 scripts/verify-vendored-material-icons.py
       - name: Compile app and instrumented UI tests
         # View-only QA: arm64 tunnel/cloudflared production binaries are not needed or exercised.
-        run: bash scripts/ci-gradle.sh ui-compile :app:assembleDebug :app:assembleDebugAndroidTest -Pandroid.injected.build.abi=x86_64
+        run: bash scripts/ci-gradle.sh ui-compile :app:assembleDebug :app:assembleDebugAndroidTest :terminal-fixture:assembleDebug -PclosepawInputFixtures=true -Pandroid.injected.build.abi=x86_64
       - name: Enable hardware acceleration
         run: |
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
@@ -51,7 +51,8 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            bash scripts/ci-gradle.sh ui-test :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest,ai.closepaw.qa.ControlOverlayWindowTest,ai.closepaw.qa.IslandOperationTest,ai.closepaw.qa.IslandScreenCoordinatesTest,ai.closepaw.qa.ClipboardProvenanceTest --stacktrace
+            adb install -r qa/terminal-fixture/build/outputs/apk/debug/terminal-fixture-debug.apk
+            bash scripts/ci-gradle.sh ui-test :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest,ai.closepaw.qa.ControlOverlayWindowTest,ai.closepaw.qa.IslandOperationTest,ai.closepaw.qa.IslandScreenCoordinatesTest,ai.closepaw.qa.ClipboardProvenanceTest,ai.closepaw.qa.TerminalInputConnectionTest -PclosepawInputFixtures=true --stacktrace
             mkdir -p ui-render-evidence
             adb pull /sdcard/Download/closepaw-premium-ux-qa ui-render-evidence
             test "$(find ui-render-evidence -name '*.png' | wc -l)" -eq 8

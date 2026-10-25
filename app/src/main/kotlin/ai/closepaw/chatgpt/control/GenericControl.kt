@@ -16,8 +16,9 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
     val focused: Boolean = false, val selectionStart: Int = -1, val selectionEnd: Int = -1,
     val setText: Boolean = false, val paste: Boolean = false, val focusable: Boolean = false,
     val scrollDirections: Set<String> = emptySet(), val sourceWindowId: Int = -1,
-    val sourcePackage: String = "", val keyboardKey: String = "", val textEntryKey: Boolean = false) {
+    val sourcePackage: String = "", val keyboardKey: String = "", val textEntryKey: Boolean = false, val terminal: TerminalEvidence? = null) {
     fun json() = buildJsonObject {
+        put("terminal_input_supported", terminal != null)
         put("focused", focused); put("focusable", focusable); put("set_text_supported", setText); put("paste_supported", paste)
         put("selection_start", selectionStart); put("selection_end", selectionEnd)
         put("scroll_directions", JsonArray(scrollDirections.sorted().map { JsonPrimitive(it) }))
@@ -184,7 +185,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (chainActions >= 20 || now() - chainStarted !in 0L..180_000L || noProgress >= 3)
             return failure("control_chain_limit_observe_again")
         val action = input["action"]?.jsonPrimitive?.content.orEmpty()
-        if (action !in setOf("click", "tap", "long_press", "type", "input", "focus", "key", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
+        if (action !in setOf("click", "tap", "long_press", "type", "input", "terminal_input", "focus", "key", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
         val frame = observation.frame
         if (!port.validatesAtNativeBoundary) {
             val fresh = port.capture()
@@ -194,7 +195,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
-        if (action in setOf("click", "tap", "long_press", "type", "input", "focus", "key", "scroll", "expand", "collapse")) {
+        if (action in setOf("click", "tap", "long_press", "type", "input", "terminal_input", "focus", "key", "scroll", "expand", "collapse")) {
             if (node == null || !node.enabled || node.password) return failure("target_unavailable")
             if ((action in setOf("click", "tap") && !node.clickable) || (action == "long_press" && !node.longClickable)) return failure("target_not_clickable")
             if ((action == "expand" && !node.expandable) || (action == "collapse" && !node.collapsible)) return failure("native_action_unavailable")
@@ -214,6 +215,10 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     return failure("submission_authorization_required")
             }
             if (action == "focus" && !node.focusable) return failure("target_not_focusable")
+            if (action == "terminal_input") {
+                TerminalInputPolicy.refusal(node, input["text"]?.jsonPrimitive?.content.orEmpty(),
+                    input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true)?.let { return failure(it) }
+            }
             if (action == "input") {
                 val plan = UnifiedInputPolicy.plan(node, input["text"]?.jsonPrimitive?.content.orEmpty(),
                     input["method"]?.jsonPrimitive?.content ?: "auto", input["mode"]?.jsonPrimitive?.content ?: "empty",

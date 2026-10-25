@@ -37,7 +37,7 @@ internal class AndroidOperationRuntime(
     private val shell = TermuxShellOperation(client, TermuxJobLinkStore(File(context.filesDir, "mcp/job-links.tsv")))
     private val store = OperationTaskStore(File(context.filesDir, "mcp/tasks.json"))
     private val registry = OperationRegistry()
-    private val screenMutex = Mutex()
+    private val screenMutex = ControlScreenLease.mutex
     private val draftDiagnostics = GeminiDraftDiagnostics(File(context.filesDir, "mcp/gemini-draft-diagnostics.json"))
     private val roundTripDiagnostics = GeminiDraftDiagnostics(File(context.filesDir, "mcp/gemini-roundtrip-diagnostics.json"))
     private val tailscaleDiagnostics = TailscaleDiagnostics(File(context.filesDir, "mcp/tailscale-recovery.json"))

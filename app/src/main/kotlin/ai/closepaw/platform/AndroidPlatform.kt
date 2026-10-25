@@ -92,6 +92,10 @@ interface AndroidPlatform {
      */
     fun allowTapToFocus(): Boolean = true
 
+    /** Opt-in unified input. Unsupported platforms refuse without legacy replay. */
+    suspend fun performVerifiedInput(request: VerifiedInputRequest, isCancelled: () -> Boolean): ai.closepaw.tool.action.ActionOutcome =
+        ai.closepaw.tool.action.ActionOutcome.Failed("Verified input unavailable on this platform", emptyList())
+
     /**
      * Show visual feedback for a verified native scroll action.
      *
@@ -136,4 +140,13 @@ data class AppInfo(
     val packageName: String,
     val label: String,
     val isSystemApp: Boolean = false
+)
+
+/** Immutable source selection, not a grant to mutate a different app or field. */
+data class VerifiedInputRequest(
+    val text: String, val method: String, val snapshot: ai.closepaw.model.ScreenSnapshot,
+    val element: ai.closepaw.model.PerceptionElement,
+    val clipboardConsent: Boolean = false, val clipboardReplaceAuthorized: Boolean = false,
+    val approvedPackageName: String? = null, val replacementApprovalVerified: Boolean = false,
+    val terminalAuthorized: Boolean = false, val terminalApprovalVerified: Boolean = false
 )

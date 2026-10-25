@@ -61,6 +61,9 @@ class AccessibilityPlatform(
     private val screenshotCapturer = AccessibilityScreenshotCapturer(service, config, traceRecorder)
     private val outOfBoundsActionTargetCount = AtomicInteger(0)
 
+    override suspend fun performVerifiedInput(request: VerifiedInputRequest, isCancelled: () -> Boolean): ai.closepaw.tool.action.ActionOutcome =
+        ai.closepaw.chatgpt.control.LocalVerifiedInput.run(service, request, isCancelled)
+
     override suspend fun captureScreen(): ScreenSnapshot {
         val currentPkg = getCurrentPackageName()
 

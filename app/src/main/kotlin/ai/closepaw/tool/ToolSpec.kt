@@ -96,6 +96,10 @@ interface ToolExecutionContext {
      * Nullable for tests or custom execution contexts.
      */
     val callId: String? get() = null
+    /** Policy-router provenance. Tool arguments cannot manufacture these grants. */
+    val approvedPackageName: String? get() = null
+    val clipboardReplacementApproved: Boolean get() = false
+    val terminalInputApproved: Boolean get() = false
 
     /** Access to platform operations */
     val platform: ai.closepaw.platform.AndroidPlatform

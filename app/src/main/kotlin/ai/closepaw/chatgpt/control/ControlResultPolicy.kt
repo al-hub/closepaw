@@ -49,6 +49,10 @@ internal object ControlResultPolicy {
             return Verdict(after.packageName == before.packageName && after.windowId == before.windowId &&
                 semantic?.focused == true, "focus_unconfirmed", true)
         }
+        if (action == "terminal_input" && node != null) return Verdict(
+            after.packageName == before.packageName && after.windowId == before.windowId &&
+                target?.focused == true && node.terminal != null && TerminalInputPolicy.inserted(node.terminal,
+                    target.terminal, input["text"]?.jsonPrimitive?.content.orEmpty()), "terminal_echo_unconfirmed", true)
         if (action == "input" && node != null) {
             val plan = UnifiedInputPolicy.plan(node, input["text"]?.jsonPrimitive?.content.orEmpty(),
                 input["method"]?.jsonPrimitive?.content ?: "auto", input["mode"]?.jsonPrimitive?.content ?: "empty",

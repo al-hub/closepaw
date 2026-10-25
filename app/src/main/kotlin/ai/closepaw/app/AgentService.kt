@@ -270,6 +270,10 @@ class AgentService : AccessibilityService() {
     private val debugExecReceiver = ActionDebugReceiver()
     private val debugMobileActionReceiver = ai.closepaw.debug.MobileActionDebugReceiver()
 
+    @androidx.annotation.RequiresApi(33)
+    override fun onCreateInputMethod(): android.accessibilityservice.InputMethod =
+        ai.closepaw.platform.GuardedAccessibilityInputMethod(this)
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         isServiceActive = true
