@@ -58,9 +58,17 @@ class TerminalInputConnectionTest {
             val control = GenericControl(port, { settings.genericControlEnabled })
             suspend fun settled(): ai.closepaw.chatgpt.operations.OperationResult {
                 var previous=port.capture()
-                repeat(5) {
+                var stableSince=SystemClock.elapsedRealtime()
+                val deadline=stableSince+15_000
+                while (SystemClock.elapsedRealtime() < deadline) {
+                    kotlinx.coroutines.delay(200)
                     val next=port.capture()
-                    if (GenericControlActionPolicy.refusal(previous,next,"terminal_input") == null && previous.touchContext == next.touchContext)
+                    // Two early identical app frames can precede the delayed IME launch.
+                    // Wait for the actual IME window and a continuous stable interval;
+                    // never retry an action or loosen production freshness checks.
+                    val stable=next.keyboard != null && GenericControlActionPolicy.refusal(previous,next,"terminal_input") == null && previous.touchContext == next.touchContext
+                    if (!stable) stableSince=SystemClock.elapsedRealtime()
+                    if (stable && SystemClock.elapsedRealtime()-stableSince >= 1_200)
                         return control.observe()
                     previous=next
                 }
@@ -72,7 +80,7 @@ class TerminalInputConnectionTest {
             val input = buildJsonObject { put("action", "terminal_input"); put("session_id", session.id)
                 put("observation_id", observed.data.getValue("observation_id")); put("node_id", target.getValue("node_id"))
                 put("terminal_authorized", true); put("text", "한글 A1!") }
-            val result = control.action(input); assertTrue(result.toString(), result.success)
+            val result = control.action(input); assertTrue("$result; ${ControlDiagnostics.snapshot()}", result.success)
             assertFalse(control.action(input).success)
             var priorGeneration=0L
             instrumentation.runOnMainSync { priorGeneration=TerminalInputBinding.capture(service)?.generation ?: 0 }
