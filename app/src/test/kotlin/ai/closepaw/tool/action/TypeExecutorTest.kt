@@ -203,6 +203,31 @@ class TypeExecutorTest {
         assertThat(outcome).isInstanceOf(ActionOutcome.Cancelled::class.java)
     }
 
+    @Test
+    fun `ambiguous direct text failure does not tap or replay`() = runTest {
+        val snapshot = editableSnapshot()
+        val platform = TypeRecordingPlatform(
+            actionResults = listOf(
+                ActionResult.Failure("ACTION_SET_TEXT failed"),
+                ActionResult.Success(),
+                ActionResult.Success()
+            )
+        )
+
+        val outcome = TypeExecutor().execute(
+            target = Target.ElementIndex(1),
+            inputText = "safe",
+            clear = false,
+            snapshot = snapshot,
+            platform = platform,
+            isCancelled = { false }
+        )
+
+        assertThat(outcome).isInstanceOf(ActionOutcome.Failed::class.java)
+        assertThat((outcome as ActionOutcome.Failed).reason).contains("unknown")
+        assertThat(platform.performedActions).hasSize(1)
+    }
+
     // ---------- Coordinate-hint normalization (Codex dual target) ----------
 
     @Test
