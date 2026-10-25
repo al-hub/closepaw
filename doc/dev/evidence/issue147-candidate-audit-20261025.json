@@ -1,0 +1,71 @@
+{
+  "status": "PASS",
+  "source_sha256": "48eaaab23ea5b05ef96bc77da63c7736601efb2b06dd9d6afd953e6845085be6",
+  "raw_summary_equal": true,
+  "accounted_ms": 10953.098163999999,
+  "per_step": [
+    {
+      "step": 0,
+      "probe_count": 1,
+      "spacing_ms": 0.017149,
+      "cue_ms": 0.0
+    },
+    {
+      "step": 1,
+      "probe_count": 3,
+      "spacing_ms": 704.77418,
+      "cue_ms": 97.821172
+    },
+    {
+      "step": 2,
+      "probe_count": 3,
+      "spacing_ms": 695.64375,
+      "cue_ms": 97.062343
+    },
+    {
+      "step": 3,
+      "probe_count": 3,
+      "spacing_ms": 729.687891,
+      "cue_ms": 97.33164
+    },
+    {
+      "step": 4,
+      "probe_count": 3,
+      "spacing_ms": 640.024258,
+      "cue_ms": 96.601015
+    },
+    {
+      "step": 5,
+      "probe_count": 3,
+      "spacing_ms": 715.939218,
+      "cue_ms": 96.889024
+    },
+    {
+      "step": 6,
+      "probe_count": 3,
+      "spacing_ms": 716.045352,
+      "cue_ms": 96.669336
+    },
+    {
+      "step": 7,
+      "probe_count": 3,
+      "spacing_ms": 783.087696,
+      "cue_ms": 96.628672
+    },
+    {
+      "step": 8,
+      "probe_count": 3,
+      "spacing_ms": 705.009648,
+      "cue_ms": 98.559882
+    },
+    {
+      "step": 9,
+      "probe_count": 3,
+      "spacing_ms": 748.874921,
+      "cue_ms": 96.987578
+    }
+  ],
+  "security_probe_residual_scope": "Window selection, Main dispatch, screenshot API/callback and bookkeeping combined; not screenshot-only time",
+  "voice_e2e": "NOT_TESTED",
+  "candidate_speedup": "NOT_TESTED"
+}

@@ -1,3 +1,10 @@
+## 2026-10-25 #147 안전 최적화 후보 및 원시 재감사
+
+- [후보 검토](../dev/issue147-safe-optimization-review-20261025.md), [재계산 JSON](../dev/evidence/issue147-candidate-audit-20261025.json). Python trace tests2 PASS, source SHA256 확인, raw139span 재계산과 기존 summary 전체 일치, exclusive+untraced 합계 확인. 기존 source/code81 REUSED_EVIDENCE이며 신규 성능 PASS 아님.
+- 현재28 fresh probes/400ms 계약 유지. 배치는 이미 구현됨; cue 삭제는 대기 이동 가능; pre/post verdict 재사용·검사제거·간격축소는 동등안전성 미입증으로 적용하지 않음. security_probe 잔여1358.483908ms는 window선택/Main/API/callback 합계이며 screenshot 단독으로 귀속 금지.
+- 다음 개발 후보는 probeWindow 실제 API dispatch→callback 및 Main대기 분리(동일 elapsedRealtime). 아직 구현/배포하지 않음. span EXIT 간격을 API dispatch 측정으로 사용하지 않으며 별도 nanoTime trace와 차감하지 않음. 실제 최적화/matched10+10/VoiceE2E NOT_TESTED, #147 OPEN.
+- 실행코드/버전/APK/설치/기기시험/세션 변경0. 현재0.1.85/code86 및 APK source8ed27ad6bb9cc97a6d28a21d8a560ed2ab150088 유지. 기존물리 X/드래그/잠금 PASS 재사용. #145/#146/#150 CLOSED 유지.
+
 ## 2026-10-25 #145 CLOSED/completed 최종 확인
 
 - [#145 종료 감사 댓글](https://github.com/al-hub/closepaw/issues/145#issuecomment-6391764721)과 GitHub update 응답에서 **state=closed/state_reason=completed** 확인. [최종 수용 감사표](../dev/issue145-final-acceptance-audit.md)에 원래 실기기/자동회귀 수용 증거·원source·미검증 한계·이관범위를 명시했다.
