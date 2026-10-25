@@ -78,4 +78,14 @@ class UnifiedInputEngineTest {
         assertFalse(ControlResultPolicy.verify("focus", before.copy(nodes = listOf(node, node.copy(id = 2))), after, node, buildJsonObject {}).confirmed)
         assertFalse(ControlResultPolicy.verify("focus", before, after.copy(nodes = listOf(moved, moved.copy(id = 2))), node, buildJsonObject {}).confirmed)
     }
+
+    @Test fun imeNodeCannotMasqueradeAsAnApplicationInputPostcondition() {
+        val field = Port().node.copy(sourceWindowId = 1, sourcePackage = "example.app")
+        val before = ControlFrame("example.app", 1, "before", listOf(field))
+        val impostor = field.copy(text = "abc", focused = true, sourceWindowId = 9, sourcePackage = "example.ime", keyboardKey = "abc")
+        val after = before.copy(fingerprint = "ime-changed", nodes = listOf(impostor))
+        val input = buildJsonObject { put("text", "abc") }
+        for (action in listOf("type", "input", "focus"))
+            assertFalse(ControlResultPolicy.verify(action, before, after, field, input).confirmed)
+    }
 }

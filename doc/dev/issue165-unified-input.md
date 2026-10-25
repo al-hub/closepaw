@@ -119,3 +119,7 @@ no IME image is read. Key touch additionally requires current interact access. C
 classifier permission changes alter freshness. Unknown keyboards therefore require the
 existing authorized declarative app-access flow; no implicit trust/allow override is added.
 Contradictory key text/description and incomplete input-target text are refused.
+
+Cross-window postcondition matching excludes all IME key nodes and verifies source app/
+window ownership. A keyboard node that copies an application's resource/class/bounds/text
+cannot satisfy that application's input or focus postcondition; a regression covers it.

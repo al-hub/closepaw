@@ -19,23 +19,25 @@ internal object ControlResultPolicy {
                 ?: return Verdict(false, "keyboard_key_unrecognized")
             val candidate = after.inputTarget
             val sameField = candidate != null && candidate.resourceId == field.resourceId && candidate.className == field.className &&
-                candidate.bounds == field.bounds && candidate.sourceWindowId == field.sourceWindowId
+                candidate.bounds == field.bounds && candidate.sourceWindowId == field.sourceWindowId && candidate.sourcePackage == field.sourcePackage
             val expected = KeyboardKeyPolicy.expectedText(field, key)
             // Neither a gesture callback nor a layout/terminal screen change proves text/command success.
             if (expected != null) return Verdict(sameField && candidate?.text == expected, "keyboard_input_unconfirmed", true)
             return Verdict(false, "keyboard_effect_requires_external_verification")
         }
-        val matching = after.nodes.filter { it.resourceId == node?.resourceId && it.bounds == node?.bounds &&
+        fun owned(candidate: ControlNode): Boolean = candidate.keyboardKey.isEmpty() &&
+            (node == null || node.sourceWindowId < 0 || (candidate.sourceWindowId == node.sourceWindowId && candidate.sourcePackage == node.sourcePackage))
+        val matching = after.nodes.filter { owned(it) && it.resourceId == node?.resourceId && it.bounds == node?.bounds &&
             it.className == node?.className }
         val target = matching.singleOrNull()
         if (action == "focus") {
             // IME opening may resize/move the field. Only a unique nonempty semantic identity
             // can survive that geometry change; never choose one of duplicate resource IDs.
             val uniqueBefore = node != null && node.resourceId.isNotEmpty() && before.nodes.count {
-                it.resourceId == node.resourceId && it.className == node.className
+                owned(it) && it.resourceId == node.resourceId && it.className == node.className
             } == 1
             val semantic = if (uniqueBefore) after.nodes.filter {
-                it.resourceId == node?.resourceId && it.className == node?.className
+                owned(it) && it.resourceId == node?.resourceId && it.className == node?.className
             }.singleOrNull() else target
             return Verdict(after.packageName == before.packageName && after.windowId == before.windowId &&
                 semantic?.focused == true, "focus_unconfirmed", true)
