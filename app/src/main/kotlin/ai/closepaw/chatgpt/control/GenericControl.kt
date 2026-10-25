@@ -287,12 +287,22 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             it.keyboardKey == label && it.sourceWindowId == frame.keyboard?.windowId &&
                 it.sourcePackage == frame.keyboard?.packageName
         }
-        if (initial.frame.keyboard == null || labels.any { matching(initial.frame, it).size != 1 }) {
+        fun keyboardNodes(frame: ControlFrame) = frame.nodes.filter {
+            it.sourceWindowId == frame.keyboard?.windowId && it.sourcePackage == frame.keyboard?.packageName
+        }
+        if (initial.frame.keyboard == null || labels.any { label ->
+            val matches = matching(initial.frame, label)
+            matches.size > 1 || (matches.isEmpty() && KeyboardKeyPolicy.layoutFor(label, keyboardNodes(initial.frame)) == null)
+        }) {
             current = null; return stop("keyboard_keys_not_uniquely_observed", false, 0)
         }
         var completed = 0
         var attempted = false
-        for (label in labels) {
+        var layoutSteps = 0
+        val pending = java.util.ArrayDeque(labels)
+        val switched = mutableSetOf<String>()
+        while (pending.isNotEmpty()) {
+            val label = pending.peekFirst()
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             val observed = current ?: return stop("keyboard_observation_lost", attempted, completed)
             val liveField = observed.frame.inputTarget
@@ -304,22 +314,28 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 liveField.bounds != field.bounds || !liveField.focused) {
                 current = null; return stop("keyboard_input_target_changed", attempted, completed)
             }
-            val key = matching(observed.frame, label).singleOrNull()
+            val matches = matching(observed.frame, label)
+            if (matches.size > 1) { current = null; return stop("keyboard_key_ambiguous", attempted, completed) }
+            val literal = matches.singleOrNull()
+            val key = literal ?: KeyboardKeyPolicy.layoutFor(label, keyboardNodes(observed.frame))
                 ?: run { current = null; return stop("keyboard_layout_changed", attempted, completed) }
+            if (literal == null && (layoutSteps >= 4 || !switched.add("$label:${observed.frame.fingerprint}:${key.keyboardKey}"))) {
+                current = null; return stop("keyboard_layout_limit", attempted, completed)
+            }
             val result = action(buildJsonObject {
                 put("action", "key"); put("observation_id", observed.id); put("node_id", key.id)
                 input["session_id"]?.let { put("session_id", it) }
             })
             attempted = attempted || result.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
             if (!result.success) return stop(result.data["reason_code"]?.jsonPrimitive?.content ?: "keyboard_input_unconfirmed", attempted, completed)
-            completed++
+            if (literal == null) layoutSteps++ else { completed++; pending.removeFirst() }
         }
         val actual = current?.frame?.inputTarget
         if (actual == null || actual.text != expected || actual.selectionStart != expected.length || actual.selectionEnd != expected.length)
             return stop("keyboard_final_text_unconfirmed", attempted, completed)
         return OperationResult(summary = "Exact keyboard text result verified.", data = buildJsonObject {
             put("input_method", "keyboard"); put("action_attempted", attempted); put("outcome_unknown", false)
-            put("app_result_verified", true); put("completed_keys", completed)
+            put("app_result_verified", true); put("completed_keys", completed); put("layout_steps", layoutSteps)
             current?.let { put("observation_id", it.id) }
         })
     }

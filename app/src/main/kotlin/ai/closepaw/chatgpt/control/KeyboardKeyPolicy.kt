@@ -25,6 +25,25 @@ internal object KeyboardKeyPolicy {
         }
         return Key(label, kind)
     }
+    /** Choose only a uniquely observed, named layout control. No coordinates or
+     * speculative glyphs. The changed layout must be observed before any literal. */
+    fun layoutFor(label: String, nodes: List<ControlNode>): ControlNode? {
+        val literalLabels = nodes.filter { it.keyboardKey.length == 1 }.map { it.keyboardKey.single() }
+        val wanted = label.singleOrNull() ?: return null
+        val names = when {
+            wanted.isUpperCase() && literalLabels.any { it.isLowerCase() } -> setOf("shift", "⇧")
+            wanted.isLowerCase() && literalLabels.any { it.isUpperCase() } -> setOf("shift", "⇧", "caps lock", "⇪")
+            wanted.code in 0x1100..0x11ff || wanted.code in 0x3130..0x318f || wanted.code in 0xac00..0xd7a3 ->
+                if (literalLabels.any { it.code in 65..90 || it.code in 97..122 }) setOf("한/영", "한영", "한국어", "🌐") else emptySet()
+            wanted.code in 65..90 || wanted.code in 97..122 -> setOf("abc", "영어", "한/영", "한영")
+            wanted.code in 33..64 || wanted.code in 91..96 || wanted.code in 123..126 -> setOf("?123", "123", "#+=")
+            else -> emptySet()
+        }
+        return nodes.filter { node ->
+            node.keyboardKey.lowercase() in names && identify(node.text, node.description,
+                node.className, node.clickable, node.textEntryKey)?.kind == Kind.LAYOUT
+        }.singleOrNull()
+    }
     /** Predict only literal insertion/deletion in a known editable field. IME composition may differ. */
     fun expectedText(field: ControlNode, key: Key): String? {
         if (!field.editable || !field.focused || field.password || field.text.length > 2000) return null

@@ -20,6 +20,13 @@ internal object ControlResultPolicy {
             val candidate = after.inputTarget
             val sameField = candidate != null && candidate.resourceId == field.resourceId && candidate.className == field.className &&
                 candidate.bounds == field.bounds && candidate.sourceWindowId == field.sourceWindowId && candidate.sourcePackage == field.sourcePackage
+            if (key.kind == KeyboardKeyPolicy.Kind.LAYOUT) {
+                val beforeKeys = before.nodes.filter { it.sourceWindowId == before.keyboard.windowId }.map { it.keyboardKey }.filter { it.isNotEmpty() }.sorted()
+                val afterKeys = after.nodes.filter { it.sourceWindowId == after.keyboard?.windowId }.map { it.keyboardKey }.filter { it.isNotEmpty() }.sorted()
+                return Verdict(sameField && candidate?.focused == true && candidate.text == field.text &&
+                    candidate.selectionStart == field.selectionStart && candidate.selectionEnd == field.selectionEnd &&
+                    beforeKeys != afterKeys && afterKeys.isNotEmpty(), "keyboard_layout_unconfirmed")
+            }
             val expected = KeyboardKeyPolicy.expectedText(field, key)
             // Neither a gesture callback nor a layout/terminal screen change proves text/command success.
             if (expected != null) return Verdict(sameField && candidate?.text == expected, "keyboard_input_unconfirmed", true)
