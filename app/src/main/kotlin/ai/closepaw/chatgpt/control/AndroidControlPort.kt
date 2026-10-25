@@ -140,7 +140,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val owned = try { root.windowId == window.id && root.packageName?.toString() == inputMethod.packageName }
             finally { root.recycleCompat() }
         if (!owned) return refuse()
-        val keyboard = ControlKeyboard(window.id, inputMethod.packageName, id)
+        val keyboard = ControlKeyboard(window.id, inputMethod.packageName, id,
+            readAllowed = packageAllowed(inputMethod.packageName, operation = "read"),
+            interactAllowed = packageAllowed(inputMethod.packageName, operation = "interact"))
         return selected.copy(signature = operationHash(selected.signature + "\n" + keyboard.toString()), keyboard = keyboard)
     }
     private val context = context.applicationContext
@@ -243,7 +245,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         windowDiagnostics = selected.diagnostics
         selected.selection.reason?.let { return it }
         // Every included root gets a NEW security verdict; no previous capture's verdict is reused.
-        for (id in (selected.selection.members + listOfNotNull(selected.keyboard?.windowId))) {
+        for (id in (selected.selection.members + listOfNotNull(selected.keyboard?.takeIf { it.readAllowed }?.windowId))) {
             var failure = probeWindow(service, id)
             // A read-only API rate-limit refusal can follow another adapter's screenshot.
             // Retry only that explicit refusal, once, with API spacing and a NEW verdict.
@@ -402,7 +404,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     identity.append("window=").append(id).append('\n')
                     visit(member, 0, -1, id == selected.selection.target)
                 }
-                selected.keyboard?.let { keyboard ->
+                selected.keyboard?.takeIf { it.readAllowed }?.let { keyboard ->
                     val member = windows.single { it.id == keyboard.windowId }.root
                     if (member == null || member.windowId != keyboard.windowId || member.packageName?.toString() != keyboard.packageName) {
                         member?.recycleCompat(); traversalFailure = "input_method_unverified"
@@ -640,7 +642,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 else -> "선택한 항목을 누르고 있습니다"
             }, admittedEpoch)
             if (action == "key") {
-                if (fresh.keyboard == null || fresh.keyboard != frame.keyboard || fresh.inputTargetId == null ||
+                if (fresh.keyboard == null || !fresh.keyboard.readAllowed || !fresh.keyboard.interactAllowed || fresh.keyboard != frame.keyboard || fresh.inputTargetId == null ||
                     fresh.inputTargetId != frame.inputTargetId || !target.isTextEntryKey || expected.keyboardKey.isEmpty())
                     return@withTree ControlEffect(false, false, "keyboard_target_unverified")
                 val key = KeyboardKeyPolicy.identify(currentText, target.contentDescription?.toString().orEmpty(),
@@ -649,7 +651,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (key.kind == KeyboardKeyPolicy.Kind.SUBMIT && input["submit_authorized"]?.jsonPrimitive?.booleanOrNull != true)
                     return@withTree ControlEffect(false, false, "submission_authorization_required")
                 val field = fresh.inputTarget ?: return@withTree ControlEffect(false, false, "keyboard_target_unverified")
-                if (InputPayloadPolicy.sensitive(field.text) || (field.editable && key.kind in setOf(
+                if (field.text.length > 2000 || InputPayloadPolicy.sensitive(field.text) || (field.editable && key.kind in setOf(
                     KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE, KeyboardKeyPolicy.Kind.BACKSPACE) &&
                     KeyboardKeyPolicy.expectedText(field, key) == null)) return@withTree ControlEffect(false, false, "sensitive_input_refused")
                 return@withTree tap(service, fresh, rect, fresh.keyboard.windowId) {

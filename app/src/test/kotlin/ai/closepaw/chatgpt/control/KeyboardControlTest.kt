@@ -30,7 +30,9 @@ class KeyboardControlTest {
     }
     @Test fun keyNeedsCurrentInputMethodAndFocusedOwnedApplicationTarget() = runBlocking {
         for (change in listOf<(ControlFrame) -> ControlFrame>(
-            { it.copy(keyboard = null) }, { it.copy(inputTargetId = null) },
+            { it.copy(keyboard = null) },
+            { it.copy(keyboard = it.keyboard?.copy(readAllowed = false)) },
+            { it.copy(keyboard = it.keyboard?.copy(interactAllowed = false)) }, { it.copy(inputTargetId = null) },
             { it.copy(inputTarget = it.inputTarget?.copy(focused = false)) },
             { it.copy(inputTarget = it.inputTarget?.copy(sourcePackage = "other.app")) },
             { it.copy(touchContext = "") }, { it.copy(truncated = true) })) {

@@ -111,3 +111,11 @@ those guards, session stop/pause, service/consent and app policy INSIDE the cont
 immediately before OS dispatch. GestureDispatchGateTest injects end/restart/pause/cancel
 between admission and dispatch gate; these are JVM state-machine tests, not proof of actual
 Galaxy dispatch timing. Existing key/tap geometry and full security probes remain required.
+
+IME packages also obey the existing app read/interact policy and BLOCKED floor. OS default
+IME selection proves identity, not permission. Without explicit allowed read access, only
+public IME identity/capability metadata is returned; its tree is not traversed/exported and
+no IME image is read. Key touch additionally requires current interact access. Config and
+classifier permission changes alter freshness. Unknown keyboards therefore require the
+existing authorized declarative app-access flow; no implicit trust/allow override is added.
+Contradictory key text/description and incomplete input-target text are refused.

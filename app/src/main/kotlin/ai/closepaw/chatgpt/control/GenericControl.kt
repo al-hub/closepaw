@@ -111,6 +111,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             put("observation_id", observation.id); put("observed_at_ms", observation.at); put("expires_in_ms", 60_000)
             frame.keyboard?.let { put("keyboard", buildJsonObject {
                 put("window_id", it.windowId); put("package_name", it.packageName); put("input_method_id", it.inputMethodId)
+                put("read_allowed", it.readAllowed); put("interaction_allowed", it.interactAllowed)
                 put("semantic_keys_only", true); put("input_target_verified", frame.inputTargetId != null)
             }) }
             put("package_name", frame.packageName); put("window_id", frame.windowId)
@@ -162,11 +163,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             if (action == "scroll" && (!node.scrollable || input["direction"]?.jsonPrimitive?.content !in (node.scrollDirections + setOf("up", "down")))) return failure("target_not_scrollable")
             if (node.keyboardKey.isNotEmpty() && action != "key") return failure("keyboard_key_action_required")
             if (action == "key") {
-                if (frame.keyboard == null || frame.inputTargetId == null || node.sourceWindowId != frame.keyboard.windowId ||
+                if (frame.keyboard == null || !frame.keyboard.readAllowed || !frame.keyboard.interactAllowed || frame.inputTargetId == null || node.sourceWindowId != frame.keyboard.windowId ||
                     node.sourcePackage != frame.keyboard.packageName) return failure("keyboard_target_unverified")
                 val field = frame.inputTarget ?: return failure("keyboard_target_unverified")
                 if (!field.editable || !field.enabled || !field.focused || field.password || field.id != frame.inputTargetId || field.sourcePackage != frame.packageName ||
-                    field.sourceWindowId != frame.windowId || InputPayloadPolicy.sensitive(field.text)) return failure("keyboard_target_unverified")
+                    field.sourceWindowId != frame.windowId || field.text.length > 2000 || InputPayloadPolicy.sensitive(field.text)) return failure("keyboard_target_unverified")
                 val key = KeyboardKeyPolicy.identify(node.text, node.description, node.className, node.clickable, node.textEntryKey)
                     ?: return failure("keyboard_key_unrecognized")
                 if (field.editable && key.kind in setOf(KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE, KeyboardKeyPolicy.Kind.BACKSPACE) &&

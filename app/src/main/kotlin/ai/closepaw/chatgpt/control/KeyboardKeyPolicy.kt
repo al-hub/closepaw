@@ -8,6 +8,7 @@ internal object KeyboardKeyPolicy {
         if (!clickable || !textEntryKey) return null
         val label = if (text == " " || (text.isEmpty() && description == " ")) "Space" else text.ifBlank { description }.trim()
         if (label.isEmpty() || label.length > 32 || InputPayloadPolicy.sensitive(label) || label.any { it.isISOControl() }) return null
+        if (text.isNotBlank() && description.isNotBlank() && text.trim() != description.trim()) return null
         val kind = when (label.lowercase()) {
             "space", "spacebar", "공백", "스페이스" -> Kind.SPACE
             "backspace", "delete", "삭제", "지우기", "⌫", "⌦" -> Kind.BACKSPACE
@@ -44,4 +45,5 @@ internal object KeyboardKeyPolicy {
     }
 }
 
-internal data class ControlKeyboard(val windowId: Int, val packageName: String, val inputMethodId: String)
+internal data class ControlKeyboard(val windowId: Int, val packageName: String, val inputMethodId: String,
+    val readAllowed: Boolean = true, val interactAllowed: Boolean = true)

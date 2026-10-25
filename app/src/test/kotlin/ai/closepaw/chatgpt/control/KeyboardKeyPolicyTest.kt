@@ -8,6 +8,7 @@ class KeyboardKeyPolicyTest {
     @Test fun onlyActualSemanticButtonsWithUnambiguousLabelsAreKeys() {
         assertNull(KeyboardKeyPolicy.identify("a", "", "android.widget.TextView", true, false))
         assertNull(KeyboardKeyPolicy.identify("a", "", "android.widget.Button", false))
+        assertNull(KeyboardKeyPolicy.identify("a", "Enter", "android.widget.Button", true, true))
         assertNull(key("suggested word")); assertNull(key("token=secret")); assertNull(key("\u2028"))
         for (label in listOf("a", "ㄱ", "1", "!")) assertEquals(KeyboardKeyPolicy.Kind.CHARACTER, key(label)?.kind)
     }
