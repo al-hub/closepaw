@@ -123,7 +123,17 @@ class TypeExecutor(
         if (directResult is ActionResult.Cancelled) {
             return ActionOutcome.Cancelled("Type at (${point.x},${point.y}) cancelled: ${directResult.reason}")
         }
-        attemptTrail.add("SetTextOnNodeAt: ${(directResult as? ActionResult.Failure)?.reason ?: "failed"}")
+        val directFailure = (directResult as? ActionResult.Failure)?.reason
+        // A platform failure can occur after the text was partially applied. Never
+        // select another input channel unless non-execution is established.
+        if (TextInputFallbackGate.afterDirectSetFailure(directFailure) !=
+            TextInputFallbackGate.Decision.NEXT_CHANNEL) {
+            return ActionOutcome.Failed(
+                reason = "Direct text effect unknown; stopped without replay",
+                attemptTrail = attemptTrail + "SetTextOnNodeAt: outcome_unknown"
+            )
+        }
+        attemptTrail.add("SetTextOnNodeAt: not_executed")
 
         if (isCancelled()) return ActionOutcome.Cancelled("Cancelled between type attempts")
 
