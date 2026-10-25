@@ -150,7 +150,7 @@ class NodeActionPerformer(
     suspend fun canPasteOnFocused(): Boolean = onMain {
         val root = rootProvider() ?: return@onMain false
         try {
-            val node = AccessibilityNodeFinder.findFocusedEditableNode(root)
+            val node = AccessibilityNodeFinder.findFocusedEditableNode(root, AccessibilityNodeInfo.ACTION_PASTE)
                 ?: return@onMain false
             try {
                 node.isEditable && !node.isPassword && node.isFocused &&
@@ -167,7 +167,7 @@ class NodeActionPerformer(
         if (!authorized) return ActionResult.Failure("Paste not authorized")
         return onMain {
             withRoot { root ->
-                val node = AccessibilityNodeFinder.findFocusedEditableNode(root)
+                val node = AccessibilityNodeFinder.findFocusedEditableNode(root, AccessibilityNodeInfo.ACTION_PASTE)
                     ?: return@withRoot ActionResult.Failure("No focused editable node for Paste")
                 try {
                     if (!node.isEditable || node.isPassword || !node.isFocused) {
@@ -334,20 +334,14 @@ class NodeActionPerformer(
         val matches = boundsMatch || identityMatch
         val tag = if (matches) "MATCH" else "MISMATCH"
 
-        Log.d(TAG, "$actionLabel target=($x,$y) " +
-                "intended=[id=${hint.resourceId} text=${hint.text} desc=${hint.description} " +
-                "class=${hint.className} bounds=${hint.bounds}] " +
-                "found=[id=$foundId text=$foundText desc=$foundDesc " +
-                "class=$foundClass bounds=[${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}]] " +
-                "→ $tag")
+        // Labels can contain a draft or private screen data. Log only structural verdicts.
+        Log.d(TAG, "$actionLabel target=($x,$y) bounds_match=$boundsMatch identity_match=$identityMatch verdict=$tag")
 
         return if (matches) {
             null // proceed with click
         } else {
             ActionResult.Failure(
-                "Node identity mismatch at ($x,$y): " +
-                    "intended=[${hint.text.ifBlank { hint.description }}] " +
-                    "found=[$foundText]"
+                "Node identity mismatch at ($x,$y)"
             )
         }
     }

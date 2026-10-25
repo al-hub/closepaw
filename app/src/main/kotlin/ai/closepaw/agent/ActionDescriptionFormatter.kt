@@ -53,11 +53,9 @@ object ActionDescriptionFormatter {
             }
             "type" -> {
                 val target = decodeActionTarget(args, action = "type")
-                val hasInputText = args.has("input_text")
-                val textToType = args.optString(if (hasInputText) "input_text" else "text", "").take(30)
                 val clear = args.optBoolean("clear", false)
                 val targetStr = targetToString(target, pointLabel = "coordinates", fallback = "focused field")
-                "Type \"$textToType\" into $targetStr${if (clear) " (clear first)" else ""}"
+                "Type text into $targetStr${if (clear) " (replace)" else ""}"
             }
             "swipe" -> formatSwipeAction(args)
             else -> "Mobile action: $action"

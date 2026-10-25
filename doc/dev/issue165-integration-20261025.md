@@ -89,3 +89,19 @@ This residual risk needs independent security review before production acceptanc
   and installed-device acceptance remain NOT_TESTED/incomplete.
 - #165 remains OPEN and PR166 DRAFT. PR167 branch is unmodified; #152/#161 code,
   runtime settings, signing material, phone session and main were not changed.
+
+## Follow-up after the first native test
+
+- Candidate6ddcba8f Security40186706035 SUCCESS; UI40186706028 FAIL, native
+  EditText direct fixture reported no focused editable node (12/13 tests passed).
+  Explicitly request/verify focus after view attachment and await actual native
+  FOCUS_INPUT publication; no success assertion or production guard was weakened.
+- Source review found Paste target lookup incorrectly required SET_TEXT via the
+  shared finder. Parameterize the advertised required action; Paste now asks only
+  for PASTE. Added a focused-Paste-only regression. Direct/Enter default is unchanged.
+- Remove old screen-label diagnostics and type-payload previews from formatter output.
+  Existing mismatch/target-format regressions assert redacted output.
+- First integrated source27a90a82 JVM artifact SHA256
+  4c3a4bdefaa65c22ff83b5400ddb1779fadc64ddd62fb466e81179cf34d24a38
+  independently matched and raw XML parsed:2842 tests, failure/error/skipped0.
+  Those are that source's results; the latest follow-up still needs its own CI.

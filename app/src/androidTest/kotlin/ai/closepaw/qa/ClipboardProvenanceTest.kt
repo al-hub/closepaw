@@ -26,11 +26,20 @@ class ClipboardProvenanceTest {
     @Test fun nativeDirectAndPastePrimitivesInsertExactMixedText() {
         lateinit var editor: EditText
         compose.setContent { AndroidView(factory = { context -> EditText(context).also {
-            editor = it; it.setSingleLine(true); it.requestFocus()
+            editor = it; it.setSingleLine(true); it.isFocusableInTouchMode = true
+            it.importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            it.showSoftInputOnFocus = false
         } }) }
         compose.waitForIdle()
+        compose.runOnIdle { assertTrue("Attached editor must own input focus", editor.requestFocusFromTouch()); assertTrue(editor.hasFocus()) }
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         automation.waitForIdle(500, 5_000)
+        compose.waitUntil(timeoutMillis = 5_000) {
+            val root = automation.rootInActiveWindow
+            val focused = root?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
+            try { focused?.isEditable == true && focused.isFocused }
+            finally { if (focused !== root) focused?.recycle(); root?.recycle() }
+        }
         val performer = NodeActionPerformer({ automation.rootInActiveWindow })
         val direct = runBlocking { performer.performSetTextOnFocused("한글 A1!", clear = true) }
         assertTrue(direct.toString(), direct is ActionResult.Success)

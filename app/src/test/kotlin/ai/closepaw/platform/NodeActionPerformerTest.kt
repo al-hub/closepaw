@@ -106,7 +106,7 @@ class NodeActionPerformerTest {
     fun `paste dispatches exactly once only for eligible focused editable node`() = runTest {
         val root = mockk<AccessibilityNodeInfo>(relaxed = true)
         val focused = mockk<AccessibilityNodeInfo>(relaxed = true)
-        every { AccessibilityNodeFinder.findFocusedEditableNode(root) } returns focused
+        every { AccessibilityNodeFinder.findFocusedEditableNode(root, AccessibilityNodeInfo.ACTION_PASTE) } returns focused
         every { focused.isEditable } returns true
         every { focused.isPassword } returns false
         every { focused.isFocused } returns true
@@ -126,7 +126,7 @@ class NodeActionPerformerTest {
         for (password in listOf(true, false)) {
             val root = mockk<AccessibilityNodeInfo>(relaxed = true)
             val focused = mockk<AccessibilityNodeInfo>(relaxed = true)
-            every { AccessibilityNodeFinder.findFocusedEditableNode(root) } returns focused
+            every { AccessibilityNodeFinder.findFocusedEditableNode(root, AccessibilityNodeInfo.ACTION_PASTE) } returns focused
             every { focused.isEditable } returns true
             every { focused.isPassword } returns password
             every { focused.isFocused } returns true
@@ -353,6 +353,8 @@ class NodeActionPerformerTest {
 
         assertThat(result).isInstanceOf(ActionResult.Failure::class.java)
         assertThat((result as ActionResult.Failure).reason).contains("mismatch")
+        assertThat(result.reason).doesNotContain("Downloads")
+        assertThat(result.reason).doesNotContain("Show roots")
         verify(exactly = 0) { node.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
     }
 
