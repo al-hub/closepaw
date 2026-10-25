@@ -327,4 +327,44 @@ class GenericControlOperationsTest {
         } finally { file.delete() }
     }
 
+
+    @Test fun newInputActionsNeverActivateLegacyIdleSessions() = runBlocking {
+        for (action in listOf("input", "focus", "key")) {
+            val session = ControlSession()
+            val port = Port().apply { controlSession = session }
+            val result = registry(port).get(GenericControlOperations.ACTION)!!.handler.invoke(
+                OperationInvocation("explicit-required", buildJsonObject { put("action", action) }))
+            assertFalse(result.success)
+            assertEquals("explicit_active_session_required", result.summary)
+            assertEquals(ControlSession.State.IDLE, session.state)
+            assertEquals(0, port.writes); assertTrue(port.activity.isEmpty())
+        }
+    }
+
+    @Test fun newInputActionsRequireExactExplicitActiveSession() = runBlocking {
+        for (state in listOf("legacy", "paused", "ended", "waiting", "reobserving", "wrong-id", "explicit")) {
+            val session = ControlSession().apply {
+                if (state == "legacy") activateLegacy() else start()
+                when (state) {
+                    "paused" -> pause()
+                    "ended" -> end()
+                    "waiting" -> waitForUser()
+                    "reobserving" -> { pause(); beginResume() }
+                }
+            }
+            for (action in listOf("input", "focus", "key")) {
+                val port = Port().apply { controlSession = session }
+                val input = buildJsonObject { put("action", action); put("session_id", if (state == "wrong-id") "wrong" else session.id) }
+                val result = registry(port).get(GenericControlOperations.ACTION)!!.handler.invoke(OperationInvocation("session-test", input))
+                assertFalse(result.success)
+                assertEquals(when (state) {
+                    "wrong-id" -> "control_session_id_mismatch"
+                    "explicit" -> "observation_required" // admission succeeded; still needs single-use observation
+                    else -> "explicit_active_session_required"
+                }, result.summary)
+                assertEquals(0, port.writes)
+                if (state !in setOf("explicit")) assertTrue(port.activity.isEmpty())
+            }
+        }
+    }
 }

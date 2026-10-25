@@ -68,8 +68,8 @@ class NodeActionPerformerTest {
         val performer = NodeActionPerformer(rootProvider = { root })
         val result = performer.performSetTextOnNodeAt(1, 2, "hello", clear = true)
 
-        assertThat(result).isEqualTo(ActionResult.Success("Text entered: hello"))
-        verify(exactly = 2) { node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, any()) }
+        assertThat(result).isEqualTo(ActionResult.Success("Text entered"))
+        verify(exactly = 1) { node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, any()) }
         verify(exactly = 0) { node.performAction(AccessibilityNodeInfo.ACTION_CLEAR_FOCUS) }
         verify(exactly = 1) { node.recycle() }
         verify(exactly = 1) { root.recycle() }
@@ -90,9 +90,51 @@ class NodeActionPerformerTest {
         val result = performer.performSetTextOnNodeAt(5, 10, "27", clear = false)
 
         assertThat(result).isInstanceOf(ActionResult.Failure::class.java)
-        assertThat((result as ActionResult.Failure).reason).contains("value did not change")
+        assertThat((result as ActionResult.Failure).reason).contains("value did not match requested update")
         verify(exactly = 1) { node.recycle() }
         verify(exactly = 1) { root.recycle() }
+    }
+
+    @Test
+    fun `paste without authorization never fetches root`() = runTest {
+        val performer = NodeActionPerformer(rootProvider = { error("root must not be accessed") })
+        assertThat(performer.performPasteOnFocused(false))
+            .isEqualTo(ActionResult.Failure("Paste not authorized"))
+    }
+
+    @Test
+    fun `paste dispatches exactly once only for eligible focused editable node`() = runTest {
+        val root = mockk<AccessibilityNodeInfo>(relaxed = true)
+        val focused = mockk<AccessibilityNodeInfo>(relaxed = true)
+        every { AccessibilityNodeFinder.findFocusedEditableNode(root, AccessibilityNodeInfo.ACTION_PASTE) } returns focused
+        every { focused.isEditable } returns true
+        every { focused.isPassword } returns false
+        every { focused.isFocused } returns true
+        val pasteAction = mockk<AccessibilityNodeInfo.AccessibilityAction>()
+        every { pasteAction.id } returns AccessibilityNodeInfo.ACTION_PASTE
+        every { focused.actionList } returns listOf(pasteAction)
+        every { focused.performAction(AccessibilityNodeInfo.ACTION_PASTE) } returns true
+        val result = NodeActionPerformer(rootProvider = { root }).performPasteOnFocused(true)
+        assertThat(result).isEqualTo(ActionResult.Success("Paste action dispatched; effect unverified"))
+        verify(exactly = 1) { focused.performAction(AccessibilityNodeInfo.ACTION_PASTE) }
+        verify(exactly = 1) { focused.recycle() }
+        verify(exactly = 1) { root.recycle() }
+    }
+
+    @Test
+    fun `paste refuses password and unsupported targets without action`() = runTest {
+        for (password in listOf(true, false)) {
+            val root = mockk<AccessibilityNodeInfo>(relaxed = true)
+            val focused = mockk<AccessibilityNodeInfo>(relaxed = true)
+            every { AccessibilityNodeFinder.findFocusedEditableNode(root, AccessibilityNodeInfo.ACTION_PASTE) } returns focused
+            every { focused.isEditable } returns true
+            every { focused.isPassword } returns password
+            every { focused.isFocused } returns true
+            every { focused.actionList } returns emptyList()
+            val result = NodeActionPerformer(rootProvider = { root }).performPasteOnFocused(true)
+            assertThat(result).isInstanceOf(ActionResult.Failure::class.java)
+            verify(exactly = 0) { focused.performAction(AccessibilityNodeInfo.ACTION_PASTE) }
+        }
     }
 
     @Test
@@ -311,6 +353,8 @@ class NodeActionPerformerTest {
 
         assertThat(result).isInstanceOf(ActionResult.Failure::class.java)
         assertThat((result as ActionResult.Failure).reason).contains("mismatch")
+        assertThat(result.reason).doesNotContain("Downloads")
+        assertThat(result.reason).doesNotContain("Show roots")
         verify(exactly = 0) { node.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
     }
 
@@ -391,7 +435,7 @@ class NodeActionPerformerTest {
         val result = performer.performSetTextOnNodeAt(100, 200, "Ultimate Fails Series", clear = false)
 
         // With the fix, existing="" so combined="Ultimate Fails Series" — matches post-verification
-        assertThat(result).isEqualTo(ActionResult.Success("Text entered: Ultimate Fails Series"))
+        assertThat(result).isEqualTo(ActionResult.Success("Text entered"))
     }
 
     @Test
@@ -415,7 +459,7 @@ class NodeActionPerformerTest {
         val performer = NodeActionPerformer(rootProvider = { root })
         val result = performer.performSetTextOnNodeAt(100, 200, "World", clear = false)
 
-        assertThat(result).isEqualTo(ActionResult.Success("Text entered: World"))
+        assertThat(result).isEqualTo(ActionResult.Success("Text entered"))
     }
 
     @Test
@@ -433,7 +477,7 @@ class NodeActionPerformerTest {
         val performer = NodeActionPerformer(rootProvider = { root })
         val result = performer.performSetTextOnNodeAt(100, 200, "My Playlist", clear = true)
 
-        assertThat(result).isEqualTo(ActionResult.Success("Text entered: My Playlist"))
+        assertThat(result).isEqualTo(ActionResult.Success("Text entered"))
     }
 
     @Test
@@ -457,7 +501,7 @@ class NodeActionPerformerTest {
         val performer = NodeActionPerformer(rootProvider = { root })
         val result = performer.performSetTextOnNodeAt(100, 200, "typed text", clear = false)
 
-        assertThat(result).isEqualTo(ActionResult.Success("Text entered: typed text"))
+        assertThat(result).isEqualTo(ActionResult.Success("Text entered"))
     }
 
     @Test

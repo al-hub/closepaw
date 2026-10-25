@@ -82,31 +82,31 @@ object AccessibilityNodeFinder {
     /**
      * Find a focused editable node in the tree. Used when typing into the currently focused field.
      */
-    fun findFocusedEditableNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+    fun findFocusedEditableNode(root: AccessibilityNodeInfo, requiredAction: Int = AccessibilityNodeInfo.ACTION_SET_TEXT): AccessibilityNodeInfo? {
         // First, try to find the input-focused node
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
         if (focused != null) {
             // Check if it supports text input
-            if (focused.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT }) {
+            if (focused.actionList.any { it.id == requiredAction }) {
                 return focused
             }
             focused.recycleCompat()
         }
 
         // Fallback: DFS for any editable node that has focus
-        return findEditableWithFocus(root)
+        return findEditableWithFocus(root, requiredAction)
     }
 
     /** DFS to find an editable node with focus. */
-    private fun findEditableWithFocus(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        if (node.isFocused && node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT }
+    private fun findEditableWithFocus(node: AccessibilityNodeInfo, requiredAction: Int): AccessibilityNodeInfo? {
+        if (node.isFocused && node.actionList.any { it.id == requiredAction }
         ) {
             return node
         }
 
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            val result = findEditableWithFocus(child)
+            val result = findEditableWithFocus(child, requiredAction)
             if (result != null) {
                 if (result !== child) child.recycleCompat()
                 return result

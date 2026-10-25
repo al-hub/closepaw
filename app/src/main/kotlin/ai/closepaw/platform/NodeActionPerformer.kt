@@ -140,6 +140,54 @@ class NodeActionPerformer(
         }
     }
 
+    /**
+     * Execute the framework Paste action on an already focused editable node.
+     * This method never writes or reads the system clipboard. The caller must
+     * separately verify consent, foreground window, clipboard provenance and
+     * target freshness before calling it. No gesture fallback or retries.
+     */
+    /** Read-only eligibility probe before overwriting the user's clipboard. */
+    suspend fun canPasteOnFocused(): Boolean = onMain {
+        val root = rootProvider() ?: return@onMain false
+        try {
+            val node = AccessibilityNodeFinder.findFocusedEditableNode(root, AccessibilityNodeInfo.ACTION_PASTE)
+                ?: return@onMain false
+            try {
+                node.isEditable && !node.isPassword && node.isFocused &&
+                    node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_PASTE }
+            } finally {
+                if (node !== root) node.recycleCompat()
+            }
+        } finally {
+            root.recycleCompat()
+        }
+    }
+
+    suspend fun performPasteOnFocused(authorized: Boolean): ActionResult {
+        if (!authorized) return ActionResult.Failure("Paste not authorized")
+        return onMain {
+            withRoot { root ->
+                val node = AccessibilityNodeFinder.findFocusedEditableNode(root, AccessibilityNodeInfo.ACTION_PASTE)
+                    ?: return@withRoot ActionResult.Failure("No focused editable node for Paste")
+                try {
+                    if (!node.isEditable || node.isPassword || !node.isFocused) {
+                        return@withRoot ActionResult.Failure("Paste target not eligible")
+                    }
+                    if (node.actionList.none { it.id == AccessibilityNodeInfo.ACTION_PASTE }) {
+                        return@withRoot ActionResult.Failure("Paste unsupported by target")
+                    }
+                    if (node.performAction(AccessibilityNodeInfo.ACTION_PASTE)) {
+                        ActionResult.Success("Paste action dispatched; effect unverified")
+                    } else {
+                        ActionResult.Failure("Paste outcome unknown; do not replay")
+                    }
+                } finally {
+                    if (node !== root) node.recycleCompat()
+                }
+            }
+        }
+    }
+
     @Suppress("DEPRECATION")
     suspend fun performEnterKey(): ActionResult {
         return onMain {
@@ -182,15 +230,8 @@ class NodeActionPerformer(
     private fun setTextOnNode(node: AccessibilityNodeInfo, text: String, clear: Boolean): ActionResult {
         val combined: String
         if (clear) {
-            // clear=true: replace entire field content
-            val clearArgs =
-                    Bundle().apply {
-                        putCharSequence(
-                                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
-                                ""
-                        )
-                    }
-            node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, clearArgs)
+            // ACTION_SET_TEXT replaces the content atomically from the caller's perspective.
+            // Clearing first can destroy the original text even if the next write fails.
             combined = text
         } else {
             // clear=false: insert text at cursor position, preserving existing content
@@ -236,16 +277,17 @@ class NodeActionPerformer(
         // (e.g., NumberPicker EditText accepts setText but doesn't commit the value).
         if (node.refresh()) {
             val actualText = node.text?.toString() ?: ""
-            if (actualText != combined && !actualText.contains(text)) {
+            if (actualText != combined) {
                 return ActionResult.Failure(
-                        "Type action failed: value did not change to '$text' " +
-                                "(actual: '$actualText'). This field may be read-only or a " +
-                                "NumberPicker. Try scroll gestures or a different approach."
+                        "Type action failed: value did not match requested update. " +
+                                "This field may be read-only or a NumberPicker."
                 )
             }
+        } else {
+            return ActionResult.Failure("Text effect unknown; target refresh failed")
         }
 
-        return ActionResult.Success("Text entered: $text")
+        return ActionResult.Success("Text entered")
     }
 
     private inline fun withRoot(block: (AccessibilityNodeInfo) -> ActionResult): ActionResult {
@@ -257,7 +299,7 @@ class NodeActionPerformer(
         }
     }
 
-    private suspend inline fun onMain(crossinline block: () -> ActionResult): ActionResult {
+    private suspend inline fun <T> onMain(crossinline block: () -> T): T {
         return withContext(Dispatchers.Main) { block() }
     }
 
@@ -292,20 +334,14 @@ class NodeActionPerformer(
         val matches = boundsMatch || identityMatch
         val tag = if (matches) "MATCH" else "MISMATCH"
 
-        Log.d(TAG, "$actionLabel target=($x,$y) " +
-                "intended=[id=${hint.resourceId} text=${hint.text} desc=${hint.description} " +
-                "class=${hint.className} bounds=${hint.bounds}] " +
-                "found=[id=$foundId text=$foundText desc=$foundDesc " +
-                "class=$foundClass bounds=[${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}]] " +
-                "→ $tag")
+        // Labels can contain a draft or private screen data. Log only structural verdicts.
+        Log.d(TAG, "$actionLabel target=($x,$y) bounds_match=$boundsMatch identity_match=$identityMatch verdict=$tag")
 
         return if (matches) {
             null // proceed with click
         } else {
             ActionResult.Failure(
-                "Node identity mismatch at ($x,$y): " +
-                    "intended=[${hint.text.ifBlank { hint.description }}] " +
-                    "found=[$foundText]"
+                "Node identity mismatch at ($x,$y)"
             )
         }
     }

@@ -284,6 +284,10 @@ class ToolRouter(
         val executionResult = try {
             val execContext = object : ToolExecutionContext {
                 override val callId: String = resolvedCallId
+                override val approvedPackageName: String? = packageName
+                override val terminalInputApproved: Boolean = approvalWasRequired && params.optBoolean("terminal_input_authorized", false)
+                override val clipboardReplacementApproved: Boolean = approvalWasRequired &&
+                    params.optBoolean("clipboard_consent", false) && params.optBoolean("clipboard_replace_authorized", false)
                 override val platform: AndroidPlatform = context.platform
                 override val currentSnapshot: ScreenSnapshot? = executionSnapshot
                 override val appClassifier: AppClassifier = policyEngine.appClassifier

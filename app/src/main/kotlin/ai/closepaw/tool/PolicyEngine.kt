@@ -76,6 +76,14 @@ class PolicyEngine(
             return PolicyDecision.Deny("Blocked: financial/auth app ($packageName)")
         }
 
+        if (tool == ToolName.MobileAction && params.optString("action") == "type" && params.optBoolean("terminal_input_authorized", false))
+            return PolicyDecision.AskUser("Commit text to the observed terminal without Enter; verify visible echo", effectiveTier)
+        if (tool == ToolName.MobileAction && params.optString("action") == "type" &&
+            params.has("input_method") && params.optString("input_method") in setOf("auto", "clipboard") &&
+            params.optBoolean("clipboard_consent", false) && params.optBoolean("clipboard_replace_authorized", false)) {
+            return PolicyDecision.AskUser("This input replaces the clipboard without automatic restoration", effectiveTier)
+        }
+
         // 4. browser_script mutates the user's real Chrome profile through CDP. Chrome is a NORMAL
         //    app, but the browser runtime needs its own SMART-mode approval rule and must not be
         //    bypassed by a NORMAL user override or the session allow-list.

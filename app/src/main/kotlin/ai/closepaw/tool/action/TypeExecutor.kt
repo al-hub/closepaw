@@ -26,6 +26,19 @@ import kotlinx.coroutines.delay
 class TypeExecutor(
     private val targetResolver: TargetResolver = TargetResolver
 ) {
+    /** Shared observed-input dispatch for the remote control adapter. Each channel callback
+     * owns native freshness/consent checks and exact effect verification. Selecting support
+     * is not an attempted write: once dispatched, even a false/unknown result is returned
+     * unchanged and never causes another channel to execute. */
+    internal suspend fun <R> executeObservedInput(
+        evidence: UnifiedTextInputPolicy.Evidence,
+        dispatch: suspend (UnifiedTextInputPolicy.Channel) -> R,
+        denied: () -> R
+    ): R {
+        val channel = UnifiedTextInputPolicy.first(evidence) ?: return denied()
+        return dispatch(channel)
+    }
+
     companion object {
         private const val FOCUS_DELAY_MS = 150L
         private const val UI_SETTLE_DELAY_MS = 300L
@@ -41,6 +54,7 @@ class TypeExecutor(
         appClassifier: AppClassifier? = null
     ): ActionOutcome {
         val attemptTrail = mutableListOf<String>()
+        if (isCancelled()) return ActionOutcome.Cancelled("Cancelled before type")
 
         if (target == null) {
             return typeOnFocused(inputText, clear, snapshot, platform, attemptTrail, appClassifier)
@@ -123,7 +137,17 @@ class TypeExecutor(
         if (directResult is ActionResult.Cancelled) {
             return ActionOutcome.Cancelled("Type at (${point.x},${point.y}) cancelled: ${directResult.reason}")
         }
-        attemptTrail.add("SetTextOnNodeAt: ${(directResult as? ActionResult.Failure)?.reason ?: "failed"}")
+        val directFailure = (directResult as? ActionResult.Failure)?.reason
+        // A platform failure can occur after the text was partially applied. Never
+        // select another input channel unless non-execution is established.
+        if (TextInputFallbackGate.afterDirectSetFailure(directFailure) !=
+            TextInputFallbackGate.Decision.NEXT_CHANNEL) {
+            return ActionOutcome.Failed(
+                reason = "Direct text effect unknown; stopped without replay",
+                attemptTrail = attemptTrail + "SetTextOnNodeAt: outcome_unknown"
+            )
+        }
+        attemptTrail.add("SetTextOnNodeAt: not_executed")
 
         if (isCancelled()) return ActionOutcome.Cancelled("Cancelled between type attempts")
 

@@ -5,6 +5,9 @@ import ai.closepaw.chatgpt.AndroidGeminiDraftUi
 import ai.closepaw.chatgpt.GeminiDraftComposerPolicy
 import ai.closepaw.chatgpt.GeminiReadIdentity
 import ai.closepaw.chatgpt.operations.operationHash
+import ai.closepaw.platform.OwnedClipboardLease
+import android.content.ClipboardManager
+import kotlinx.coroutines.ensureActive
 import ai.closepaw.platform.AccessibilityPlatform
 import ai.closepaw.platform.ActionResult
 import ai.closepaw.platform.SystemButtonType
@@ -17,6 +20,9 @@ import ai.closepaw.util.recycleCompat
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.app.KeyguardManager
+import android.content.ComponentName
+import android.provider.Settings
+import android.view.inputmethod.InputMethodManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
@@ -40,30 +46,31 @@ import kotlin.coroutines.resume
 
 /** Native adapter: semantic targets only; explicit guarded node tap, never automatic gesture fallback. */
 internal class AndroidControlPort(context: Context, private val mutationBlock: (String) -> String? = { null },
-    private val runtime: RuntimeControlSettings? = null, private val allowed: () -> Boolean) : ControlPort {
+    private val runtime: RuntimeControlSettings? = null, private val localAuthority: LocalInputAuthority? = null, private val allowed: () -> Boolean) : ControlPort {
     override val validatesAtNativeBoundary = true
     override fun islandRefusal(sessionId: String): String? {
         val service = AgentService.instance ?: return "accessibility_permission_missing"
-        val session = service.remoteControlSession
+        val session = sessionFor(service)
         if (!session.explicit || session.state != ControlSession.State.ACTIVE) return "explicit_active_session_required"
         session.refusal(sessionId, mutation = true)?.let { return it }
         return reason(service)
     }
     override suspend fun observeIsland(): IslandBounds? = withContext(Dispatchers.Main) {
         val service = AgentService.instance ?: return@withContext null
-        if (islandRefusal(service.remoteControlSession.id) != null) return@withContext null
+        if (islandRefusal(sessionFor(service).id) != null) return@withContext null
         service.observedIsland()
     }
     override suspend fun dragIsland(before: IslandBounds, dx: Int, dy: Int, holdMs: Long, moveMs: Long, sessionId: String): Boolean =
         withContext(Dispatchers.Main) {
             val service = AgentService.instance ?: return@withContext false
-            val epoch = service.remoteControlSession.epoch
+            val epoch = sessionFor(service).epoch
             if (islandRefusal(sessionId) != null) return@withContext false
             service.dragIsland(before, dx, dy, holdMs, moveMs) {
-                AgentService.instance === service && service.remoteControlSession.epoch == epoch && islandRefusal(sessionId) == null
+                AgentService.instance === service && sessionFor(service).epoch == epoch && islandRefusal(sessionId) == null
             }
         }
-    override fun session() = AgentService.instance?.remoteControlSession
+    private fun sessionFor(service: AgentService): ControlSession = localAuthority?.session ?: service.remoteControlSession
+    override fun session() = AgentService.instance?.let(::sessionFor)
     override fun bindResume(check: suspend () -> Boolean) { AgentService.instance?.remoteResumeCheck = check }
     override suspend fun feedback(label: String) { withContext(Dispatchers.Main) { session()?.feedback(label) } }
     override suspend fun feedbackAtEpoch(label: String, expectedEpoch: Long?) {
@@ -118,9 +125,30 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
     }
     private fun controlledWindows(service: AgentService, foreground: Int, pkg: String,
-        windows: List<AccessibilityWindowInfo>) = controlWindows(foreground, pkg, windows.filterNot {
+        windows: List<AccessibilityWindowInfo>): NativeControlWindows {
+        val selected = controlWindows(foreground, pkg, windows.filterNot {
             it.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY && service.ownsRemoteControlIndicatorWindow(it.id)
         })
+        if (selected.selection.reason != null) return selected
+        fun refuse() = selected.copy(selection = selected.selection.copy(reason = "input_method_unverified"))
+        val keyboards = windows.filter { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+        if (keyboards.isEmpty()) return selected
+        if (keyboards.size != 1) return refuse()
+        val window = keyboards.single()
+        if (window.displayId != android.view.Display.DEFAULT_DISPLAY || window.isInPictureInPictureMode) return refuse()
+        val id = Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) ?: return refuse()
+        val component = ComponentName.unflattenFromString(id) ?: return refuse()
+        val inputMethod = context.getSystemService(InputMethodManager::class.java).enabledInputMethodList
+            .singleOrNull { it.id == id && it.packageName == component.packageName } ?: return refuse()
+        val root = window.root ?: return refuse()
+        val owned = try { root.windowId == window.id && root.packageName?.toString() == inputMethod.packageName }
+            finally { root.recycleCompat() }
+        if (!owned) return refuse()
+        val keyboard = ControlKeyboard(window.id, inputMethod.packageName, id,
+            readAllowed = packageAllowed(inputMethod.packageName, operation = "read"),
+            interactAllowed = packageAllowed(inputMethod.packageName, operation = "interact"))
+        return selected.copy(signature = operationHash(selected.signature + "\n" + keyboard.toString()), keyboard = keyboard)
+    }
     private val context = context.applicationContext
     private val classifier = AppClassifierHolder.get(this.context)
     private val appCatalog = AndroidAppCatalog(this.context.packageManager) { pkg ->
@@ -134,15 +162,18 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private var windowDiagnostics: JsonObject? = null
     private val probeThrottle = ScreenProbeThrottle({ SystemClock.elapsedRealtime() })
     override fun clearSelections() { appSelections.clear() }
+    override fun visualDisclosureAllowed(frame: ControlFrame): Boolean = reason(AgentService.instance) == null &&
+        packageAllowed(frame.packageName, operation = "read") && (runtime?.snapshot()?.revision ?: 0L) == frame.configurationRevision
     override fun invalidate() { probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
     private fun reason(service: AgentService?): String? = when {
+        localAuthority?.refusal() != null -> localAuthority?.refusal()
         !allowed() -> "generic_control_disabled"
         session()?.refusal(session()?.id) != null -> session()?.refusal(session()?.id)
         service == null -> "accessibility_permission_missing"
         AgentService.instance !== service -> "accessibility_service_changed"
         context.getSystemService(KeyguardManager::class.java).isKeyguardLocked ||
             !context.getSystemService(PowerManager::class.java).isInteractive -> "device_locked"
-        service.getActiveSession()?.state?.value in setOf(SessionState.Running, SessionState.TakeoverPending) -> "local_agent_busy"
+        localAuthority == null && service.getActiveSession()?.state?.value in setOf(SessionState.Running, SessionState.TakeoverPending) -> "local_agent_busy"
         else -> null
     }
     private fun denied(code: String, diagnostics: JsonObject? = null) = ControlFrame("", -1, "", emptyList(), reason = code, windowDiagnostics = diagnostics)
@@ -206,6 +237,21 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 })
         }
     }
+    override suspend fun visual(frame: ControlFrame): VisualTargetProof? {
+        if (frame.reason != null || frame.truncated || frame.touchContext.isEmpty()) return null
+        val service = AgentService.instance ?: return null
+        if (islandRefusal(sessionFor(service).id) != null) return null
+        val bounds = withContext(Dispatchers.Main) {
+            val windows = service.windows.orEmpty()
+            try { windows.singleOrNull { it.id == frame.windowId }?.let { bounds(windowBounds(it)) } }
+            finally { windows.forEach { runCatching { it.recycle() } } }
+        } ?: return null
+        probeThrottle.awaitSlot()
+        val proof = WindowVisualCapture.capture(service, frame.windowId, bounds, frame.touchContext) ?: return null
+        val after = capture()
+        return proof.takeIf { GenericControlActionPolicy.refusal(frame, after, "visual_tap") == null }
+    }
+
     private suspend fun secureWindow(service: AgentService): String? = controlSpan("security_probe") { secureWindowChecked(service) }
     private suspend fun secureWindowChecked(service: AgentService): String? {
         certifiedWindows = null
@@ -221,7 +267,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         windowDiagnostics = selected.diagnostics
         selected.selection.reason?.let { return it }
         // Every included root gets a NEW security verdict; no previous capture's verdict is reused.
-        for (id in selected.selection.members) {
+        for (id in (selected.selection.members + listOfNotNull(selected.keyboard?.takeIf { it.readAllowed }?.windowId))) {
             var failure = probeWindow(service, id)
             // A read-only API rate-limit refusal can follow another adapter's screenshot.
             // Retry only that explicit refusal, once, with API spacing and a NEW verdict.
@@ -246,7 +292,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             suspendCancellableCoroutine<String?> { continuation ->
                 continuation.invokeOnCancellation { mark(ControlTiming.Event.PROBE_CANCELLED) }
                 try {
-                    service.remoteControlSession.feedback("보안 확인용 화면 캡처 중")
+                    sessionFor(service).feedback("보안 확인용 화면 캡처 중")
                     mark(ControlTiming.Event.PROBE_DISPATCH)
                     service.takeScreenshotOfWindow(id, service.mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
                         override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
@@ -293,7 +339,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val scanStarted = SystemClock.elapsedRealtime()
             val nodes = mutableListOf<ControlNode>()
             val native = mutableListOf<AccessibilityNodeInfo>()
+            val terminalBinding = try { TerminalInputBinding.capture(service) } catch (_: Exception) { null }
             val identity = StringBuilder("configuration=$revision\n").append(selected.signature).append('\n')
+            terminalBinding?.let { identity.append("input_generation=${it.generation}:${it.fieldId}\n") }
             var truncated = false
             var protected = false
             var gemini = false
@@ -301,7 +349,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             var visited = 0
             var deepest = 0
             val truncationReasons = linkedSetOf<String>()
-            fun visit(node: AccessibilityNodeInfo, depth: Int, parent: Int, expose: Boolean) {
+            fun visit(node: AccessibilityNodeInfo, depth: Int, parent: Int, expose: Boolean, keyboard: Boolean = false) {
                 deepest = maxOf(deepest, depth)
                 if (depth > 64 || visited >= nodeBudget || SystemClock.elapsedRealtime() - scanStarted > 2500) {
                     truncated = true
@@ -314,23 +362,26 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val description = node.contentDescription?.toString().orEmpty()
                 val resource = node.viewIdResourceName.orEmpty()
                 val hint = node.hintText?.toString().orEmpty()
+                val key = if (keyboard) KeyboardKeyPolicy.identify(text, description, node.className?.toString().orEmpty(),
+                    node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, node.isTextEntryKey) else null
                 if (node.isVisibleToUser && node.packageName?.toString() == pkg) shellIds.add(resource)
                 val sensitiveId = resource.substringAfterLast('/').lowercase()
                 if (node.isPassword || (Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive) ||
                     listOf("password", "credential", "biometric", "lock_settings", "pin_entry", "otp", "permission_allow").any { sensitiveId.contains(it) }) protected = true
-                if (GeminiDraftComposerPolicy.isComposer(hint, description, resource.substringAfterLast('/'), true) && node.isEditable) gemini = true
+                if (!keyboard && GeminiDraftComposerPolicy.isComposer(hint, description, resource.substringAfterLast('/'), true) && node.isEditable) gemini = true
                 val json = buildJsonObject {
                     put("id", index); put("parent", parent); put("pkg", node.packageName?.toString().orEmpty())
                     put("text_hash", operationHash(text)); put("description_hash", operationHash(description)); put("hint", operationHash(hint))
                     put("resource", resource); put("class", node.className?.toString().orEmpty()); put("bounds", rect.flattenToString())
-                    put("visible", node.isVisibleToUser); put("enabled", node.isEnabled); put("clickable", node.isClickable)
+                    put("text_entry_key", node.isTextEntryKey); put("visible", node.isVisibleToUser); put("enabled", node.isEnabled); put("clickable", node.isClickable)
                     put("long_clickable", node.isLongClickable); put("editable", node.isEditable); put("scrollable", node.isScrollable); put("password", node.isPassword)
+                    put("focused", node.isFocused); put("selection_start", node.textSelectionStart); put("selection_end", node.textSelectionEnd)
                     put("selected", node.isSelected); put("checkable", node.isCheckable); put("checked", node.isChecked)
                     put("child_count", node.childCount); put("actions", node.actionList.joinToString { it.id.toString() })
                 }
                 identity.append(json.toString()).append('\n')
-                if (expose && node.isVisibleToUser && !rect.isEmpty &&
-                    (text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable ||
+                if (expose && (!keyboard || key != null) && node.isVisibleToUser && !rect.isEmpty &&
+                    (text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable || node.isFocusable ||
                         node.actionList.any { it.id in setOf(AccessibilityNodeInfo.ACTION_CLICK, AccessibilityNodeInfo.ACTION_EXPAND, AccessibilityNodeInfo.ACTION_COLLAPSE) })) {
                     run {
                         nodes.add(ControlNode(index, if (node.isShowingHintText) "" else text.take(2001), description.take(100), resource.take(100),
@@ -338,7 +389,19 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                             node.isEnabled, node.isPassword, node.isShowingHintText || text.isEmpty(), rect.flattenToString(), parent, node.isLongClickable,
                             node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_EXPAND },
                             node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_COLLAPSE },
-                            node.className?.toString().orEmpty(), node.isSelected, node.isCheckable, node.isChecked))
+                            node.className?.toString().orEmpty(), node.isSelected, node.isCheckable, node.isChecked,
+                            focused = node.isFocused, selectionStart = node.textSelectionStart, selectionEnd = node.textSelectionEnd,
+                            setText = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT },
+                            paste = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_PASTE }, focusable = node.isFocusable,
+                            scrollDirections = node.actionList.mapNotNull { action -> when (action.id) {
+                                AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_UP.id -> "up"
+                                AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_DOWN.id -> "down"
+                                AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_LEFT.id -> "left"
+                                AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_RIGHT.id -> "right"
+                                else -> null
+                            } }.toSet(), sourceWindowId = node.windowId, sourcePackage = node.packageName?.toString().orEmpty(),
+                            keyboardKey = key?.label.orEmpty(), textEntryKey = node.isTextEntryKey,
+                            terminal = terminalBinding?.evidence(node)))
                         native.add(node)
                     }
                 }
@@ -349,7 +412,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     }
                     val child = node.getChild(i)
                     if (child == null) { truncated = true; truncationReasons.add("child_unavailable"); continue }
-                    owned.add(child); visit(child, depth + 1, index, expose)
+                    owned.add(child); visit(child, depth + 1, index, expose, keyboard)
                 }
             }
             var traversalFailure: String? = null
@@ -365,6 +428,15 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     if (member !== root) owned.add(member)
                     identity.append("window=").append(id).append('\n')
                     visit(member, 0, -1, id == selected.selection.target)
+                }
+                selected.keyboard?.takeIf { it.readAllowed }?.let { keyboard ->
+                    val member = windows.single { it.id == keyboard.windowId }.root
+                    if (member == null || member.windowId != keyboard.windowId || member.packageName?.toString() != keyboard.packageName) {
+                        member?.recycleCompat(); traversalFailure = "input_method_unverified"
+                    } else {
+                        owned.add(member); identity.append("keyboard=").append(keyboard.inputMethodId).append('\n')
+                        visit(member, 0, -1, true, true)
+                    }
                 }
                 operationHash(identity.toString())
             } }
@@ -390,11 +462,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 packageAllowed = packageAllowed(pkg), isGeminiHost = pkg == AndroidGeminiDraftUi.GOOGLE_HOST,
                 verifiedGemini = geminiIdentityVerified, readable = nodes.isNotEmpty(),
             ) ?: reason(service)
+            val inputTarget = nodes.filter { it.keyboardKey.isEmpty() && it.sourceWindowId == selected.selection.target &&
+                it.sourcePackage == pkg && it.editable && it.enabled && it.focused && it.focusable && !it.password }.singleOrNull()
             block(ControlFrame(pkg, window.id, fingerprint, nodes, code, truncated,
                 truncationReasons, visited, deepest, touchContext(service, window, windows), root.windowId,
                 selected.signature, selected.diagnostics, revision, outputLimit,
                 verifiedApplicationPackage = if (code == null && !truncated &&
-                    pkg == AndroidGeminiDraftUi.GOOGLE_HOST && geminiIdentityVerified) AndroidGeminiDraftUi.PACKAGE else null), native)
+                    pkg == AndroidGeminiDraftUi.GOOGLE_HOST && geminiIdentityVerified) AndroidGeminiDraftUi.PACKAGE else null,
+                keyboard = selected.keyboard, inputTargetId = inputTarget?.id, inputTarget = inputTarget), native)
         } finally {
             owned.forEach { it.recycleCompat() }
             windows.forEach { runCatching { it.recycle() } }
@@ -430,21 +505,22 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         }
         return operationHash(geometry.toString())
     }
-    private suspend fun tap(service: AgentService, frame: ControlFrame, targetBounds: Rect): ControlEffect {
+    private suspend fun tap(service: AgentService, frame: ControlFrame, targetBounds: Rect, targetWindowId: Int = frame.windowId, endBounds: Rect? = null, durationMs: Long = 50, finalGuard: () -> String? = { null }): ControlEffect {
         // Reacquire windows immediately before dispatch, while still on Main. No suspension between
         // these checks and dispatchGesture; the gesture has no caller-controlled coordinates.
+        val expectedEpoch = sessionFor(service).epoch
         val windows = service.windows.orEmpty()
         try {
             val root = service.rootInActiveWindow ?: return ControlEffect(false, false, "active_root_missing")
             val rootMatches = try { root.windowId == frame.foregroundWindowId && root.packageName?.toString() == frame.packageName }
                 finally { root.recycleCompat() }
             if (!rootMatches) return ControlEffect(false, false, "screen_changed")
-            val window = windows.singleOrNull { it.id == frame.windowId }
+            val window = windows.singleOrNull { it.id == targetWindowId }
                 ?: return ControlEffect(false, false, "touch_window_unavailable")
             val selected = controlledWindows(service, frame.foregroundWindowId, frame.packageName, windows)
             if (selected.selection.reason != null || selected.selection.target != frame.windowId ||
                 selected.signature != frame.windowContext || frame.touchContext.isEmpty() ||
-                touchContext(service, window, windows) != frame.touchContext)
+                touchContext(service, windows.single { it.id == frame.windowId }, windows) != frame.touchContext)
                 return ControlEffect(false, false, "touch_window_changed")
             val covering = windows.filter { it.id != window.id && it.displayId == window.displayId && it.layer >= window.layer &&
                 !(it.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY && service.ownsRemoteControlIndicatorWindow(it.id)) }
@@ -457,14 +533,38 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             session()?.refusal(session()?.id, mutation = true)?.let { return ControlEffect(false, false, it) }
             reason(service)?.let { return ControlEffect(false, false, it) }
             mutationBlock(frame.packageName)?.let { return ControlEffect(false, false, it) }
-            val path = Path().apply { moveTo(point.first.toFloat(), point.second.toFloat()) }
+            finalGuard()?.let { return ControlEffect(false, false, it) }
+            val end = endBounds?.let { NodeTapPolicy.point(bounds(it), bounds(windowBounds(window)), covering) }
+            if (endBounds != null && end == null) return ControlEffect(false, false, "gesture_end_unverified")
+            if (end != null) {
+                val steps = maxOf(kotlin.math.abs(end.first-point.first), kotlin.math.abs(end.second-point.second))
+                if (steps > 4096) return ControlEffect(false, false, "gesture_path_limit")
+                for (i in 0..maxOf(1, steps)) {
+                    val x = point.first + ((end.first-point.first).toLong()*i/maxOf(1,steps)).toInt()
+                    val y = point.second + ((end.second-point.second).toLong()*i/maxOf(1,steps)).toInt()
+                    if (!region.contains(x,y) || covering.any { it.contains(x,y) } || service.remoteControlCovers(Rect(x,y,x+1,y+1)))
+                        return ControlEffect(false, false, "gesture_path_covered")
+                }
+            }
+            val path = Path().apply { moveTo(point.first.toFloat(), point.second.toFloat()); end?.let { lineTo(it.first.toFloat(),it.second.toFloat()) } }
             val gesture = GestureDescription.Builder().setDisplayId(android.view.Display.DEFAULT_DISPLAY)
-                .addStroke(GestureDescription.StrokeDescription(path, 0, 50)).build()
-            val eventEpoch = service.remoteControlSession.epoch
+                .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs)).build()
+            val eventEpoch = expectedEpoch
             val timing = currentCoroutineContext()[ControlTiming]
             val gestureId = timing?.nextId() ?: 0
             val step = currentCoroutineContext()[ControlTrace]?.step ?: 0
             return suspendCancellableCoroutine { continuation ->
+                // Cancellation can arrive during final Binder reads. A cancelled continuation
+                // still enters this block, so guard INSIDE it before any OS side effect.
+                if (!continuation.isActive) return@suspendCancellableCoroutine
+                val finalRefusal = GestureDispatchGate.refusal(session(), expectedEpoch, continuation.isActive)
+                    ?: reason(service) ?: mutationBlock(frame.packageName)
+                    ?: if (!packageAllowed(frame.packageName, operation = "interact")) "runtime_interaction_not_allowed" else null
+                if (finalRefusal != null) {
+                    if (continuation.isActive) continuation.resume(ControlEffect(false, false, finalRefusal))
+                    return@suspendCancellableCoroutine
+                }
+                if (!continuation.isActive) return@suspendCancellableCoroutine
                 timing?.mark(ControlTiming.Event.GESTURE_DISPATCH, gestureId, step)
                 val submitted = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
                     override fun onCompleted(gestureDescription: GestureDescription?) {
@@ -476,7 +576,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         if (continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_cancelled"))
                     }
                 }, null)
-                if (submitted && service.remoteControlSession.epoch == eventEpoch)
+                if (submitted && sessionFor(service).epoch == eventEpoch)
                     service.showRemoteControlTap(targetBounds, point.first.toFloat(), point.second.toFloat())
                 // Even a negative dispatch acknowledgement is conservatively not replayable.
                 if (!submitted && continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_unconfirmed"))
@@ -485,9 +585,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     }
     override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
         val service = AgentService.instance ?: return ControlEffect(false, false, "accessibility_permission_missing")
-        val admittedEpoch = service.remoteControlSession.epoch
+        val admittedEpoch = sessionFor(service).epoch
         secureWindow(service)?.let { return ControlEffect(false, false, it) }
         val action = input.getValue("action").jsonPrimitive.content
+        if (action in setOf("input", "terminal_input", "terminal_submit", "focus", "key", "visual_tap", "visual_long_press", "visual_drag", "visual_scroll")) {
+            islandRefusal(input["session_id"]?.jsonPrimitive?.content.orEmpty())?.let {
+                return ControlEffect(false, false, it)
+            }
+        }
         // This is an explicitly planned region from the consumed observation, never a touch.
         // Yield a few frames for the intent cue, then run the full native validation below.
         // No node/effect is retained across this delay and no security check is bypassed.
@@ -508,7 +613,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
         }
         val effect = controlSpan("fresh_fingerprint_and_action") { withTree(service) { fresh, native ->
-            if (service.remoteControlSession.epoch != admittedEpoch)
+            if (sessionFor(service).epoch != admittedEpoch)
                 return@withTree ControlEffect(false, false, "control_session_changed_observe_again")
             val failure = GenericControlActionPolicy.refusal(frame, fresh, action)
             if (failure != null) {
@@ -547,14 +652,37 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
             if (!packageAllowed(fresh.packageName, operation = "interact"))
                 return@withTree ControlEffect(false, false, "runtime_interaction_not_allowed")
+            if (action.startsWith("visual_")) {
+                val proof = frame.visual ?: return@withTree ControlEffect(false, false, "visual_observation_required")
+                if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
+                    System.currentTimeMillis()-proof.at !in 0L..60_000L) return@withTree ControlEffect(false,false,"visual_proof_invalid_or_expired")
+                fun rect(prefix: String): Rect? {
+                    val a = input[prefix]?.jsonArray ?: return null
+                    if (a.size != 4) return null
+                    val numbers = a.map { it.jsonPrimitive.intOrNull ?: return null }
+                    val mapped = proof.map(TapBounds(numbers[0],numbers[1],numbers[2],numbers[3])) ?: return null
+                    return Rect(mapped.left,mapped.top,mapped.right,mapped.bottom)
+                }
+                val start = rect("image_rect") ?: return@withTree ControlEffect(false,false,"visual_target_bounds_invalid")
+                val end = if (action in setOf("visual_drag","visual_scroll")) rect("image_end_rect")
+                    ?: return@withTree ControlEffect(false,false,"visual_end_bounds_required") else null
+                val latest = visual(fresh) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
+                if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context)
+                    return@withTree ControlEffect(false,false,"visual_pixels_or_geometry_changed")
+                return@withTree tap(service, fresh, start, endBounds = end,
+                    durationMs = if (action == "visual_long_press") 650 else if (end != null) 450 else 50)
+            }
             val at = fresh.nodes.indexOfFirst { it.id == node?.id }
             val target = native.getOrNull(at) ?: return@withTree ControlEffect(false, false, "target_unavailable")
-            if (!target.refresh() || !target.isVisibleToUser || !target.isEnabled || target.isPassword || target.windowId != fresh.windowId || target.packageName?.toString() != fresh.packageName)
-                return@withTree ControlEffect(false, false, "target_changed")
             val expected = fresh.nodes[at]
+            val expectedWindow = if (action == "key") fresh.keyboard?.windowId ?: -1 else fresh.windowId
+            val expectedPackage = if (action == "key") fresh.keyboard?.packageName.orEmpty() else fresh.packageName
+            if (!target.refresh() || !target.isVisibleToUser || !target.isEnabled || target.isPassword || target.windowId != expectedWindow || target.packageName?.toString() != expectedPackage)
+                return@withTree ControlEffect(false, false, "target_changed")
             val rect = Rect(); target.getBoundsInScreen(rect)
             val currentText = if (target.isShowingHintText) "" else target.text?.toString().orEmpty().take(2001)
-            if (currentText != expected.text || target.contentDescription?.toString().orEmpty().take(100) != expected.description ||
+            if (currentText != expected.text || target.isFocused != expected.focused ||
+                target.textSelectionStart != expected.selectionStart || target.textSelectionEnd != expected.selectionEnd || target.contentDescription?.toString().orEmpty().take(100) != expected.description ||
                 target.viewIdResourceName.orEmpty().take(100) != expected.resourceId || rect.flattenToString() != expected.bounds ||
                 (Build.VERSION.SDK_INT >= 34 && target.isAccessibilityDataSensitive))
                 return@withTree ControlEffect(false, false, "target_changed")
@@ -563,12 +691,89 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             service.showRemoteControlTarget(rect)
             session()?.feedback(when (action) {
                 "scroll" -> "화면을 스크롤하고 있습니다"
-                "type" -> "입력란에 글자를 입력하고 있습니다"
+                "type", "input" -> "입력란에 글자를 입력하고 있습니다"
+                "focus" -> "입력란에 초점을 맞추고 있습니다"
                 "expand" -> "선택한 내용을 펼치고 있습니다"
                 "collapse" -> "선택한 내용을 접고 있습니다"
                 "long_press" -> "선택한 항목의 길게 누르기 기능을 실행합니다"
                 else -> "선택한 항목을 누르고 있습니다"
             }, admittedEpoch)
+            if (action in setOf("terminal_input", "terminal_submit")) {
+                val text = input["text"]?.jsonPrimitive?.content.orEmpty()
+                val refusal = if (action == "terminal_submit") TerminalInputPolicy.submitRefusal(expected,text,
+                    input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true, input["submit_authorized"]?.jsonPrimitive?.booleanOrNull == true, frame.terminalSubmission)
+                    else TerminalInputPolicy.refusal(expected,text,input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true)
+                refusal?.let {
+                    return@withTree ControlEffect(false, false, it)
+                }
+                val binding = TerminalInputBinding.capture(service)
+                    ?: return@withTree ControlEffect(false, false, "terminal_binding_unverified")
+                if (binding.evidence(target) != expected.terminal)
+                    return@withTree ControlEffect(false, false, "terminal_target_changed")
+                currentCoroutineContext().ensureActive()
+                reason(service)?.let { return@withTree ControlEffect(false, false, it) }
+                islandRefusal(input["session_id"]?.jsonPrimitive?.content.orEmpty())?.let { return@withTree ControlEffect(false, false, it) }
+                return@withTree try {
+                    binding.commit(if (action == "terminal_submit") "\n" else text)
+                    ControlEffect(true, true, "terminal_input_dispatched")
+                } catch (_: Exception) { ControlEffect(true, false, "terminal_input_unknown") }
+            }
+            if (action == "key") {
+                if (fresh.keyboard == null || !fresh.keyboard.readAllowed || !fresh.keyboard.interactAllowed || fresh.keyboard != frame.keyboard || fresh.inputTargetId == null ||
+                    fresh.inputTargetId != frame.inputTargetId || !target.isTextEntryKey || expected.keyboardKey.isEmpty())
+                    return@withTree ControlEffect(false, false, "keyboard_target_unverified")
+                val key = KeyboardKeyPolicy.identify(currentText, target.contentDescription?.toString().orEmpty(),
+                    target.className?.toString().orEmpty(), target.isClickable || target.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, target.isTextEntryKey)
+                    ?: return@withTree ControlEffect(false, false, "keyboard_key_unrecognized")
+                if (key.kind == KeyboardKeyPolicy.Kind.SUBMIT && input["submit_authorized"]?.jsonPrimitive?.booleanOrNull != true)
+                    return@withTree ControlEffect(false, false, "submission_authorization_required")
+                val field = fresh.inputTarget ?: return@withTree ControlEffect(false, false, "keyboard_target_unverified")
+                if (field.text.length > 2000 || InputPayloadPolicy.sensitive(field.text) || (field.editable && key.kind in setOf(
+                    KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE, KeyboardKeyPolicy.Kind.BACKSPACE) &&
+                    KeyboardKeyPolicy.expectedText(field, key) == null)) return@withTree ControlEffect(false, false, "sensitive_input_refused")
+                return@withTree tap(service, fresh, rect, fresh.keyboard.windowId) {
+                    // Reacquire the actual app input focus after the IME tree scan. Window/IME
+                    // stability alone cannot prove that a user did not select a different field.
+                    val appWindow = service.windows.orEmpty()
+                    var appRoot: AccessibilityNodeInfo? = null
+                    var focused: AccessibilityNodeInfo? = null
+                    try {
+                        appRoot = appWindow.singleOrNull { it.id == field.sourceWindowId }?.root
+                        focused = appRoot?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                        val live = focused
+                        val focusRefusal = if (live == null || !live.refresh() || !live.isVisibleToUser ||
+                            (Build.VERSION.SDK_INT >= 34 && live.isAccessibilityDataSensitive)) "keyboard_input_target_changed"
+                        else {
+                            val liveBounds = Rect(); live.getBoundsInScreen(liveBounds)
+                            KeyboardTargetPolicy.refusal(field, field.copy(
+                                text = if (live.isShowingHintText) "" else live.text?.toString().orEmpty().take(2001),
+                                resourceId = live.viewIdResourceName.orEmpty().take(100), className = live.className?.toString().orEmpty(),
+                                bounds = liveBounds.flattenToString(), enabled = live.isEnabled, focused = live.isFocused,
+                                focusable = live.isFocusable, editable = live.isEditable, password = live.isPassword,
+                                sourceWindowId = live.windowId, sourcePackage = live.packageName?.toString().orEmpty(),
+                                selectionStart = live.textSelectionStart, selectionEnd = live.textSelectionEnd))
+                        }
+                        if (focusRefusal != null) focusRefusal
+                        else {
+                            val latest = controlledWindows(service, fresh.foregroundWindowId, fresh.packageName, appWindow)
+                            val keyBounds = Rect()
+                            if (!target.refresh()) "keyboard_key_changed" else {
+                                target.getBoundsInScreen(keyBounds)
+                                if (latest.selection.reason != null || latest.signature != fresh.windowContext ||
+                                    latest.keyboard != fresh.keyboard || !target.isVisibleToUser || !target.isEnabled ||
+                                    !target.isTextEntryKey || target.isPassword || target.windowId != expectedWindow ||
+                                    target.packageName?.toString() != expectedPackage || keyBounds != rect ||
+                                    target.text?.toString().orEmpty() != expected.text ||
+                                    target.contentDescription?.toString().orEmpty().take(100) != expected.description ||
+                                    (Build.VERSION.SDK_INT >= 34 && target.isAccessibilityDataSensitive)) "keyboard_key_changed" else null
+                            }
+                        }
+                    } finally {
+                        if (focused !== appRoot) focused?.recycleCompat()
+                        appRoot?.recycleCompat(); appWindow.forEach { runCatching { it.recycle() } }
+                    }
+                }
+            }
             if (action == "tap") {
                 if (!target.isClickable && target.actionList.none { it.id == AccessibilityNodeInfo.ACTION_CLICK })
                     return@withTree ControlEffect(false, false, "target_not_clickable")
@@ -591,8 +796,96 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     target.performAction(nativeAction)
                 }
                 "long_press" -> target.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)
-                "scroll" -> target.performAction(if (input.getValue("direction").jsonPrimitive.content == "down")
-                    AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                "scroll" -> {
+                    val direction = input.getValue("direction").jsonPrimitive.content
+                    val directional = when (direction) {
+                        "up" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_UP.id
+                        "down" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_DOWN.id
+                        "left" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_LEFT.id
+                        "right" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_RIGHT.id
+                        else -> return@withTree ControlEffect(false, false, "scroll_direction_invalid")
+                    }
+                    val supported = target.actionList.any { it.id == directional }
+                    if (!supported && direction in setOf("left", "right"))
+                        return@withTree ControlEffect(false, false, "directional_scroll_unsupported")
+                    target.performAction(if (supported) directional else if (direction == "down")
+                        AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                }
+                "focus" -> {
+                    if (!target.isFocusable || target.actionList.none { it.id == AccessibilityNodeInfo.ACTION_FOCUS })
+                        return@withTree ControlEffect(false, false, "native_focus_unsupported")
+                    target.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                }
+                "input" -> {
+                    val plan = UnifiedInputPolicy.plan(expected, input["text"]?.jsonPrimitive?.content.orEmpty(),
+                        input["method"]?.jsonPrimitive?.content ?: "auto", input["mode"]?.jsonPrimitive?.content ?: "empty",
+                        input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true)
+                    plan.refusal?.let { return@withTree ControlEffect(false, false, it) }
+                    if (!target.isEditable || !target.isFocused) return@withTree ControlEffect(false, false, "focused_editable_required")
+                    if (plan.method == "direct") {
+                        if (target.actionList.none { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT })
+                            return@withTree ControlEffect(false, false, "direct_input_unsupported")
+                        target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, plan.resultText)
+                        })
+                    } else {
+                        if (target.actionList.none { it.id == AccessibilityNodeInfo.ACTION_PASTE })
+                            return@withTree ControlEffect(false, false, "paste_unsupported")
+                        if (input["clipboard_replace_authorized"]?.jsonPrimitive?.booleanOrNull != true)
+                            return@withTree ControlEffect(false, false, "clipboard_replacement_authorization_required")
+                        val clipboard = context.getSystemService(ClipboardManager::class.java)
+                            ?: return@withTree ControlEffect(false, false, "clipboard_unavailable")
+                        val lease = try { OwnedClipboardLease.acquire(clipboard,
+                            input.getValue("text").jsonPrimitive.content, replacementAuthorized = true) }
+                            catch (_: Exception) { null }
+                            ?: return@withTree ControlEffect(false, false, "clipboard_read_access_unproven")
+                        // No suspension between final guards and staging. Clipboard access is
+                        // re-proven after the write, then full app/window/focus guards run again.
+                        currentCoroutineContext().ensureActive()
+                        islandRefusal(input["session_id"]?.jsonPrimitive?.content.orEmpty())?.let {
+                            return@withTree ControlEffect(false, false, it)
+                        }
+                        return@withTree ClipboardInputTransaction(
+                            stage = lease::stage,
+                            pasteWithFreshGuards = guardedPaste@ {
+                                secureWindow(service)?.let { return@guardedPaste ControlEffect(false, false, it) }
+                                withTree(service) paste@ { latest, latestNative ->
+                                    currentCoroutineContext().ensureActive()
+                                    if (sessionFor(service).epoch != admittedEpoch)
+                                        return@paste ControlEffect(false, false, "control_session_changed_observe_again")
+                                    islandRefusal(input["session_id"]?.jsonPrimitive?.content.orEmpty())?.let {
+                                        return@paste ControlEffect(false, false, it)
+                                    }
+                                    GenericControlActionPolicy.refusal(fresh, latest, "input")?.let {
+                                        return@paste ControlEffect(false, false, it)
+                                    }
+                                    mutationBlock(latest.packageName)?.let { return@paste ControlEffect(false, false, it) }
+                                    if (!packageAllowed(latest.packageName, operation = "interact"))
+                                        return@paste ControlEffect(false, false, "runtime_interaction_not_allowed")
+                                    val position = latest.nodes.indexOfFirst { it == expected }
+                                    val live = latestNative.getOrNull(position)
+                                        ?: return@paste ControlEffect(false, false, "target_changed")
+                                    val bounds = Rect()
+                                    if (!live.refresh()) return@paste ControlEffect(false, false, "target_changed")
+                                    live.getBoundsInScreen(bounds)
+                                    if (!live.isFocused || !live.isEditable || !live.isEnabled || !live.isVisibleToUser || live.isPassword ||
+                                        live.windowId != expectedWindow || live.packageName?.toString() != expectedPackage ||
+                                        live.viewIdResourceName.orEmpty().take(100) != expected.resourceId || bounds.flattenToString() != expected.bounds ||
+                                        (if (live.isShowingHintText) "" else live.text?.toString().orEmpty()) != expected.text ||
+                                        live.textSelectionStart != expected.selectionStart || live.textSelectionEnd != expected.selectionEnd ||
+                                        (Build.VERSION.SDK_INT >= 34 && live.isAccessibilityDataSensitive) ||
+                                        live.actionList.none { it.id == AccessibilityNodeInfo.ACTION_PASTE })
+                                        return@paste ControlEffect(false, false, "target_changed")
+                                    if (!lease.ownsCurrent()) return@paste ControlEffect(false, false, "clipboard_provenance_changed")
+                                    val ok = live.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+                                    ControlEffect(true, ok, if (ok) "paste_acknowledged" else "paste_outcome_unknown")
+                                }
+                            },
+                            // Android exposes no atomic compare-and-restore. Preserve competing clips.
+                            restoreIfOwned = {}
+                        ).execute()
+                    }
+                }
                 "type" -> {
                     if (!target.isEditable || (!target.isShowingHintText && !target.text.isNullOrEmpty()))
                         return@withTree ControlEffect(false, false, "draft_not_empty")

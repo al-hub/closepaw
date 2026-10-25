@@ -171,6 +171,7 @@ class AgentService : AccessibilityService() {
     internal fun remoteControlCovers(rect: android.graphics.Rect) = remoteControlIndicator.controlCovers(rect) ||
         overlayController?.controlCovers(rect) == true
     internal fun stopRemoteAndLocalControl() {
+        ai.closepaw.chatgpt.control.VisualImageCache.clear()
         remoteControlSession.end()
         hideRemoteControlActivity(force = true)
         submitOp(Op.Shutdown)
@@ -269,6 +270,10 @@ class AgentService : AccessibilityService() {
 
     private val debugExecReceiver = ActionDebugReceiver()
     private val debugMobileActionReceiver = ai.closepaw.debug.MobileActionDebugReceiver()
+
+    @androidx.annotation.RequiresApi(33)
+    override fun onCreateInputMethod(): android.accessibilityservice.InputMethod =
+        ai.closepaw.platform.GuardedAccessibilityInputMethod(this)
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -406,6 +411,7 @@ class AgentService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        ai.closepaw.chatgpt.control.VisualImageCache.clear()
         controlUiRestoreJob?.cancel()
         runCatching { unregisterReceiver(controlScreenReceiver) }
         remoteControlSession.end()
@@ -502,6 +508,7 @@ class AgentService : AccessibilityService() {
     private val controlScreenReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
             if (intent?.action == android.content.Intent.ACTION_SCREEN_OFF) {
+                ai.closepaw.chatgpt.control.VisualImageCache.clear()
                 controlUiRestoreJob?.cancel()
                 remoteControlIndicator.hide()
                 actionVisualizer?.clear()

@@ -155,7 +155,7 @@ class ActionTargetTest {
         val call = ToolCallRequest("1", "mobile_action",
             JSONObject("""{"action":"type","input_text":"hello world","text":"Search","text_index":0}"""))
         assertThat(ActionDescriptionFormatter.format(call))
-            .isEqualTo("Type \"hello world\" into text \"Search\" (index 0)")
+            .isEqualTo("Type text into text \"Search\" (index 0)")
     }
 
     @Test
@@ -163,7 +163,7 @@ class ActionTargetTest {
         val call = ToolCallRequest("1", "mobile_action",
             JSONObject("""{"action":"type","text":"hello"}"""))
         assertThat(ActionDescriptionFormatter.format(call))
-            .isEqualTo("Type \"hello\" into focused field")
+            .isEqualTo("Type text into focused field")
     }
 
     @Test

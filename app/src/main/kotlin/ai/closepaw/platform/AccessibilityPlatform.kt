@@ -61,6 +61,9 @@ class AccessibilityPlatform(
     private val screenshotCapturer = AccessibilityScreenshotCapturer(service, config, traceRecorder)
     private val outOfBoundsActionTargetCount = AtomicInteger(0)
 
+    override suspend fun performVerifiedInput(request: VerifiedInputRequest, isCancelled: () -> Boolean): ai.closepaw.tool.action.ActionOutcome =
+        ai.closepaw.chatgpt.control.LocalVerifiedInput.run(service, request, isCancelled)
+
     override suspend fun captureScreen(): ScreenSnapshot {
         val currentPkg = getCurrentPackageName()
 
@@ -299,6 +302,42 @@ class AccessibilityPlatform(
                     .onFailure { err -> Log.w(TAG, "Window recycle failed (ignored)", err) }
             }
         }
+    }
+
+    /**
+     * Internal #165 integration point, deliberately NOT exposed as UIAction or
+     * remotely callable tool. A higher-level coordinator must validate explicit
+     * per-operation consent, target identity and session liveness before use.
+     *
+     * Each boundary additionally checks current permissions, foreground package
+     * and blocked-window privacy before altering the clipboard or dispatching Paste.
+     * Pasting never reports inserted text as verified.
+     */
+    internal suspend fun stageAndPasteWithFreshGuards(
+        text: String,
+        operationAuthorized: () -> Boolean,
+        targetVerified: () -> Boolean
+    ): GuardedPasteSequence.Outcome {
+        val writer = GuardedClipboardWriter.from(service)
+            ?: return GuardedPasteSequence.Outcome.DENIED
+        fun allowedNow(): Boolean {
+            if (!operationAuthorized() || !targetVerified() || !hasRequiredPermissions()) return false
+            val pkg = getCurrentPackageName() ?: return false
+            if (isPackageBlocked(pkg) || hasBlockedWindowRoot()) return false
+            return true
+        }
+        val sequence = GuardedPasteSequence(
+            stage = { content -> writer.stage(content, consent = allowedNow(), safeTarget = allowedNow()) },
+            paste = {
+                nodeActionPerformer.performPasteOnFocused(authorized = allowedNow()) is ActionResult.Success
+            }
+        )
+        return sequence.execute(
+            text,
+            beforeStage = { allowedNow() },
+            beforePaste = { allowedNow() },
+            preflightTarget = { allowedNow() && nodeActionPerformer.canPasteOnFocused() }
+        )
     }
 
     override suspend fun performAction(action: UIAction): ActionResult {

@@ -12,8 +12,9 @@ internal object GenericControlActionPolicy {
             expected.foregroundWindowId != fresh.foregroundWindowId -> "screen_changed"
         requiresCompleteTree(action) && expected.fingerprint != fresh.fingerprint -> "screen_changed"
         requiresCompleteTree(action) && (expected.truncated || fresh.truncated) -> "truncated_observation"
-        action == "tap" && (expected.touchContext.isEmpty() || fresh.touchContext.isEmpty()) -> "touch_window_unavailable"
-        action == "tap" && expected.touchContext != fresh.touchContext -> "touch_window_changed"
+        action == "key" && (expected.keyboard != fresh.keyboard || expected.inputTargetId != fresh.inputTargetId) -> "keyboard_context_changed"
+        (action in setOf("tap", "key") || action.startsWith("visual_")) && (expected.touchContext.isEmpty() || fresh.touchContext.isEmpty()) -> "touch_window_unavailable"
+        (action in setOf("tap", "key") || action.startsWith("visual_")) && expected.touchContext != fresh.touchContext -> "touch_window_changed"
         else -> null
     }
 }

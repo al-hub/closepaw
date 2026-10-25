@@ -35,7 +35,7 @@ Targeting (click, long_press, type): prefer element_index, then text, then x/y c
 Actions:
 - click: Tap element
 - long_press: Long press element
-- type: Type text into element (or focused field if no target)
+- type: Type text into element (or focused field if no target). Optional input_method=auto/direct/clipboard/keyboard invokes the shared guarded engine with exact result checks; requires a fresh semantic focused target. Clipboard replacement needs separate approval. Unsupported platform/target or uncertain effect stops without replay.
 - scroll: Scroll content direction (direction="down" reveals content below). Optional element_index/text for specific scrollable; bare x/y is not accepted.
 - swipe: Precision coordinate gesture (sliders, drag-and-drop). Requires start/end [x,y].
 """.trimIndent()
@@ -66,6 +66,7 @@ Actions:
     override fun createInvocation(params: JSONObject): ToolInvocation {
         val action = params.getString("action")
         val target = parseOptionalTarget(params)
+        if (action == "type" && params.has("input_method")) return VerifiedInputInvocation(params, target)
         val description = buildDescription(action, target, params)
 
         return MobileActionInvocation(params, description) { platform, snapshot, isCancelled, appClassifier ->
@@ -138,6 +139,15 @@ Actions:
     private fun validateTypeAction(params: JSONObject): ValidationResult {
         if (!params.has("input_text")) {
             return ValidationResult.Invalid("type action requires input_text")
+        }
+        if (params.has("input_method")) {
+            if (params.optString("input_method") !in setOf("auto", "direct", "clipboard", "keyboard"))
+                return ValidationResult.Invalid("input_method must be auto/direct/clipboard/keyboard")
+            if (params.optBoolean("clear", false)) return ValidationResult.Invalid("Verified input preserves drafts; clear separately")
+            if (params.optBoolean("clipboard_consent", false) != params.optBoolean("clipboard_replace_authorized", false))
+                return ValidationResult.Invalid("Clipboard use requires both consent and explicit replacement authorization")
+            if (params.optString("input_method") == "clipboard" && !params.optBoolean("clipboard_consent", false))
+                return ValidationResult.Invalid("Clipboard method requires explicit consent")
         }
         // Type allows no target (types into focused field)
         return validateTargetedAction(params, "type", required = false)
@@ -241,9 +251,8 @@ Actions:
             "click" -> "Click $targetDesc"
             "long_press" -> "Long press $targetDesc for ${params.optLong("duration_ms", 1000)}ms"
             "type" -> {
-                val input = params.optString("input_text", "").take(30)
                 val clear = if (params.optBoolean("clear", false)) " (clear first)" else ""
-                "Type \"$input\" into $targetDesc$clear"
+                "Type [redacted] into $targetDesc$clear"
             }
             "scroll" -> {
                 val dir = params.optString("direction", "")
@@ -275,6 +284,10 @@ Actions:
 
     private fun buildSchema(): JSONObject {
         val properties = JSONObject().apply {
+            put("input_method", JSONObject().put("type", "string").put("enum", JSONArray(listOf("auto", "direct", "clipboard", "keyboard"))))
+            put("terminal_input_authorized", JSONObject().put("type", "boolean").put("description", "Explicit permission to commit single-line terminal text without Enter. Requires a supported native binding, empty prompt and user approval."))
+            put("clipboard_consent", JSONObject().put("type", "boolean"))
+            put("clipboard_replace_authorized", JSONObject().put("type", "boolean").put("description", "Explicit consent to replace clipboard; no automatic restoration. Always requires user approval."))
             put("agent_thought", JSONObject().apply {
                 put("type", "string")
                 put("description", "Brief reason for why this action is being performed")
