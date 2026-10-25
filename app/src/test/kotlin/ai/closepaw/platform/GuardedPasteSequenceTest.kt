@@ -63,4 +63,25 @@ class GuardedPasteSequenceTest {
             .isEqualTo(GuardedPasteSequence.Outcome.PASTE_UNKNOWN)
         assertThat(pastes).isEqualTo(1)
     }
+    @Test fun stageExceptionCannotLeadToPaste() = runTest {
+        var pasted = false
+        val seq = GuardedPasteSequence(
+            stage = { throw SecurityException("denied") },
+            paste = { pasted = true; true }
+        )
+        assertThat(seq.execute("safe", { true }, { true }))
+            .isEqualTo(GuardedPasteSequence.Outcome.STAGE_UNKNOWN)
+        assertThat(pasted).isFalse()
+    }
+
+    @Test fun pasteExceptionDoesNotCauseSecondDispatch() = runTest {
+        var attempts = 0
+        val seq = GuardedPasteSequence(
+            stage = { GuardedClipboardWriter.Outcome.STAGED_UNVERIFIED },
+            paste = { attempts++; throw IllegalStateException("disconnect") }
+        )
+        assertThat(seq.execute("safe", { true }, { true }))
+            .isEqualTo(GuardedPasteSequence.Outcome.PASTE_UNKNOWN)
+        assertThat(attempts).isEqualTo(1)
+    }
 }
