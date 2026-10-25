@@ -97,5 +97,39 @@
     "repeat_end": 0,
     "new_questions": 0,
     "app_launch_effect": "UNCONFIRMED; read_app may launch, no screenshot taken"
+  },
+  "subsequent_user_requested_verification": {
+    "status": "PASS",
+    "installed_version": "0.1.85/code86",
+    "session_id": "76a50082-4903-4a9a-9e48-1dca10a07246",
+    "start_task": "8fe91320-a81d-45c2-aecd-924499d7f66f",
+    "inspection_invocations": 2,
+    "preflight": {
+      "status": "FAIL_SAFE_REFUSAL",
+      "observation_reason": "wrong_package",
+      "nodes_exported": 0
+    },
+    "target_read_app": {
+      "status": "PASS",
+      "reason_code": "ok",
+      "screenshot_attempts": 1
+    },
+    "positive_inspection": {
+      "status": "PASS",
+      "observation_reason": "recognized_hosted_composer",
+      "foreground": true,
+      "traversal_complete": true,
+      "composer_candidates": 1,
+      "root_package": "com.google.android.googlequicksearchbox",
+      "diagnostic_nodes": 105,
+      "nodes_exported": 80,
+      "nodes_truncated": true
+    },
+    "end_task": "6582776d-d1ef-490b-a6f6-ce4ea0da5364",
+    "final_session_state": "ended",
+    "final_epoch": 4,
+    "new_questions": 0,
+    "reinstalls": 0,
+    "old_failures_preserved": true
   }
 }
