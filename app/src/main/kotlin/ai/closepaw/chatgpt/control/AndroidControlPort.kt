@@ -346,6 +346,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             var protected = false
             var gemini = false
             val shellIds = mutableSetOf<String>()
+            val keyboardScan = KeyboardScanDiagnostics()
             var visited = 0
             var deepest = 0
             val truncationReasons = linkedSetOf<String>()
@@ -364,6 +365,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val hint = node.hintText?.toString().orEmpty()
                 val key = if (keyboard) KeyboardKeyPolicy.identify(text, description, node.className?.toString().orEmpty(),
                     node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, node.isTextEntryKey) else null
+                if (keyboard) keyboardScan.record(text, description, node.className?.toString().orEmpty(),
+                    node.isVisibleToUser, node.isEnabled, node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
+                    node.isTextEntryKey, key != null)
                 if (node.isVisibleToUser && node.packageName?.toString() == pkg) shellIds.add(resource)
                 val sensitiveId = resource.substringAfterLast('/').lowercase()
                 if (node.isPassword || (Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive) ||
@@ -469,7 +473,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 selected.signature, selected.diagnostics, revision, outputLimit,
                 verifiedApplicationPackage = if (code == null && !truncated &&
                     pkg == AndroidGeminiDraftUi.GOOGLE_HOST && geminiIdentityVerified) AndroidGeminiDraftUi.PACKAGE else null,
-                keyboard = selected.keyboard, inputTargetId = inputTarget?.id, inputTarget = inputTarget), native)
+                keyboard = selected.keyboard, inputTargetId = inputTarget?.id, inputTarget = inputTarget,
+                keyboardDiagnostics = selected.keyboard?.takeIf { it.readAllowed }?.let { keyboardScan.json() }), native)
         } finally {
             owned.forEach { it.recycleCompat() }
             windows.forEach { runCatching { it.recycle() } }
@@ -835,10 +840,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                             return@withTree ControlEffect(false, false, "clipboard_replacement_authorization_required")
                         val clipboard = context.getSystemService(ClipboardManager::class.java)
                             ?: return@withTree ControlEffect(false, false, "clipboard_unavailable")
-                        val lease = try { OwnedClipboardLease.acquire(clipboard,
-                            input.getValue("text").jsonPrimitive.content, replacementAuthorized = true) }
-                            catch (_: Exception) { null }
-                            ?: return@withTree ControlEffect(false, false, "clipboard_read_access_unproven")
+                        val acquisition = OwnedClipboardLease.inspectAndAcquire(clipboard,
+                            input.getValue("text").jsonPrimitive.content, replacementAuthorized = true)
+                        val lease = acquisition.lease ?: return@withTree ControlEffect(false, false,
+                            acquisition.refusal ?: "clipboard_read_access_unproven")
                         // No suspension between final guards and staging. Clipboard access is
                         // re-proven after the write, then full app/window/focus guards run again.
                         currentCoroutineContext().ensureActive()

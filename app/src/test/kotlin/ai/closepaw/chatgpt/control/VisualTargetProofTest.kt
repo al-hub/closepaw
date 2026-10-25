@@ -22,4 +22,13 @@ class VisualTargetProofTest {
         assertNotNull(GenericControlActionPolicy.refusal(before,before.copy(touchContext="rotation1"),"visual_drag"))
         assertNotNull(GenericControlActionPolicy.refusal(before,before.copy(fingerprint="changed"),"visual_tap"))
     }
+    @Test fun queryAndTaskEnvelopesDeliverOnlyLiveProofImages() {
+        val p = proof(); var active = true
+        val query = buildJsonObject { put("status", "succeeded"); put("data", buildJsonObject { put("visual", p.metadata()) }) }
+        val task = buildJsonObject { put("result", buildJsonObject { put("data", buildJsonObject { put("visual", p.metadata()) }) }) }
+        VisualImageCache.put(p) { active }
+        assertSame(p.image, VisualImageCache.imageFor(query)); assertSame(p.image, VisualImageCache.imageFor(task))
+        active = false
+        assertNull(VisualImageCache.imageFor(query)); assertNull(VisualImageCache.imageFor(task))
+    }
 }

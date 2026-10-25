@@ -70,7 +70,7 @@ class UnifiedInputEngineTest {
         }
     }
     @Test fun focusCanFollowUniqueSemanticFieldAcrossImeResizeButNotDuplicates() {
-        val node = Port().node.copy(focused = false)
+        val node = Port().node.copy(focused = false, sourceWindowId = 1, sourcePackage = "example.app")
         val before = ControlFrame("example.app", 1, "before", listOf(node))
         val moved = node.copy(bounds = "0 0 100 50", focused = true)
         val after = before.copy(fingerprint = "ime", nodes = listOf(moved))

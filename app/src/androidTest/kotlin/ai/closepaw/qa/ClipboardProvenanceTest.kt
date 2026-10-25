@@ -67,6 +67,8 @@ class ClipboardProvenanceTest {
             clipboard.setPrimaryClip(ClipData.newPlainText("", "fixture-before"))
             try {
                 assertNull(OwnedClipboardLease.acquire(clipboard, "fixture-input", false))
+                assertEquals("clipboard_replacement_authorization_required",
+                    OwnedClipboardLease.inspectAndAcquire(clipboard, "fixture-input", false).refusal)
                 assertEquals("fixture-before", clipboard.primaryClip!!.getItemAt(0).text.toString())
                 val lease = OwnedClipboardLease.acquire(clipboard, "fixture-input", true)
                 assertNotNull(lease); assertTrue(lease!!.stage()); assertTrue(lease.ownsCurrent())
@@ -74,6 +76,10 @@ class ClipboardProvenanceTest {
                 assertFalse(lease.ownsCurrent())
                 assertEquals("fixture-competing", clipboard.primaryClip!!.getItemAt(0).text.toString())
             } finally { clipboard.clearPrimaryClip() }
+            val emptyOrDenied = OwnedClipboardLease.inspectAndAcquire(clipboard, "fixture-input", true)
+            assertNull(emptyOrDenied.lease)
+            assertEquals("clipboard_empty_or_read_restricted", emptyOrDenied.refusal)
+            assertNull("Refusal must not stage clipboard text", clipboard.primaryClip)
         }
     }
 }

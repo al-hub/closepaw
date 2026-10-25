@@ -67,6 +67,27 @@ class McpOperationContractTest {
         } finally { scope.cancel(); ledger.delete() }
     }
 
+    @Test fun screenObserveQueryReturnsActualImageBlockAndRevocationRemovesIt() {
+        val image = ai.closepaw.model.ScreenImage(2, 3, "image/jpeg", byteArrayOf(1,2,3),
+            ai.closepaw.model.ScreenImageSource.ACCESSIBILITY_SCREENSHOT)
+        val proof = ai.closepaw.chatgpt.control.VisualTargetProof(image, "pixels",
+            ai.closepaw.chatgpt.control.TapBounds(0,0,2,3), "window", System.currentTimeMillis())
+        var allowed = true
+        ai.closepaw.chatgpt.control.VisualImageCache.put(proof) { allowed }
+        val handler = handler { name, _ ->
+            assertThat(name).isEqualTo("query")
+            buildJsonObject { put("status", "succeeded"); put("data", buildJsonObject { put("visual", proof.metadata()) }) }
+        }
+        val request = """{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"query","arguments":{"operation_id":"android.screen.observe","operation_version":1,"schema_hash":"hash","input_json":"{}"}}}"""
+        fun content() = Json.parseToJsonElement(handler.handle(request).body!!).jsonObject.getValue("result").jsonObject.getValue("content").jsonArray
+        val blocks = content()
+        assertThat(blocks.map { it.jsonObject.getValue("type").jsonPrimitive.content }).containsExactly("text", "image").inOrder()
+        assertThat(blocks[1].jsonObject.getValue("data").jsonPrimitive.content).isEqualTo("AQID")
+        assertThat(blocks[1].jsonObject.getValue("mimeType").jsonPrimitive.content).isEqualTo("image/jpeg")
+        allowed = false
+        assertThat(content().map { it.jsonObject.getValue("type").jsonPrimitive.content }).containsExactly("text")
+    }
+
     @Test fun malformedArgumentsAndUnsupportedProtocolDoNotCrashOrReflectUnknownVersion() {
         val handler = handler()
         assertThat(handler.handle("""{"jsonrpc":"2.0","id":1,"method":"tools/call","params":[]}""").body).contains("error")

@@ -41,14 +41,21 @@ internal class OwnedClipboardLease private constructor(
     }
     companion object {
         private const val MARKER = "ai.closepaw.input.lease"
-        /** Explicit replacement consent is independent of general UI consent. */
-        fun acquire(clipboard: ClipboardManager, text: String, replacementAuthorized: Boolean): OwnedClipboardLease? {
-            if (!replacementAuthorized || text.isEmpty()) return null
-            // Probe actual read access; hasPrimaryClip false/null does not prove EMPTY.
-            val old = clipboard.primaryClip ?: return null
+        data class Acquisition(val lease: OwnedClipboardLease? = null, val refusal: String? = null)
+        /** Explicit replacement consent is independent of general UI consent.
+         * Null is never classified as empty: Android deliberately returns it for denied reads. */
+        fun inspectAndAcquire(clipboard: ClipboardManager, text: String, replacementAuthorized: Boolean): Acquisition {
+            if (!replacementAuthorized || text.isEmpty()) return Acquisition(refusal = "clipboard_replacement_authorization_required")
+            val old = try { clipboard.primaryClip }
+                catch (_: SecurityException) { return Acquisition(refusal = "clipboard_read_permission_denied") }
+                catch (_: RuntimeException) { return Acquisition(refusal = "clipboard_read_unavailable") }
+                ?: return Acquisition(refusal = "clipboard_empty_or_read_restricted")
             if (old.itemCount != 1 || !old.description.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) ||
-                old.getItemAt(0).uri != null || old.getItemAt(0).intent != null || old.getItemAt(0).text == null) return null
-            return OwnedClipboardLease(clipboard, text)
+                old.getItemAt(0).uri != null || old.getItemAt(0).intent != null || old.getItemAt(0).text == null)
+                return Acquisition(refusal = "clipboard_existing_content_unsupported")
+            return Acquisition(OwnedClipboardLease(clipboard, text))
         }
+        fun acquire(clipboard: ClipboardManager, text: String, replacementAuthorized: Boolean): OwnedClipboardLease? =
+            inspectAndAcquire(clipboard, text, replacementAuthorized).lease
     }
 }

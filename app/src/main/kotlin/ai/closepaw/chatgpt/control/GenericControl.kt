@@ -35,7 +35,7 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val touchContext: String = "", val foregroundWindowId: Int = windowId, val windowContext: String = "",
     val windowDiagnostics: JsonObject? = null, val configurationRevision: Long = 0, val outputLimit: Int = 50,
     val verifiedApplicationPackage: String? = null, val keyboard: ControlKeyboard? = null, val inputTargetId: Int? = null, val inputTarget: ControlNode? = null, val visual: VisualTargetProof? = null,
-    val terminalSubmission: TerminalSubmission? = null)
+    val terminalSubmission: TerminalSubmission? = null, val keyboardDiagnostics: JsonObject? = null)
 /** Logical identity is supplied only by a complete, guarded native application identity scan. */
 internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expected != null && reason == null &&
     (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
@@ -133,6 +133,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 put("window_id", it.windowId); put("package_name", it.packageName); put("input_method_id", it.inputMethodId)
                 put("read_allowed", it.readAllowed); put("interaction_allowed", it.interactAllowed)
                 put("semantic_keys_only", true); put("input_target_verified", frame.inputTargetId != null)
+                frame.keyboardDiagnostics?.let { diagnostics -> put("scan", diagnostics) }
             }) }
             put("package_name", frame.packageName); put("window_id", frame.windowId)
             frame.verifiedApplicationPackage?.let { put("verified_application_package", it) }
