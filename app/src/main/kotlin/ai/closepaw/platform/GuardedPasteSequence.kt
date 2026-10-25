@@ -17,9 +17,11 @@ internal class GuardedPasteSequence(
     suspend fun execute(
         text: String,
         beforeStage: () -> Boolean,
-        beforePaste: () -> Boolean
+        beforePaste: () -> Boolean,
+        preflightTarget: suspend () -> Boolean = { true }
     ): Outcome {
         if (text.isEmpty() || !beforeStage()) return Outcome.DENIED
+        if (!preflightTarget() || !beforeStage()) return Outcome.DENIED
         // Runtime failure from the platform may occur after staging.
         // Treat it as unknown and never attempt Paste or automatic recovery.
         val stageOutcome = try { stage(text) } catch (_: Exception) { return Outcome.STAGE_UNKNOWN }
