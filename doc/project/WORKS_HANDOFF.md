@@ -1,3 +1,11 @@
+## 2026-10-25 #145 최종 수용 감사 완료 — 원래 범위 충족·종료 판정
+
+- [최종 수용 감사표](../dev/issue145-final-acceptance-audit.md)에서 원문 구현·실기기/자동회귀 조합 기준에 기존 증거를 항목별 매핑했다. Galaxy OFF/unlock 즉시표시 사용자PASS + bounded restore/host재생성·OFF/회전/중복·ended 자동회귀 + 10stage/dedup/stale 안전회귀 + 실제emulator 상세renderer4상태/8PNG + v85실기기 session-bound inspection PASS를 재사용한다.
+- Galaxy expanded 뷰 별도 사진은 원문 필수조건이 아닌 보강관찰이었다. 기존 NOT_TESTED를 PASS로 바꾸지 않고, 실제emulator window 렌더와기기핵심복원/inspection 증거를 구분하여 수용한다. OEM별AOD시각특성/정량 first-visible ms도 미측정임을 명시. #117TalkBack/알림/장기반복,#76타기기 이관 유지.
+- 과거 question reply_timeout/target_changed/unknown은 응답수집/실행의 별도 원인미확정 기록이다. 현재 UI가 거짓완료를 표시한 증거가 아니므로 #145 UI필수범위에 새차단조건으로 추가하지 않는다. #147 E2E/결과관찰·안전진단 후속에서 원 task·증거를 참조하며 실패상태는 보존한다.
+- **#145 종료 판정**, #147 OPEN(실제최적화/matched성능/VoiceE2E 미입증), #146/#150 CLOSED 유지. GitHub issue의 최종 state와 감사댓글을 함께 확인한다. 아래 #145 OPEN/Galaxy추가관찰 필수 문구는 이전 시점의 판단이며 이번 원래범위 감사로 갱신한다.
+- 현재 설치0.1.85/code86, APK/tag source8ed27ad6bb9cc97a6d28a21d8a560ed2ab150088 불변. 이번감사는 코드/기기세션/질문/시험/서명/재설치0, 문서만변경. 마지막확인 UI세션은 ended/epoch4. 임의재개 금지.
+
 ## 2026-10-25 v0.1.85 수정 후 실기기 inspection 신규 PASS
 
 - 사용자의 새 명시 요청으로 현재0.1.85/code86 연결 확인. 새 세션8fe91320-a81d-45c2-aecd-924499d7f66f, id76a50082-4903-4a9a-9e48-1dca10a07246 active/epoch3. 현재화면wrong_package 안전거부(export0) 후 read_app(gemini)1회 success/ok, 질문전송0.
