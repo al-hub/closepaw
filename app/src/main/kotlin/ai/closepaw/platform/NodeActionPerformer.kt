@@ -146,6 +146,23 @@ class NodeActionPerformer(
      * separately verify consent, foreground window, clipboard provenance and
      * target freshness before calling it. No gesture fallback or retries.
      */
+    /** Read-only eligibility probe before overwriting the user's clipboard. */
+    suspend fun canPasteOnFocused(): Boolean = onMain {
+        val root = rootProvider() ?: return@onMain false
+        try {
+            val node = AccessibilityNodeFinder.findFocusedEditableNode(root)
+                ?: return@onMain false
+            try {
+                node.isEditable && !node.isPassword && node.isFocused &&
+                    node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_PASTE }
+            } finally {
+                if (node !== root) node.recycleCompat()
+            }
+        } finally {
+            root.recycleCompat()
+        }
+    }
+
     suspend fun performPasteOnFocused(authorized: Boolean): ActionResult {
         if (!authorized) return ActionResult.Failure("Paste not authorized")
         return onMain {
