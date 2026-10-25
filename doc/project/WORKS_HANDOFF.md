@@ -1,3 +1,10 @@
+## 2026-10-25 v0.1.85 수정 후 실기기 inspection 신규 PASS
+
+- 사용자의 새 명시 요청으로 현재0.1.85/code86 연결 확인. 새 세션8fe91320-a81d-45c2-aecd-924499d7f66f, id76a50082-4903-4a9a-9e48-1dca10a07246 active/epoch3. 현재화면wrong_package 안전거부(export0) 후 read_app(gemini)1회 success/ok, 질문전송0.
+- 정확한 current session_id를 새 schema로 전달한 gemini.ui.inspect **succeeded**, observation_reason=recognized_hosted_composer, foreground=true, Google-hosted active/focused application window2576, composer1, traversal_complete=true. diagnostic export80/105 한도(truncated=true)는 source tree incomplete가 아님. **v85 세션계약수정의 실제 positive 경로 PASS**, 이전 session-ended/FAIL/unknown 기록은 불변. [보고서](../dev/issue145-inspection-session-v0185.md),[metadata](../dev/evidence/issue145-inspection-session-v0185-release.json).
+- 종료6582776d-d1ef-490b-a6f6-ce4ea0da5364 success→독립 ended/epoch4. 코드/서명/설치/새질문/기존물리시험 반복0. APK source8ed27ad6bb9cc97a6d28a21d8a560ed2ab150088 불변. 완료세션 임의재개 금지.
+- #145 OPEN: Galaxy expanded 실제관찰 및 별도 historical question target_changed 원인 미확정. #147 OPEN: 실제안전최적화/matched성능/VoiceE2E 미입증. #146/#150 CLOSED 유지. 아래 미검증 문구는 이전 차단표본 당시 기록이며 이 신규 inspection PASS와 구분한다.
+
 ## 2026-10-25 v0.1.85/code86 발행·설치 완료 — 읽기 실검증은 세션 종료로 미완료
 
 - [PR158](https://github.com/al-hub/closepaw/pull/158) 진단보완→0.1.84/code85, [PR159](https://github.com/al-hub/closepaw/pull/159) inspection 세션계약수정→**현재0.1.85/code86**. 최신 APK/tag source `8ed27ad6bb9cc97a6d28a21d8a560ed2ab150088`. [v85 보고서](../dev/issue145-inspection-session-v0185.md), [v85 metadata](../dev/evidence/issue145-inspection-session-v0185-release.json), [v84 실제 결과](../dev/issues145-147-observation-v0184.md).
