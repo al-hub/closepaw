@@ -81,6 +81,56 @@ class HttpTermuxHealthProbeTest {
         }
     }
 
+    @Test
+    fun `unverified health endpoint 401 does not prove token mismatch`() = runTest {
+        withServer { server ->
+            server.enqueue(MockResponse().setResponseCode(401))
+            val probe = HttpTermuxHealthProbe(server.url("/v1/health").toString(), "closepaw-bridge", "2", TOKEN)
+            assertThat(probe.fetch()).isEqualTo(HealthProbe.UnverifiedListener)
+            assertThat(server.takeRequest().getHeader("X-ClosePaw-Token")).isNull()
+            assertThat(server.requestCount).isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `foreign or rejected health never sends credentials or starts an auth probe`() = runTest {
+        for (response in listOf(
+            MockResponse().setBody("""{"identity":"foreign-service","version":"2"}"""),
+            MockResponse().setResponseCode(503),
+            MockResponse().setBody("not json"),
+            MockResponse().setResponseCode(302).setHeader("Location", "/foreign"),
+        )) {
+            withServer { server ->
+                server.enqueue(response)
+                val probe = HttpTermuxHealthProbe(server.url("/v1/health").toString(), "closepaw-bridge", "2", TOKEN)
+                assertThat(probe.fetch()).isAnyOf(HealthProbe.InvalidIdentity, HealthProbe.UnverifiedListener)
+                assertThat(server.takeRequest().getHeader("X-ClosePaw-Token")).isNull()
+                assertThat(server.requestCount).isEqualTo(1)
+            }
+        }
+    }
+
+    @Test
+    fun `health response timeout does not imply daemon absence`() = runTest {
+        withServer { server ->
+            server.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE))
+            val probe = HttpTermuxHealthProbe(server.url("/v1/health").toString(), "closepaw-bridge", "2", TOKEN)
+            assertThat(probe.fetch()).isEqualTo(HealthProbe.ResponseTimeout)
+        }
+    }
+
+    @Test
+    fun `total call timeout while response trickles is not daemon absence`() = runTest {
+        withServer { server ->
+            server.enqueue(MockResponse()
+                .setBody("""{"identity":"closepaw-bridge","version":"2"}""")
+                .throttleBody(1, 500, java.util.concurrent.TimeUnit.MILLISECONDS))
+            val probe = HttpTermuxHealthProbe(server.url("/v1/health").toString(), "closepaw-bridge", "2", TOKEN)
+            assertThat(probe.fetch()).isEqualTo(HealthProbe.ResponseTimeout)
+            assertThat(server.requestCount).isEqualTo(1)
+        }
+    }
+
     private suspend fun withServer(block: suspend (MockWebServer) -> Unit) {
         val server = MockWebServer().apply { start() }
         try {

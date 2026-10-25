@@ -5,6 +5,14 @@
 - **기존 실행경로 상세 계측 준비 READY**, 병렬 Worker는 test-only로 폰후보통합은 안 됨. A~F전체/동일조건10+10/CPU메모리/새경로X/실제개선배율 NOT_TESTED. #161 PARTIAL/OPEN, #147 OPEN. 설치를 전체실험완료로 확대하지 않음.
 - 읽기전용 session.status ended/epoch0, 신규UI세션/기기입력/화면읽기/물리시험0. 다음 명시적 실험 요청에서 시작; 매실행 직후 trace 회수(4개순환버퍼), clock혼합 금지. 아래 v85/배포미수행 기록은 당시 역사 상태.
 
+## 2026-10-25 #152 bridge diagnostics — PR160, device acceptance pending
+
+- [Change/acceptance record](../dev/issue152-bridge-diagnostics.md). Installed baseline0.1.85/code86 evidence is REUSED_EVIDENCE; original daemon-loss cause remains unconfirmed.
+- Tests-first82cda75 / Security40151254559: JVM2756, new3 FAIL expected (offline classification, restricted restart fallback, initial unauthenticated health401 hypothesis). Independent review rejected that health401 hypothesis: unverified response must not imply token mismatch.
+- Green candidate separates offline/no-RUN_COMMAND and actual start restriction, prevents restart→bootstrap/token persistence, blocks recovery on unverified HTTP/timeout, and adds passive linux.bridge.status. Health identity/version gates auth; redirects disabled. Existing supervisor/boot/backoff/singleton/non-replay transport reused.
+- Parallel #161 PR162 is OPEN with candidate0.1.86/code87. Sole shared file gradle.properties; #152 reserves candidate0.1.87/code88. No control timing/sequence/experimental tests changed. Latest main/signing must be checked immediately before merge; no main change during another signed release.
+- New candidate CI/release/install/device recovery/SSH remain pending. Do not close #152 from CI alone. Do not change revision13 com.termux=interact, tokens, #161 device sessions, #139 CLOSED, or #147 scope. Passive diagnostic first after install; actual no-RUN_COMMAND/no-listener may require one existing Termux recovery-hook invocation.
+
 ## 2026-10-25 #147 안전 최적화 후보 및 원시 재감사
 
 - [후보 검토](../dev/issue147-safe-optimization-review-20261025.md), [재계산 JSON](../dev/evidence/issue147-candidate-audit-20261025.json). Python trace tests2 PASS, source SHA256 확인, raw139span 재계산과 기존 summary 전체 일치, exclusive+untraced 합계 확인. 기존 source/code81 REUSED_EVIDENCE이며 신규 성능 PASS 아님.

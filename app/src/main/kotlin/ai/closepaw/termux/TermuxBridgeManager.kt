@@ -117,8 +117,14 @@ class TermuxBridgeManager internal constructor(
         }
         if (health == HealthProbe.InvalidIdentity) return@withLock emit(needsSetup(NeedsSetupReason.PORT_IN_USE))
         if (health == HealthProbe.BridgeOutdated) return@withLock emit(needsSetup(NeedsSetupReason.BRIDGE_OUTDATED))
+        if (health == HealthProbe.UnverifiedListener || health == HealthProbe.ResponseTimeout) return@withLock emit(health.toPassiveStatus())
         unavailableRecoveryStatus()?.let { return@withLock emit(it) }
         emit(health.toPassiveStatus())
+    }
+
+    /** Passive observation: no restart, maintenance, command, pairing write or UI lease. */
+    internal suspend fun diagnosticSnapshot(): TermuxBridgeDiagnosticSnapshot = mutex.withLock {
+        TermuxBridgeDiagnosticSnapshot(detectTermuxInstall(), fetchHealth())
     }
 
     suspend fun detectInstalled(): TermuxBridgeStatus = mutex.withLock { detectInstalledLocked() }
@@ -270,25 +276,15 @@ class TermuxBridgeManager internal constructor(
             HealthProbe.AuthMismatch -> return needsSetup(NeedsSetupReason.AUTH_MISMATCH)
             HealthProbe.InvalidIdentity -> return needsSetup(NeedsSetupReason.PORT_IN_USE)
             HealthProbe.BridgeOutdated -> return needsSetup(NeedsSetupReason.BRIDGE_OUTDATED)
+            HealthProbe.UnverifiedListener -> return needsSetup(NeedsSetupReason.BRIDGE_HEALTH_UNVERIFIED)
+            HealthProbe.ResponseTimeout -> return needsSetup(NeedsSetupReason.BRIDGE_RESPONSE_TIMEOUT)
             HealthProbe.Unavailable -> Unit
         }
         unavailableRecoveryStatus()?.let { return it }
 
         return when (val start = startBridge()) {
-            StartResult.Started ->
-                when (waitForReadyHealth()) {
-                    HealthProbe.Ready -> TermuxBridgeStatus.Ready
-                    HealthProbe.BridgeOutdated -> doBootstrap()
-                    HealthProbe.AuthMismatch -> needsSetup(NeedsSetupReason.AUTH_MISMATCH)
-                    HealthProbe.InvalidIdentity,
-                    HealthProbe.Unavailable -> needsSetup(NeedsSetupReason.HEALTH_TIMEOUT)
-                }
-            is StartResult.Failed ->
-                if (start.reason == NeedsSetupReason.PORT_IN_USE) {
-                    needsSetup(NeedsSetupReason.PORT_IN_USE)
-                } else {
-                    doBootstrap()
-                }
+            StartResult.Started -> waitForReadyHealth().toStartupStatus()
+            is StartResult.Failed -> needsSetup(start.reason)
         }
     }
 
@@ -305,6 +301,7 @@ class TermuxBridgeManager internal constructor(
         if (health == HealthProbe.BridgeOutdated) {
             return emit(needsSetup(NeedsSetupReason.BRIDGE_OUTDATED))
         }
+        if (health == HealthProbe.UnverifiedListener || health == HealthProbe.ResponseTimeout) return emit(health.toPassiveStatus())
         unavailableRecoveryStatus()?.let { return emit(it) }
 
         val passiveStatus = emit(health.toPassiveStatus())
@@ -339,7 +336,7 @@ class TermuxBridgeManager internal constructor(
     private fun unavailableRecoveryStatus(): TermuxBridgeStatus? =
         when (detectTermuxInstall()) {
             TermuxInstallState.NotInstalled -> TermuxBridgeStatus.NotInstalled
-            TermuxInstallState.RunCommandUnavailable -> needsSetup(NeedsSetupReason.TERMUX_NOT_RUNNING)
+            TermuxInstallState.RunCommandUnavailable -> needsSetup(NeedsSetupReason.BRIDGE_OFFLINE_NO_RUN_COMMAND)
             TermuxInstallState.Available -> null
         }
 
@@ -387,7 +384,9 @@ class TermuxBridgeManager internal constructor(
                     HealthProbe.Ready,
                     HealthProbe.BridgeOutdated -> return@withTimeoutOrNull health
                     HealthProbe.AuthMismatch -> return@withTimeoutOrNull health
-                    HealthProbe.InvalidIdentity,
+                    HealthProbe.UnverifiedListener,
+                    HealthProbe.ResponseTimeout -> return@withTimeoutOrNull health
+                    HealthProbe.InvalidIdentity -> return@withTimeoutOrNull health
                     HealthProbe.Unavailable -> delay(250)
                 }
             }
@@ -414,8 +413,8 @@ class TermuxBridgeManager internal constructor(
         when (this) {
             RunCommandError.PermissionMissing -> NeedsSetupReason.PERMISSION_MISSING
             RunCommandError.AllowExternalAppsMissing -> NeedsSetupReason.ALLOW_EXTERNAL_APPS_MISSING
-            is RunCommandError.StartRestricted -> NeedsSetupReason.UNKNOWN
-            RunCommandError.TermuxNotAvailable -> NeedsSetupReason.ALLOW_EXTERNAL_APPS_MISSING
+            is RunCommandError.StartRestricted -> NeedsSetupReason.TERMUX_START_RESTRICTED
+            RunCommandError.TermuxNotAvailable -> NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE
             is RunCommandError.Timeout -> NeedsSetupReason.TERMUX_TIMEOUT
             is RunCommandError.Other -> fallback
         }
@@ -441,6 +440,8 @@ class TermuxBridgeManager internal constructor(
             HealthProbe.BridgeOutdated -> needsSetup(NeedsSetupReason.BRIDGE_OUTDATED)
             HealthProbe.AuthMismatch -> needsSetup(NeedsSetupReason.AUTH_MISMATCH)
             HealthProbe.InvalidIdentity -> needsSetup(NeedsSetupReason.PORT_IN_USE)
+            HealthProbe.UnverifiedListener -> needsSetup(NeedsSetupReason.BRIDGE_HEALTH_UNVERIFIED)
+            HealthProbe.ResponseTimeout -> needsSetup(NeedsSetupReason.BRIDGE_RESPONSE_TIMEOUT)
             HealthProbe.Unavailable -> needsSetup(NeedsSetupReason.HEALTH_TIMEOUT)
         }
 
@@ -450,6 +451,8 @@ class TermuxBridgeManager internal constructor(
             HealthProbe.BridgeOutdated -> needsSetup(NeedsSetupReason.BRIDGE_OUTDATED)
             HealthProbe.AuthMismatch -> needsSetup(NeedsSetupReason.AUTH_MISMATCH)
             HealthProbe.InvalidIdentity -> needsSetup(NeedsSetupReason.PORT_IN_USE)
+            HealthProbe.UnverifiedListener -> needsSetup(NeedsSetupReason.BRIDGE_HEALTH_UNVERIFIED)
+            HealthProbe.ResponseTimeout -> needsSetup(NeedsSetupReason.BRIDGE_RESPONSE_TIMEOUT)
             HealthProbe.Unavailable -> needsSetup(NeedsSetupReason.HEALTH_TIMEOUT)
         }
 

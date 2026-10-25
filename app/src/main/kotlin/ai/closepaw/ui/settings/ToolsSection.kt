@@ -149,13 +149,17 @@ private fun TermuxShellSettingsRow() {
                     NeedsSetupReason.AUTH_MISMATCH -> {
                         { context.launchTermux() }
                     }
-                    NeedsSetupReason.TERMUX_NOT_RUNNING -> {
+                    NeedsSetupReason.TERMUX_NOT_RUNNING,
+                    NeedsSetupReason.BRIDGE_OFFLINE_NO_RUN_COMMAND,
+                    NeedsSetupReason.TERMUX_START_RESTRICTED -> {
                         { context.launchTermux() }
                     }
                     NeedsSetupReason.HEALTH_TIMEOUT -> {
                         { scope.launch(Dispatchers.IO) { manager.ensureReadyForSession(8_000) } }
                     }
-                    NeedsSetupReason.PORT_IN_USE -> null
+                    NeedsSetupReason.PORT_IN_USE,
+                    NeedsSetupReason.BRIDGE_HEALTH_UNVERIFIED,
+                    NeedsSetupReason.BRIDGE_RESPONSE_TIMEOUT -> null
                     NeedsSetupReason.PERMISSION_MISSING -> permissionRowAction(
                         gate = permissionGate,
                         runSetup = { scope.launch(Dispatchers.IO) { manager.setup() } },
@@ -211,10 +215,16 @@ private fun TermuxShellSettingsRow() {
                 NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE,
                 NeedsSetupReason.AUTH_MISMATCH,
                 NeedsSetupReason.TERMUX_NOT_RUNNING,
+                NeedsSetupReason.BRIDGE_OFFLINE_NO_RUN_COMMAND,
+                NeedsSetupReason.TERMUX_START_RESTRICTED,
             )
         ) {
             {
-                val keepPairing = (bridgeStatus as TermuxBridgeStatus.NeedsSetup).reason == NeedsSetupReason.TERMUX_NOT_RUNNING
+                val keepPairing = (bridgeStatus as TermuxBridgeStatus.NeedsSetup).reason in setOf(
+                    NeedsSetupReason.TERMUX_NOT_RUNNING,
+                    NeedsSetupReason.BRIDGE_OFFLINE_NO_RUN_COMMAND,
+                    NeedsSetupReason.TERMUX_START_RESTRICTED,
+                )
                 Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.closePaw.spacing.sm)) {
                     Text(
                         text = if (

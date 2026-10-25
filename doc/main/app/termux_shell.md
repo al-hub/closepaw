@@ -1,7 +1,7 @@
 # Termux Shell
 
 > Full Linux bash runtime for the agent through a Termux bridge daemon.
-> Last updated: 2026-10-05 (pairing bootstrap CI validation)
+> Last updated: 2026-10-25 (#152 diagnostic classification; device acceptance tracked separately)
 
 ## Overview
 
@@ -62,7 +62,9 @@ Primary files:
 | `PORT_IN_USE` | `127.0.0.1:18422` is owned by another process. |
 | `TERMUX_TIMEOUT` | A Termux `RUN_COMMAND` bootstrap command timed out. |
 | `TERMUX_RUN_COMMAND_UNAVAILABLE` | The installed Termux build does not expose `RUN_COMMAND`. |
-| `TERMUX_NOT_RUNNING` | Android rejected the cross-app service start; the user must open Termux manually. |
+| `BRIDGE_OFFLINE_NO_RUN_COMMAND` | Health unavailable and installed package lacks RUN_COMMAND; process/supervisor death is not established. Existing pairing retained. |
+| `TERMUX_START_RESTRICTED` | An actual Android cross-app service start was rejected. No bootstrap or token rewrite follows. |
+| `TERMUX_NOT_RUNNING` | Legacy reason; do not infer process death from this historical label. |
 | `UNKNOWN` | Setup failed without a more specific mapped reason. |
 
 ## Lifecycle Invariants
@@ -72,9 +74,14 @@ Primary files:
   session, including Hot Idle follow-up tasks.
 - `ensureReadyForSession(...)` may restart an already-deployed idle bridge, but it does not run
   `apt` or redeploy packages. Full bootstrap remains explicit setup work.
-- The Python bridge exits after 30 minutes of bridge idleness. The app does not keep it alive with
-  background health polling; the next session readiness check restarts it if the deployed bridge
-  exists.
+- Launches use `--supervise --idle-timeout-sec 0`. The existing Termux supervisor handles
+  daemon recovery with five-launch/300-second limits, single-instance locking and bounded backoff.
+  It cannot recover if Android removes the whole Termux runtime and no external service path exists.
+- `linux.bridge.status` passively checks package metadata, health and authenticated jobs readiness
+  without starting a UI session, recovery, maintenance or shell command. It reports process and
+  supervisor state as `not_observed`; job connection refusal/timeout is separate from package support.
+- Restart failure returns a reason and never falls through to package installation or pairing writes.
+  Explicit full setup remains separate.
 - Bootstrap is consent-only. Passive Settings rendering may detect and probe state, but package
   install and bridge deploy run only from an explicit setup action. Session readiness may restart an
   already-deployed idle bridge.

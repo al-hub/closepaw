@@ -112,7 +112,42 @@ class TermuxBridgeManagerTest {
         val manager = manager(runner, FakeHealthProbe(HealthProbe.Unavailable),
             TermuxInstallProbe { TermuxInstallState.RunCommandUnavailable })
         assertThat(manager.ensureReadyForSession(1000))
-            .isEqualTo(TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.TERMUX_NOT_RUNNING))
+            .isEqualTo(TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.BRIDGE_OFFLINE_NO_RUN_COMMAND))
+        assertThat(runner.commands).isEmpty()
+    }
+
+    @Test
+    fun `offline unsupported service is not evidence Termux process stopped`() = runTest {
+        val runner = FakeCommandRunner()
+        val manager = manager(runner, FakeHealthProbe(HealthProbe.Unavailable),
+            TermuxInstallProbe { TermuxInstallState.RunCommandUnavailable })
+        for (status in listOf(manager.healthCheck(), manager.ensureReadyForSession(1000), manager.restart())) {
+            assertThat((status as TermuxBridgeStatus.NeedsSetup).reason.name)
+                .isEqualTo("BRIDGE_OFFLINE_NO_RUN_COMMAND")
+        }
+        assertThat(runner.commands).isEmpty()
+    }
+
+    @Test
+    fun `restricted restart never falls through to bootstrap or rewrites pairing`() = runTest {
+        val runner = FakeCommandRunner(startError = RunCommandError.StartRestricted("restricted"))
+        val manager = manager(runner, FakeHealthProbe(HealthProbe.Unavailable))
+        val status = manager.restart() as TermuxBridgeStatus.NeedsSetup
+        assertThat(status.reason.name).isEqualTo("TERMUX_START_RESTRICTED")
+        assertThat(runner.commands).containsExactly(Command.Start)
+        assertThat(runner.installCalls).isEqualTo(0)
+        assertThat(runner.deployCalls).isEqualTo(0)
+    }
+
+    @Test
+    fun `diagnostics are passive even for a ready bridge`() = runTest {
+        val runner = FakeCommandRunner()
+        val manager = manager(runner, FakeHealthProbe(HealthProbe.Ready),
+            TermuxInstallProbe { TermuxInstallState.RunCommandUnavailable })
+        val before = manager.state.value
+        assertThat(manager.diagnosticSnapshot()).isEqualTo(TermuxBridgeDiagnosticSnapshot(
+            TermuxInstallState.RunCommandUnavailable, HealthProbe.Ready))
+        assertThat(manager.state.value).isEqualTo(before)
         assertThat(runner.commands).isEmpty()
     }
 
@@ -122,6 +157,8 @@ class TermuxBridgeManagerTest {
             HealthProbe.Ready to TermuxBridgeStatus.Ready,
             HealthProbe.AuthMismatch to TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.AUTH_MISMATCH),
             HealthProbe.InvalidIdentity to TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.PORT_IN_USE),
+            HealthProbe.UnverifiedListener to TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.BRIDGE_HEALTH_UNVERIFIED),
+            HealthProbe.ResponseTimeout to TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.BRIDGE_RESPONSE_TIMEOUT),
         ).forEach { (health, expected) ->
             val runner = FakeCommandRunner()
             val manager = manager(runner, FakeHealthProbe(health))
@@ -145,7 +182,7 @@ class TermuxBridgeManagerTest {
                 Triple(
                     ForegroundServiceStartNotAllowedException(FGS_REJECTED_MESSAGE).toRunCommandStartError(),
                     TermuxInstallProbe { TermuxInstallState.Available },
-                    NeedsSetupReason.UNKNOWN
+                    NeedsSetupReason.TERMUX_START_RESTRICTED
                 )
             )
 
@@ -362,7 +399,8 @@ class TermuxBridgeManagerTest {
         private val bridgeExists: Boolean = true,
         private val probeError: RunCommandError? = null,
         private val installGate: CompletableDeferred<Unit>? = null,
-        private val bridgeExistsGate: CompletableDeferred<Unit>? = null
+        private val bridgeExistsGate: CompletableDeferred<Unit>? = null,
+        private val startError: RunCommandError? = null
     ) : TermuxCommandRunner {
         val commands = mutableListOf<Command>()
         var installCalls = 0
@@ -424,6 +462,7 @@ class TermuxBridgeManagerTest {
                 "nohup python3 ~/.closepaw/bridge.py" in command -> {
                     commands += Command.Start
                     startCalls += 1
+                    startError?.let { throw it }
                     lastStartCommand = command
                     bridgeReady = true
                     RunCommandResult("CLOSEPAW_START=ok\n", "", 0)
