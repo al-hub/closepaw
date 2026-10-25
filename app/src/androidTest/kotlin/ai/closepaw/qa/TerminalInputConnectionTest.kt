@@ -56,7 +56,7 @@ class TerminalInputConnectionTest {
             }
             val port = AndroidControlPort(service, runtime = settings.runtimeControl) { settings.genericControlEnabled }
             val control = GenericControl(port, { settings.genericControlEnabled })
-            suspend fun settled(): ai.closepaw.chatgpt.operations.OperationResult {
+            suspend fun settled(requireIme: Boolean = true): ai.closepaw.chatgpt.operations.OperationResult {
                 var previous=port.capture()
                 var stableSince=SystemClock.elapsedRealtime()
                 val deadline=stableSince+15_000
@@ -66,7 +66,7 @@ class TerminalInputConnectionTest {
                     // Two early identical app frames can precede the delayed IME launch.
                     // Wait for the actual IME window and a continuous stable interval;
                     // never retry an action or loosen production freshness checks.
-                    val stable=next.keyboard != null && GenericControlActionPolicy.refusal(previous,next,"terminal_input") == null && previous.touchContext == next.touchContext
+                    val stable=(!requireIme || next.keyboard != null) && GenericControlActionPolicy.refusal(previous,next,"terminal_input") == null && previous.touchContext == next.touchContext
                     if (!stable) stableSince=SystemClock.elapsedRealtime()
                     if (stable && SystemClock.elapsedRealtime()-stableSince >= 1_200)
                         return control.observe()
@@ -136,7 +136,9 @@ class TerminalInputConnectionTest {
                 instrumentation.runOnMainSync { denied = service.inputMethod?.currentInputEditorInfo?.let { it.packageName == "com.termux" && it.inputType != 0 } == true }
                 denied
             }
-            val protected = control.observe()
+            // Unlock/restartInput may remove the IME window. Re-observe only after
+            // that OS transition settles; never bypass the secure-window guard.
+            val protected = settled(requireIme=false)
             assertTrue(protected.toString(),protected.success)
             run {
                 val node = protected.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["resource_id"]?.jsonPrimitive?.content == "com.termux:id/terminal_view" }
