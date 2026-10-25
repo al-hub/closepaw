@@ -1,0 +1,71 @@
+{
+  "status": "PARTIAL",
+  "issue161_close_eligible": false,
+  "issue147_status": "OPEN",
+  "code_head": "8c4d6ac6018ced47ee76db65c4515412ec3d85cb",
+  "ci_checkout_merge_sha": "b1048e8556e9d0eba50d806745954fbff67dae5d",
+  "ci_checkout_parents": [
+    "34b602a469ef3325bf13c73517c4338c7b224adf",
+    "8c4d6ac6018ced47ee76db65c4515412ec3d85cb"
+  ],
+  "checkout_tree_equals_code_head_tree": "ff797cf0645e7ca71b4e3e9ea0d4b3dda1578ebc",
+  "security_ci": {
+    "run_id": 40163758253,
+    "status": "success",
+    "jvm_tests": 2765,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "new_timing_tests": 4,
+    "new_prototype_tests": 8,
+    "artifact_id": 12587393179,
+    "artifact_sha256": "73cd04ae8507dc8acb0e1cf82ff8023849f365257534204234a1eb8c702cff63"
+  },
+  "local_python_tests": {
+    "tests": 43,
+    "failures": 0,
+    "errors": 0
+  },
+  "acceptance_artifact": {
+    "id": 12587612729,
+    "sha256": "74c6564bc4d333cc1153d74bba3731acfef9327e052c70398a264bae549a44d4"
+  },
+  "independent_review": "Findings fixed and re-reviewed: child self-cancellation, metadata labels, snapshot correlation, queued proof accounting.",
+  "device_A_through_F": "NOT_TESTED",
+  "evidence_acquisition_cost_comparison": "NOT_TESTED",
+  "android_matched_10_plus_10": "NOT_TESTED",
+  "new_path_physical_x": "NOT_TESTED",
+  "cpu_memory_event_delivery_physical_render_voice_e2e": "NOT_MEASURED",
+  "virtual_model": "NOT_ANDROID_PERFORMANCE; chosen inputs execution1200ms/verification40ms; testScheduler domain",
+  "historical_reference": {
+    "version": "0.1.85/code86",
+    "server_task_duration_ms": [
+      11371,
+      11273,
+      11287
+    ],
+    "status": "REUSED_EVIDENCE",
+    "source": "https://github.com/al-hub/closepaw/issues/147#issuecomment-6392816297",
+    "scope": "server task start-to-complete; Android process clock equivalence not established"
+  },
+  "actual_speedup": "NOT_COMPUTED",
+  "new_phone_session": false,
+  "apk_release_or_install": false,
+  "preserved_files_sha256": {
+    "TEST-ai.closepaw.chatgpt.control.ControlTimingTest.xml": "00b2d67d2c04a9110c255123bfb4ea7048a5c3d3976ce393d12b28d7e7bfd66e",
+    "TEST-ai.closepaw.chatgpt.control.VerificationPipelinePrototypeTest.xml": "f60a0b24759d8f17111a2fe49038e8a8a6624a851f53f6215f06c1d4ba5f0bb4",
+    "virtual-model.json": "68f07e53994a6ff12004bcba002de40020d1c018acf817f8fd3f45483dbd9d10",
+    "android-ui-results.xml": "2823c5e5c371bd72a94b4b12bd7ff170a852bf51be526769308c4a6d63bda8e2"
+  },
+  "ui_ci": {
+    "run_id": 40163758255,
+    "status": "success",
+    "ui_tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "pngs": 8,
+    "artifact_id": 12587503150,
+    "artifact_sha256": "739080115e76d6bab106b188d2d8680d3ab0583328d47adbb7203abfb9bcf121"
+  }
+}

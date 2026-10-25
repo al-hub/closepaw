@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ai.closepaw.chatgpt.control.VerificationPipelinePrototypeTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-25T05:02:17" hostname="runnervmtai0g" time="0.047">
+  <properties/>
+  <testcase name="xDuringVerifierDelayCancelsProducerWithoutExecutingOrReplayingQueue" classname="ai.closepaw.chatgpt.control.VerificationPipelinePrototypeTest" time="0.008"/>
+  <testcase name="immutableSnapshotSurvivesLaterUiMutationAndDelayedEventsNeedActualResult" classname="ai.closepaw.chatgpt.control.VerificationPipelinePrototypeTest" time="0.003"/>
+  <testcase name="eachSafetySignalStopsAtNativeBoundaryAndDiscardsPendingWork" classname="ai.closepaw.chatgpt.control.VerificationPipelinePrototypeTest" time="0.003"/>
+  <testcase name="tenPlusTenVirtualTimeModelIsExplicitlyNotAnAndroidPerformanceResult" classname="ai.closepaw.chatgpt.control.VerificationPipelinePrototypeTest" time="0.019"/>
+  <testcase name="missingDuplicateReversedStaleOrWrongWindowEvidenceCannotVerifySuccess" classname="ai.closepaw.chatgpt.control.VerificationPipelinePrototypeTest" time="0.005"/>
+  <testcase name="verifierExceptionAndExternalCancellationNeverResumeExecution" classname="ai.closepaw.chatgpt.control.VerificationPipelinePrototypeTest" time="0.005"/>
+  <testcase name="independentlyCancelledCallbacksStopSiblingWithoutDeadlockOrFalseSuccess" classname="ai.closepaw.chatgpt.control.VerificationPipelinePrototypeTest" time="0.001"/>
+  <testcase name="boundedOneAndTwoRetainCorrectOrderAndApplyBackpressure" classname="ai.closepaw.chatgpt.control.VerificationPipelinePrototypeTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
