@@ -37,7 +37,7 @@ internal object VisualImageCache {
     }
     @Synchronized fun imageFor(result: JsonObject): ScreenImage? {
         prune()
-        val data=(result["result"] as? JsonObject)?.get("data") as? JsonObject
+        val data=((result["result"] as? JsonObject)?.get("data") ?: result["data"]) as? JsonObject
         val visual=(data?.get("visual") ?: result["visual"]) as? JsonObject ?: return null
         val id=(visual["visual_id"] as? JsonPrimitive)?.content ?: return null
         return images[id]?.proof?.image

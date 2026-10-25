@@ -43,4 +43,24 @@ class ControlResultPolicyTest {
         selections.clear()
         assertEquals("app_selection_required", selections.refusal("gemini", true))
     }
+    @Test fun exactInputSurvivesUniqueSemanticFieldResizeOnlyAfterDispatch() {
+        val field = ControlNode(7, resourceId = "browser:id/url", className = "android.widget.EditText",
+            bounds = "224 127 1076 323", sourceWindowId = 1, sourcePackage = "browser", editable = true,
+            focused = true, setText = true, selectionStart = 0, selectionEnd = 0)
+        val old = ControlFrame("browser", 1, "before", listOf(field))
+        val changed = field.copy(text = "한글 A1!", bounds = "224 127 1244 323")
+        val next = old.copy(nodes = listOf(changed), fingerprint = "after")
+        val input = buildJsonObject { put("text", "한글 A1!"); put("method", "direct"); put("mode", "empty") }
+        fun verify(frame: ControlFrame) = ControlResultPolicy.verify("input", old, frame, field, input).confirmed
+        assertTrue(verify(next))
+        for (bad in listOf(next.copy(packageName = "other"), next.copy(windowId = 2), next.copy(truncated = true),
+            next.copy(nodes = listOf(changed, changed.copy(bounds = field.bounds))),
+            next.copy(nodes = listOf(changed.copy(focused = false))), next.copy(nodes = listOf(changed.copy(password = true))),
+            next.copy(nodes = listOf(changed.copy(enabled = false))), next.copy(nodes = listOf(changed.copy(text = "한글 A1!!"))),
+            next.copy(nodes = listOf(changed.copy(sourceWindowId = 2))), next.copy(nodes = listOf(changed.copy(sourcePackage = "other")))))
+            assertFalse(verify(bad))
+        assertFalse(ControlResultPolicy.verify("input", old.copy(nodes = listOf(field, field.copy(bounds = "elsewhere"))), next, field, input).confirmed)
+        assertFalse(ControlResultPolicy.verify("input", old.copy(nodes = listOf(field.copy(resourceId = ""))),
+            next.copy(nodes = listOf(changed.copy(resourceId = ""))), field.copy(resourceId = ""), input).confirmed)
+    }
 }

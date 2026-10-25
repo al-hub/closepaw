@@ -35,7 +35,7 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val touchContext: String = "", val foregroundWindowId: Int = windowId, val windowContext: String = "",
     val windowDiagnostics: JsonObject? = null, val configurationRevision: Long = 0, val outputLimit: Int = 50,
     val verifiedApplicationPackage: String? = null, val keyboard: ControlKeyboard? = null, val inputTargetId: Int? = null, val inputTarget: ControlNode? = null, val visual: VisualTargetProof? = null,
-    val terminalSubmission: TerminalSubmission? = null)
+    val terminalSubmission: TerminalSubmission? = null, val keyboardDiagnostics: JsonObject? = null)
 /** Logical identity is supplied only by a complete, guarded native application identity scan. */
 internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expected != null && reason == null &&
     (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
@@ -77,7 +77,10 @@ internal interface ControlPort : IslandControlPort {
 /** One current, expiring, single-use observation. No planner or model names in the executor. */
 internal class GenericControl(private val port: ControlPort, private val allowed: () -> Boolean,
     private val now: () -> Long = System::currentTimeMillis) {
-    private data class Observation(val id: String, val at: Long, val frame: ControlFrame, val epoch: Long)
+    // Action IDs remain limited to disclosed nodes; postcondition uniqueness uses
+    // the complete native scan, including nodes omitted by filter/output limits.
+    private data class Observation(val id: String, val at: Long, val frame: ControlFrame, val epoch: Long,
+        val verificationFrame: ControlFrame)
     private var current: Observation? = null
     private data class PendingTerminal(val proof: TerminalSubmission, val frame: ControlFrame, val node: ControlNode, val epoch: Long, val at: Long)
     private var pendingTerminal: PendingTerminal? = null
@@ -119,7 +122,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         // Full security/fingerprint traversal is independent of bounded presentation.
         // Only IDs actually disclosed in this observation may be acted on.
         val bounded = frame.copy(nodes = exposed)
-        val observation = Observation(UUID.randomUUID().toString(), now(), bounded, port.session()?.epoch ?: 0L)
+        val observation = Observation(UUID.randomUUID().toString(), now(), bounded, port.session()?.epoch ?: 0L, frame)
         current = observation
         frame.visual?.let { proof ->
             val sessionId = port.session()?.id; val epoch = port.session()?.epoch
@@ -133,6 +136,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 put("window_id", it.windowId); put("package_name", it.packageName); put("input_method_id", it.inputMethodId)
                 put("read_allowed", it.readAllowed); put("interaction_allowed", it.interactAllowed)
                 put("semantic_keys_only", true); put("input_target_verified", frame.inputTargetId != null)
+                frame.keyboardDiagnostics?.let { diagnostics -> put("scan", diagnostics) }
             }) }
             put("package_name", frame.packageName); put("window_id", frame.windowId)
             frame.verifiedApplicationPackage?.let { put("verified_application_package", it) }
@@ -277,7 +281,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val changed = post != null && post.reason == null &&
             (frame.fingerprint != post.fingerprint || frame.packageName != post.packageName || frame.windowId != post.windowId)
         noProgress = if (changed) 0 else noProgress + 1
-        val verdict = controlSpan("result_validation") { ControlResultPolicy.verify(action, frame, post, node, input) }
+        val verdict = controlSpan("result_validation") { ControlResultPolicy.verify(action, observation.verificationFrame, post, node, input) }
         val verified = effect.acknowledged && observed?.success == true && verdict.confirmed
         if (verified && action == "terminal_input" && node?.terminal != null && post != null) {
             val after = post.nodes.singleOrNull { it.resourceId == node.resourceId && it.className == node.className &&

@@ -9,7 +9,7 @@ internal object ControlResultPolicy {
         if (after == null || after.reason != null) return Verdict(false, "post_observation_unavailable")
         if (action == "open_app") return Verdict(after.matchesApplication(input["package_name"]?.jsonPrimitive?.content),
             "target_app_not_observed", true)
-        if (after.truncated && action != "home") return Verdict(false, "post_observation_incomplete")
+        if ((before.truncated || after.truncated) && action != "home") return Verdict(false, "post_observation_incomplete")
         if (action == "key") {
             if (node == null || before.keyboard == null || before.keyboard != after.keyboard ||
                 before.packageName != after.packageName || before.windowId != after.windowId)
@@ -37,18 +37,16 @@ internal object ControlResultPolicy {
         val matching = after.nodes.filter { owned(it) && it.resourceId == node?.resourceId && it.bounds == node?.bounds &&
             it.className == node?.className }
         val target = matching.singleOrNull()
-        if (action == "focus") {
-            // IME opening may resize/move the field. Only a unique nonempty semantic identity
-            // can survive that geometry change; never choose one of duplicate resource IDs.
-            val uniqueBefore = node != null && node.resourceId.isNotEmpty() && before.nodes.count {
-                owned(it) && it.resourceId == node.resourceId && it.className == node.className
-            } == 1
-            val semantic = if (uniqueBefore) after.nodes.filter {
-                owned(it) && it.resourceId == node?.resourceId && it.className == node?.className
-            }.singleOrNull() else target
-            return Verdict(after.packageName == before.packageName && after.windowId == before.windowId &&
-                semantic?.focused == true, "focus_unconfirmed", true)
-        }
+        // Post-effect geometry may legitimately change (IME, clear button, browser toolbar).
+        // Only a unique nonempty semantic identity in BOTH complete frames can survive it.
+        // Pre-dispatch freshness/geometry guards remain exact and are not changed here.
+        val semantic = if (node != null && node.resourceId.isNotEmpty() && node.className.isNotEmpty() &&
+            node.sourceWindowId >= 0 && node.sourcePackage.isNotEmpty() &&
+            before.nodes.count { owned(it) && it.resourceId == node.resourceId && it.className == node.className } == 1)
+            after.nodes.filter { owned(it) && it.resourceId == node.resourceId && it.className == node.className }.singleOrNull()
+        else target
+        if (action == "focus") return Verdict(after.packageName == before.packageName && after.windowId == before.windowId &&
+            semantic?.focused == true, "focus_unconfirmed", true)
         if (action == "terminal_submit" && node != null) return Verdict(
             after.packageName == before.packageName && after.windowId == before.windowId && target?.focused == true &&
                 node.terminal != null && TerminalInputPolicy.submitted(node.terminal,target.terminal,
@@ -63,7 +61,7 @@ internal object ControlResultPolicy {
                 input["method"]?.jsonPrimitive?.content ?: "auto", input["mode"]?.jsonPrimitive?.content ?: "empty",
                 input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true)
             return Verdict(plan.refusal == null && after.packageName == before.packageName && after.windowId == before.windowId &&
-                target?.text == plan.resultText && target.focused && target.editable && !target.password,
+                semantic?.text == plan.resultText && semantic.focused && semantic.editable && semantic.enabled && !semantic.password,
                 "input_unconfirmed", true)
         }
         if (action == "type") return Verdict(after.packageName == before.packageName && target?.text == input["text"]?.jsonPrimitive?.content, "input_unconfirmed", true)

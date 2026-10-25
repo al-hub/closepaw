@@ -12,6 +12,7 @@ class UnifiedInputEngineTest {
         var frame = ControlFrame("example.app", 1, "initial", listOf(node))
         var writes = 0
         var confirmed = true
+        var resize = false
         var effect = ControlEffect(true, true, "action_acknowledged")
         override suspend fun capture() = frame
         override suspend fun apps(filter: String) = JsonArray(emptyList())
@@ -20,7 +21,7 @@ class UnifiedInputEngineTest {
             if (confirmed && effect.attempted) {
                 val plan = UnifiedInputPolicy.plan(node!!, input.getValue("text").jsonPrimitive.content,
                     input["method"]?.jsonPrimitive?.content ?: "auto", input["mode"]?.jsonPrimitive?.content ?: "empty", true)
-                this.frame = frame.copy(fingerprint = "changed", nodes = listOf(node.copy(text = plan.resultText)))
+                this.frame = frame.copy(fingerprint = "changed", nodes = listOf(node.copy(text = plan.resultText, bounds = if (resize) "0 0 120 100" else node.bounds)))
             }
             return effect
         }
@@ -70,13 +71,28 @@ class UnifiedInputEngineTest {
         }
     }
     @Test fun focusCanFollowUniqueSemanticFieldAcrossImeResizeButNotDuplicates() {
-        val node = Port().node.copy(focused = false)
+        val node = Port().node.copy(focused = false, sourceWindowId = 1, sourcePackage = "example.app")
         val before = ControlFrame("example.app", 1, "before", listOf(node))
         val moved = node.copy(bounds = "0 0 100 50", focused = true)
         val after = before.copy(fingerprint = "ime", nodes = listOf(moved))
         assertTrue(ControlResultPolicy.verify("focus", before, after, node, buildJsonObject {}).confirmed)
         assertFalse(ControlResultPolicy.verify("focus", before.copy(nodes = listOf(node, node.copy(id = 2))), after, node, buildJsonObject {}).confirmed)
         assertFalse(ControlResultPolicy.verify("focus", before, after.copy(nodes = listOf(moved, moved.copy(id = 2))), node, buildJsonObject {}).confirmed)
+    }
+
+    @Test fun hiddenDuplicateOutsideOutputLimitCannotProveResizedInput() = runBlocking {
+        val port = Port().apply {
+            node = node.copy(sourceWindowId = 1, sourcePackage = "example.app")
+            frame = frame.copy(outputLimit = 1, nodes = listOf(node, node.copy(id = 2, bounds = "0 100 100 200", focused = false)))
+            resize = true
+        }
+        val control = GenericControl(port, { true })
+        val observed = control.observe()
+        assertTrue(observed.data.getValue("output_truncated").jsonPrimitive.boolean)
+        val result = control.action(input(observed.data.getValue("observation_id").jsonPrimitive.content))
+        assertFalse(result.success)
+        assertTrue(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+        assertEquals(1, port.writes)
     }
 
     @Test fun imeNodeCannotMasqueradeAsAnApplicationInputPostcondition() {
