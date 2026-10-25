@@ -27,10 +27,19 @@ public final class TerminalView extends View {
         return new BaseInputConnection(this, true) {
             @Override public boolean commitText(CharSequence text, int cursor) {
                 super.commitText(text, cursor); Editable content = getEditable();
-                echo += (echo.endsWith("$") ? " " : "") + content.toString(); content.clear();
+                String committed = content.toString();
+                if (committed.equals("\n")) echo += "\nfixture_ok\n~ $";
+                else echo += (echo.endsWith("$") ? " " : "") + committed;
+                content.clear();
                 setContentDescription(echo); invalidate(); sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED); return true;
             }
         };
     }
-    @Override protected void onDraw(Canvas canvas) { super.onDraw(canvas); canvas.drawRGB(245,245,245); canvas.drawText(echo, 16, 80, paint); }
+    @Override public boolean onTouchEvent(android.view.MotionEvent event) {
+        if (event.getAction() == android.view.MotionEvent.ACTION_UP && event.getX() >= 16 && event.getX() <= 180 && event.getY() >= 120 && event.getY() <= 200) {
+            echo += "\nfixture_visual_clicked"; setContentDescription(echo); invalidate(); sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
+        }
+        return true;
+    }
+    @Override protected void onDraw(Canvas canvas) { super.onDraw(canvas); canvas.drawRGB(245,245,245); canvas.drawText(echo, 16, 80, paint); paint.setColor(android.graphics.Color.BLUE); canvas.drawRect(16,120,180,200,paint); paint.setColor(android.graphics.Color.BLACK); }
 }

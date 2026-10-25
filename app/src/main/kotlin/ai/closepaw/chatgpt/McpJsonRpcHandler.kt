@@ -251,6 +251,10 @@ internal class McpJsonRpcHandler(
                         put("type", "text")
                         put("text", content)
                     })
+                    ai.closepaw.chatgpt.control.VisualImageCache.imageFor(structured)?.let { image ->
+                        add(buildJsonObject { put("type", "image"); put("mimeType", image.mimeType)
+                            put("data", android.util.Base64.encodeToString(image.bytes, android.util.Base64.NO_WRAP)) })
+                    }
                 })
                 put("structuredContent", structured)
                 put("isError", isError)

@@ -34,7 +34,7 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val truncationReasons: Set<String> = emptySet(), val visitedNodes: Int = 0, val maxDepth: Int = 0,
     val touchContext: String = "", val foregroundWindowId: Int = windowId, val windowContext: String = "",
     val windowDiagnostics: JsonObject? = null, val configurationRevision: Long = 0, val outputLimit: Int = 50,
-    val verifiedApplicationPackage: String? = null, val keyboard: ControlKeyboard? = null, val inputTargetId: Int? = null, val inputTarget: ControlNode? = null)
+    val verifiedApplicationPackage: String? = null, val keyboard: ControlKeyboard? = null, val inputTargetId: Int? = null, val inputTarget: ControlNode? = null, val visual: VisualTargetProof? = null)
 /** Logical identity is supplied only by a complete, guarded native application identity scan. */
 internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expected != null && reason == null &&
     (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
@@ -62,6 +62,7 @@ internal interface ControlPort : IslandControlPort {
         }
         return post
     }
+    suspend fun visual(frame: ControlFrame): VisualTargetProof? = null
     suspend fun capture(): ControlFrame
     // Must recheck consent and action-scoped freshness/identity at the native action boundary.
     suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect
@@ -79,15 +80,20 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     private var chainStarted = 0L
     private var chainActions = 0
     private var noProgress = 0
-    fun invalidate(clearSelections: Boolean = false) { current = null; port.invalidate(); if (clearSelections) port.clearSelections() }
+    fun invalidate(clearSelections: Boolean = false) { VisualImageCache.remove(current?.frame?.visual?.id); current = null; port.invalidate(); if (clearSelections) port.clearSelections() }
 
-    suspend fun observe(filter: String = ""): OperationResult {
-        current = null
+    suspend fun observe(filter: String = "", includeImage: Boolean = false): OperationResult {
+        VisualImageCache.remove(current?.frame?.visual?.id); current = null
         chainStarted = now(); chainActions = 0; noProgress = 0
         if (!allowed()) return failure("generic_control_disabled")
         val visualEpoch = port.session()?.epoch
         port.presentation(ControlSession.VisualPhase.OBSERVING, visualEpoch)
-        val result = publish(port.capture(), filter)
+        var frame = port.capture()
+        if (includeImage && frame.reason == null && !frame.truncated) {
+            val visual = port.visual(frame) ?: return failure("visual_observation_unavailable")
+            frame = frame.copy(visual = visual)
+        }
+        val result = publish(frame, filter)
         port.presentation(if (result.success) ControlSession.VisualPhase.WAITING else ControlSession.VisualPhase.FAILED, visualEpoch)
         port.feedbackAtEpoch(if (result.success) "접근성 확인 완료 · 다음 명령 대기" else "화면 확인 실패 · 재관찰 필요", visualEpoch)
         return result
@@ -111,7 +117,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val bounded = frame.copy(nodes = exposed)
         val observation = Observation(UUID.randomUUID().toString(), now(), bounded, port.session()?.epoch ?: 0L)
         current = observation
+        frame.visual?.let { proof ->
+            val sessionId = port.session()?.id; val epoch = port.session()?.epoch
+            val owner = java.lang.ref.WeakReference(this)
+            VisualImageCache.put(proof) { owner.get()?.canReadVisual(sessionId, epoch) == true }
+        }
         return OperationResult(data = buildJsonObject {
+            frame.visual?.let { put("visual", it.metadata()) }
             put("observation_id", observation.id); put("observed_at_ms", observation.at); put("expires_in_ms", 60_000)
             frame.keyboard?.let { put("keyboard", buildJsonObject {
                 put("window_id", it.windowId); put("package_name", it.packageName); put("input_method_id", it.inputMethodId)
@@ -179,13 +191,14 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val started = now()
         val startedNs = System.nanoTime()
         // Consume before any native side effect, including failure, cancellation and lost transport.
+        VisualImageCache.remove(observation.frame.visual?.id)
         current = null
         if (observation.epoch != (port.session()?.epoch ?: 0L)) return failure("control_session_changed_observe_again")
         if (now() - observation.at !in 0L..60_000L) return failure("observation_expired")
         if (chainActions >= 20 || now() - chainStarted !in 0L..180_000L || noProgress >= 3)
             return failure("control_chain_limit_observe_again")
         val action = input["action"]?.jsonPrimitive?.content.orEmpty()
-        if (action !in setOf("click", "tap", "long_press", "type", "input", "terminal_input", "focus", "key", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
+        if (action !in setOf("click", "tap", "long_press", "type", "input", "terminal_input", "terminal_submit", "focus", "key", "scroll", "visual_tap", "visual_long_press", "visual_drag", "visual_scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
         val frame = observation.frame
         if (!port.validatesAtNativeBoundary) {
             val fresh = port.capture()
@@ -193,9 +206,14 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 return failure(it, GenericControlActionPolicy.validationScope(action), fresh.windowDiagnostics)
             }
         }
+        if (action.startsWith("visual_")) {
+            val proof = frame.visual ?: return failure("visual_observation_required")
+            if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
+                now() - proof.at !in 0L..60_000L) return failure("visual_proof_invalid_or_expired")
+        }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
-        if (action in setOf("click", "tap", "long_press", "type", "input", "terminal_input", "focus", "key", "scroll", "expand", "collapse")) {
+        if (action in setOf("click", "tap", "long_press", "type", "input", "terminal_input", "terminal_submit", "focus", "key", "scroll", "expand", "collapse")) {
             if (node == null || !node.enabled || node.password) return failure("target_unavailable")
             if ((action in setOf("click", "tap") && !node.clickable) || (action == "long_press" && !node.longClickable)) return failure("target_not_clickable")
             if ((action == "expand" && !node.expandable) || (action == "collapse" && !node.collapsible)) return failure("native_action_unavailable")
@@ -215,6 +233,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     return failure("submission_authorization_required")
             }
             if (action == "focus" && !node.focusable) return failure("target_not_focusable")
+            if (action == "terminal_submit") {
+                TerminalInputPolicy.submitRefusal(node, input["text"]?.jsonPrimitive?.content.orEmpty(),
+                    input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true,
+                    input["submit_authorized"]?.jsonPrimitive?.booleanOrNull == true)?.let { return failure(it) }
+            }
             if (action == "terminal_input") {
                 TerminalInputPolicy.refusal(node, input["text"]?.jsonPrimitive?.content.orEmpty(),
                     input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true)?.let { return failure(it) }
@@ -236,7 +259,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val effect = controlSpan("native_action") { port.perform(frame, input, node) }
         val performedAtNs = System.nanoTime()
         // After an attempted action even a negative native acknowledgement is not proof of no effect.
-        val post = if (effect.attempted) controlSpan("post_observation") { port.captureAfter(frame, input) } else null
+        val post = if (effect.attempted) controlSpan("post_observation") { port.captureAfter(frame, input).copy(visual = null) } else null
         val observed = if (post != null && allowed()) publish(post) else null
         val changed = post != null && post.reason == null &&
             (frame.fingerprint != post.fingerprint || frame.packageName != post.packageName || frame.windowId != post.windowId)
@@ -344,6 +367,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             current?.let { put("observation_id", it.id) }
         })
     }
+    private fun canReadVisual(id: String?, epoch: Long?) = allowed() && port.session()?.id == id &&
+        port.session()?.epoch == epoch && port.session()?.state == ControlSession.State.ACTIVE
     private fun failure(reason: String, validationScope: String? = null, diagnostics: JsonObject? = null) = OperationResult(success = false, summary = reason,
         data = buildJsonObject { put("reason_code", reason); put("action_attempted", false); put("outcome_unknown", false); validationScope?.let { put("validation_scope", it) }
             diagnostics?.let { put("window_diagnostics", it) } })

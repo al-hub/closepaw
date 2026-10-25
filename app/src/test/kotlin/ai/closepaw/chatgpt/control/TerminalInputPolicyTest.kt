@@ -6,8 +6,14 @@ import org.junit.Test
 class TerminalInputPolicyTest {
     private fun node(echo: String = "~ $") = ControlNode(1, className = "com.termux.view.TerminalView", resourceId = "com.termux:id/terminal_view",
         bounds = "0 0 200 300", focused = true, focusable = true, sourceWindowId = 1, sourcePackage = "com.termux", terminal = TerminalEvidence(echo, 3, 11))
+    @Test fun onlyDocumentedNullClassTerminalModesAreAccepted() {
+        assertTrue(TerminalInputPolicy.inputTypeAllowed(0)); assertTrue(TerminalInputPolicy.inputTypeAllowed(0x00080090))
+        for (type in listOf(0x81,0x91,0x80091,0x12,0x01)) assertFalse(TerminalInputPolicy.inputTypeAllowed(type))
+    }
     @Test fun wholeSingleLineInputRequiresRealBindingEmptyPromptAndExplicitConsent() {
         assertNull(TerminalInputPolicy.refusal(node(), "printf closepaw_ok", true))
+        assertNull(TerminalInputPolicy.refusal(node().copy(className="android.view.View"),"hello",true))
+        assertNotNull(TerminalInputPolicy.refusal(node().copy(className="android.widget.EditText"),"hello",true))
         for (target in listOf(node().copy(terminal = null), node().copy(focused = false), node("Password:"), node("$ existing"), node().copy(password = true), node().copy(sourcePackage = "other")))
             assertNotNull(TerminalInputPolicy.refusal(target, "hello", true))
         for (text in listOf("echo x\n", "a\r", "token=abc", "", "hello ")) assertNotNull(TerminalInputPolicy.refusal(node(), text, true))
@@ -18,6 +24,16 @@ class TerminalInputPolicyTest {
         assertTrue(TerminalInputPolicy.inserted(before, before.copy(echo = "~ $ 한글 A1!"), "한글 A1!"))
         for (after in listOf(before, before.copy(echo = "~ $ 한글"), before.copy(echo = "~ $ hello", generation = 4)))
             assertFalse(TerminalInputPolicy.inserted(before, after, "hello"))
+    }
+    @Test fun submissionIsSeparateAndRequiresExactPendingCommandAndNewOutput() {
+        val pending=node("~ $ printf fixture_ok")
+        assertNull(TerminalInputPolicy.submitRefusal(pending,"printf fixture_ok",true,true))
+        assertNotNull(TerminalInputPolicy.submitRefusal(pending,"printf other",true,true))
+        assertNotNull(TerminalInputPolicy.submitRefusal(pending,"printf fixture_ok",true,false))
+        val before=pending.terminal!!; val after=before.copy(echo=before.echo+"\nfixture_ok\n~ $")
+        assertTrue(TerminalInputPolicy.submitted(before,after,"printf fixture_ok","fixture_ok"))
+        assertFalse(TerminalInputPolicy.submitted(before,before,"printf fixture_ok","fixture_ok"))
+        assertFalse(TerminalInputPolicy.submitted(before,after.copy(generation=4),"printf fixture_ok","fixture_ok"))
     }
     @Test fun realControlPathDispatchesOnceAndVerifiesWholeTerminalEcho() = runBlocking {
         class Port : ControlPort {

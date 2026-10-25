@@ -16,11 +16,11 @@ internal class VerifiedInputInvocation(override val params: JSONObject, private 
     override suspend fun execute(context: ToolExecutionContext): ToolExecutionResult {
         if (context.isCancelled()) return ToolExecutionResult.Cancelled()
         val snapshot = context.currentSnapshot ?: return ToolExecutionResult.Failure("Fresh input snapshot required")
-        if (target is Target.Coordinate || target is Target.ElementIndex && target.coordinateHint != null ||
-            target is Target.Text && target.coordinateHint != null)
+        if (target is Target.Coordinate)
             return ToolExecutionResult.Failure("Verified text input requires a semantic target; coordinate fallback is disabled")
         val element = if (target == null) snapshot.elements.filter { it.isFocused }.singleOrNull() else {
-            val resolved = TargetResolver.resolve(target, snapshot) as? TargetResolver.ResolveResult.Resolved
+            val semantic = when (target) { is Target.ElementIndex -> target.copy(coordinateHint = null); is Target.Text -> target.copy(coordinateHint = null); else -> target }
+            val resolved = TargetResolver.resolve(semantic, snapshot) as? TargetResolver.ResolveResult.Resolved
                 ?: return ToolExecutionResult.Failure("Input target unavailable or ambiguous")
             snapshot.elements.filter { it.bounds == resolved.bounds }.singleOrNull()
         } ?: return ToolExecutionResult.Failure("Unique observed input target required")

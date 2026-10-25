@@ -235,6 +235,21 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 })
         }
     }
+    override suspend fun visual(frame: ControlFrame): VisualTargetProof? {
+        if (frame.reason != null || frame.truncated || frame.touchContext.isEmpty()) return null
+        val service = AgentService.instance ?: return null
+        if (islandRefusal(sessionFor(service).id) != null) return null
+        val bounds = withContext(Dispatchers.Main) {
+            val windows = service.windows.orEmpty()
+            try { windows.singleOrNull { it.id == frame.windowId }?.let { bounds(windowBounds(it)) } }
+            finally { windows.forEach { runCatching { it.recycle() } } }
+        } ?: return null
+        probeThrottle.awaitSlot()
+        val proof = WindowVisualCapture.capture(service, frame.windowId, bounds, frame.touchContext) ?: return null
+        val after = capture()
+        return proof.takeIf { GenericControlActionPolicy.refusal(frame, after, "visual_tap") == null }
+    }
+
     private suspend fun secureWindow(service: AgentService): String? = controlSpan("security_probe") { secureWindowChecked(service) }
     private suspend fun secureWindowChecked(service: AgentService): String? {
         certifiedWindows = null
@@ -487,7 +502,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         }
         return operationHash(geometry.toString())
     }
-    private suspend fun tap(service: AgentService, frame: ControlFrame, targetBounds: Rect, targetWindowId: Int = frame.windowId, finalGuard: () -> String? = { null }): ControlEffect {
+    private suspend fun tap(service: AgentService, frame: ControlFrame, targetBounds: Rect, targetWindowId: Int = frame.windowId, endBounds: Rect? = null, durationMs: Long = 50, finalGuard: () -> String? = { null }): ControlEffect {
         // Reacquire windows immediately before dispatch, while still on Main. No suspension between
         // these checks and dispatchGesture; the gesture has no caller-controlled coordinates.
         val expectedEpoch = sessionFor(service).epoch
@@ -516,9 +531,21 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             reason(service)?.let { return ControlEffect(false, false, it) }
             mutationBlock(frame.packageName)?.let { return ControlEffect(false, false, it) }
             finalGuard()?.let { return ControlEffect(false, false, it) }
-            val path = Path().apply { moveTo(point.first.toFloat(), point.second.toFloat()) }
+            val end = endBounds?.let { NodeTapPolicy.point(bounds(it), bounds(windowBounds(window)), covering) }
+            if (endBounds != null && end == null) return ControlEffect(false, false, "gesture_end_unverified")
+            if (end != null) {
+                val steps = maxOf(kotlin.math.abs(end.first-point.first), kotlin.math.abs(end.second-point.second))
+                if (steps > 4096) return ControlEffect(false, false, "gesture_path_limit")
+                for (i in 0..maxOf(1, steps)) {
+                    val x = point.first + ((end.first-point.first).toLong()*i/maxOf(1,steps)).toInt()
+                    val y = point.second + ((end.second-point.second).toLong()*i/maxOf(1,steps)).toInt()
+                    if (!region.contains(x,y) || covering.any { it.contains(x,y) } || service.remoteControlCovers(Rect(x,y,x+1,y+1)))
+                        return ControlEffect(false, false, "gesture_path_covered")
+                }
+            }
+            val path = Path().apply { moveTo(point.first.toFloat(), point.second.toFloat()); end?.let { lineTo(it.first.toFloat(),it.second.toFloat()) } }
             val gesture = GestureDescription.Builder().setDisplayId(android.view.Display.DEFAULT_DISPLAY)
-                .addStroke(GestureDescription.StrokeDescription(path, 0, 50)).build()
+                .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs)).build()
             val eventEpoch = expectedEpoch
             val timing = currentCoroutineContext()[ControlTiming]
             val gestureId = timing?.nextId() ?: 0
@@ -558,7 +585,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val admittedEpoch = sessionFor(service).epoch
         secureWindow(service)?.let { return ControlEffect(false, false, it) }
         val action = input.getValue("action").jsonPrimitive.content
-        if (action in setOf("input", "terminal_input", "focus", "key")) {
+        if (action in setOf("input", "terminal_input", "terminal_submit", "focus", "key", "visual_tap", "visual_long_press", "visual_drag", "visual_scroll")) {
             islandRefusal(input["session_id"]?.jsonPrimitive?.content.orEmpty())?.let {
                 return ControlEffect(false, false, it)
             }
@@ -622,6 +649,26 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
             if (!packageAllowed(fresh.packageName, operation = "interact"))
                 return@withTree ControlEffect(false, false, "runtime_interaction_not_allowed")
+            if (action.startsWith("visual_")) {
+                val proof = frame.visual ?: return@withTree ControlEffect(false, false, "visual_observation_required")
+                if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
+                    System.currentTimeMillis()-proof.at !in 0L..60_000L) return@withTree ControlEffect(false,false,"visual_proof_invalid_or_expired")
+                fun rect(prefix: String): Rect? {
+                    val a = input[prefix]?.jsonArray ?: return null
+                    if (a.size != 4) return null
+                    val numbers = a.map { it.jsonPrimitive.intOrNull ?: return null }
+                    val mapped = proof.map(TapBounds(numbers[0],numbers[1],numbers[2],numbers[3])) ?: return null
+                    return Rect(mapped.left,mapped.top,mapped.right,mapped.bottom)
+                }
+                val start = rect("image_rect") ?: return@withTree ControlEffect(false,false,"visual_target_bounds_invalid")
+                val end = if (action in setOf("visual_drag","visual_scroll")) rect("image_end_rect")
+                    ?: return@withTree ControlEffect(false,false,"visual_end_bounds_required") else null
+                val latest = visual(fresh) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
+                if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context)
+                    return@withTree ControlEffect(false,false,"visual_pixels_or_geometry_changed")
+                return@withTree tap(service, fresh, start, endBounds = end,
+                    durationMs = if (action == "visual_long_press") 650 else if (end != null) 450 else 50)
+            }
             val at = fresh.nodes.indexOfFirst { it.id == node?.id }
             val target = native.getOrNull(at) ?: return@withTree ControlEffect(false, false, "target_unavailable")
             val expected = fresh.nodes[at]
@@ -648,9 +695,12 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 "long_press" -> "선택한 항목의 길게 누르기 기능을 실행합니다"
                 else -> "선택한 항목을 누르고 있습니다"
             }, admittedEpoch)
-            if (action == "terminal_input") {
+            if (action in setOf("terminal_input", "terminal_submit")) {
                 val text = input["text"]?.jsonPrimitive?.content.orEmpty()
-                TerminalInputPolicy.refusal(expected, text, input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true)?.let {
+                val refusal = if (action == "terminal_submit") TerminalInputPolicy.submitRefusal(expected,text,
+                    input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true, input["submit_authorized"]?.jsonPrimitive?.booleanOrNull == true)
+                    else TerminalInputPolicy.refusal(expected,text,input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true)
+                refusal?.let {
                     return@withTree ControlEffect(false, false, it)
                 }
                 val binding = TerminalInputBinding.capture(service)
@@ -661,7 +711,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 reason(service)?.let { return@withTree ControlEffect(false, false, it) }
                 islandRefusal(input["session_id"]?.jsonPrimitive?.content.orEmpty())?.let { return@withTree ControlEffect(false, false, it) }
                 return@withTree try {
-                    binding.commit(text)
+                    binding.commit(if (action == "terminal_submit") "\n" else text)
                     ControlEffect(true, true, "terminal_input_dispatched")
                 } catch (_: Exception) { ControlEffect(true, false, "terminal_input_unknown") }
             }

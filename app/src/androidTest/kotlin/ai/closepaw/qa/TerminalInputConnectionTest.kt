@@ -27,7 +27,14 @@ class TerminalInputConnectionTest {
         fun await(check: () -> Boolean) {
             val deadline = SystemClock.elapsedRealtime() + 10_000
             while (!check() && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(100)
-            assertTrue("Native input binding must be available", check())
+            if (!check()) {
+                var metadata="service_missing"
+                instrumentation.runOnMainSync { metadata=AgentService.instance?.inputMethod?.let { im ->
+                    val info=im.currentInputEditorInfo
+                    "started=${im.currentInputStarted},package=${info?.packageName},field=${info?.fieldId},type=${info?.inputType}"
+                } ?: "input_method_unavailable" }
+                fail("Native binding unavailable: $metadata")
+            }
         }
         await { AgentService.instance != null }
         val service = AgentService.instance!!
@@ -55,14 +62,49 @@ class TerminalInputConnectionTest {
                 put("terminal_authorized", true); put("text", "한글 A1!") }
             val result = control.action(input); assertTrue(result.toString(), result.success)
             assertFalse(control.action(input).success)
+            var priorGeneration=0L
+            instrumentation.runOnMainSync { priorGeneration=TerminalInputBinding.capture(service)?.generation ?: 0 }
+            launch(false)
+            await {
+                var ready=false
+                instrumentation.runOnMainSync {
+                    val binding=TerminalInputBinding.capture(service)
+                    val root=service.rootInActiveWindow
+                    val focus=root?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
+                    try { ready=binding != null && binding.generation > priorGeneration && focus != null &&
+                        binding.evidence(focus)?.echo?.let(TerminalInputPolicy::emptyPrompt) == true }
+                    finally { if(focus !== root) focus?.recycle(); root?.recycle() }
+                }
+                ready
+            }
+            val pending = control.observe(); assertTrue(pending.success)
+            val terminalNode = pending.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["terminal_input_supported"]?.jsonPrimitive?.booleanOrNull == true }
+            val command = "printf fixture_ok"
+            val typed = control.action(buildJsonObject { put("action","terminal_input");put("session_id",session.id);put("terminal_authorized",true)
+                put("text",command);put("observation_id",pending.data.getValue("observation_id"));put("node_id",terminalNode.getValue("node_id")) })
+            assertTrue(typed.toString(), typed.success)
+            val submitObservation = control.observe(); assertTrue(submitObservation.success)
+            val submitted = control.action(buildJsonObject { put("action","terminal_submit");put("session_id",session.id);put("terminal_authorized",true);put("submit_authorized",true)
+                put("text",command);put("expected_output","fixture_ok");put("observation_id",submitObservation.data.getValue("observation_id"));put("node_id",terminalNode.getValue("node_id")) })
+            assertTrue(submitted.toString(), submitted.success)
+            val visual = control.observe(includeImage=true); assertTrue(visual.toString(),visual.success)
+            val visualMeta=visual.data.getValue("visual").jsonObject
+            val osBounds=visual.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["resource_id"]?.jsonPrimitive?.content == "com.termux:id/terminal_view" }.getValue("bounds").jsonPrimitive.content.split(' ').map{it.toInt()}
+            val window=visualMeta.getValue("window_bounds").jsonPrimitive.content.split(' ').map{it.toInt()}
+            val ix=((osBounds[0]+80-window[0]).toLong()*visualMeta.getValue("image_width").jsonPrimitive.int/(window[2]-window[0])).toInt()
+            val iy=((osBounds[1]+160-window[1]).toLong()*visualMeta.getValue("image_height").jsonPrimitive.int/(window[3]-window[1])).toInt()
+            val tapped=control.action(buildJsonObject { put("action","visual_tap");put("session_id",session.id);put("observation_id",visual.data.getValue("observation_id"));put("visual_id",visualMeta.getValue("visual_id"));put("visual_target_confirmed",true)
+                put("image_rect",JsonArray(listOf(ix-2,iy-2,ix+2,iy+2).map{JsonPrimitive(it)})) })
+            assertTrue(tapped.toString(),tapped.success)
             launch(true)
             await {
                 var denied = false
-                instrumentation.runOnMainSync { denied = service.inputMethod?.currentInputEditorInfo?.inputType != 0 }
+                instrumentation.runOnMainSync { denied = service.inputMethod?.currentInputEditorInfo?.let { it.packageName == "com.termux" && it.inputType != 0 } == true }
                 denied
             }
             val protected = control.observe()
-            if (protected.success) {
+            assertTrue(protected.toString(),protected.success)
+            run {
                 val node = protected.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["resource_id"]?.jsonPrimitive?.content == "com.termux:id/terminal_view" }
                 val refused = control.action(buildJsonObject { put("action", "terminal_input"); put("session_id", session.id)
                     put("observation_id", protected.data.getValue("observation_id")); put("node_id", node.getValue("node_id"))

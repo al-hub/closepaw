@@ -51,7 +51,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            adb install -r qa/terminal-fixture/build/outputs/apk/debug/terminal-fixture-debug.apk
+            bash scripts/ci-gradle.sh terminal-fixture-install :terminal-fixture:installDebug -PclosepawInputFixtures=true -Pandroid.injected.build.abi=x86_64
             bash scripts/ci-gradle.sh ui-test :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest,ai.closepaw.qa.ControlOverlayWindowTest,ai.closepaw.qa.IslandOperationTest,ai.closepaw.qa.IslandScreenCoordinatesTest,ai.closepaw.qa.ClipboardProvenanceTest,ai.closepaw.qa.TerminalInputConnectionTest -PclosepawInputFixtures=true --stacktrace
             mkdir -p ui-render-evidence
             adb pull /sdcard/Download/closepaw-premium-ux-qa ui-render-evidence

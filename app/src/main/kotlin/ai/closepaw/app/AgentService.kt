@@ -171,6 +171,7 @@ class AgentService : AccessibilityService() {
     internal fun remoteControlCovers(rect: android.graphics.Rect) = remoteControlIndicator.controlCovers(rect) ||
         overlayController?.controlCovers(rect) == true
     internal fun stopRemoteAndLocalControl() {
+        ai.closepaw.chatgpt.control.VisualImageCache.clear()
         remoteControlSession.end()
         hideRemoteControlActivity(force = true)
         submitOp(Op.Shutdown)
@@ -410,6 +411,7 @@ class AgentService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        ai.closepaw.chatgpt.control.VisualImageCache.clear()
         controlUiRestoreJob?.cancel()
         runCatching { unregisterReceiver(controlScreenReceiver) }
         remoteControlSession.end()

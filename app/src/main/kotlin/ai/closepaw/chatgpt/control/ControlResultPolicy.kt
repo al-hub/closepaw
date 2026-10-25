@@ -49,6 +49,11 @@ internal object ControlResultPolicy {
             return Verdict(after.packageName == before.packageName && after.windowId == before.windowId &&
                 semantic?.focused == true, "focus_unconfirmed", true)
         }
+        if (action == "terminal_submit" && node != null) return Verdict(
+            after.packageName == before.packageName && after.windowId == before.windowId && target?.focused == true &&
+                node.terminal != null && TerminalInputPolicy.submitted(node.terminal,target.terminal,
+                    input["text"]?.jsonPrimitive?.content.orEmpty(),input["expected_output"]?.jsonPrimitive?.content.orEmpty()),
+            "terminal_execution_output_unconfirmed", true)
         if (action == "terminal_input" && node != null) return Verdict(
             after.packageName == before.packageName && after.windowId == before.windowId &&
                 target?.focused == true && node.terminal != null && TerminalInputPolicy.inserted(node.terminal,
