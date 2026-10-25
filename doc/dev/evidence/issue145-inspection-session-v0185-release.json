@@ -1,0 +1,101 @@
+{
+  "version": "0.1.85",
+  "version_code": 86,
+  "pr": 159,
+  "pr_head": "ca15054799239461d60f1fa697102935f747580e",
+  "source_commit": "8ed27ad6bb9cc97a6d28a21d8a560ed2ab150088",
+  "pr_ci": {
+    "security": 40143732746,
+    "ui": 40143732679,
+    "jvm_tests": 2753,
+    "new_contract_regressions": 3,
+    "ui_tests": 11,
+    "png": 8,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0,
+    "xml": {
+      "artifact_id": 12579433697,
+      "sha256": "2cf4ae78908dacdd5cd6fea297a1dd62f0228af50492aaf7a0d1be9fbfdb8d00"
+    },
+    "ui_artifact": {
+      "id": 12579418924,
+      "sha256": "952196e3f38a7c4b594db9a222d14cd93c51bbfede49bb7060ae6ba6a3884155"
+    }
+  },
+  "reason": "Fix deterministic missing-session-token inspection admission defect; no historical target_changed causation or speedup claim",
+  "new_phone_questions": 0,
+  "old_physical_tests_repeated": 0,
+  "previous_release_evidence": "doc/dev/evidence/issues145-147-observation-v0184-release.json",
+  "issue_status": {
+    "145": "OPEN",
+    "146": "CLOSED",
+    "147": "OPEN",
+    "150": "CLOSED"
+  },
+  "main_ci": {
+    "security": 40144294423,
+    "ui": 40144294444,
+    "signed": 40144807816,
+    "status": "PASS",
+    "jvm_tests": 2753,
+    "ui_tests": 11,
+    "png": 8,
+    "failures": 0,
+    "skips": 0,
+    "xml": {
+      "artifact_id": 12580175792,
+      "sha256": "3496e16a08adf5384b6d821652a39577f8edb9fb21e38cc06cd6ab79642bfd1d"
+    },
+    "ui_artifact": {
+      "id": 12579713976,
+      "sha256": "17b4dc68b7b54a7c559af6a8550e4ef89c5d7a483a9b7b8a19de940ac8331718"
+    },
+    "public_verification": {
+      "artifact_id": 12579564630,
+      "sha256": "556e18f6510b72a17e7321227f75333c3e9f07a438b740d5e570d414be9a67e7"
+    }
+  },
+  "apk": {
+    "status": "PASS",
+    "bytes": 116646511,
+    "sha256": "5b8cb4f565fcd146e98adf5c9d13f31941f6ed49e9cfca3c64d5291fc4e9199b",
+    "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+    "checks": [
+      "anonymous download/checksum",
+      "v3 RSA-SHA512 signed data and full chunked content digest",
+      "binary manifest ai.closepaw/0.1.85/86",
+      "two native runtimes",
+      "tag-source"
+    ]
+  },
+  "install_task_id": "900ccaa7-26f5-4574-b09d-ac0944e80231",
+  "install": {
+    "status": "PASS",
+    "requests": 1,
+    "task_id": "900ccaa7-26f5-4574-b09d-ac0944e80231",
+    "durable_current": "0.1.85/code86",
+    "independent_get_status": "reachable 0.1.85/code86"
+  },
+  "phone_verification": {
+    "status": "NOT_TESTED",
+    "inspection_invocations": 0,
+    "read_app": {
+      "status": "FAIL",
+      "request_id": "bbf9d6d1-c2d4-4413-a053-cc7b9334c923",
+      "reason_code": "control_session_ended",
+      "screenshot_attempts": 0
+    },
+    "session": {
+      "id": "f35daf6a-985f-4ba8-bb38-2f90a6e91586",
+      "start_task": "63f1c551-31cb-4c16-a183-72c0e17f7ff0",
+      "final_state": "ended",
+      "epoch": 2,
+      "physical_x_or_termination_cause": "NOT_TESTED"
+    },
+    "auto_restart": 0,
+    "repeat_end": 0,
+    "new_questions": 0,
+    "app_launch_effect": "UNCONFIRMED; read_app may launch, no screenshot taken"
+  }
+}

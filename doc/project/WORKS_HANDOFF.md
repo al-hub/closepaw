@@ -1,3 +1,15 @@
+## 2026-10-25 v0.1.85/code86 발행·설치 완료 — 읽기 실검증은 세션 종료로 미완료
+
+- [PR158](https://github.com/al-hub/closepaw/pull/158) 진단보완→0.1.84/code85, [PR159](https://github.com/al-hub/closepaw/pull/159) inspection 세션계약수정→**현재0.1.85/code86**. 최신 APK/tag source `8ed27ad6bb9cc97a6d28a21d8a560ed2ab150088`. [v85 보고서](../dev/issue145-inspection-session-v0185.md), [v85 metadata](../dev/evidence/issue145-inspection-session-v0185-release.json), [v84 실제 결과](../dev/issues145-147-observation-v0184.md).
+- v84는 snapshot 후 lock/취소/권한회수를 target_changed보다 먼저 분류하고 fixed observation_reason/예외reason만 노출. 원문/예외메시지/임의type 비공개. v84 읽기검사 snapshot_illegal_state FAIL을 새 코드로 관찰, 종료02125429-2d1d-4166-a39f-2d6d37688140/ended epoch2. 과거 question target_changed의 실제원인 확정은 아님.
+- 정적 호출 계약 결함: 기존 inspect는{}만 허용하지만 withRemoteActivity(null)를 호출해 명시적세션의 session-ID guard에서 거부됨. v85는 **session_id 필수 검증·정확한 전달**, explicitly ACTIVE/matching 세션만 허용, 기존mutex/epoch/취소/사용자우선권 유지. idle/ended/paused/legacy/stale ID에 대한 읽기·자동시작/재개 금지. 새 스키마는 반드시 fresh discover로 확인.
+- v85 PR Security40143732746/UI40143732679, main Security40144294423/UI40144294444/Signed40144807816 success. 독립 raw XML **2753 JVM/11 UI failure/error/skip0, PNG8**. v84 7개+v85 3개 회귀 포함. 공개 APK116646511bytes SHA256 `5b8cb4f565fcd146e98adf5c9d13f31941f6ed49e9cfca3c64d5291fc4e9199b`: 익명다운로드/기존 signer/v3서명·content digest/binary manifest/두runtime/tag-source 독립 PASS.
+- 설치버전별각1회: v84 taskcd1b5b2d-df67-4e80-8027-187f6d82f1d9, v85 task900ccaa7-26f5-4574-b09d-ac0944e80231. 현재durable installed/current0.1.85/code86→독립get_status reachable 확인. 같은버전 설치 재전송0, 기존키/태그/자산 덮어쓰기0.
+- v85 새 검증 세션 시작63f1c551-31cb-4c16-a183-72c0e17f7ff0, sessionf35daf6a-985f-4ba8-bb38-2f90a6e91586 active/epoch1. 대상Gemini를 읽는 read_app 1회는 **control_session_ended/User control has priority로 FAIL**, screenshot_attempts0. 독립status는 같은세션 **ended/epoch2**. 종료원인/물리X누름 여부/앱실행효과 미확인. inspect호출0, 자동재시작/재시도/중복종료0. **설치후 실제positive inspection은 NOT_TESTED**, CI/계약수정만으로 PASS 승격 금지.
+- #147 기존 raw139span은28 probes(초기1+9×3), nominal27×400ms=10800ms 정책산술을 추가감사. [출처hash·clock구분](../dev/evidence/issue147-probe-budget-20261025.json). nanoTime trace와 차감/개선율 산출 금지.400ms/신선보안검사 불변; 실제안전최적화·matched10+10·Voice E2E 미입증. 신규성능물리시험0,3회smoke 상한과10+10별도 유지.
+- **#145/#147 OPEN**, #146/#150 CLOSED. 기존Galaxy 질문PASS/잠금/회전/드래그/X와emulator 상세렌더PASS는 원source REUSED_EVIDENCE, 새APK positive/GalaxyexpandedPASS아님. 새질문/기존물리시험반복0.
+- 다음최소경로: 사용자의 새 명시적 UI요청 후 current session.status→새로허가된 active세션의 정확한ID로 inspect 단회. ended 상태를 이번과거요청으로 임의재개하지 말 것. User control has priority면 launcher/gesture/legacy 경로로 우회 금지. 새서명/재설치는 필요없음. 실제Galaxy expanded 뷰는 다음정상사용중1회관찰로 보완.
+
 ## 2026-10-24 #145 실제 에뮬레이터 상세 패널 렌더 PASS — PR157
 
 - [PR157](https://github.com/al-hub/closepaw/pull/157), main `e6b19eedd3fee6a5ea68e1e656352d6564b0eb6f`. [보고서·artifact digest](../dev/issue145-expanded-island-qa.md). production 코드/버전 변경0, 휴대폰 조작/질문/설치/기존 물리시험 반복0.
