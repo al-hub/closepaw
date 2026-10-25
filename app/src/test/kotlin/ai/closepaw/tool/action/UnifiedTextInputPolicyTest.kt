@@ -13,19 +13,19 @@ class UnifiedTextInputPolicyTest {
     @Test fun directFirstAndOrderedFallback() {
         val p = UnifiedTextInputPolicy
         val e = evidence()
-        assertThat(p.first(e)).isEqualTo(p.Channel.DIRECT)
-        assertThat(p.next(p.Channel.DIRECT, p.Result.DEFINITELY_UNSUPPORTED, e))
-            .isEqualTo(p.Channel.CLIPBOARD_PASTE)
-        assertThat(p.next(p.Channel.CLIPBOARD_PASTE, p.Result.DEFINITELY_UNSUPPORTED, e))
-            .isEqualTo(p.Channel.VISIBLE_IME)
-        assertThat(p.next(p.Channel.VISIBLE_IME, p.Result.DEFINITELY_UNSUPPORTED, e)).isNull()
+        assertThat(p.first(e)).isEqualTo(UnifiedTextInputPolicy.Channel.DIRECT)
+        assertThat(p.next(UnifiedTextInputPolicy.Channel.DIRECT, UnifiedTextInputPolicy.Result.DEFINITELY_UNSUPPORTED, e))
+            .isEqualTo(UnifiedTextInputPolicy.Channel.CLIPBOARD_PASTE)
+        assertThat(p.next(UnifiedTextInputPolicy.Channel.CLIPBOARD_PASTE, UnifiedTextInputPolicy.Result.DEFINITELY_UNSUPPORTED, e))
+            .isEqualTo(UnifiedTextInputPolicy.Channel.VISIBLE_IME)
+        assertThat(p.next(UnifiedTextInputPolicy.Channel.VISIBLE_IME, UnifiedTextInputPolicy.Result.DEFINITELY_UNSUPPORTED, e)).isNull()
     }
 
     @Test fun unknownPartialOrCancelledNeverFallback() {
         val p = UnifiedTextInputPolicy
-        listOf(p.Result.UNKNOWN, p.Result.PARTIAL, p.Result.CANCELLED, p.Result.VERIFIED,
-            p.Result.NOT_ATTEMPTED).forEach { result ->
-            assertThat(p.next(p.Channel.DIRECT, result, evidence())).isNull()
+        listOf(UnifiedTextInputPolicy.Result.UNKNOWN, UnifiedTextInputPolicy.Result.PARTIAL, UnifiedTextInputPolicy.Result.CANCELLED, UnifiedTextInputPolicy.Result.VERIFIED,
+            UnifiedTextInputPolicy.Result.NOT_ATTEMPTED).forEach { result ->
+            assertThat(p.next(UnifiedTextInputPolicy.Channel.DIRECT, result, evidence())).isNull()
         }
     }
 
@@ -38,7 +38,7 @@ class UnifiedTextInputPolicyTest {
         )
         blocked.forEach {
             assertThat(p.first(it)).isNull()
-            assertThat(p.next(p.Channel.DIRECT, p.Result.DEFINITELY_UNSUPPORTED, it)).isNull()
+            assertThat(p.next(UnifiedTextInputPolicy.Channel.DIRECT, UnifiedTextInputPolicy.Result.DEFINITELY_UNSUPPORTED, it)).isNull()
         }
     }
 
@@ -46,14 +46,14 @@ class UnifiedTextInputPolicyTest {
         val p = UnifiedTextInputPolicy
         val e = evidence().copy(directSupported = false, pasteSupported = false, imeKeysVerified = false)
         assertThat(p.first(e)).isNull()
-        assertThat(p.next(p.Channel.DIRECT, p.Result.DEFINITELY_UNSUPPORTED, e)).isNull()
+        assertThat(p.next(UnifiedTextInputPolicy.Channel.DIRECT, UnifiedTextInputPolicy.Result.DEFINITELY_UNSUPPORTED, e)).isNull()
     }
 
     @Test fun clipboardRequiresBothPermissionAndPasteCapability() {
         val p = UnifiedTextInputPolicy
         assertThat(p.first(evidence().copy(directSupported = false, clipboardAllowed = false)))
-            .isEqualTo(p.Channel.VISIBLE_IME)
+            .isEqualTo(UnifiedTextInputPolicy.Channel.VISIBLE_IME)
         assertThat(p.first(evidence().copy(directSupported = false, pasteSupported = false)))
-            .isEqualTo(p.Channel.VISIBLE_IME)
+            .isEqualTo(UnifiedTextInputPolicy.Channel.VISIBLE_IME)
     }
 }
