@@ -1,0 +1,1665 @@
+{
+  "issue": 165,
+  "pull_request": 167,
+  "date_kst": "2026-10-25",
+  "baseline_commit": "d2c6c449fce684e2db4f8763167a46c1a1127d33",
+  "implementation_commit": "bdcf9b3b46192dd0ac4d222f41f41d7587499132",
+  "implementation_tree": "c7ed607da2b2e8c0c6edc06bedafd60eaf3856a6",
+  "local_tree": "c7ed607da2b2e8c0c6edc06bedafd60eaf3856a6",
+  "status": "PARTIAL_OPEN",
+  "pr_draft": true,
+  "main_merged": false,
+  "implemented_candidates": [
+    "draft_preserving_direct_input",
+    "native_input_focus",
+    "advertised_horizontal_scroll",
+    "selected_ime_semantic_key_touch",
+    "explicit_session_admission",
+    "native_final_focus_and_key_revalidation",
+    "cancel_epoch_dispatch_gate",
+    "no_replay_postcondition_verification"
+  ],
+  "reused": [
+    "ControlPort",
+    "GenericControl",
+    "ControlSession",
+    "ControlWindowPolicy",
+    "NodeTapPolicy",
+    "ScreenProbeThrottle",
+    "ControlPostObserver",
+    "ControlResultPolicy",
+    "RuntimeControlSettings",
+    "OperationRegistry"
+  ],
+  "tests": {
+    "local_python": {
+      "count": 43,
+      "status": "PASS"
+    },
+    "local_jvm": {
+      "status": "BLOCKED",
+      "reason": "Gradle distribution network unavailable"
+    },
+    "expected_jvm_tests": 2808,
+    "final_ci": "PASS",
+    "ui": {
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "png_count": 8,
+      "artifact_sha256": "aabdf4c281365990bfca8acbcaf14bdfa6cc00a976fd3c2edc093908eb781cb1",
+      "status": "PASS",
+      "run_id": 40172997555,
+      "scope": "existing emulator panel/overlay regression; NOT new native keyboard acceptance",
+      "source_commit": "bdcf9b3b46192dd0ac4d222f41f41d7587499132"
+    },
+    "jvm": {
+      "tests": 2808,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_files": 307,
+      "artifact_sha256": "5c3c74f0ca58889637f1f95b121340287b70d0ede2c25e0eeb3031684d896fa6",
+      "new_classes": {
+        "ai.closepaw.chatgpt.control.GestureDispatchGateTest": 2,
+        "ai.closepaw.chatgpt.control.KeyboardControlTest": 6,
+        "ai.closepaw.chatgpt.control.KeyboardKeyPolicyTest": 4,
+        "ai.closepaw.chatgpt.control.KeyboardTargetPolicyTest": 2,
+        "ai.closepaw.chatgpt.control.UnifiedInputEngineTest": 8,
+        "ai.closepaw.chatgpt.control.UnifiedInputPolicyTest": 9
+      },
+      "status": "PASS",
+      "run_id": 40172997673,
+      "source_commit": "bdcf9b3b46192dd0ac4d222f41f41d7587499132"
+    },
+    "security_ci_url": "https://github.com/al-hub/closepaw/actions/runs/40172997673",
+    "ui_ci_url": "https://github.com/al-hub/closepaw/actions/runs/40172997555",
+    "raw_xml_index": [
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.ActionOutcomeMappingTest.xml",
+        "sha256": "e24b237c9a1ccb25c93fcd0af3007669bc4a598beef540a36827af4a5b933280",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.ActionTargetTest.xml",
+        "sha256": "d2e1f4faeb5e591e427c6f2cec62f6c7e18f9cef75d79df30fd17705943b9b1e",
+        "tests": 24
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.AgentErrorRecoveryTest.xml",
+        "sha256": "7b797511cab602b866b2415f7af72a1751344e8914d43d173143f58c30bbf4a9",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.AgentModelResolverTest.xml",
+        "sha256": "6da66264987729a7fd3ffcd76f23dcfebec0a05f8d838efcd69d70642a52724f",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.AgentRunLoopTest.xml",
+        "sha256": "2425beb08e650653cfb03e1d6f8e1a64666dcd7cd2c6c9b20f45f0c8f0833ca7",
+        "tests": 15
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.AgentTraceObservabilityTest.xml",
+        "sha256": "0e4638a05da5cb66c98e79367bd8fae01564f2bdc0e1479b9851ab25c5ab547d",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.LocalBackendTurnRoutingTest.xml",
+        "sha256": "0cbf07a7637f5eae9e7e605fd19a7387c29877d2b6497fafd5d1c8880de649eb",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.ObservationFallbackTest.xml",
+        "sha256": "78825767ee73021e26b0b6d45388e6fe11aa004e9a1bcb7681474d84d9f86f5b",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.TurnErrorClassifierTest.xml",
+        "sha256": "0e6336fed0b6ab7bb95328df9e68823d08fcf39f4d74896aa44a5b73b2284b88",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.TurnExecutionPhaseRunnerTest.xml",
+        "sha256": "66e55af638026ace94a18a2783f69c70176ee85088d20c3c636a490d342c217b",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.TurnOutcomeDecisionTest.xml",
+        "sha256": "0f616b0a041701a2970f52b2d810810f6aa68f51576628dab92acee3fe406cf4",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.TurnPlanningPhaseRunnerTest.xml",
+        "sha256": "dc36f1c49c5b20b1c7937c86dd53faeb3219d33aec7eee1612ebc141cf02f5e9",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.TurnReactiveCompactionTest.xml",
+        "sha256": "2fb63c094bc5736cd74cadfd8179ef01847f7ce7945bd2ca9921dd3745168df9",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.TurnToolFilteringTest.xml",
+        "sha256": "0df771e9fff17b1bde3e0aadea95d0840791025279f74dad8d54704f53445d1d",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.cognition.context.NavigationStateTest.xml",
+        "sha256": "2fc09b1459f919123ff5e661c16f6cbd15f9744763912fcba2a555d53a185838",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.cognition.policy.LoopDetectionPolicyTest.xml",
+        "sha256": "ea36d1dc0a8b15893247ef04db380cdb96cd215d236556dec6f7b5a80884e96e",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.cognition.policy.TurnToolPolicyTest.xml",
+        "sha256": "03bf9cd02236f1cf08f9eca873b6f35fe9d703d038651ba7f6e936921db6307f",
+        "tests": 12
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.cognition.prompt.AppSkillAssetIntegrityTest.xml",
+        "sha256": "ced1a6ed5d806fa4f1ebca3e1a3c6f271a49e2687644253cc65e6f23f1f13732",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.cognition.prompt.PromptBuilderTest.xml",
+        "sha256": "bce0c4c1e7dd1983c60a36dd4c68148a9664ef47d31eda814eb04a209dd6ee2e",
+        "tests": 24
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.cognition.prompt.AssetAppSkillRepositoryTest.xml",
+        "sha256": "405fd27053722e7973936be91cbcd2b7726b7314dcb35c94ce3b1c8bc7413987",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.cognition.skills.AgentSkillCatalogTest.xml",
+        "sha256": "e9516e1984b4e4328ebf0a0d29dd72e6f43f6c7506f67935c735c332a31ac263",
+        "tests": 22
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.cognition.skills.AgentSkillManagerTest.xml",
+        "sha256": "e36badb3cf4a70744df4eb78dd36b20f7d3f9682b1cfefb2eb56dbc3708795a4",
+        "tests": 36
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.cognition.skills.BundledAgentSkillInstallerTest.xml",
+        "sha256": "c36daf7fb1797b30b0e67eaadcffd281c7a48bc3d2045a39e7bf8b83d0fda292",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.cognition.skills.SkillFrontmatterParserTest.xml",
+        "sha256": "54de82abe1c7a04f848de71aef02a6bdfec72998468e30a65a8dd2cceb34b2e2",
+        "tests": 13
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.definition.AgentDefRegistryTest.xml",
+        "sha256": "1d61a461ce75b6847612e8bafceb2c0b5dacde47f951d0cae6131bfd880ea9a2",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.definition.AgentRoleResolveTest.xml",
+        "sha256": "947c2d3ab10a7f6766a3c90ee962dc86ad680a4c550e90ef2acb33430eef1da9",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.definition.AgentDefTest.xml",
+        "sha256": "8ef670ab2ee18da956dd27b898d70b54593ba16124d11be6a04d0c549c48b1bf",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.definition.DefaultToolsExcludedByPrefTest.xml",
+        "sha256": "7652dbbbc43a75200f353f173f7e24ca644ec20d54ec10c607344b5e7c91ebfc",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.agent.subagent.SubAgentRunnerTest.xml",
+        "sha256": "e78967cf7b7aab30ce32c1d8b423838a147efda57ffacedd8951e65535a05fcf",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.app.AgentServiceEventHandlerTest.xml",
+        "sha256": "ecc5adc8f50d8dfa8b83715ab449899d47a3ae958b2d1389cd17450650e98a07",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.app.AgentServiceOnDestroyShutdownTest.xml",
+        "sha256": "cad1a3540f3a9b2560ce4c94c054459f3c93148d0aed6c719e9da5ca57564114",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.app.AppSettingsStoreTest.xml",
+        "sha256": "a988b1daa7cf9414af48ff0a04bfff08b50635572515695d1e876cc55a3233ee",
+        "tests": 20
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.app.ControlUiRestoreTest.xml",
+        "sha256": "245884a9b6e92a29af86015d12f8a074ca0d057016cfb184efa18877e0f81132",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.app.MainActivityIntentApplierSecurityTest.xml",
+        "sha256": "43f01deb640f38ab40d26ba7276152811caff2552e2637c7c0db21a302ff340d",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.app.MainActivityModelValidationTest.xml",
+        "sha256": "7dbd4fb30dcc79ee443005216dad4b9c62ee0fd3ffebb5a5e1745ef4b3cc5d9e",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.app.MemoryEditGateTest.xml",
+        "sha256": "1d867cb2fe0b3b8e3094c24e66b28dac72badc04bec754ffd912616f17d09665",
+        "tests": 12
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.app.OverlayLocationPolicyTest.xml",
+        "sha256": "f05908638f1890431443f970f3e1483cc4d8bedd11d8a25b646cb557435df812",
+        "tests": 44
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.app.PremiumMotionPolicyTest.xml",
+        "sha256": "b5ad18942729a6729ae302043ed4cf9c2b85c0cfb0013c68e514ba672bb0c6b8",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.auth.AuthStoreTest.xml",
+        "sha256": "2a0958ded45a1a1642198bf915a41206e5c486ada9806fe7eff4c842b088d679",
+        "tests": 15
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.auth.OpenAIOAuthTest.xml",
+        "sha256": "4a54f764bca42fef228a43bec93c9284c20a2cc302f2dc80e43f759bd1074c47",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.bridge.CapabilityExecutionGatewayTest.xml",
+        "sha256": "2cf2c91b6f9255a5bc9370d8282248b6d3847868eb2855eec0e1bc21bfcfa6fe",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.bridge.TermuxJobClientTest.xml",
+        "sha256": "4d718860610c8e820b3a01ba525e7fd4cd2e46b71c0f868093b8442612e8c73a",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.bridge.ExecutionAdapterRegistryTest.xml",
+        "sha256": "b9989e5b9258e74057a241263ad1f45e08ba3be63639252ffa08d76706711b1d",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.bridge.TermuxJobLinkStoreTest.xml",
+        "sha256": "54aafc31814cf0f076995e065871277d22e00a8ae867055c4515b2d2fd73a344",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.bridge.TermuxLocalBridgeExecutionAdapterTest.xml",
+        "sha256": "bd2663ca19100526c1054e3952d6bbb11aef9809964151cc14c64d70f5aaf72f",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.bridge.TermuxRunCommandExecutionAdapterTest.xml",
+        "sha256": "5f431c6f16feb314760e1fb446a70cf08ac58acdc30736ccaffb9acf7731e93d",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.bridge.UniversalAndroidExecutionAdapterTest.xml",
+        "sha256": "1f2614527f59280cbe5ec531d4d5d34abe37fc5ee05410867267857a84dc44fb",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.BrowserUseSkillAssetTest.xml",
+        "sha256": "87e9eba5efe8f5a8a04e84614533670a64ace471c1a6a91917e228c66962c1b4",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.ChromeCdpClientTest.xml",
+        "sha256": "f9ac563373a55a5a279161242f94577efe87d7116aca20890a4e2eda78e8db39",
+        "tests": 26
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.ChromeCdpDialogTrackingTest.xml",
+        "sha256": "da3971450f5f3001ec52d6dd4f23dcece9d22be4bb145d106658166a99928ec6",
+        "tests": 13
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.ChromeCdpRecoveryTest.xml",
+        "sha256": "a4d8c28d1d22fdcad29b77bf9efea7c96a02bdafc20aae161fc7854b26bcc63d",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.DialogStateTrackerTest.xml",
+        "sha256": "ba76493bc690f667962adaf53ff894335d3c28f8fbb22646fa567e673d6bf275",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.RelayAuthTokenTest.xml",
+        "sha256": "230d558b3bbbf1081c685b5175052b8d8bb12363af214cf3bb3fe15e0f392620",
+        "tests": 16
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.shizuku.ChromeDevtoolsUserServiceRelayTest.xml",
+        "sha256": "e9e14bffad9d72b01c28f4468bcb5c74656ad959150dcb847a97308d5026a823",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.shizuku.DevtoolsHttpProtocolTest.xml",
+        "sha256": "ddfce538933c2b547a676f6c62be2cf214952ae3ce1d2b623aef4aec2f46f077",
+        "tests": 18
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.shizuku.ShizukuChromeDevtoolsBridgeTest.xml",
+        "sha256": "208650b7d405f474e8d20ffef4b7564b08e25ddb301c705cbb57810311ec248a",
+        "tests": 19
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.wireless.AdbCryptoKeyStoreTest.xml",
+        "sha256": "640f62516e77923b0780a19bf0b37d529f2589021e4d3308736eb984798d1ec8",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.shizuku.ShizukuUserServiceProviderTest.xml",
+        "sha256": "bc1795fd96c1cae1327adb0dded73dacc2f9d22ee531e306478c36ecd3672233",
+        "tests": 15
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.wireless.AdbPairingClientTest.xml",
+        "sha256": "8f6567bab246e73021556bc2ddc00506d0da66f19811cee1561523fb30153b01",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.wireless.AdbPairingPacketTest.xml",
+        "sha256": "f5ca2411649aa3dffd5e8fa41c6663d6cad847b9978be94752131ab04cb8aca8",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.wireless.AdbProtocolTest.xml",
+        "sha256": "91cceaee779cec6ea4fc64e18acbb4e086459fccd4db37d378ad78bf365de74e",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.wireless.AdbWireProtocolClientTest.xml",
+        "sha256": "1db2a4a003a5bb03b610ab9f90cf5b5e43187cbd1edb6894b2a2c1e66efd4f5e",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.wireless.AdbWirelessManagerTest.xml",
+        "sha256": "87ca5db0f938891ce1f3943db1e26c412b8cce825dfc2010af500cebc2eb8900",
+        "tests": 28
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.wireless.AndroidPubkeyTest.xml",
+        "sha256": "999710ee345b199a77123453a9c643490643eb0f12c35ba04f5098f4ca7ef7fd",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.wireless.PairOnceCacheTest.xml",
+        "sha256": "6fa76ce25fd9c25c3ecca0363509da24f6cc8d38b3af03779b935e9471e7ebcc",
+        "tests": 20
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.wireless.Spake25519Test.xml",
+        "sha256": "980884f7f85a0f849743cf9f81606eacf949542f8cdee30506dac9c2935ed46b",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.cdp.wireless.WirelessAdbSelfPairTransportRelayStressTest.xml",
+        "sha256": "95525987e21d2703db8726f7aa2ee0d1d261d9f3540903ca7f912b2ecd12cb92",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.script.BrowserScriptBridgeTest.xml",
+        "sha256": "fb62c9a5d7accefce6dd25bf348922d48477bb20a878feaba2cac5cb0f2ba938",
+        "tests": 19
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.script.BrowserScriptJsInterfaceTest.xml",
+        "sha256": "d5dd98bf5d3baa3f4b7c9c7cf9f305e6a4b8a435cdd4e0317314e34f7734a0c7",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.script.BrowserScriptPreludeTest.xml",
+        "sha256": "4e9b277d9c61c44fab798411aa7cfa50f086d439727c9ba60f2506d4774b9bca",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.script.BrowserSessionManagerTest.xml",
+        "sha256": "e2b228c9c8f05b02a4c406156c680207f7ef39acde4688d20e16dba113bba165",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.script.ScriptHostPageLoadCancelGuardTest.xml",
+        "sha256": "8ee6432d8c21aac15c4d5ab12965e32bf7b058e413292dba188825c6f8dfbeb0",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.setup.ChromeCdpProbeTest.xml",
+        "sha256": "bb5de8f10e7ad70de997543f2f31efb2ddac9fe616520f87e8e5d854126d1c96",
+        "tests": 11
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.setup.ChromeFlagDeepLinkTest.xml",
+        "sha256": "0a2e0b009bae40646db6eb351355e091a56b2b27b39923cd33623758ad60b373",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.setup.CommandLineWriterTest.xml",
+        "sha256": "a71fdc1b8792c6160ba444dc1e5d1e111c86b448c7f4cb8afb1fdc7b094a5965",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.browser.setup.ShellRunnerTest.xml",
+        "sha256": "ba920acca786503fb48b133a25078010727fa5904a3d152eedbcf087ca131830",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.AndroidGeminiRoundTripUiTest.xml",
+        "sha256": "138ff9e45751ee6648be323a18378ba4c4d7c5f95f587ed6555c2e6a2eac7fc2",
+        "tests": 19
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.BrowserReadDiagnosticsTest.xml",
+        "sha256": "b4edb7b368c4d078728a2eaf155da472fca90c4f152bb1218b996b821ed34811",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.BrowserReadTextPolicyTest.xml",
+        "sha256": "e35a220f30aeee8006684aba72894f853896c98a8cf55f07864f14636c9d5c89",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.BrowserScreenshotOcrPolicyTest.xml",
+        "sha256": "eab9fc8c6922418f623d118534e872ede98fad7fe27230b50a2ff37278021f0f",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.ChatGptAutoConnectTest.xml",
+        "sha256": "f3c2a8e072298a478dd13358a11d9dcf8001872195846cb08719317d88300b74",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.ChatGptConnectionSettingsTest.xml",
+        "sha256": "a813568ef14384899f95e4934cf7701e884d1d0a4ef26d7c2aea77c1e3ffa163",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.ClosePawStatusToolTest.xml",
+        "sha256": "aa7159eb26a72561aa3bb003779b6413996a31633fb174a15d13fffbdea0d0b2",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.CloudflareQuickTunnelProviderTest.xml",
+        "sha256": "2294193c9b653ba27a4213c46401ec3c0f523eeedeacdb3adcc9f188353e46c6",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiConversationParserTest.xml",
+        "sha256": "87b5af82d7765dda6c82ae38c35f024a8b199a0c3b7fa3fa6c71f5b1ea3d4d44",
+        "tests": 42
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiDraftExpansionTest.xml",
+        "sha256": "e89221abcd1afb87dd9bc58964df6d6bf72612a1a018f9db28850feaecbb9f88",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiDraftOperationTest.xml",
+        "sha256": "b2807e7ff407b9d53e10c0603a6bd80c723c33ea3d091d77012492e1d682d29a",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiNativeReplyPageParserTest.xml",
+        "sha256": "597ee0198b3b12f40aed641207c75667e41fb99e368c2acab1ddcdf90ece756a",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiNativeShortReplyTest.xml",
+        "sha256": "2bbfdfcfdea4518a2534f694cebe186c70dc0c4bbbf86dc64ef579c27592e85a",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiPagedReplyCollectorTest.xml",
+        "sha256": "cf84bfaf0c588255e49bd6fcf70d0280aa0a3db41beabd5690f3ca5b0572a4b0",
+        "tests": 21
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiQuestionSettingsTest.xml",
+        "sha256": "0aac7dbac11d29192cbc60074af2cd61afbf5af586b819193f3ec162e0f584d6",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiQuestionSubmitterTest.xml",
+        "sha256": "d7ed331d6774428c927a397c9cdb1ad42a729ebc105a7fe13994d84307f77bc3",
+        "tests": 17
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiReadIdentityTest.xml",
+        "sha256": "896094293fb840b01ef68cc60c003c4439785c9ca8eb7321b6409e88247c8606",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiReplyCollectorTest.xml",
+        "sha256": "d35895fe8047fc1434a63e3a2bbd50b595b4dea7f0f6968523fc063ee8c9536e",
+        "tests": 29
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiReplyPageParserTest.xml",
+        "sha256": "65df09adf5b53c08882d6c1d8b0081cf80eac7ecb6fe010d4b2843645775c61e",
+        "tests": 11
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiRoundTripSemanticsTest.xml",
+        "sha256": "d5bb676512fc07cf2bf060fc2dd89afb81701bfecb22d6aa149dd396794c27fd",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiScreenReadPolicyTest.xml",
+        "sha256": "a9a6ab6cae0ebcdccac365738d30e3dea028a7e03e9045235c37d8dabf9bc08c",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiRoundTripOperationTest.xml",
+        "sha256": "e984acd223a6d6213534ef2b59bf0b6b47e7f7fc51cb84b47fb06a8474b05331",
+        "tests": 15
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiTaskAwaiterTest.xml",
+        "sha256": "d92766d359763f4492311cdfe079d79f6f1b124b80f1a415758610429948c0bb",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiUiControlResolverTest.xml",
+        "sha256": "706053e7142c98ca5527df0e7d18a10256335046731b4af5b66634fba68a8e31",
+        "tests": 20
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiUiInspectionOperationTest.xml",
+        "sha256": "e0f7e5984814fa48c9b47443513d887a58cb1955b5f489e0902bbe04648a7b0b",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeminiUiMetadataTest.xml",
+        "sha256": "1390242836f81f0757ddbd4ef6464f80676a0205c5e9179817fbac13c59f09e3",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.GeneralReadTargetTest.xml",
+        "sha256": "daa409733bdd0623c38fd6f317e17edec1382baa66ec3f732f56e2ff60ec7304",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.HostedGeminiReadTest.xml",
+        "sha256": "8af0fbdaa9d35934504fb8b316c27e97c31d077a212775a2596950e0e26ebf41",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.McpBodyCompatibilityTest.xml",
+        "sha256": "29559f98f34c82499ddfa74efec49468596454704d676c18cf39417b7e3660fa",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.McpBrowserReadTransportTest.xml",
+        "sha256": "adb2aacd182a5e56958edead4e9d6c4b9bfab03badc0d5d01d6121345a251fcb",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.McpDiagnosticsToolTest.xml",
+        "sha256": "60b06138872b6c9e5b47aeac663d7b4976fc463c45182f53068d67ebaada2cb8",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.McpHttpServerPathTest.xml",
+        "sha256": "c8faa5150488ea4aba2f6ead7363cc019a2d150afa1c30130b78ef330ba6d3c7",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.McpJsonRpcHandlerTest.xml",
+        "sha256": "9748fccbe8c3ed90b8cb6c9e1360b816788b1e7a4fa0fa6683b131e77663c839",
+        "tests": 11
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.McpOperationContractTest.xml",
+        "sha256": "03dad670fee04e0f7f3f9fcb5c2a0994e06e721f911456f4bfe4d150732ad9ba",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.McpPrivateEndpointTest.xml",
+        "sha256": "ae0470352f0185e68bd9a54ce5467b92f6e05e2a3936b3949455e4d0b1171af0",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.McpRuntimeExpansionTest.xml",
+        "sha256": "b56a52b1655bdd57a6e54aae1e46e11eaa57bb4ace33cec066898aecef13e126",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.OpenAiSecureTunnelProbeTest.xml",
+        "sha256": "16ec365441c1b1cde085f9e1dbe4ee57824d90b025078f9af8e69cf31cb3bc0c",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.ReadAppForegroundPolicyTest.xml",
+        "sha256": "ad07edca4bb3a9cf129ba52391ade1aa2c7a7599aa27dff6ca99856b8d4bbef4",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.TailscaleExecutionSettingsTest.xml",
+        "sha256": "0d19078ec0c6fe5cc67609d081c53ee3527ac7db974ae7b853699de87db651d9",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.TermuxBridgeStatusOperationTest.xml",
+        "sha256": "54be433472b54f7a0a018f7bdb8bf3bc58007c6e284f84e505d43b010b37c807",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.TermuxJobReadinessGateTest.xml",
+        "sha256": "14b681fa0abcebca07b3d39abcb7032020b48eedf9441b80457366f2cee0abdb",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.TermuxShellOperationTest.xml",
+        "sha256": "466491ef3498d0d91711b1b455a3f3c3165c2e1ae52d0a32f116cdc2afa568b8",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.AndroidAppCatalogTest.xml",
+        "sha256": "71088e417671c5b710c1741de55fa62f7304e70a807ab3e72d30d96652c89ded",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.ControlChangeSignalTest.xml",
+        "sha256": "3b25395e31ac211c12c443ef8056afcfb29ab82ecf5e20914a7b105203179aef",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.ControlFeedbackTestTest.xml",
+        "sha256": "4b1501f8c91c2b7cb592f94aa2f4858183ba1007ed836fade6a574f72e12ac07",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.ControlLatencyStatsTest.xml",
+        "sha256": "8883054c6f9583c80b3d6caa3d49e32b69cc882f1157742d2f71f34806105357",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.ControlResultPolicyTest.xml",
+        "sha256": "b3570b8eb98091adc5530eb37f4e089b75b080d12ebb4e2df9336a46cac624f4",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.ControlPostObserverTest.xml",
+        "sha256": "7c050b72e4b77d80a0abc1a668d9ad33bd38512922951913e0f5fce45507c06b",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.ControlSessionTest.xml",
+        "sha256": "fad1331d11912718d2245736ae69d82570e1b87dd3c889b9124c96c185ffc75f",
+        "tests": 11
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.ControlTimingTest.xml",
+        "sha256": "187d01aabcfc4d161872c14a5dfd58f24a56ee07c409291654f0b496cf6c855b",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.ControlTraceTest.xml",
+        "sha256": "ffcce24bfad2bafe8dcd7ad7948bf70470234e6826447514bf4e456c18cbd0af",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.ControlWindowPolicyTest.xml",
+        "sha256": "428b296097a07d68e2b35663e1d86c9d191f7618c332f3d28274dbd0918192bf",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.GenericControlActionPolicyTest.xml",
+        "sha256": "91f8d81e376a9351d2745868f96598dd988e8c86a711915fea5cf87b8c3cdfed",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.GenericControlOperationsTest.xml",
+        "sha256": "94678749a71dc3a98eefb337caebb8f81f8964ca785a0604b346ab3a94603cf9",
+        "tests": 23
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.GenericControlSequenceTest.xml",
+        "sha256": "cd7b833d20e5c4b5a7662923f3231b80ee148df1a9e42782e2d5fd5b9e2b9dee",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.GenericControlTest.xml",
+        "sha256": "fcd1ced672d0ab2e811072a56aeea36385a94b279be85192865c2dfa1b9193b0",
+        "tests": 40
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.GestureDispatchGateTest.xml",
+        "sha256": "b11c9a8319bdae0554be1ca337675a50979f6a6455ab52996059f71e530e4981",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.GenericScreenPolicyTest.xml",
+        "sha256": "7ad20a3356522e054abace9445eb4fc5ae5bdb329f1c4fcc62d74cfb8fe730f4",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.IslandControlTest.xml",
+        "sha256": "9abb973d5a663683fc3a3067300cb39d06a28886812ee8f96c918f795bde5df0",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.KeyboardControlTest.xml",
+        "sha256": "11e5d4527424b761591b539c157cb68677d338dae6e94505e27969a73609ed86",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.KeyboardKeyPolicyTest.xml",
+        "sha256": "1b2777487efb25ea99e19b235263a2a5286c379c19ba2c63160b7659b70872bf",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.KeyboardTargetPolicyTest.xml",
+        "sha256": "bda63684337703283bfe9dd0dc7159d75185ff3332e1173dea95060c724a8693",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.NodeTapPolicyTest.xml",
+        "sha256": "1f6fc190e59afcba6f2dfa231d3c0e591a24b75f567d57cf7b04e5f0e61ef148",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.RuntimeControlSettingsTest.xml",
+        "sha256": "8dff783cd85e3a0e50a334e1e3c10e78f3c3151c900fc3010ee47b93aedabdc5",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.ScreenProbeThrottleTest.xml",
+        "sha256": "dd13fe4f1dbd4822885dd2096eda5eb37589556f91746067b45f3a8bcc85f74a",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.UnifiedInputEngineTest.xml",
+        "sha256": "7b7569a75332905dce1aa3fe97edc9c317ed0998a38f8264ffa9ec5bb1e41f93",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.UnifiedInputPolicyTest.xml",
+        "sha256": "9f95825f902dc64a2c7a2f3e31f4a65b70604f71f6a5e9467a24d4382124f23a",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.control.VerificationPipelinePrototypeTest.xml",
+        "sha256": "21efd06c3273daf8fb93a29766999ac2000a1d9e162f0e375784f8143695f421",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.operations.OperationDispatcherTest.xml",
+        "sha256": "cb8edf48bb2e106c28f4b6455d3152ca2273a67c29ab22ec0492249fe96d7809",
+        "tests": 16
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.operations.OperationHashBenchmarkTest.xml",
+        "sha256": "70bb4992e919541a16267cd81980a6c333e8b1b8ff9f1755dae34314d2693600",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.operations.OperationHashTest.xml",
+        "sha256": "deabb3d015f1cf4f674004c5f6d666de862f0912472295265611802aafb2bb76",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.operations.OperationTaskStoreConcurrencyTest.xml",
+        "sha256": "1fd0bdbeb36f52e5f4cb86b5f94371a5dabce1cae679016f3a0aad101f836dfe",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.history.AgentMessageBufferTest.xml",
+        "sha256": "79b0e194935726b71dca60acb260d4ae4b9534c4ba0d951935d8fcedda53fca8",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.history.CompactorTest.xml",
+        "sha256": "c306519ea573f0ecba566c267f71f972d76556aac53c7241424d56d634504692",
+        "tests": 15
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.history.HistoryManagerTest.xml",
+        "sha256": "ba8cbbdb6e092d8b6b7f0c0eecabd8b0296463df5c69b563c1e6c54ee19a2742",
+        "tests": 17
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.history.SessionHistoryManagerTest.xml",
+        "sha256": "16d66d37ac94088d94ee5c864847dd58eecf8d4bced5eb5f985fef5fc29374ff",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.history.SessionRecordingServiceTest.xml",
+        "sha256": "3e53f0c69296abc881963969f5d4be840f0ed43dc9b26a72113bc5250650bf51",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.history.SessionStorageTest.xml",
+        "sha256": "47fb1b545288a166ecbc5efe8ca09664f2c8b545f7dcdd10804b9d510cf3a8d2",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.history.model.CheckpointStateReloadabilityTest.xml",
+        "sha256": "04f11b253f9e981bf127b16902a7f3169f420fa06c7c45f2460414841fc320cb",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.history.model.HistoryItemConverterTest.xml",
+        "sha256": "3b2f09261e92211fa42d678017047d9276d049bc65e81bbde484d3b55fa21508",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.history.model.MessageConverterTest.xml",
+        "sha256": "3464655d96fe1c88caa2ad5bb4aa3e31b63a3f9634ed935f3b08592b0ec64bdc",
+        "tests": 13
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.ChatCompletionClientTest.xml",
+        "sha256": "16523627d296ab8ecd7d79b62516e03f6d88737d4312bbc1225cd485dfc6460b",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.ChatCompletionInteropTest.xml",
+        "sha256": "03e6d93c43387864862f3aaaae98789aab622e1de9c3521ffadfb240e985bdca",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.CloudStreamRetryPolicyTest.xml",
+        "sha256": "45b13cbc28ec00061913981767cfc9494ec55f78b72d0dda8bc51a6fbe507106",
+        "tests": 23
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.CodexRequestBuilderTest.xml",
+        "sha256": "52938c16dff290f703ec6a9a1db29e8661d31ada8ddaf1c20d1c54438be655b4",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.CloudStreamRetryRunnerTest.xml",
+        "sha256": "3e8f3a0f77d69fc2badab7241d672e89709f16a022dbc6d6c7d9368999a78ad8",
+        "tests": 24
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.CodexResponseClientTest.xml",
+        "sha256": "82a7cc53c660894fc584dff633ddcc50ad04315957dffb3ae65d7b66faacbe77",
+        "tests": 14
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.CodexSseParserTest.xml",
+        "sha256": "07611f9e1336c4004dcd21ffe0f44f764416358995a70e1d5796eaa4dd7f0015",
+        "tests": 21
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.ContextWindowClassifierTest.xml",
+        "sha256": "e2f4472523ac0c816dab665cb5ef2744982668ac356ce3aa2c8495d0beb88aab",
+        "tests": 14
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.LFMLLMClientConversionTest.xml",
+        "sha256": "a4668ea4117d1ad079818faedd952229913938e945f0370ad5e1f7521e620d9c",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.LFMLLMClientTest.xml",
+        "sha256": "2ebf3c79ad2a57ebcba537cba25efb217b23b37b0d6519062d7729c912f67560",
+        "tests": 14
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.LLMClientFactoryTest.xml",
+        "sha256": "b9508ed48b72744f7617e88297fca2b7c6bd2ba58a7d34200d96d47e91bc6e29",
+        "tests": 14
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.ModelCatalogRepositoryTest.xml",
+        "sha256": "1c57cfe4c654af8bf3ea3a1e2a10b5e3e23e45f9b5b981af324ae23695e00812",
+        "tests": 15
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.ModelCatalogTest.xml",
+        "sha256": "37b8ad902f630033537a3ce2b3a0eae2df536e220fc779684812a0d83e8c2a37",
+        "tests": 38
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.ModelDiscoveryCacheTest.xml",
+        "sha256": "a9f06f20e1a99924719abc4684eaf70e46702d1db610dd8d16b3bf1bc7c25c31",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.ModelDiscoveryTest.xml",
+        "sha256": "fbd276307a413ba3d1d125b540c033810cbd066f8c1ad30e29801c98ad53d3e8",
+        "tests": 16
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.ModelIdValidatorTest.xml",
+        "sha256": "b2aec26f774501e9f6f04df939b5e019dfb4c6c601ce3df39e1b7dfb5adc29c2",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.OpenAIErrorClassifierTest.xml",
+        "sha256": "f32614a2f942bdb08bfdc1b7a08b52a0a94bddead7da16281ef911842d2376fb",
+        "tests": 27
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.OpenAIResponseClientTest.xml",
+        "sha256": "9635cc8121e47c94f113789ac163ee230a5aaaf15411a5051043a9ab76f5eb69",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.OtherBaseUrlValidatorTest.xml",
+        "sha256": "4a18680e1fe004eedf2b612b7f730ec4feebe5999d6a2b9f40c7747908e71c92",
+        "tests": 14
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.llm.ToolParameterExtractorTest.xml",
+        "sha256": "5cfecee20c5e0f051890a71383768c58d704a7fd40244d59cec6c0e15a1e5392",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.memory.MemoryRecallerTest.xml",
+        "sha256": "3d79e8a7a9d81bf84dcfc44c422576013891ddd222d6e259462ce58ffaa3154c",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.memory.MemoryStoreTest.xml",
+        "sha256": "f32cac3f6ca89e84acea2b552280d4a4dbc350439230cb1c689f8850158db1c8",
+        "tests": 33
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.model.ModelsTest.xml",
+        "sha256": "cdcc7446d6d94ac5e4fb3bcb3cec212847fbfb241576fef404fd02e2d3821969",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.onboarding.ApiKeyStepStateTest.xml",
+        "sha256": "2865d5396b07d28015e1d6cf2b53470bdef69a73f062dd7260bb86b04452ec4a",
+        "tests": 35
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.onboarding.DemoStepStateTest.xml",
+        "sha256": "6d2ce929b5feadcb7ab2071d69b71de02f8c4167135a79df447e4ac768a50549",
+        "tests": 18
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.onboarding.HttpLlmCredentialValidatorTest.xml",
+        "sha256": "5dadc8c2e86acd58a9052064c143b90e156a9052841e029e0b2f50521f60f5b2",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.onboarding.OnboardingStoreTest.xml",
+        "sha256": "4531f018127f06a1c521e4fb709a45d36c2124228fcb8d23b0d12dde4c952a09",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.onboarding.OnboardingViewModelTest.xml",
+        "sha256": "dec2f8013819d0dff461a417bb48f26390789dbb510f0d4a9ae904663827bdef",
+        "tests": 48
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.onboarding.PermissionStateMonitorTest.xml",
+        "sha256": "296dfe04565284296dc5bcd70cfd4cce874c501f0afafadf3dada50bc78ce863",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.onboarding.PermissionStepStateTest.xml",
+        "sha256": "e8186249b327d035ba867332d6ad61429d7054931aae9a605376d4e47d02c282",
+        "tests": 16
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.perception.PerceptorInternalsTest.xml",
+        "sha256": "0f24c80197ccfc486d4b012967ad105b7868b8968536b629860292d2b93f1179",
+        "tests": 37
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.perception.PerceptorTest.xml",
+        "sha256": "02222dcbdb3066bb4494a3fadeace9f183706fc32f21596ab86dc6b6f2142359",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.perception.ScreenSummaryTest.xml",
+        "sha256": "71e67b44e188c7f4c677abb4459cd04d27130ee9b145426c1c283825a5b5f071",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.platform.BitmapUtilsTest.xml",
+        "sha256": "fc46ca952d153dcbe1aa4d5c90879e6a7cb1c31db54e7cad7dd9898fa8eee567",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.platform.BoundedCallbackTest.xml",
+        "sha256": "6fc262124ced184109fbe7d1bb892d23a8349538d4b8137f03131e7ba57798c5",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.platform.AppManagerTest.xml",
+        "sha256": "d14b59f1465601e1df53d7f88517e3ed272290460748eb5dc9dae97d74639faf",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.platform.NodeActionPerformerTest.xml",
+        "sha256": "e85cd010ccaf9b34fcf0be05e1bc0bd39a75a62ce07ec46d9c8cdf6343108922",
+        "tests": 24
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.platform.ScrollVisualizationGeometryTest.xml",
+        "sha256": "3e7899e039ebcb19e0ced6525577769ad7e8188cd0265da3709487760ade819c",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.platform.virtualdisplay.ShizukuActivityTaskTransportTest.xml",
+        "sha256": "8cc8cdb75ca63980b28c306bc01464fb1840a06190cd01fa27705d180ebbf177",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.platform.virtualdisplay.ShizukuRuntimeGatewayTest.xml",
+        "sha256": "8abe3a522003cb74c178626a0414e20618aaf4569ddd98c634b6843b499836ea",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.platform.virtualdisplay.VdLifecycleArbiterTest.xml",
+        "sha256": "9c8e44ddf6831793a3aca5a71bdd819e68019ffa067b66b240c914da6e6137e7",
+        "tests": 13
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.platform.virtualdisplay.VirtualDisplayCaptureCoordinatorTest.xml",
+        "sha256": "fa597b60b3151c05dcce7de84bc6ce22d6c1992fb56cf2552db95057e17a76a9",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.platform.virtualdisplay.VirtualDisplayPlatformStopTest.xml",
+        "sha256": "f2cfa0b11f834815b3ae52321979ba990d428c8f0c2cd87593cb76374de24099",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.platform.virtualdisplay.VirtualDisplaySurfaceControllerTest.xml",
+        "sha256": "7afb5986fce95f845685ff36aafcb87a83e1ff01bdc7155dfef7212fc0bdb9d0",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.platform.virtualdisplay.VirtualDisplayViewerTouchHandlerTest.xml",
+        "sha256": "46023e4d41119a8022cdc8b807dcdf390ae07ea92d0e2cae3c3ef9556d85ab7d",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.AgentSessionCompletionHandoffTest.xml",
+        "sha256": "25a966017f0e71f4396835e6aa6bddf2c91fddeb3038ce8657819c61a4bd5bc2",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.AgentSessionTest.xml",
+        "sha256": "de6b7584c99de22bb9c37d5ecc1ba6bcf6ffb02251977e06359da2bc733b9ab6",
+        "tests": 41
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.ScratchpadStateTest.xml",
+        "sha256": "d40b98ef1135f1b3a6a913813fdb96e8e4d6020f5abf9f90055b171207a5338f",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.SessionBrowserIntegrationTest.xml",
+        "sha256": "178b7800ac5bfb01c028aaee0997c53ff81d96f9eea3fa6aad488f81fb8a8742",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.SessionCheckpointConfigSnapshotTest.xml",
+        "sha256": "73a9c13da6a9667cc886c157c22ffd15d1aff84839c1b1dbb2a16fea7d18fd20",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.SessionCheckpointCoordinatorTest.xml",
+        "sha256": "af26495de760d2acce61441998d643ac2f295e8f9d673a9fc696595967c12d31",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.SessionCheckpointReloadAndListenersTest.xml",
+        "sha256": "2c0d40dd52861e247a31fb6bd1d1c047ab99a8f6605ff59fc74e72ee693db25c",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.SessionLlmBootstrapperTest.xml",
+        "sha256": "6dda1e086ad22e3059ba0e083ce9eaed713ba555abc26f5f53794aced4f410c2",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.SessionCoordinatorTest.xml",
+        "sha256": "530c6e2f26492a4dd12b4c461138f2a8a1aebfcfef7aa1fc2155245e54d644ef",
+        "tests": 34
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.SessionServicesBundledSkillInstallTest.xml",
+        "sha256": "71e8e24ff61ce64b06dfcdff08da62c4eb7d9e2e4bceb89b04955c725bdab870",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.SessionServicesCleanupTest.xml",
+        "sha256": "baad98ef013a43f002280e91adfc51223a7cba8fb6c65d8b055247c0e59abfda",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.SessionServicesProviderRoutingTest.xml",
+        "sha256": "529067c6ac558b80413708ce33b44c3f772c3cc09e45db51d7cab22ce1af272b",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.SessionServicesTermuxSnapshotTest.xml",
+        "sha256": "fe2267ad327902eff4aab4efed374a0c24331c9b6294ace681af5ae89b295461",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.TodoStateTest.xml",
+        "sha256": "ce6605a8e2ea2e9d4f0254a8d042ad6c5c51dc702428af52a29742a67fadf745",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.session.UserResponseChannelTest.xml",
+        "sha256": "1d09741bf435f1cae2e8324a9a0aca38716365362f8e3c4528aeebc3d754e7d2",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tailscale.PrivateTargetProbeTest.xml",
+        "sha256": "bd26c85c104a707ba95973139690fc3df7bec96261050f03782dacff5444b955",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tailscale.TailscaleRecoveryTest.xml",
+        "sha256": "e00de08328aa5dbe537cbac218f3befbfb142287d02d574df97f5161f28572f7",
+        "tests": 14
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tailscale.TailscaleOperationsTest.xml",
+        "sha256": "ab869c75a385aeb9a4b0184fbf054c5e5bedc39e3223560b71d695199bd20acb",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.termux.ClosePawBridgeResourceTest.xml",
+        "sha256": "1992b34a452c1e4b982f8f49b64c6a64d55b464858337a5e1bc5292f2d181f8c",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.termux.HttpTermuxHealthProbeTest.xml",
+        "sha256": "37a00d66d352ddf71123feed0f872fb1b580ccb708a95814c97aa16e4862e711",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.termux.TermuxBridgeAuthTest.xml",
+        "sha256": "77b33e38309a21ec3ed3d7c3f78321e3894582793cfdac90239750c58d9c78b1",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.termux.TermuxBridgeManagerTest.xml",
+        "sha256": "7818dea0b205c22c1a5c1f331b26a3e999ffbbd1475436ff2b659a5521d8bbda",
+        "tests": 21
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.termux.TermuxManualBootstrapTest.xml",
+        "sha256": "abf60b0f7c34a3afad59557911dfba7713dda460dd916a2c1a3f74aec3beeb0a",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.termux.TermuxRunCommandAdapterTest.xml",
+        "sha256": "92a912285976c014c7603c268929adc16a9ff7b070c792eae28e890041f460de",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.AppClassifierOverrideTest.xml",
+        "sha256": "f4dad12c07648b186aa044b1db9c15cfba68f361bdbb27f88d1a67d0e5fe0808",
+        "tests": 12
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.AppClassifierSecurityTest.xml",
+        "sha256": "e4e9d39badf216cdc7250fe0802897f3d652f088ce18583144849d03f9dad43c",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.PolicyEngineTest.xml",
+        "sha256": "37731b3d2c0374087eacbe7011de429b2946b2315ea051651e9722f3907f4157",
+        "tests": 28
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.ToolCallStateTest.xml",
+        "sha256": "a60a9e5e35e1f6db4ccdaa0184ca0f894df82ca9552d65c4b0f2a44405bc1edc",
+        "tests": 19
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.ToolRegistryTest.xml",
+        "sha256": "49219d22b6c6947ab34070147f8d19e435465a1fbc1c64e27a813e125e09e3db",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.ToolRouterTest.xml",
+        "sha256": "7fd270d138e137c2b01726fab64d6255ceeb9ba7a8f373207efbc54ff68a62a7",
+        "tests": 12
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.action.CapturePrivacyGateTest.xml",
+        "sha256": "42c549ca8d16ac4a1e8862978fc77e322c536c8bc3d2482a2c77261d095e97af",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.action.ClickExecutorTest.xml",
+        "sha256": "42fa41cd2c39b760e949c49b4f5e4bc1bc9afebb5f281adf978a99b7648c2b02",
+        "tests": 22
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.action.LongPressExecutorTest.xml",
+        "sha256": "a1f9832875ef150d9ddf691299eaf7e5627c4071c8e6fe4cdbf367323364658f",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.action.ScrollExecutorTest.xml",
+        "sha256": "cf60e823f31458f3c869869a880134ba8cf353f22cb8151ce2285b1fbc0aa6b1",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.action.SwipeExecutorTest.xml",
+        "sha256": "1a96f10ba6144715d553f25ded47b788b9d7a17c6019e78e9f5b64b7619ed523",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.action.TargetResolverTest.xml",
+        "sha256": "1c962218333305784306f9e430185e3af474dc07b9ade5ee3d74beeb651ce590",
+        "tests": 18
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.action.TypeExecutorTest.xml",
+        "sha256": "22dd76212eaef68e535451b4a8de5d336ed1e4fca35eb90b178426ef08390cdf",
+        "tests": 12
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.ActivateSkillToolTest.xml",
+        "sha256": "005b549a6e92e22425ce63a77a796070a8fdd3c53f131fa65ccedabccba771d9",
+        "tests": 12
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.AskUserToolTest.xml",
+        "sha256": "3cbe772cd3d0d8a1545f75646111abaf6e7a0627b301d32ec72486ee8fe9d8d2",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.BrowserScriptToolCancellationTest.xml",
+        "sha256": "7f602bccd7e7291ee1202c1eb476092a7eb82e92d92caf04fbca3915c091cda7",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.BrowserScriptToolTest.xml",
+        "sha256": "c631c9c51b613689d31866935e113eafb3d90ab97fdbc974bc4832e4d86e781e",
+        "tests": 13
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.BrowserScriptToolTraceTest.xml",
+        "sha256": "a2c2bbafb163476be53db15e26b74e20c6fe2079ed9a2dfbd7dd3e057836cfcc",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.DefaultBrowserScriptCapabilityGateTest.xml",
+        "sha256": "eeff7f1d7ad229e7ae866933dd51ed34bae25ad08810614be31945009dab075d",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.CompleteTaskToolTest.xml",
+        "sha256": "bea66232eb7c75714c0d46c2f9505f08edecb973babd3472ff8ef4691c7a4ee1",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.DelegateTaskToolTest.xml",
+        "sha256": "9bef1c15a283ab00aa92e7b11c5e00dbc3e9fc6b37b85934c9ad78503bd4ee73",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.MobileActionToolTest.xml",
+        "sha256": "a610cb626bcc2adc762904189f3b4a851eb9ff9f535a03e8dd074933d79cb585",
+        "tests": 26
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.OpenAppToolTest.xml",
+        "sha256": "3276d3f22c9bab943b9a25abd3f896391956b7abf46c53d3b200806f83c0fb9e",
+        "tests": 13
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.RememberExperienceToolTest.xml",
+        "sha256": "e661510e0aeccde096e8375954ff11d05c1344eb8cb8a61dff408a96eaee937e",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.ScratchpadToolTest.xml",
+        "sha256": "5cbbdb6bfcd32fc0fe60e743543d6ef814ac1ead25e6e9039cb91850c47815b4",
+        "tests": 11
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.ShellToolBlocklistTest.xml",
+        "sha256": "0fe9ef77e6c6634a9d0dad1c048790492bbc2ac765833367e72764e50eebd2ad",
+        "tests": 24
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.SystemActionToolsTest.xml",
+        "sha256": "c70fa0cb4c269a7e126969cea218981f826e766940ac8fccb4e0fdb04fbab169",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.ShellToolExecutionTest.xml",
+        "sha256": "5f4df1186722cec4fe46685447358c0185f0cd5c44094e9fd383a6c4af964818",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.TermuxShellToolTest.xml",
+        "sha256": "08b48c66f4812685c4ced481facea73b23d1b22942efd4e8db88dddd565d493f",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.tool.impl.WriteTodosToolTest.xml",
+        "sha256": "44fc4ffe88195861bb26362580a3bcb14c7690a58ae68ebe2ac0b9fa360e2b18",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.trace.AgentTraceArtifactsTest.xml",
+        "sha256": "a494dfa348b2765295e1372bc71a67cecd493cb8f40090df4e8d592d8596c483",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.trace.CognitionTraceRedactorSecurityTest.xml",
+        "sha256": "6c7b71f155cbe48128b3cdc6b941b9380a3ffa6b99b3ad61c65a88addfa99a51",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.trace.FileTraceRecorderTest.xml",
+        "sha256": "74d1757097d28e59d64a382bbea310ea2209ec2dc10be078565887684c55c4c2",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.capsule.voice.VoiceInputControllerTest.xml",
+        "sha256": "3f9554ca89879a32cc983bd95c1259bc3308557e17fd2f2bb76c0eb68a316f66",
+        "tests": 12
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.ChatActionExecutionMappingTest.xml",
+        "sha256": "3469d7d87cd3a5eb0257ff8cf448b62a7957ec51c27a21f77eb853fa8071db21",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.ChatCompletionHandoffTest.xml",
+        "sha256": "85fa7ca7e0bf7e54a092b1b3f1bbe0a5baef14fe7c96e455e7b48540b2e67991",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.ChatCompletionMessageTest.xml",
+        "sha256": "ee35b518ad67f8b483ee2f0afc082eebbc95e593278500c8b66242f3af9fcc85",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.ChatCompletionSummaryTest.xml",
+        "sha256": "84f993d25220dec89b718de06f5bbd9ce7a43c21295e4fbde59f6e998a3c9a61",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.ChatDoneBridgeTest.xml",
+        "sha256": "5d9c29ac42334e5319f5d98589a799081ec564e2ac141f897b2fd616928a37d7",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.ChatEventReducerTest.xml",
+        "sha256": "756d5db07bd825fa30506592651bf3f1ea10a282265a8c0db3803da240985b09",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.ChatRebindEventFilterTest.xml",
+        "sha256": "257629ebde483a6da49c8aa4e602755261bd5654e15288e94dc5e7980401a724",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.ChatStartupFailureTest.xml",
+        "sha256": "ae6395bfa1794061c43f2bb09c49bf9b1354f3dbe3fabe02c65028abbc3fe34c",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.ChatSessionHistoryControllerTest.xml",
+        "sha256": "f160765699f5741e77b893a4d7a24c5bf7ff6bf799e665a29539cafa2f165e56",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.ChatSupplementAndActionTransitionTest.xml",
+        "sha256": "7fa84f4d50a1fe453506624deb4784c66b4677e224b8f0f8c097e9184cf4c2c6",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.ChatThoughtAndRowStateTest.xml",
+        "sha256": "18b53bcdb19f554006f5c2fb82b3cb988ed814e60e6eec4fe2353e4a080a2e4b",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.ChatViewModelTest.xml",
+        "sha256": "1ec23416ff9be3f041fbdce7e242e75ef74c117c7bf59a07212abfa42ede755b",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.NewSessionNoHandoffTest.xml",
+        "sha256": "872b757e8b751ba0306e862e10da1bc41bd63ac865699787eb07736047322c92",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.components.CompletionHandoffCtaVisibilityTest.xml",
+        "sha256": "cb1e465b7913dfb69d5d7b2f3aace05596a1d1fdc161068f32d58731e3fba05d",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.components.ThinkingIndicatorCadenceTest.xml",
+        "sha256": "e5e7388b3c33207296797de3ec72b7989f1f4d7a8aa815ed54b4ba6fc361c790",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.chat.components.ThoughtGroupTest.xml",
+        "sha256": "1322577834a8fb905e11dcb6d6eb927f7443d5bab22b010a8318f9e0145e8c91",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.CapsuleApprovalTransitionTest.xml",
+        "sha256": "ebc98277f3e0b215a4ab6888101214ee7081edae215d1ab1d7ba334205d5b7c6",
+        "tests": 27
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.CapsuleStateHolderTest.xml",
+        "sha256": "526bbedcf753b478108fdef24900e2d950c3ded132daf7dc2f33cdab88a846b3",
+        "tests": 44
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.IslandActionLabelTest.xml",
+        "sha256": "ae5239113fa0983a4bf9165527ea7aa920185fddf301e15d41c82c8f19240de3",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.IslandDragGestureTest.xml",
+        "sha256": "72e48b6021fa0b101cd58cc154459f912bd34e0dd7aaa39adf212c5c7f5a76f3",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.IslandDragPlanTest.xml",
+        "sha256": "0f2c3c1538cde57f22b5116ae641fcd056d124af0f28d18232e8cce16ad63a86",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.IslandEventGateTest.xml",
+        "sha256": "2134a7a543cc7eeb3bb1df5025ca68f1f6d854a32333e9745bfb580c4eeb3b07",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.IslandMoveVerifierTest.xml",
+        "sha256": "6594ab08dcfb43b20efda41df988d6cd01d43d82b067d7ea19fbf1fb89010480",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.IslandStatusTextTest.xml",
+        "sha256": "016f096978c1e2ee4cd4db1146fa42ef08b64198ad1e95837c8649ad69168e6e",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.OverlayPositionPolicyTest.xml",
+        "sha256": "de9701dcaf181b20a69f908bc6b8976c687dc675576f4aafac343e964d52db4f",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.RemoteStatusLabelTest.xml",
+        "sha256": "8f452a78aeeac4a510883a68b9e1424fef6cc98cfa3e20783d886c0060c3c9d4",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.XDragPositionPolicyTest.xml",
+        "sha256": "eded112fd067074a15901bd46fe1ef1ac616c400a50944664b7a9a7184acc746",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.XHandleGesturePolicyTest.xml",
+        "sha256": "03dedfa4caf0bc3f290579e5a4a8bcefe7f487a10a3b3a47cf84fe1f25bf5082",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.compose.VisualizationTimingTest.xml",
+        "sha256": "88d5e83c6765d230b05a2afa6cfc0570613a554cc8f61b0f840bca59c1ae06d1",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.model.CapsuleModeTest.xml",
+        "sha256": "5b4c9dbefbec740dbfe08c6e3471fd05fea839413d463762709d3e88d7588de4",
+        "tests": 6
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.model.NavSpecTest.xml",
+        "sha256": "960ff4099f5b254c7c278cf986921f11edeee4ddba1b34a1249311f58ace1d08",
+        "tests": 7
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.settings.AppAccessContentIndexTest.xml",
+        "sha256": "daa255884b41a55d360874fb1745844ddf8682a3f0f997d35bd21e72e091827b",
+        "tests": 10
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.overlay.model.CapsuleRenderSpecTest.xml",
+        "sha256": "92fbc37ae384f6fb3a3d48023b41d7b42f476f8e6a34c206100b441ecbb61f6c",
+        "tests": 5
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.settings.BrowserScriptStatusMapperTest.xml",
+        "sha256": "13f78001a75b7649eb6e1650f9a357b4f7d8c64a7bbdea44c2f6a496fad19c69",
+        "tests": 11
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.settings.AppRowTest.xml",
+        "sha256": "4ea8b327804967a889862db5aa2d400af090a71a4da76f342585d452a5d2d417",
+        "tests": 4
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.settings.BrowserScriptToggleGateTest.xml",
+        "sha256": "0d2ea9a516c1425283192bbc9b52b0164758e1236ee9e2df1a4fcf06c11b00b4",
+        "tests": 14
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.settings.LlmAuthApiKeyPersistTest.xml",
+        "sha256": "05a0f9870a41443d8f3a4a9b21758027f98a61debef350535079b4e9cf2dbbc6",
+        "tests": 2
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.settings.ModelPickerTest.xml",
+        "sha256": "3c47a7369638c3fa21d8530aa4b0573471a151a58faf885b47a602091fe89b6b",
+        "tests": 8
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.settings.RefreshButtonGateTest.xml",
+        "sha256": "bd77385c62fb9f7fa704f74cc650b83aff95938a2a36331ce53bed28fdecd966",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.settings.LlmAuthOtherAutoFlipTest.xml",
+        "sha256": "1782fec08e831cbe9766357d07a37a96d4d594a17806e915081a2d411441c84c",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.settings.RunCommandPermissionGateTest.xml",
+        "sha256": "3b1e2c3b49f86069fa39aee7206b20b49845aed76c1c20917b7255463a56cc50",
+        "tests": 9
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.settings.TermuxStatusMapperTest.xml",
+        "sha256": "a33b5983dbb28519e1708747040ef9fa420cbc9533067a6ef7384eb969b2dd1e",
+        "tests": 21
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.settings.VirtualDisplayStatusMapperTest.xml",
+        "sha256": "c28d799f627184f91f40771baf053e76b7170f63888b09711ba831cfb16fad81",
+        "tests": 13
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.settings.VirtualDisplayToggleGateTest.xml",
+        "sha256": "e4d83c6eee4b8fd945ea102a5801776f10539a0fd9431c1d51b87568991a2ebe",
+        "tests": 11
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.ui.theme.CalmThemeContrastTest.xml",
+        "sha256": "6280cac8764e7d43b5ec09153c846384201b4634ce848d96f4fbea279d802aff",
+        "tests": 1
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.update.SelfUpdateOperationsTest.xml",
+        "sha256": "91a09de43820a1f58c9b452f4bad5ca211c0c9f2529e189f67fd46fd390081f0",
+        "tests": 3
+      },
+      {
+        "path": "test-results/testDebugUnitTest/TEST-ai.closepaw.update.SelfUpdatePolicyTest.xml",
+        "sha256": "29f73a158496e4309725d83dbe97b554051f16238a3b2d3ea352135a73d6d3c1",
+        "tests": 13
+      }
+    ]
+  },
+  "security_review": {
+    "status": "NO_ADDITIONAL_STATIC_BLOCKERS_IN_LIMITED_CANDIDATE",
+    "independent": true,
+    "native_runtime_review_status": "NOT_TESTED",
+    "clipboard_writes": 0,
+    "opaque_canvas_key_effects_allowed": false
+  },
+  "blocked": {
+    "clipboard": "No foreground/default-IME clipboard read grant; false hasPrimaryClip cannot prove empty. No clipboard side effects enabled. Supported local-consent broker remains unimplemented.",
+    "termux": "Opaque non-editable canvas lacks trustworthy prompt/authentication state proof; key effects prohibited."
+  },
+  "not_implemented": [
+    "safe_clipboard_broker_and_paste",
+    "bounded_generic_visual_target_capture",
+    "image_display_transform_validation",
+    "gesture_scroll_fallback",
+    "non_advertised_long_press_fallback",
+    "full_automatic_text_to_keyboard_sequence",
+    "complete_korean_composition_verification"
+  ],
+  "device_acceptance": {
+    "status": "NOT_TESTED",
+    "new_sessions": 0,
+    "apk_installations": 0,
+    "settings_changes": 0,
+    "bridge_pairing_token_changes": 0,
+    "baseline_installed_version": "0.1.87",
+    "baseline_version_code": 88
+  },
+  "performance": {
+    "status": "NOT_TESTED",
+    "speedup_claimed": false,
+    "security_probe_spacing_ms": 400,
+    "matched_abc_cohorts": false,
+    "voice_e2e": false
+  },
+  "release": {
+    "status": "NOT_ISSUED",
+    "main_merge_commit": null,
+    "apk_version": null,
+    "public_apk_signature_hash_verification": "NOT_APPLICABLE_NO_NEW_APK",
+    "production_key_changed": false
+  },
+  "related": {
+    "152": "bridge integration/recovery remains separate; settings and tokens unchanged",
+    "153": "IME requirements remain owned by165; no duplicate release",
+    "161": "timing/experiment code and active branches untouched"
+  },
+  "completion": "OPEN; required implementation and device/release acceptance incomplete"
+}

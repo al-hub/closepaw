@@ -123,3 +123,56 @@ Contradictory key text/description and incomplete input-target text are refused.
 Cross-window postcondition matching excludes all IME key nodes and verifies source app/
 window ownership. A keyboard node that copies an application's resource/class/bounds/text
 cannot satisfy that application's input or focus postcondition; a regression covers it.
+
+## Verified final checkpoint — 2026-10-25 KST
+
+Implementation source: `bdcf9b3b46192dd0ac4d222f41f41d7587499132`.
+Evidence-only commits following it do not change implementation/tests/version.
+[Machine-readable result and per-XML hashes](evidence/issue165/candidate.json).
+
+| Gate | Actual result |
+| --- | --- |
+| Code and design | PARTIAL: direct insertion/focus/horizontal native scroll/current-IME semantic key candidate |
+| Reused platform | Existing ControlPort/session/epoch/security/permissions/geometry/post-observation/no-replay; no new service/process/framework |
+| Final Security CI | [40172997673](https://github.com/al-hub/closepaw/actions/runs/40172997673) SUCCESS; lint/debug/full JVM |
+| Independent raw JVM XML | **2808 tests, failure/error/skipped 0**, 307 XML; artifact12590862559 SHA256 `5c3c74f0ca58889637f1f95b121340287b70d0ede2c25e0eeb3031684d896fa6` |
+| Final UI CI | [40172997555](https://github.com/al-hub/closepaw/actions/runs/40172997555) SUCCESS |
+| Independent raw UI XML | **11 tests, failure/error/skipped 0**, PNG8; artifact12590902528 SHA256 `aabdf4c281365990bfca8acbcaf14bdfa6cc00a976fd3c2edc093908eb781cb1` |
+| UI evidence scope | Existing emulator overlay/panel regression; **not** real new keyboard/input acceptance |
+| Local Python | 43 PASS; local JVM download BLOCKED, never substituted for remote JVM results |
+| Independent static review | Corrections re-reviewed; no further static blocker in the constrained candidate, not full #165/native acceptance |
+| Clipboard write/Paste | BLOCKED, no effects; foreground/local-consent broker unimplemented |
+| Termux opaque canvas | BLOCKED, no effects; trustworthy prompt/visual proof unavailable |
+| General screenshot/visual targets/transforms | NOT_IMPLEMENTED |
+| Two real apps/Termux/alternate IME/rotation/X on new path | NOT_TESTED |
+| A/B/C input performance/accuracy/UNKNOWN/call counts/Voice E2E | NOT_TESTED; no speedup claimed; existing400ms security spacing retained |
+| Main merge / release / public APK / install | NOT_PERFORMED; version unchanged0.1.87/code88, production key/tags/assets untouched |
+| Related #152/#153 | #152 bridge recovery remains separate; #153 requirements remain owned by #165 with no duplicate engine/release |
+| #165 / PR167 | **OPEN / DRAFT**, cannot close from these CI results |
+
+The source tree of the final GitHub commit was checked against the local implementation
+snapshot. Final main was independently rechecked as unchanged
+`d2c6c449fce684e2db4f8763167a46c1a1127d33`. No phone UI session, input, installation,
+accessibility reset, app permission change or Termux pairing/token modification was performed.
+Downloaded test ZIPs were checked against GitHub artifact digests before independent XML
+parsing. Per-file XML hashes/counts and artifact source SHA are retained in candidate.json;
+raw artifacts remain subject to GitHub retention (JVM7 days/UI14 days).
+
+### Required continuation before merge/release
+
+1. Implement a supported, visible local-consent clipboard path that protects original data,
+   handles read denial/foreign writes without automatic restoration overwrite, and performs
+   a new target/session/security validation before Paste. Do not re-enable background
+   clipboard writes using hasPrimaryClip=false as emptiness proof.
+2. Implement bounded generic screenshot delivery and trustworthy image/display/window
+   transforms/visual target evidence. Do not enable opaque terminal input or arbitrary
+   coordinates before the authentication/prompt/occlusion/freshness checks are proven.
+3. Finish full A→B→C orchestration and composition verification. Current IME support is a
+   single guarded semantic key, not arbitrary string-to-keyboard typing in all keyboards.
+4. Add real native Android input/IME and cancellation-race tests, then independent review
+   and full exact-source CI. Existing panel tests do not establish these behaviors.
+5. Recheck #152/#161/main/active device sessions, allocate a new unused version only when
+   the integrated implementation is ready, and use the existing signed-release runbook.
+   Then independently verify the public APK, install once and execute the two-app/Termux/
+   safety/performance matrix on that exact installed version. Only close #165 when every
+   mandatory condition actually passes. No extra user action is requested at this checkpoint.
