@@ -1,3 +1,9 @@
+## 2026-10-25 #145 CLOSED/completed 최종 확인
+
+- [#145 종료 감사 댓글](https://github.com/al-hub/closepaw/issues/145#issuecomment-6391764721)과 GitHub update 응답에서 **state=closed/state_reason=completed** 확인. [최종 수용 감사표](../dev/issue145-final-acceptance-audit.md)에 원래 실기기/자동회귀 수용 증거·원source·미검증 한계·이관범위를 명시했다.
+- 현재 #145/#146/#150 CLOSED, #147 OPEN. v0.1.85/code86 및 APK source8ed27ad6bb9cc97a6d28a21d8a560ed2ab150088 불변. 이번 종료감사에 신규기기시험/세션/질문/코드/서명/설치0.
+- Galaxy expanded 사진·OEM별 AOD시각특성·정량 first-visible ms를 PASS로 바꾸지 않았다. 기존 비대화면/복원·실제emulator 상세renderer 및 Galaxy 핵심동작 혼합증거로 원래 수용을 완료했다. 관련 과거 응답수집 실패·실제성능 개선은 #147 후속이며 미해결 기록을 보존한다.
+
 ## 2026-10-25 #145 최종 수용 감사 완료 — 원래 범위 충족·종료 판정
 
 - [최종 수용 감사표](../dev/issue145-final-acceptance-audit.md)에서 원문 구현·실기기/자동회귀 조합 기준에 기존 증거를 항목별 매핑했다. Galaxy OFF/unlock 즉시표시 사용자PASS + bounded restore/host재생성·OFF/회전/중복·ended 자동회귀 + 10stage/dedup/stale 안전회귀 + 실제emulator 상세renderer4상태/8PNG + v85실기기 session-bound inspection PASS를 재사용한다.
