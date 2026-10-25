@@ -1,0 +1,19 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="ai.closepaw.qa.ControlOverlayWindowTest" tests="11" failures="0" errors="0" skipped="0" time="70.208" timestamp="2026-10-25T05:03:12" hostname="localhost">
+  <properties>
+    <property name="device" value="emulator-5554 - 15" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="realWindowsDragPersistArbitrateAndStopWithoutExposingRemoteMoveCommands" classname="ai.closepaw.qa.ControlOverlayWindowTest" time="21.919" />
+  <testcase name="expandedGeminiStagesRenderInTheRealOwnedIsland" classname="ai.closepaw.qa.ControlOverlayWindowTest" time="2.864" />
+  <testcase name="userPresentRestoresWithoutAnotherAccessibilityEventAndNeverRestartsEndedControl" classname="ai.closepaw.qa.ControlOverlayWindowTest" time="1.662" />
+  <testcase name="sameLocationRecoveryAndHostRecreationNeverResumeEndedSession" classname="ai.closepaw.qa.ControlOverlayWindowTest" time="2.969" />
+  <testcase name="persistedTopCoordinatesMatchPhysicalScreenWithoutSystemBarOffset" classname="ai.closepaw.qa.IslandScreenCoordinatesTest" time="2.388" />
+  <testcase name="lightDarkAndLargeTextRenderWithLargeControls" classname="ai.closepaw.qa.RemoteControlPanelRenderingTest" time="1.069" />
+  <testcase name="activeIslandContainsNoLegacyControlButtons" classname="ai.closepaw.qa.RemoteControlPanelTest" time="0.008" />
+  <testcase name="waitingRetainsStatusButNoPauseResumeStopOrDirectControl" classname="ai.closepaw.qa.RemoteControlPanelTest" time="0.035" />
+  <testcase name="smallViewportDoesNotRevealHiddenControls" classname="ai.closepaw.qa.RemoteControlPanelTest" time="0.004" />
+  <testcase name="islandStatusUpdatesWithoutRecreatingTheView" classname="ai.closepaw.qa.RemoteControlPanelTest" time="0.005" />
+  <testcase name="productionDragMovesTenTimesRejectsReplayAndPreservesStop" classname="ai.closepaw.qa.IslandOperationTest" time="35.785" />
+</testsuite>

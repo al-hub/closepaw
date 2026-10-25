@@ -19,9 +19,11 @@ internal class GenericControlSequence(
 ) {
     suspend fun run(labels: List<String>, sessionId: String?, correlationId: String = java.util.UUID.randomUUID().toString()): OperationResult {
         val trace = ControlTrace(correlationId)
+        val timing = ControlTiming(android.os.SystemClock::elapsedRealtimeNanos)
         return try {
-            kotlinx.coroutines.withContext(trace) { runTraced(labels, sessionId, trace) }
+            kotlinx.coroutines.withContext(trace + timing) { runTraced(labels, sessionId, trace) }
         } catch (cancelled: CancellationException) {
+            timing.mark(ControlTiming.Event.CANCEL_OBSERVED, step = trace.step)
             currentCoroutineContext()[OperationInterruptionEvidence]?.snapshot = buildJsonObject {
                 put("correlation_id", correlationId)
                 put("cancel_requested", true)
@@ -47,8 +49,12 @@ internal class GenericControlSequence(
             }
             throw cancelled
         } finally {
+            timing.mark(ControlTiming.Event.INVOCATION_FINISHED, step = trace.step)
             ControlDiagnostics.record("sequence_trace", "finished", taskId = correlationId,
-                metrics = trace.snapshot())
+                metrics = buildJsonObject {
+                    trace.snapshot().forEach { (key, value) -> put(key, value) }
+                    put("android_timing", timing.snapshot())
+                })
         }
     }
     private suspend fun runTraced(labels: List<String>, sessionId: String?, trace: ControlTrace): OperationResult {
