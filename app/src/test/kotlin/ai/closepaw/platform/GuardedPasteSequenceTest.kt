@@ -84,4 +84,28 @@ class GuardedPasteSequenceTest {
             .isEqualTo(GuardedPasteSequence.Outcome.PASTE_UNKNOWN)
         assertThat(attempts).isEqualTo(1)
     }
+    @Test fun unsupportedPasteTargetNeverOverwritesClipboard() = runTest {
+        var stages = 0
+        var pastes = 0
+        val seq = GuardedPasteSequence(
+            stage = { stages++; GuardedClipboardWriter.Outcome.STAGED_UNVERIFIED },
+            paste = { pastes++; true }
+        )
+        assertThat(seq.execute("safe", { true }, { true }, preflightTarget = { false }))
+            .isEqualTo(GuardedPasteSequence.Outcome.DENIED)
+        assertThat(stages).isEqualTo(0)
+        assertThat(pastes).isEqualTo(0)
+    }
+
+    @Test fun revokedAfterPreflightStillCannotStage() = runTest {
+        var guardCount = 0
+        var stages = 0
+        val seq = GuardedPasteSequence(
+            stage = { stages++; GuardedClipboardWriter.Outcome.STAGED_UNVERIFIED },
+            paste = { true }
+        )
+        assertThat(seq.execute("safe", { ++guardCount == 1 }, { true }, preflightTarget = { true }))
+            .isEqualTo(GuardedPasteSequence.Outcome.DENIED)
+        assertThat(stages).isEqualTo(0)
+    }
 }
