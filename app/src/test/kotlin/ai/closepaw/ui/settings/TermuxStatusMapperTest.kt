@@ -167,6 +167,18 @@ class TermuxStatusMapperTest {
     }
 
     @Test
+    fun `offline unsupported service preserves pairing without claiming process death`() {
+        val ui = termuxStatusUi(
+            state = TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.BRIDGE_OFFLINE_NO_RUN_COMMAND),
+            permissionDisposition = null,
+            enabledPref = true,
+        )
+        assertThat(ui.label).isEqualTo("Offline")
+        assertThat(ui.subtitle).contains("Process state is unknown")
+        assertThat(ui.subtitle).contains("existing pairing is retained")
+    }
+
+    @Test
     fun `NeedsSetup TERMUX_RUN_COMMAND_UNAVAILABLE subtitle`() {
         val ui = termuxStatusUi(
             state = TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.TERMUX_RUN_COMMAND_UNAVAILABLE),

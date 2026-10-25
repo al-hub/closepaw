@@ -39,6 +39,8 @@ internal enum class HealthProbe {
     BridgeOutdated,
     InvalidIdentity,
     AuthMismatch,
+    UnverifiedListener,
+    ResponseTimeout,
     Unavailable
 }
 
@@ -125,6 +127,8 @@ internal class HttpTermuxHealthProbe(
 ) : TermuxHealthProbe {
     private val httpClient =
         OkHttpClient.Builder()
+            .followRedirects(false)
+            .followSslRedirects(false)
             .connectTimeout(1, TimeUnit.SECONDS)
             .readTimeout(2, TimeUnit.SECONDS)
             .writeTimeout(2, TimeUnit.SECONDS)
@@ -161,7 +165,7 @@ internal class HttpTermuxHealthProbe(
             val request = Request.Builder().url(healthUrl).get().build()
             try {
                 httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) return@withContext HealthProbe.Unavailable
+                    if (!response.isSuccessful) return@withContext HealthProbe.UnverifiedListener
                     val json = JSONObject(response.body.string())
                     val identity = json.optString("identity")
                     val version = json.optString("version")
@@ -172,12 +176,14 @@ internal class HttpTermuxHealthProbe(
                         else -> authenticatedProbe()
                     }
                 }
+            } catch (_: java.io.InterruptedIOException) {
+                HealthProbe.ResponseTimeout
             } catch (_: IOException) {
                 HealthProbe.Unavailable
             } catch (_: JSONException) {
-                HealthProbe.Unavailable
+                HealthProbe.UnverifiedListener
             } catch (_: IllegalStateException) {
-                HealthProbe.Unavailable
+                HealthProbe.UnverifiedListener
             }
         }
     private fun authenticatedProbe(): HealthProbe {
@@ -196,13 +202,15 @@ internal class HttpTermuxHealthProbe(
                         if (json.optString("status") == "ready" && json.optInt("job_api_version") == 1)
                             HealthProbe.Ready else HealthProbe.BridgeOutdated
                     }
-                    else -> HealthProbe.Unavailable
+                    else -> HealthProbe.UnverifiedListener
                 }
             }
+        } catch (_: java.io.InterruptedIOException) {
+            HealthProbe.ResponseTimeout
         } catch (_: IOException) {
             HealthProbe.Unavailable
         } catch (_: JSONException) {
-            HealthProbe.Unavailable
+            HealthProbe.UnverifiedListener
         }
     }
 
