@@ -12,14 +12,16 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
     val checkable: Boolean = false, val checked: Boolean = false,
     val focused: Boolean = false, val selectionStart: Int = -1, val selectionEnd: Int = -1,
     val setText: Boolean = false, val paste: Boolean = false, val focusable: Boolean = false,
-    val scrollDirections: Set<String> = emptySet()) {
+    val scrollDirections: Set<String> = emptySet(), val sourceWindowId: Int = -1,
+    val sourcePackage: String = "", val keyboardKey: String = "", val textEntryKey: Boolean = false) {
     fun json() = buildJsonObject {
         put("focused", focused); put("focusable", focusable); put("set_text_supported", setText); put("paste_supported", paste)
         put("selection_start", selectionStart); put("selection_end", selectionEnd)
         put("scroll_directions", JsonArray(scrollDirections.sorted().map { JsonPrimitive(it) }))
         put("expandable", expandable); put("collapsible", collapsible); put("class_name", className.take(100)); put("selected", selected)
         put("checkable", checkable); put("checked", checked)
-        put("node_id", id); put("text", text.take(100)); put("description", description.take(100)); put("resource_id", resourceId.take(100))
+        put("source_window_id", sourceWindowId); put("keyboard_key", keyboardKey)
+        put("node_id", id); put("text", if (keyboardKey.isNotEmpty()) keyboardKey else text.take(100)); put("description", if (keyboardKey.isNotEmpty()) "" else description.take(100)); put("resource_id", resourceId.take(100))
         put("long_clickable", longClickable); put("bounds", bounds); put("parent", parent); put("clickable", clickable); put("editable", editable); put("scrollable", scrollable); put("enabled", enabled)
     }
 }
@@ -28,7 +30,7 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val truncationReasons: Set<String> = emptySet(), val visitedNodes: Int = 0, val maxDepth: Int = 0,
     val touchContext: String = "", val foregroundWindowId: Int = windowId, val windowContext: String = "",
     val windowDiagnostics: JsonObject? = null, val configurationRevision: Long = 0, val outputLimit: Int = 50,
-    val verifiedApplicationPackage: String? = null)
+    val verifiedApplicationPackage: String? = null, val keyboard: ControlKeyboard? = null, val inputTargetId: Int? = null, val inputTarget: ControlNode? = null)
 /** Logical identity is supplied only by a complete, guarded native application identity scan. */
 internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expected != null && reason == null &&
     (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
@@ -107,6 +109,10 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         current = observation
         return OperationResult(data = buildJsonObject {
             put("observation_id", observation.id); put("observed_at_ms", observation.at); put("expires_in_ms", 60_000)
+            frame.keyboard?.let { put("keyboard", buildJsonObject {
+                put("window_id", it.windowId); put("package_name", it.packageName); put("input_method_id", it.inputMethodId)
+                put("semantic_keys_only", true); put("input_target_verified", frame.inputTargetId != null)
+            }) }
             put("package_name", frame.packageName); put("window_id", frame.windowId)
             frame.verifiedApplicationPackage?.let { put("verified_application_package", it) }
             put("foreground_window_id", frame.foregroundWindowId)
@@ -139,7 +145,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (chainActions >= 20 || now() - chainStarted !in 0L..180_000L || noProgress >= 3)
             return failure("control_chain_limit_observe_again")
         val action = input["action"]?.jsonPrimitive?.content.orEmpty()
-        if (action !in setOf("click", "tap", "long_press", "type", "input", "focus", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
+        if (action !in setOf("click", "tap", "long_press", "type", "input", "focus", "key", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
         val frame = observation.frame
         if (!port.validatesAtNativeBoundary) {
             val fresh = port.capture()
@@ -149,11 +155,25 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
-        if (action in setOf("click", "tap", "long_press", "type", "input", "focus", "scroll", "expand", "collapse")) {
+        if (action in setOf("click", "tap", "long_press", "type", "input", "focus", "key", "scroll", "expand", "collapse")) {
             if (node == null || !node.enabled || node.password) return failure("target_unavailable")
             if ((action in setOf("click", "tap") && !node.clickable) || (action == "long_press" && !node.longClickable)) return failure("target_not_clickable")
             if ((action == "expand" && !node.expandable) || (action == "collapse" && !node.collapsible)) return failure("native_action_unavailable")
             if (action == "scroll" && (!node.scrollable || input["direction"]?.jsonPrimitive?.content !in (node.scrollDirections + setOf("up", "down")))) return failure("target_not_scrollable")
+            if (node.keyboardKey.isNotEmpty() && action != "key") return failure("keyboard_key_action_required")
+            if (action == "key") {
+                if (frame.keyboard == null || frame.inputTargetId == null || node.sourceWindowId != frame.keyboard.windowId ||
+                    node.sourcePackage != frame.keyboard.packageName) return failure("keyboard_target_unverified")
+                val field = frame.inputTarget ?: return failure("keyboard_target_unverified")
+                if (!field.editable || !field.enabled || !field.focused || field.password || field.id != frame.inputTargetId || field.sourcePackage != frame.packageName ||
+                    field.sourceWindowId != frame.windowId || InputPayloadPolicy.sensitive(field.text)) return failure("keyboard_target_unverified")
+                val key = KeyboardKeyPolicy.identify(node.text, node.description, node.className, node.clickable, node.textEntryKey)
+                    ?: return failure("keyboard_key_unrecognized")
+                if (field.editable && key.kind in setOf(KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE, KeyboardKeyPolicy.Kind.BACKSPACE) &&
+                    KeyboardKeyPolicy.expectedText(field, key) == null) return failure("keyboard_literal_unverified")
+                if (key.kind == KeyboardKeyPolicy.Kind.SUBMIT && input["submit_authorized"]?.jsonPrimitive?.booleanOrNull != true)
+                    return failure("submission_authorization_required")
+            }
             if (action == "focus" && !node.focusable) return failure("target_not_focusable")
             if (action == "input") {
                 val plan = UnifiedInputPolicy.plan(node, input["text"]?.jsonPrimitive?.content.orEmpty(),

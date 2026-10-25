@@ -6,7 +6,7 @@ import android.graphics.Rect
 import android.view.accessibility.AccessibilityWindowInfo
 import kotlinx.serialization.json.*
 
-internal data class NativeControlWindows(val selection: ControlWindowSelection, val signature: String, val diagnostics: JsonObject)
+internal data class NativeControlWindows(val selection: ControlWindowSelection, val signature: String, val diagnostics: JsonObject, val keyboard: ControlKeyboard? = null)
 
 /** Metadata only; no retained native refs, titles, account identifiers or screen text. */
 internal fun controlWindows(foreground: Int, pkg: String, windows: List<AccessibilityWindowInfo>): NativeControlWindows {

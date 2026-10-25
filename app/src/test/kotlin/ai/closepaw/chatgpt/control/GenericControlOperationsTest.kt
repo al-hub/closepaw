@@ -329,7 +329,7 @@ class GenericControlOperationsTest {
 
 
     @Test fun newInputActionsNeverActivateLegacyIdleSessions() = runBlocking {
-        for (action in listOf("input", "focus")) {
+        for (action in listOf("input", "focus", "key")) {
             val session = ControlSession()
             val port = Port().apply { controlSession = session }
             val result = registry(port).get(GenericControlOperations.ACTION)!!.handler.invoke(
@@ -352,7 +352,7 @@ class GenericControlOperationsTest {
                     "reobserving" -> { pause(); beginResume() }
                 }
             }
-            for (action in listOf("input", "focus")) {
+            for (action in listOf("input", "focus", "key")) {
                 val port = Port().apply { controlSession = session }
                 val input = buildJsonObject { put("action", action); put("session_id", if (state == "wrong-id") "wrong" else session.id) }
                 val result = registry(port).get(GenericControlOperations.ACTION)!!.handler.invoke(OperationInvocation("session-test", input))

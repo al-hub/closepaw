@@ -60,8 +60,16 @@ restoration. A supported explicitly foreground/local-consent broker design remai
 - Local Gradle could not download Gradle8.11.1: Network is unreachable. No local RED/GREEN
   assertion is claimed. GitHub exact-source JVM/lint/debug/UI results must be recorded.
 - Native clipboard safety refusal is deliberate; clipboard successful input is BLOCKED.
-- IME window ownership/traversal and dynamic key touch remain NOT_IMPLEMENTED; no Samsung
-  coordinates, key assumptions or arbitrary point injection were added.
+- IME extension candidate: unique OS TYPE_INPUT_METHOD/default-display window bound to
+  DEFAULT_INPUT_METHOD and enabledInputMethodList package/service, fresh security probes
+  for both app and IME, complete bounded IME fingerprint, OS isTextEntryKey-only exposure,
+  dynamic current key bounds and existing occlusion/region/magnification policy. One key
+  per consumed observation, explicit session, separate submit authorization. Unknown
+  function glyphs are refused. Exact literal text may verify only in a known editable
+  field; layout/composition/custom terminal/Enter effects remain UNKNOWN and are never
+  automatically replayed. IME switch/rotation/layout invalidates previous key observations.
+  No Samsung coordinates or arbitrary point injection. Actual IME native support and
+  Korean composition require installed-device acceptance; they are not asserted PASS.
 - Screenshot visual targets, validated image/display transforms, gesture scroll fallback
   and fallback long-touch for non-advertised targets remain NOT_IMPLEMENTED.
 - New installed-APK direct input/focus/scroll, two general apps, Termux, same-APK A/B/C
@@ -71,3 +79,35 @@ restoration. A supported explicitly foreground/local-consent broker design remai
 
 **#165 stays OPEN. This candidate must remain draft and must not merge/release as if the
 full issue were implemented.** The existing production APK remains 0.1.87/code88.
+
+## IME follow-up independent review
+
+The reviewer found that OS isTextEntryKey also marks functional keys. The initial
+single-codepoint fallback could treat unknown return/send icons as literal characters.
+The candidate now permits only one ASCII printable character or Hangul/jamo ranges as
+literal; known return/check labels are submit actions, unknown arrow/play/send/emoji
+glyphs are refused. This is intentionally a limited supported key vocabulary, not
+universal recognition. Functional keys with no trustworthy exposed label are unsupported.
+
+Primary Android key metadata contract:
+https://developer.android.com/reference/android/view/accessibility/AccessibilityNodeInfo#isTextEntryKey()
+The flag proves a keyboard/keypad entry node, not whether its effect is submission.
+KeyboardControlTest covers fresh owner/focus, IME/rotation/layout changes, exact literal
+postconditions, cancelled gesture no-replay and terminal/composition/Enter UNKNOWN.
+Native identity/probe/gesture behavior still needs instrumented/physical evidence.
+
+IME review also found that scanning the app then IME does not freeze input focus. A final
+FOCUS_INPUT reacquisition now checks actual app owner/window, editable/focused/visible/
+enabled/password/data-sensitive state, resource/class/bounds/text/selection after IME
+scan and before gesture dispatch without suspension. KeyboardTargetPolicy failure-injection
+covers focus/caret/text/auth/geometry races. Native OEM boundary execution remains untested.
+Opaque/non-editable terminal canvases are refused: a missing isPassword flag is not proof
+of a non-authentication shell prompt. Thus Termux keys remain BLOCKED until trustworthy
+bounded visual/prompt evidence exists; UNKNOWN after an effect is not a safety exemption.
+
+A final review found cancellation may arrive during Binder guards even without a coroutine
+suspension. Gesture dispatch now checks continuation activity, the epoch captured before
+those guards, session stop/pause, service/consent and app policy INSIDE the continuation
+immediately before OS dispatch. GestureDispatchGateTest injects end/restart/pause/cancel
+between admission and dispatch gate; these are JVM state-machine tests, not proof of actual
+Galaxy dispatch timing. Existing key/tap geometry and full security probes remain required.
