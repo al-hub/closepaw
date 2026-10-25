@@ -31,3 +31,13 @@ Do not touch #152 bridge recovery, #161 benchmarks/experimental branch, or activ
 - `NodeActionPerformer.setTextOnNode` returns a failure message containing intended/actual text, which may expose sensitive input via logs or tool results. Sanitize at source before enabling new input channels.
 - `MobileActionTool.buildDescription` previews input text. Redact input payload in instrumentation, actions and UI descriptions.
 - Prioritize comprehensive security policy parity between `mobile_action` and `android.ui.action` before exposing new gesture/clipboard commands.
+
+
+## Additional implementation checkpoint — input policy and real IME blocker
+
+- `UnifiedTextInputPolicy` defines a pure evidence-gated priority order: direct API, clipboard Paste, visible IME. It does **not** currently call Android clipboard or inject keyboard taps. A successful test of this policy only validates branching, not real input.
+- Explicit `DEFINITELY_UNSUPPORTED` permits moving to the next evidenced channel; UNKNOWN/PARTIAL/CANCELLED/VERIFIED never trigger replay. Stale frame, missing app policy, unverified target, sensitive field or ended session all block selection.
+- `AccessibilityPlatform.collectRootsOnActiveDisplay()` currently **excludes TYPE_INPUT_METHOD windows** when building perceptual elements (although keyboard visibility is detected). Thus the current snapshot cannot establish individual IME key identity, bounds or owner. Keyboard taps must not be enabled until a separate guarded IME observation contract, ownership checks and rotation/layout-change tests are built.
+- `AccessibilityPlatform.performAction(UIAction.TapAt)` exposes low-level gestures, but this does not establish that external ChatGPT surface has permission/freshness for any arbitrary IME coordinate. The shared action adapter must not bypass `GenericControlActionPolicy`, security and session controls.
+- Clipboard writing and restoration remain OS-policy dependent and are **NOT_IMPLEMENTED**. No automatic clipboard fallback is enabled.
+- Release, PR merge and close remain prohibited until implementation + CI + signed source + installed phone acceptance are proven.
