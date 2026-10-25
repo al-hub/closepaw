@@ -48,7 +48,17 @@ python3 scripts/control_timing_report.py trace-with-android-timing.json --output
 
 로컬 Python43개 PASS. 로컬 JVM 실행은 Gradle 배포 다운로드의 `Network is unreachable`로 BLOCKED;
 SDK도 없다. 같은 실패를 재시도하지 않고 PR Security CI/full JVM/lint/debug 및 기존 UI gate를 사용한다.
-Kotlin 시험의 실제 성공 여부는 정확한 PR HEAD의 CI 결과를 확인한 뒤 #161에 기록한다.
+최종 코드 HEAD `8c4d6ac6018ced47ee76db65c4515412ec3d85cb`의
+[Security CI40163758253](https://github.com/al-hub/closepaw/actions/runs/40163758253)와
+[UI40163758255](https://github.com/al-hub/closepaw/actions/runs/40163758255)는 모두 success.
+원시 XML 독립 집계: JVM2765(신규12 포함), Android UI11, 실패/오류/skip 모두0, 기존 PNG8.
+PR CI 실제 checkout은 merge `b1048e8556e9d0eba50d806745954fbff67dae5d`이며 parents가
+감사main/코드HEAD임을 확인했고 merge tree와 코드HEAD tree가
+`ff797cf0645e7ca71b4e3e9ea0d4b3dda1578ebc`로 동일하다.
+후속 증거 보존 커밋은 docs-only `[skip ci]`이며 이 결과를 새 runtime 시험으로 바꾸지 않는다.
+[감사 JSON](evidence/issue161/audit.json), [원시 model](evidence/issue161/virtual-model.json)과
+새12case/기존UI11case XML을 같은 디렉터리에 보관했다. 전체 raw artifacts의 ID/hash는 감사 JSON 참조.
+기존 CI 최초HEAD는 수정 push에 따라 정상 취소됐고, 실패 재시도한 것이 아니다.
 
 새 Kotlin 시험12개: collector4개, 시제품8개. cap1/2·순서/backpressure·검증 지연, 앱전환/잠금/권한회수/
 X/사용자직접조작/세션종료, 이벤트만/누락 결과/중복·역순 callback/오래된 snapshot/다른 generation·epoch/
@@ -107,11 +117,11 @@ snapshot별 고유ID 및 정상9단계 분석 회귀도 추가했고, 대기proo
 | 세부 계측 코드 | 구현, CI/배포/실측 구분; render/event/실제 취소요청 경로 미계측 |
 | 기초 성능 A~F | NOT_TESTED, 실제 Android 실험 필요 |
 | 기록 방식 비교 | 계약 분석만 완료, 비용 실측 NOT_TESTED |
-| 제한 병렬 시제품·오류 주입 | 테스트더블 구현; exact-SHA CI 확인 필요 |
+| 제한 병렬 시제품·오류 주입 | 테스트더블 신규12개 CI PASS; Android 실연결 미검증 |
 | X·실기기 안전성 | 원래 PASS는 REUSED_EVIDENCE; 변경 공통경로 신규 시험 NOT_TESTED |
 | 동일조건 실제 성능10+10 | NOT_TESTED |
 | 독립 리뷰 | 수행·지적 수정·재검토 완료 |
-| CI | PR exact-SHA 결과로 갱신 |
+| CI | 위 코드HEAD/동일tree merge의 Security·UI success, raw XML 독립 확인 |
 | 결과 기록·#147 인계 | PR 및 이슈 댓글로 연결 |
 
 1. CI와 리뷰를 확인한 계측 PR을 보존한다. 현 단계에서 운영 APK/설치/세션 변경은 필요 없다.
