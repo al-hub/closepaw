@@ -238,9 +238,8 @@ class NodeActionPerformer(
             val actualText = node.text?.toString() ?: ""
             if (actualText != combined && !actualText.contains(text)) {
                 return ActionResult.Failure(
-                        "Type action failed: value did not change to '$text' " +
-                                "(actual: '$actualText'). This field may be read-only or a " +
-                                "NumberPicker. Try scroll gestures or a different approach."
+                        "Type action failed: value did not match requested update. " +
+                                "This field may be read-only or a NumberPicker."
                 )
             }
         }
