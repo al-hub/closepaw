@@ -16,7 +16,7 @@ class TerminalInputPolicyTest {
         assertNotNull(TerminalInputPolicy.refusal(node().copy(className="android.widget.EditText"),"hello",true))
         for (target in listOf(node().copy(terminal = null), node().copy(focused = false), node("Password:"), node("$ existing"), node().copy(password = true), node().copy(sourcePackage = "other")))
             assertNotNull(TerminalInputPolicy.refusal(target, "hello", true))
-        for (text in listOf("echo x\n", "a\r", "token=abc", "", "hello ")) assertNotNull(TerminalInputPolicy.refusal(node(), text, true))
+        for (text in listOf("echo x\n", "a\r", "token=abc", "a\u202Eb", "", "hello ")) assertNotNull(TerminalInputPolicy.refusal(node(), text, true))
         assertNotNull(TerminalInputPolicy.refusal(node(), "hello", false))
     }
     @Test fun echoVerificationDoesNotAcceptAnotherWindowBindingPartialOrUnchangedOutput() {

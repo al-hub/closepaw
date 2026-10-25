@@ -54,8 +54,20 @@ class TerminalInputConnectionTest {
                 instrumentation.runOnMainSync { ready = TerminalInputBinding.capture(service) != null }
                 ready
             }
-            val control = GenericControl(AndroidControlPort(service, runtime = settings.runtimeControl) { settings.genericControlEnabled }, { settings.genericControlEnabled })
-            val observed = control.observe(); assertTrue(observed.toString(), observed.success)
+            val port = AndroidControlPort(service, runtime = settings.runtimeControl) { settings.genericControlEnabled }
+            val control = GenericControl(port, { settings.genericControlEnabled })
+            suspend fun settled(): ai.closepaw.chatgpt.operations.OperationResult {
+                var previous=port.capture()
+                repeat(5) {
+                    val next=port.capture()
+                    if (GenericControlActionPolicy.refusal(previous,next,"terminal_input") == null && previous.touchContext == next.touchContext)
+                        return control.observe()
+                    previous=next
+                }
+                fail("Fixture screen did not settle: ${previous.reason}")
+                return control.observe()
+            }
+            val observed = settled(); assertTrue(observed.toString(), observed.success)
             val target = observed.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["terminal_input_supported"]?.jsonPrimitive?.booleanOrNull == true }
             val input = buildJsonObject { put("action", "terminal_input"); put("session_id", session.id)
                 put("observation_id", observed.data.getValue("observation_id")); put("node_id", target.getValue("node_id"))
@@ -77,13 +89,13 @@ class TerminalInputConnectionTest {
                 }
                 ready
             }
-            val pending = control.observe(); assertTrue(pending.success)
+            val pending = settled(); assertTrue(pending.success)
             val terminalNode = pending.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["terminal_input_supported"]?.jsonPrimitive?.booleanOrNull == true }
             val command = "printf fixture_ok"
             val typed = control.action(buildJsonObject { put("action","terminal_input");put("session_id",session.id);put("terminal_authorized",true)
                 put("text",command);put("observation_id",pending.data.getValue("observation_id"));put("node_id",terminalNode.getValue("node_id")) })
             assertTrue(typed.toString(), typed.success)
-            val submitObservation = control.observe(); assertTrue(submitObservation.success)
+            val submitObservation = settled(); assertTrue(submitObservation.success)
             val submitted = control.action(buildJsonObject { put("action","terminal_submit");put("session_id",session.id);put("terminal_authorized",true);put("submit_authorized",true)
                 put("text",command);put("expected_output","fixture_ok");put("observation_id",submitObservation.data.getValue("observation_id"));put("node_id",terminalNode.getValue("node_id")) })
             assertTrue(submitted.toString(), submitted.success)

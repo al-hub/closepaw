@@ -14,6 +14,7 @@ import kotlin.coroutines.resume
 
 /** Window-only screenshot: never falls back to a display capture after denial.
  * Raw dimensions must equal OS window bounds; ambiguous insets/rotation refuse. */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 internal object WindowVisualCapture {
     suspend fun capture(service: AccessibilityService, windowId: Int, window: TapBounds, context: String): VisualTargetProof? {
         if (Build.VERSION.SDK_INT < 34 || !window.valid) return null
@@ -21,7 +22,7 @@ internal object WindowVisualCapture {
             suspendCancellableCoroutine<AccessibilityService.ScreenshotResult?> { continuation ->
                 try { service.takeScreenshotOfWindow(windowId, service.mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
                     override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
-                        if (continuation.isActive) continuation.resume(screenshot) else screenshot.hardwareBuffer.close()
+                        if (continuation.isActive) continuation.resume(screenshot, onCancellation = { _: Throwable -> screenshot.hardwareBuffer.close() }) else screenshot.hardwareBuffer.close()
                     }
                     override fun onFailure(errorCode: Int) { if (continuation.isActive) continuation.resume(null) }
                 }) } catch (_: Exception) { if (continuation.isActive) continuation.resume(null) }

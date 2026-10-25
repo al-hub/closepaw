@@ -90,8 +90,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         port.presentation(ControlSession.VisualPhase.OBSERVING, visualEpoch)
         var frame = port.capture()
         if (includeImage && frame.reason == null && !frame.truncated) {
-            val visual = port.visual(frame) ?: return failure("visual_observation_unavailable")
-            frame = frame.copy(visual = visual)
+            val visual = port.visual(frame)
+            frame = if (visual == null) frame.copy(reason = "visual_observation_unavailable") else frame.copy(visual = visual)
         }
         val result = publish(frame, filter)
         port.presentation(if (result.success) ControlSession.VisualPhase.WAITING else ControlSession.VisualPhase.FAILED, visualEpoch)

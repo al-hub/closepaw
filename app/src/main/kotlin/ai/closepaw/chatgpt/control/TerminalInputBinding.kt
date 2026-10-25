@@ -20,12 +20,13 @@ internal class TerminalInputBinding private constructor(
     }
     fun commit(text: String) {
         // Caller performs final session/window/node/permission check immediately before this.
-        if (Build.VERSION.SDK_INT < 33) error("terminal_input_api_unavailable")
-        check(input.generation == generation && input.currentInputStarted)
-        val editor = input.currentInputEditorInfo ?: error("terminal_editor_missing")
-        check(editor.packageName == "com.termux" && editor.fieldId == fieldId && TerminalInputPolicy.inputTypeAllowed(editor.inputType))
-        val connection = input.currentInputConnection ?: error("terminal_connection_missing")
-        connection.commitText(text, 1, null) // void dispatch; exact echo must still be observed.
+        if (Build.VERSION.SDK_INT >= 33) {
+            check(input.generation == generation && input.currentInputStarted)
+            val editor = input.currentInputEditorInfo ?: error("terminal_editor_missing")
+            check(editor.packageName == "com.termux" && editor.fieldId == fieldId && TerminalInputPolicy.inputTypeAllowed(editor.inputType))
+            val connection = input.currentInputConnection ?: error("terminal_connection_missing")
+            connection.commitText(text, 1, null) // void dispatch; exact echo must still be observed.
+        } else throw UnsupportedOperationException("terminal_input_api_unavailable")
     }
     companion object {
         fun capture(service: AgentService): TerminalInputBinding? {

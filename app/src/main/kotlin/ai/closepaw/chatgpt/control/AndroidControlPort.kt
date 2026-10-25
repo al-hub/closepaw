@@ -339,6 +339,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val native = mutableListOf<AccessibilityNodeInfo>()
             val terminalBinding = try { TerminalInputBinding.capture(service) } catch (_: Exception) { null }
             val identity = StringBuilder("configuration=$revision\n").append(selected.signature).append('\n')
+            terminalBinding?.let { identity.append("input_generation=${it.generation}:${it.fieldId}\n") }
             var truncated = false
             var protected = false
             var gemini = false
