@@ -10,9 +10,45 @@ internal object ControlResultPolicy {
         if (action == "open_app") return Verdict(after.matchesApplication(input["package_name"]?.jsonPrimitive?.content),
             "target_app_not_observed", true)
         if (after.truncated && action != "home") return Verdict(false, "post_observation_incomplete")
-        val matching = after.nodes.filter { it.resourceId == node?.resourceId && it.bounds == node?.bounds &&
+        if (action == "key") {
+            if (node == null || before.keyboard == null || before.keyboard != after.keyboard ||
+                before.packageName != after.packageName || before.windowId != after.windowId)
+                return Verdict(false, "keyboard_postcondition_unavailable")
+            val field = before.inputTarget ?: return Verdict(false, "keyboard_input_target_unverified")
+            val key = KeyboardKeyPolicy.identify(node.text, node.description, node.className, node.clickable, node.textEntryKey)
+                ?: return Verdict(false, "keyboard_key_unrecognized")
+            val candidate = after.inputTarget
+            val sameField = candidate != null && candidate.resourceId == field.resourceId && candidate.className == field.className &&
+                candidate.bounds == field.bounds && candidate.sourceWindowId == field.sourceWindowId && candidate.sourcePackage == field.sourcePackage
+            val expected = KeyboardKeyPolicy.expectedText(field, key)
+            // Neither a gesture callback nor a layout/terminal screen change proves text/command success.
+            if (expected != null) return Verdict(sameField && candidate?.text == expected, "keyboard_input_unconfirmed", true)
+            return Verdict(false, "keyboard_effect_requires_external_verification")
+        }
+        fun owned(candidate: ControlNode): Boolean = candidate.keyboardKey.isEmpty() &&
+            (node == null || node.sourceWindowId < 0 || (candidate.sourceWindowId == node.sourceWindowId && candidate.sourcePackage == node.sourcePackage))
+        val matching = after.nodes.filter { owned(it) && it.resourceId == node?.resourceId && it.bounds == node?.bounds &&
             it.className == node?.className }
         val target = matching.singleOrNull()
+        if (action == "focus") {
+            // IME opening may resize/move the field. Only a unique nonempty semantic identity
+            // can survive that geometry change; never choose one of duplicate resource IDs.
+            val uniqueBefore = node != null && node.resourceId.isNotEmpty() && before.nodes.count {
+                owned(it) && it.resourceId == node.resourceId && it.className == node.className
+            } == 1
+            val semantic = if (uniqueBefore) after.nodes.filter {
+                owned(it) && it.resourceId == node?.resourceId && it.className == node?.className
+            }.singleOrNull() else target
+            return Verdict(after.packageName == before.packageName && after.windowId == before.windowId &&
+                semantic?.focused == true, "focus_unconfirmed", true)
+        }
+        if (action == "input" && node != null) {
+            val plan = UnifiedInputPolicy.plan(node, input["text"]?.jsonPrimitive?.content.orEmpty(),
+                input["method"]?.jsonPrimitive?.content ?: "auto", input["mode"]?.jsonPrimitive?.content ?: "empty",
+                input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true)
+            return Verdict(plan.refusal == null && after.packageName == before.packageName && after.windowId == before.windowId &&
+                target?.text == plan.resultText, "input_unconfirmed", true)
+        }
         if (action == "type") return Verdict(after.packageName == before.packageName && target?.text == input["text"]?.jsonPrimitive?.content, "input_unconfirmed", true)
         if (action in setOf("click", "tap") && node?.checkable == true) return Verdict(
             after.packageName == before.packageName && target?.checkable == true && target.checked != node.checked,

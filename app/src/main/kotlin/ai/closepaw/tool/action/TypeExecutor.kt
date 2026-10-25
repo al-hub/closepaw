@@ -41,6 +41,7 @@ class TypeExecutor(
         appClassifier: AppClassifier? = null
     ): ActionOutcome {
         val attemptTrail = mutableListOf<String>()
+        if (isCancelled()) return ActionOutcome.Cancelled("Cancelled before type")
 
         if (target == null) {
             return typeOnFocused(inputText, clear, snapshot, platform, attemptTrail, appClassifier)

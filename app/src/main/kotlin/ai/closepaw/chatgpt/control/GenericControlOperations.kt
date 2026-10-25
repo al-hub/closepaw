@@ -39,6 +39,12 @@ internal class GenericControlOperations(private val control: GenericControl, pri
             }
             override suspend fun invoke(invocation: OperationInvocation): OperationResult {
                 val session = session()
+                if (operation == ACTION && invocation.input["action"]?.jsonPrimitive?.content in setOf("input", "focus", "key")) {
+                    if (session == null || !session.explicit || session.state != ControlSession.State.ACTIVE)
+                        return appFailure("explicit_active_session_required")
+                    if (invocation.input["session_id"]?.jsonPrimitive?.content != session.id)
+                        return appFailure("control_session_id_mismatch")
+                }
                 session?.refusal(invocation.input["session_id"]?.jsonPrimitive?.content)?.let { return appFailure(it) }
                 if (!mutex.tryLock()) return OperationResult(success = false, summary = "ui_busy",
                     data = buildJsonObject { put("reason_code", "ui_busy"); put("action_attempted", false) })
@@ -52,11 +58,12 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                             put("inter_operation_idle_ms", ((started - it) / 1_000_000L).coerceAtLeast(0L))
                         }
                     })
-                return try { withTimeout(if (operation == SEQUENCE) 25_000L else 10_000L) {
+                return try { withTimeout(if (operation == ACTION && invocation.input["action"]?.jsonPrimitive?.content == "input") 120_000L else if (operation == SEQUENCE) 25_000L else 10_000L) {
                     if (showActivity) {
                         // A batch must never implicitly activate an idle control session.
                         // Only explicit android.control.session.start may authorize it.
-                        if (operation !in setOf(SEQUENCE, ISLAND_OBSERVE, ISLAND_DRAG)) session?.activateLegacy()
+                        if (operation !in setOf(SEQUENCE, ISLAND_OBSERVE, ISLAND_DRAG) &&
+                            !(operation == ACTION && invocation.input["action"]?.jsonPrimitive?.content in setOf("input", "focus", "key"))) session?.activateLegacy()
                         val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
                         session?.interrupt = { job?.cancel(kotlinx.coroutines.CancellationException("user_control_interrupt")) }
                         port.activity(true)
@@ -186,11 +193,16 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                 )
             })
         registry.register(OperationDescriptor(ACTION,
-            "Perform exactly one guarded action from a fresh observation, then return a new observation. Requires observation_id for ALL actions and node_id for click/tap/long_press/type/scroll/expand/collapse. click uses the native accessibility action. tap explicitly touches the center of the freshly revalidated clickable node, only on the default display with unchanged window geometry and no covering window; requires node_tap_available=true. No caller coordinates. type only fills an empty field; never overwrites. open_app requires an exact package from android.apps.list. Partial observations allow only Home/exact app launch; Back and node actions require a complete tree. Home/open_app validate foreground app/window identity; Back/node actions additionally require the unchanged content fingerprint. Inspect validation_scope. Policy, foreground owner, owned window set and consent are rechecked for every action. expand/collapse require the corresponding advertised native node action. No automatic fallback from click to tap, no model-specific logic, no automatic resend. Cancelled or unconfirmed gestures are unknown outcomes, not permission to retry. Native acknowledgement is not confirmation of the user's requested result. Inspect the new screen. Unknown outcomes require observation, never replay.",
+            "Perform exactly one guarded action from a fresh observation, then return a new observation. input requires a focused editable field and single-line non-sensitive text. mode=empty preserves drafts by refusal; insert requires a known selection and preserves text outside it. method=auto selects advertised SET_TEXT, then explicitly approved PASTE, then currently observed keyboard keys. Keyboard text is limited to32 verified keys in the unchanged layout, requires an end caret, and verifies every intermediate and final string. Hangul predictions require actual composition to match; unknown keys or effects stop. Never retries an attempted/unknown result. Clipboard Paste requires clipboard_consent=true AND clipboard_replace_authorized=true, authorizing replacement of the existing clipboard and leaving the staged content there. There is no restoration promise: Android has no atomic clipboard restore. Native read/provenance must be established before staging and immediately before Paste; unreadable/null clipboard is refused without writing. Clipboard-only or uncertain effects never trigger fallback. key targets only an exposed semantic button in the OS-selected IME, requires an explicitly active session and fresh keyboard geometry, and submits exactly one touch. Enter/send/search/next keys require submit_authorized=true for that separate side effect. Literal key prediction is limited to a verified editable field; terminal/composition results can remain UNKNOWN. Never auto-repeat an unconfirmed key. input/focus require explicit ACTIVE session_id; neither starts a legacy session. No automatic Enter. focus requests native input focus; horizontal scroll requires advertised directional actions. Requires observation_id for ALL actions and node_id for click/tap/long_press/type/scroll/expand/collapse. click uses the native accessibility action. tap explicitly touches the center of the freshly revalidated clickable node, only on the default display with unchanged window geometry and no covering window; requires node_tap_available=true. No caller coordinates. type only fills an empty field; never overwrites. open_app requires an exact package from android.apps.list. Partial observations allow only Home/exact app launch; Back and node actions require a complete tree. Home/open_app validate foreground app/window identity; Back/node actions additionally require the unchanged content fingerprint. Inspect validation_scope. Policy, foreground owner, owned window set and consent are rechecked for every action. expand/collapse require the corresponding advertised native node action. No automatic fallback from click to tap, no model-specific logic, no automatic resend. Cancelled or unconfirmed gestures are unknown outcomes, not permission to retry. Native acknowledgement is not confirmation of the user's requested result. Inspect the new screen. Unknown outcomes require observation, never replay.",
             inputSchema = obj("observation_id" to str(128, 1), "action" to buildJsonObject {
-                put("type", "string"); put("enum", JsonArray(listOf("click", "tap", "long_press", "type", "scroll", "expand", "collapse", "home", "back", "open_app").map { JsonPrimitive(it) }))
+                put("type", "string"); put("enum", JsonArray(listOf("click", "tap", "long_press", "type", "input", "focus", "key", "scroll", "expand", "collapse", "home", "back", "open_app").map { JsonPrimitive(it) }))
             }, "node_id" to buildJsonObject { put("type", "integer"); put("minimum", 0); put("maximum", 8191) },
-                "text" to str(2000, 1), "direction" to buildJsonObject { put("type", "string"); put("enum", JsonArray(listOf(JsonPrimitive("up"), JsonPrimitive("down")))) },
+                "text" to str(2000, 1),
+                "method" to buildJsonObject { put("type", "string"); put("enum", JsonArray(listOf("auto", "direct", "clipboard", "keyboard").map { JsonPrimitive(it) })) },
+                "mode" to buildJsonObject { put("type", "string"); put("enum", JsonArray(listOf("empty", "insert").map { JsonPrimitive(it) })) },
+                "submit_authorized" to buildJsonObject { put("type", "boolean") },
+                "clipboard_replace_authorized" to buildJsonObject { put("type", "boolean") },
+                "clipboard_consent" to buildJsonObject { put("type", "boolean") }, "direction" to buildJsonObject { put("type", "string"); put("enum", JsonArray(listOf("up", "down", "left", "right").map { JsonPrimitive(it) })) },
                 "package_name" to str(256, 1), required = listOf("observation_id", "action")),
             readOnly = false, permissions = listOf("accessibility", "generic_android_control"),
             effects = listOf("foreground_ui_action"), readiness = readiness), handler(ACTION, showActivity = true) { control.action(it.input) })

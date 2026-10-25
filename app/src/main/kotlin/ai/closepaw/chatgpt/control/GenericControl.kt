@@ -2,6 +2,7 @@ package ai.closepaw.chatgpt.control
 
 import ai.closepaw.chatgpt.operations.*
 import java.util.UUID
+import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.*
 
 internal data class ControlNode(val id: Int, val text: String = "", val description: String = "", val resourceId: String = "",
@@ -9,11 +10,19 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
     val enabled: Boolean = true, val password: Boolean = false, val empty: Boolean = true,
     val bounds: String = "", val parent: Int = -1, val longClickable: Boolean = false,
     val expandable: Boolean = false, val collapsible: Boolean = false, val className: String = "", val selected: Boolean = false,
-    val checkable: Boolean = false, val checked: Boolean = false) {
+    val checkable: Boolean = false, val checked: Boolean = false,
+    val focused: Boolean = false, val selectionStart: Int = -1, val selectionEnd: Int = -1,
+    val setText: Boolean = false, val paste: Boolean = false, val focusable: Boolean = false,
+    val scrollDirections: Set<String> = emptySet(), val sourceWindowId: Int = -1,
+    val sourcePackage: String = "", val keyboardKey: String = "", val textEntryKey: Boolean = false) {
     fun json() = buildJsonObject {
+        put("focused", focused); put("focusable", focusable); put("set_text_supported", setText); put("paste_supported", paste)
+        put("selection_start", selectionStart); put("selection_end", selectionEnd)
+        put("scroll_directions", JsonArray(scrollDirections.sorted().map { JsonPrimitive(it) }))
         put("expandable", expandable); put("collapsible", collapsible); put("class_name", className.take(100)); put("selected", selected)
         put("checkable", checkable); put("checked", checked)
-        put("node_id", id); put("text", text.take(100)); put("description", description.take(100)); put("resource_id", resourceId.take(100))
+        put("source_window_id", sourceWindowId); put("keyboard_key", keyboardKey)
+        put("node_id", id); put("text", if (keyboardKey.isNotEmpty()) keyboardKey else text.take(100)); put("description", if (keyboardKey.isNotEmpty()) "" else description.take(100)); put("resource_id", resourceId.take(100))
         put("long_clickable", longClickable); put("bounds", bounds); put("parent", parent); put("clickable", clickable); put("editable", editable); put("scrollable", scrollable); put("enabled", enabled)
     }
 }
@@ -22,7 +31,7 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val truncationReasons: Set<String> = emptySet(), val visitedNodes: Int = 0, val maxDepth: Int = 0,
     val touchContext: String = "", val foregroundWindowId: Int = windowId, val windowContext: String = "",
     val windowDiagnostics: JsonObject? = null, val configurationRevision: Long = 0, val outputLimit: Int = 50,
-    val verifiedApplicationPackage: String? = null)
+    val verifiedApplicationPackage: String? = null, val keyboard: ControlKeyboard? = null, val inputTargetId: Int? = null, val inputTarget: ControlNode? = null)
 /** Logical identity is supplied only by a complete, guarded native application identity scan. */
 internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expected != null && reason == null &&
     (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
@@ -101,6 +110,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         current = observation
         return OperationResult(data = buildJsonObject {
             put("observation_id", observation.id); put("observed_at_ms", observation.at); put("expires_in_ms", 60_000)
+            frame.keyboard?.let { put("keyboard", buildJsonObject {
+                put("window_id", it.windowId); put("package_name", it.packageName); put("input_method_id", it.inputMethodId)
+                put("read_allowed", it.readAllowed); put("interaction_allowed", it.interactAllowed)
+                put("semantic_keys_only", true); put("input_target_verified", frame.inputTargetId != null)
+            }) }
             put("package_name", frame.packageName); put("window_id", frame.windowId)
             frame.verifiedApplicationPackage?.let { put("verified_application_package", it) }
             put("foreground_window_id", frame.foregroundWindowId)
@@ -126,6 +140,17 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (!allowed()) { current = null; return failure("generic_control_disabled") }
         val observation = current ?: return failure("observation_required")
         if (input["observation_id"]?.jsonPrimitive?.content != observation.id) return failure("stale_observation")
+        // Route keyboard text through this SAME single-use action executor for every key.
+        // The runner never invokes the platform directly or retries an unknown effect.
+        if (input["action"]?.jsonPrimitive?.content == "input") {
+            val field = observation.frame.nodes.singleOrNull { it.id == input["node_id"]?.jsonPrimitive?.intOrNull }
+            if (field != null) {
+                val plan = UnifiedInputPolicy.plan(field, input["text"]?.jsonPrimitive?.content.orEmpty(),
+                    input["method"]?.jsonPrimitive?.content ?: "auto", input["mode"]?.jsonPrimitive?.content ?: "empty",
+                    input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true)
+                if (plan.refusal == null && plan.method == "keyboard") return keyboardInput(input, observation, field, plan.resultText)
+            }
+        }
         // Consume before any native side effect, including failure, cancellation and lost transport.
         current = null
         if (observation.epoch != (port.session()?.epoch ?: 0L)) return failure("control_session_changed_observe_again")
@@ -133,7 +158,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (chainActions >= 20 || now() - chainStarted !in 0L..180_000L || noProgress >= 3)
             return failure("control_chain_limit_observe_again")
         val action = input["action"]?.jsonPrimitive?.content.orEmpty()
-        if (action !in setOf("click", "tap", "long_press", "type", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
+        if (action !in setOf("click", "tap", "long_press", "type", "input", "focus", "key", "scroll", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
         val frame = observation.frame
         if (!port.validatesAtNativeBoundary) {
             val fresh = port.capture()
@@ -143,11 +168,32 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
-        if (action in setOf("click", "tap", "long_press", "type", "scroll", "expand", "collapse")) {
+        if (action in setOf("click", "tap", "long_press", "type", "input", "focus", "key", "scroll", "expand", "collapse")) {
             if (node == null || !node.enabled || node.password) return failure("target_unavailable")
             if ((action in setOf("click", "tap") && !node.clickable) || (action == "long_press" && !node.longClickable)) return failure("target_not_clickable")
             if ((action == "expand" && !node.expandable) || (action == "collapse" && !node.collapsible)) return failure("native_action_unavailable")
-            if (action == "scroll" && (!node.scrollable || input["direction"]?.jsonPrimitive?.content !in setOf("up", "down"))) return failure("target_not_scrollable")
+            if (action == "scroll" && (!node.scrollable || input["direction"]?.jsonPrimitive?.content !in (node.scrollDirections + setOf("up", "down")))) return failure("target_not_scrollable")
+            if (node.keyboardKey.isNotEmpty() && action != "key") return failure("keyboard_key_action_required")
+            if (action == "key") {
+                if (frame.keyboard == null || !frame.keyboard.readAllowed || !frame.keyboard.interactAllowed || frame.inputTargetId == null || node.sourceWindowId != frame.keyboard.windowId ||
+                    node.sourcePackage != frame.keyboard.packageName) return failure("keyboard_target_unverified")
+                val field = frame.inputTarget ?: return failure("keyboard_target_unverified")
+                if (!field.editable || !field.enabled || !field.focused || field.password || field.id != frame.inputTargetId || field.sourcePackage != frame.packageName ||
+                    field.sourceWindowId != frame.windowId || field.text.length > 2000 || InputPayloadPolicy.sensitive(field.text)) return failure("keyboard_target_unverified")
+                val key = KeyboardKeyPolicy.identify(node.text, node.description, node.className, node.clickable, node.textEntryKey)
+                    ?: return failure("keyboard_key_unrecognized")
+                if (field.editable && key.kind in setOf(KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE, KeyboardKeyPolicy.Kind.BACKSPACE) &&
+                    KeyboardKeyPolicy.expectedText(field, key) == null) return failure("keyboard_literal_unverified")
+                if (key.kind == KeyboardKeyPolicy.Kind.SUBMIT && input["submit_authorized"]?.jsonPrimitive?.booleanOrNull != true)
+                    return failure("submission_authorization_required")
+            }
+            if (action == "focus" && !node.focusable) return failure("target_not_focusable")
+            if (action == "input") {
+                val plan = UnifiedInputPolicy.plan(node, input["text"]?.jsonPrimitive?.content.orEmpty(),
+                    input["method"]?.jsonPrimitive?.content ?: "auto", input["mode"]?.jsonPrimitive?.content ?: "empty",
+                    input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true)
+                plan.refusal?.let { return failure(it) }
+            }
             if (action == "type" && (!node.editable || !node.empty || input["text"]?.jsonPrimitive?.content.isNullOrBlank())) return failure("draft_not_empty_or_not_editable")
         }
         if (action == "open_app" && input["package_name"]?.jsonPrimitive?.content.isNullOrBlank()) return failure("package_required")
@@ -175,6 +221,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             if (verdict.goalVerified) "Observed action postcondition confirmed." else
                 "Screen transition observed; the wider task result remains unverified." else resultReason,
             data = buildJsonObject {
+                if (action == "input" && node != null) put("input_method", UnifiedInputPolicy.plan(node,
+                    input["text"]?.jsonPrimitive?.content.orEmpty(), input["method"]?.jsonPrimitive?.content ?: "auto",
+                    input["mode"]?.jsonPrimitive?.content ?: "empty", input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true).method)
+                if (action == "input" && input["clipboard_consent"]?.jsonPrimitive?.booleanOrNull == true)
+                    put("clipboard_policy", "explicit_replace_no_automatic_restore")
                 put("observation_age_ms", (started - observation.at).coerceAtLeast(0))
                 put("validation_scope", GenericControlActionPolicy.validationScope(action))
                 put("reason_code", resultReason)
@@ -193,6 +244,58 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 })
                 observed?.let { put("observation", it.data) }
             })
+    }
+    private suspend fun keyboardInput(input: JsonObject, initial: Observation, field: ControlNode, expected: String): OperationResult {
+        val text = input["text"]?.jsonPrimitive?.content.orEmpty()
+        val labels = HangulKeyComposer.labels(text)
+        fun stop(reason: String, attempted: Boolean, completed: Int) = OperationResult(success = false, summary = reason,
+            data = buildJsonObject { put("reason_code", reason); put("action_attempted", attempted)
+                put("outcome_unknown", attempted); put("completed_keys", completed); put("input_method", "keyboard") })
+        // Bounded operation. Preflight every literal against the current observed layout before
+        // the first effect. Unknown layouts are never guessed or toggled speculatively.
+        if (labels.isEmpty() || labels.size > 32) { current = null; return stop("keyboard_input_limit", false, 0) }
+        if (field.selectionStart != field.selectionEnd || field.selectionEnd != field.text.length) {
+            current = null; return stop("keyboard_end_caret_required", false, 0)
+        }
+        fun matching(frame: ControlFrame, label: String) = frame.nodes.filter {
+            it.keyboardKey == label && it.sourceWindowId == frame.keyboard?.windowId &&
+                it.sourcePackage == frame.keyboard?.packageName
+        }
+        if (initial.frame.keyboard == null || labels.any { matching(initial.frame, it).size != 1 }) {
+            current = null; return stop("keyboard_keys_not_uniquely_observed", false, 0)
+        }
+        var completed = 0
+        var attempted = false
+        for (label in labels) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            val observed = current ?: return stop("keyboard_observation_lost", attempted, completed)
+            val liveField = observed.frame.inputTarget
+            if (observed.epoch != initial.epoch || observed.frame.packageName != initial.frame.packageName ||
+                observed.frame.windowId != initial.frame.windowId || observed.frame.keyboard != initial.frame.keyboard ||
+                observed.frame.touchContext != initial.frame.touchContext || observed.frame.configurationRevision != initial.frame.configurationRevision ||
+                liveField == null || liveField.resourceId != field.resourceId || liveField.className != field.className ||
+                liveField.sourceWindowId != field.sourceWindowId || liveField.sourcePackage != field.sourcePackage ||
+                liveField.bounds != field.bounds || !liveField.focused) {
+                current = null; return stop("keyboard_input_target_changed", attempted, completed)
+            }
+            val key = matching(observed.frame, label).singleOrNull()
+                ?: run { current = null; return stop("keyboard_layout_changed", attempted, completed) }
+            val result = action(buildJsonObject {
+                put("action", "key"); put("observation_id", observed.id); put("node_id", key.id)
+                input["session_id"]?.let { put("session_id", it) }
+            })
+            attempted = attempted || result.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
+            if (!result.success) return stop(result.data["reason_code"]?.jsonPrimitive?.content ?: "keyboard_input_unconfirmed", attempted, completed)
+            completed++
+        }
+        val actual = current?.frame?.inputTarget
+        if (actual == null || actual.text != expected || actual.selectionStart != expected.length || actual.selectionEnd != expected.length)
+            return stop("keyboard_final_text_unconfirmed", attempted, completed)
+        return OperationResult(summary = "Exact keyboard text result verified.", data = buildJsonObject {
+            put("input_method", "keyboard"); put("action_attempted", attempted); put("outcome_unknown", false)
+            put("app_result_verified", true); put("completed_keys", completed)
+            current?.let { put("observation_id", it.id) }
+        })
     }
     private fun failure(reason: String, validationScope: String? = null, diagnostics: JsonObject? = null) = OperationResult(success = false, summary = reason,
         data = buildJsonObject { put("reason_code", reason); put("action_attempted", false); put("outcome_unknown", false); validationScope?.let { put("validation_scope", it) }

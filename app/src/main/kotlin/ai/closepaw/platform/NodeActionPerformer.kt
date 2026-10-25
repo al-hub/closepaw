@@ -277,12 +277,14 @@ class NodeActionPerformer(
         // (e.g., NumberPicker EditText accepts setText but doesn't commit the value).
         if (node.refresh()) {
             val actualText = node.text?.toString() ?: ""
-            if (actualText != combined && !actualText.contains(text)) {
+            if (actualText != combined) {
                 return ActionResult.Failure(
                         "Type action failed: value did not match requested update. " +
                                 "This field may be read-only or a NumberPicker."
                 )
             }
+        } else {
+            return ActionResult.Failure("Text effect unknown; target refresh failed")
         }
 
         return ActionResult.Success("Text entered")
@@ -297,7 +299,7 @@ class NodeActionPerformer(
         }
     }
 
-    private suspend inline fun onMain(crossinline block: () -> ActionResult): ActionResult {
+    private suspend inline fun <T> onMain(crossinline block: () -> T): T {
         return withContext(Dispatchers.Main) { block() }
     }
 
