@@ -1,0 +1,100 @@
+{
+  "date": "2026-10-25",
+  "scope": "device timing experiment preparation only",
+  "version": "0.1.86",
+  "version_code": 87,
+  "source_commit": "e636350bdfec5ca87d683b907d67b268582556a6",
+  "pr": 162,
+  "pr_head": "9c39e4e1349add04986632f7318dde1bd73e44df",
+  "runs": {
+    "pr_security": 40164745723,
+    "pr_ui": 40164745734,
+    "main_security": 40165238220,
+    "signed_release": 40165607282
+  },
+  "tests": {
+    "python": 43,
+    "pr_jvm": 2765,
+    "pr_ui": 11,
+    "main_jvm": 2765,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "png": 8
+  },
+  "artifact_sha256": {
+    "pr_jvm": "9965478ed40611982e32a2913826a0f5d3ba8ef818f147ef208803bce1e90f21",
+    "pr_ui": "bca08370abb90a25ed6e769afd3d6cb47ebf5f050524d2d2e2488c3107b7270a",
+    "main_jvm": "8841615ff1cc344b24b26ba5ac5a311e62ec732678428da05d0d5c3967cffa93",
+    "public_verification": "96751c0373d13600f39df1335dbbe370afc013cc01ef17ba58c54301bf46e248"
+  },
+  "apk": {
+    "bytes": 116650607,
+    "sha256": "69bb0470cca09672be550c6e6ed0af5cdb71a546869ac8bffc7ff88295916fcc",
+    "signer_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+    "public_download_verification": "PASS in exact source Signed Release",
+    "signature": "v3 verified"
+  },
+  "installation": {
+    "requests": 1,
+    "task_id": "9a8f535b-6e50-4756-b13e-549dcf7682ab",
+    "durable": {
+      "state": "installed",
+      "task_id": "9a8f535b-6e50-4756-b13e-549dcf7682ab",
+      "target_version": "0.1.86",
+      "session_id": 1799548034,
+      "target_code": 87,
+      "installed_version": "0.1.86",
+      "current_version": "0.1.86",
+      "current_code": 87,
+      "install_source_allowed": true,
+      "remote_update_enabled": true
+    },
+    "independent_status": {
+      "status": "succeeded",
+      "summary": "ClosePaw is reachable and responding.",
+      "app": "ClosePaw",
+      "version_name": "0.1.86",
+      "version_code": 87,
+      "capability": "status",
+      "operation_contract_version": 1,
+      "operation_discovery_tool": "discover_operations",
+      "supported_read_apps": [
+        {
+          "id": "samsung_internet",
+          "package_name": "com.sec.android.app.sbrowser",
+          "display_name": "Samsung Internet"
+        },
+        {
+          "id": "chrome",
+          "package_name": "com.android.chrome",
+          "display_name": "Chrome"
+        },
+        {
+          "id": "gemini",
+          "package_name": "com.google.android.apps.bard",
+          "display_name": "Gemini"
+        }
+      ],
+      "mcp_tool_count": 9,
+      "runtime_info_tool": "get_runtime_info",
+      "tool_list_refresh_verified": false
+    },
+    "diagnostics_export": "succeeded on 0.1.86/code87",
+    "sequence_operation_ready": true,
+    "session_state": "ended",
+    "session_epoch": 0,
+    "new_control_sessions": 0,
+    "phone_input_trials": 0
+  },
+  "readiness": {
+    "existing_path_timing": "READY",
+    "parallel_candidate_on_phone": "NOT_IMPLEMENTED; src/test only",
+    "A_to_F_complete": "NOT_TESTED",
+    "matched_10_plus_10": "NOT_TESTED",
+    "speedup": "NOT_MEASURED",
+    "physical_X_changed_path": "NOT_TESTED"
+  },
+  "issue161": "PARTIAL/OPEN",
+  "issue147": "OPEN"
+}

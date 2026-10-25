@@ -1,3 +1,10 @@
+## 2026-10-25 #161 v0.1.86/code87 계측 APK 설치·연결 준비 완료
+
+- [준비 보고서](../dev/issue161-device-preparation-v0186.md), [metadata](../dev/evidence/issue161/device-preparation-v0186.json). PR#162 병합, APK/tag source `e636350bdfec5ca87d683b907d67b268582556a6`. PR Security40164745723/UI40164745734, main Security40165238220/Signed40165607282 success. raw PR JVM2765/UI11/main JVM2765 failure/error/skip0, PNG8, Python43.
+- 공개 APK 기존 signer/v3/SHA256/version/code/두runtime/tag-source 검증 PASS. 단일 설치 task9a8f535b-6e50-4756-b13e-549dcf7682ab 후 durable installed/current0.1.86/code87→독립 get_status reachable 확인. 새버전 diagnostics export와 sequence ready 확인, 플러그인 재등록0.
+- **기존 실행경로 상세 계측 준비 READY**, 병렬 Worker는 test-only로 폰후보통합은 안 됨. A~F전체/동일조건10+10/CPU메모리/새경로X/실제개선배율 NOT_TESTED. #161 PARTIAL/OPEN, #147 OPEN. 설치를 전체실험완료로 확대하지 않음.
+- 읽기전용 session.status ended/epoch0, 신규UI세션/기기입력/화면읽기/물리시험0. 다음 명시적 실험 요청에서 시작; 매실행 직후 trace 회수(4개순환버퍼), clock혼합 금지. 아래 v85/배포미수행 기록은 당시 역사 상태.
+
 ## 2026-10-25 #147 안전 최적화 후보 및 원시 재감사
 
 - [후보 검토](../dev/issue147-safe-optimization-review-20261025.md), [재계산 JSON](../dev/evidence/issue147-candidate-audit-20261025.json). Python trace tests2 PASS, source SHA256 확인, raw139span 재계산과 기존 summary 전체 일치, exclusive+untraced 합계 확인. 기존 source/code81 REUSED_EVIDENCE이며 신규 성능 PASS 아님.
