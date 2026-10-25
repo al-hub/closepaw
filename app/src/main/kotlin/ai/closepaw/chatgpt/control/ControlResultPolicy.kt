@@ -9,7 +9,7 @@ internal object ControlResultPolicy {
         if (after == null || after.reason != null) return Verdict(false, "post_observation_unavailable")
         if (action == "open_app") return Verdict(after.matchesApplication(input["package_name"]?.jsonPrimitive?.content),
             "target_app_not_observed", true)
-        if (after.truncated && action != "home") return Verdict(false, "post_observation_incomplete")
+        if ((before.truncated || after.truncated) && action != "home") return Verdict(false, "post_observation_incomplete")
         if (action == "key") {
             if (node == null || before.keyboard == null || before.keyboard != after.keyboard ||
                 before.packageName != after.packageName || before.windowId != after.windowId)
