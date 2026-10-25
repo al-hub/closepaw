@@ -112,7 +112,7 @@ class TermuxBridgeManagerTest {
         val manager = manager(runner, FakeHealthProbe(HealthProbe.Unavailable),
             TermuxInstallProbe { TermuxInstallState.RunCommandUnavailable })
         assertThat(manager.ensureReadyForSession(1000))
-            .isEqualTo(TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.TERMUX_NOT_RUNNING))
+            .isEqualTo(TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.BRIDGE_OFFLINE_NO_RUN_COMMAND))
         assertThat(runner.commands).isEmpty()
     }
 
@@ -140,11 +140,25 @@ class TermuxBridgeManagerTest {
     }
 
     @Test
+    fun `diagnostics are passive even for a ready bridge`() = runTest {
+        val runner = FakeCommandRunner()
+        val manager = manager(runner, FakeHealthProbe(HealthProbe.Ready),
+            TermuxInstallProbe { TermuxInstallState.RunCommandUnavailable })
+        val before = manager.state.value
+        assertThat(manager.diagnosticSnapshot()).isEqualTo(TermuxBridgeDiagnosticSnapshot(
+            TermuxInstallState.RunCommandUnavailable, HealthProbe.Ready))
+        assertThat(manager.state.value).isEqualTo(before)
+        assertThat(runner.commands).isEmpty()
+    }
+
+    @Test
     fun `restart never kills healthy or mismatched or foreign listener`() = runTest {
         listOf(
             HealthProbe.Ready to TermuxBridgeStatus.Ready,
             HealthProbe.AuthMismatch to TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.AUTH_MISMATCH),
             HealthProbe.InvalidIdentity to TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.PORT_IN_USE),
+            HealthProbe.UnverifiedListener to TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.BRIDGE_HEALTH_UNVERIFIED),
+            HealthProbe.ResponseTimeout to TermuxBridgeStatus.NeedsSetup(NeedsSetupReason.BRIDGE_RESPONSE_TIMEOUT),
         ).forEach { (health, expected) ->
             val runner = FakeCommandRunner()
             val manager = manager(runner, FakeHealthProbe(health))
@@ -168,7 +182,7 @@ class TermuxBridgeManagerTest {
                 Triple(
                     ForegroundServiceStartNotAllowedException(FGS_REJECTED_MESSAGE).toRunCommandStartError(),
                     TermuxInstallProbe { TermuxInstallState.Available },
-                    NeedsSetupReason.UNKNOWN
+                    NeedsSetupReason.TERMUX_START_RESTRICTED
                 )
             )
 
