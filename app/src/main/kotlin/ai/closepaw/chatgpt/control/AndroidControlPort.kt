@@ -34,6 +34,7 @@ import android.view.accessibility.AccessibilityWindowInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.json.*
 import kotlin.coroutines.resume
 
@@ -110,7 +111,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     override suspend fun captureAfter(frame: ControlFrame, input: JsonObject): ControlFrame {
         val service = AgentService.instance ?: return capture()
         return ControlPostObserver({ SystemClock.elapsedRealtime() }, service.remoteControlChanges::version,
-            service.remoteControlChanges::awaitAfter, ::capture).observe(frame, input, actionChangeVersion)
+            service.remoteControlChanges::awaitAfter, ::capture).observe(frame, input, actionChangeVersion).also {
+                currentCoroutineContext()[ControlTiming]?.mark(ControlTiming.Event.GUARDED_SNAPSHOT_AVAILABLE,
+                    step = currentCoroutineContext()[ControlTrace]?.step ?: 0)
+            }
     }
     private fun controlledWindows(service: AgentService, foreground: Int, pkg: String,
         windows: List<AccessibilityWindowInfo>) = controlWindows(foreground, pkg, windows.filterNot {
@@ -228,18 +232,29 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     }
     private suspend fun probeWindow(service: AgentService, id: Int): String? {
         if (Build.VERSION.SDK_INT < 34) return "secure_window_probe_requires_android14"
+        val timing = currentCoroutineContext()[ControlTiming]
+        val probe = timing?.nextId() ?: 0
+        val step = currentCoroutineContext()[ControlTrace]?.step ?: 0
+        fun mark(event: ControlTiming.Event) { timing?.mark(event, probe, step) }
+        mark(ControlTiming.Event.PROBE_QUEUED)
         controlSpan("probe_api_spacing") { probeThrottle.awaitSlot() }
+        mark(ControlTiming.Event.PROBE_SLOT_READY)
         return withContext(Dispatchers.Main) {
+            mark(ControlTiming.Event.MAIN_ENTERED)
             reason(service)?.let { return@withContext it }
             suspendCancellableCoroutine<String?> { continuation ->
+                continuation.invokeOnCancellation { mark(ControlTiming.Event.PROBE_CANCELLED) }
                 try {
                     service.remoteControlSession.feedback("보안 확인용 화면 캡처 중")
+                    mark(ControlTiming.Event.PROBE_DISPATCH)
                     service.takeScreenshotOfWindow(id, service.mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
                         override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                            mark(ControlTiming.Event.PROBE_CALLBACK_OK)
                             screenshot.hardwareBuffer.close()
                             if (continuation.isActive) continuation.resume(null)
                         }
                         override fun onFailure(errorCode: Int) {
+                            mark(ControlTiming.Event.PROBE_CALLBACK_FAILED)
                             if (continuation.isActive) continuation.resume(when (errorCode) {
                                 AccessibilityService.ERROR_TAKE_SCREENSHOT_SECURE_WINDOW -> "secure_window"
                                 AccessibilityService.ERROR_TAKE_SCREENSHOT_INVALID_WINDOW -> "secure_window_changed"
@@ -249,6 +264,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         }
                     })
                 } catch (_: Exception) {
+                    mark(ControlTiming.Event.PROBE_EXCEPTION)
                     if (continuation.isActive) continuation.resume("secure_window_probe_failed")
                 }
             }
@@ -444,12 +460,18 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val gesture = GestureDescription.Builder().setDisplayId(android.view.Display.DEFAULT_DISPLAY)
                 .addStroke(GestureDescription.StrokeDescription(path, 0, 50)).build()
             val eventEpoch = service.remoteControlSession.epoch
+            val timing = currentCoroutineContext()[ControlTiming]
+            val gestureId = timing?.nextId() ?: 0
+            val step = currentCoroutineContext()[ControlTrace]?.step ?: 0
             return suspendCancellableCoroutine { continuation ->
+                timing?.mark(ControlTiming.Event.GESTURE_DISPATCH, gestureId, step)
                 val submitted = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
                     override fun onCompleted(gestureDescription: GestureDescription?) {
+                        timing?.mark(ControlTiming.Event.GESTURE_CALLBACK_OK, gestureId, step)
                         if (continuation.isActive) continuation.resume(ControlEffect(true, true, "gesture_completed"))
                     }
                     override fun onCancelled(gestureDescription: GestureDescription?) {
+                        timing?.mark(ControlTiming.Event.GESTURE_CALLBACK_CANCELLED, gestureId, step)
                         if (continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_cancelled"))
                     }
                 }, null)
@@ -553,7 +575,15 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
             // Atomic native node actions match the existing Gemini adapter; no focus/tap/retry fallback.
             val acknowledged = when (action) {
-                "click" -> target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                "click" -> {
+                    val timing = currentCoroutineContext()[ControlTiming]
+                    val clickId = timing?.nextId() ?: 0
+                    val step = currentCoroutineContext()[ControlTrace]?.step ?: 0
+                    timing?.mark(ControlTiming.Event.NODE_CLICK_DISPATCH, clickId, step)
+                    val result = target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    timing?.mark(ControlTiming.Event.NODE_CLICK_RETURNED, clickId, step)
+                    result
+                }
                 "expand", "collapse" -> {
                     val nativeAction = if (action == "expand") AccessibilityNodeInfo.ACTION_EXPAND else AccessibilityNodeInfo.ACTION_COLLAPSE
                     if (target.actionList.none { it.id == nativeAction }) return@withTree ControlEffect(false, false, "native_action_unavailable")

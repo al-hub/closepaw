@@ -43,5 +43,5 @@ internal class ControlTrace(val correlationId: String, private val now: () -> Lo
 }
 internal suspend fun <T> controlSpan(name: String, block: suspend () -> T): T {
     val trace = currentCoroutineContext()[ControlTrace]
-    return if (trace == null) block() else trace.measure(name, block)
+    return timedControlStage(name) { if (trace == null) block() else trace.measure(name, block) }
 }
