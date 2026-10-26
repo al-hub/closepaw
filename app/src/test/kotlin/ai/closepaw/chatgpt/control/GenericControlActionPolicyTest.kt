@@ -4,6 +4,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GenericControlActionPolicyTest {
+    @Test fun deniedFramesKeepTheirNativeReasonInsteadOfComparingUnavailableMetadata() {
+        val observed = ControlFrame("example.app", 4, "screen", emptyList(), configurationRevision = 19)
+        for (reason in listOf("secure_window_changed", "device_locked", "accessibility_permission_missing", "screen_changed")) {
+            // Native denied() frames deliberately contain no readable app/configuration metadata.
+            val denied = ControlFrame("", -1, "", emptyList(), reason = reason)
+            assertEquals(reason, GenericControlActionPolicy.refusal(observed, denied, "click"))
+        }
+        assertEquals("configuration_revision_changed", GenericControlActionPolicy.refusal(
+            observed, observed.copy(configurationRevision = 20), "click"))
+    }
     private val frame = ControlFrame("example.app", 4, "same", emptyList(), truncated = true)
     @Test fun onlyHomeAndAppLaunchAreIndependentOfNodeCompleteness() {
         for (action in listOf("home", "open_app")) assertNull(GenericControlActionPolicy.refusal(frame, frame, action))
