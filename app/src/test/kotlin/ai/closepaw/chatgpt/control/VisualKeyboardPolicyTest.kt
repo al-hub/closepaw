@@ -22,6 +22,18 @@ class VisualKeyboardPolicyTest {
         assertNull(VisualKeyboardPolicy.imageReadRefusal(readOnly, true, false, false))
         assertNotNull(VisualKeyboardPolicy.refusal(frame.copy(keyboard=readOnly), key, "keyboard"))
     }
+    @Test fun displayReadNeverGrantsKeyboardInteractionOrBypassesReadDenial() {
+        val readOnly = keyboard.copy(readAllowed = true, interactAllowed = false)
+        // Full-display observation does not require an editable target, unlike
+        // keyboard-only observation. Neither path grants permission to input.
+        assertNull(VisualKeyboardPolicy.imageReadRefusal(readOnly, true, false, false))
+        assertEquals("visual_keyboard_policy_denied",
+            VisualKeyboardPolicy.imageReadRefusal(readOnly, false, false, false))
+        assertNotNull(VisualKeyboardPolicy.refusal(frame.copy(keyboard = readOnly), key, "display"))
+        // OS/IME read denial must remain fail-closed even if runtime policy permits.
+        assertEquals("visual_keyboard_policy_denied",
+            VisualKeyboardPolicy.imageReadRefusal(keyboard.copy(readAllowed = false), true, false, true))
+    }
     @Test fun imageAndMatchingNativeLabelAreBothRequired() {
         assertNull(VisualKeyboardPolicy.refusal(frame,key,"keyboard"))
         assertEquals("keyboard_visual_required",VisualKeyboardPolicy.refusal(frame,key,"app"))
