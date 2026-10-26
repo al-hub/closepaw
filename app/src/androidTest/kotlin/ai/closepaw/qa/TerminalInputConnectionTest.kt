@@ -10,6 +10,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -134,6 +136,18 @@ class TerminalInputConnectionTest {
             // Real renderer/native capture regression for the same display
             // revalidation helper used by visual_key. This is not key-input PASS.
             instrumentation.runOnMainSync { service.showRemoteControlActivity(); service.showRemoteControlTarget(android.graphics.Rect(100,300,500,600)) }
+            // A real in-flight native display capture cannot survive a sensitive
+            // editor callback followed immediately by finish (matching endpoints).
+            val raceFrame=port.capture()
+            val inFlight=async {port.visualDisplay(raceFrame)}
+            delay(75)
+            instrumentation.runOnMainSync {
+                val ime=service.inputMethod as ai.closepaw.platform.GuardedAccessibilityInputMethod
+                val info=android.view.inputmethod.EditorInfo().apply {packageName="com.termux";inputType=0x81}
+                ime.onStartInput(info,false);ime.onFinishInput()
+            }
+            assertNull("Transient sensitive editor must revoke in-flight pixels",inFlight.await())
+            assertEquals("visual_editor_privacy_changed",port.visualFailure())
             val cached=control.observe(includeImage=true,imageScope="display");assertTrue(cached.toString(),cached.success)
             val cueFrame=port.capture()
             val cueProof=port.visualDisplay(cueFrame);assertNotNull(port.visualFailure(),cueProof)

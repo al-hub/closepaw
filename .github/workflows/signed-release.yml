@@ -7,7 +7,7 @@ on:
   schedule:
     - cron: '11,41 * * * *'
   workflow_run:
-    workflows: [ "Security CI" ]
+    workflows: [ "Security CI", "Premium UX UI" ]
     types: [ completed ]
     branches: [ main ]
   workflow_dispatch:
@@ -61,6 +61,11 @@ jobs:
               exit 1
             fi
           fi
+          ui="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/premium-ux-ui.yml/runs?head_sha=$GITHUB_SHA&per_page=100")"
+          if jq -e '.workflow_runs | length == 0' <<< "$ui" >/dev/null; then
+            echo "No UI workflow exists for this main source; dispatching once. Failed UI runs require investigation."
+            gh workflow run premium-ux-ui.yml --ref main
+          fi
           ci="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/security-ci.yml/runs?head_sha=$GITHUB_SHA&per_page=100")"
           if jq -e '.workflow_runs | any(.status != "completed")' <<< "$ci" >/dev/null; then
             echo "Security CI is already running or queued for this main commit."
@@ -113,6 +118,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || {
             echo "CI run is not for current main; refusing stale release" >&2; exit 1;
           }
+          # Both exact-main workflows are mandatory before any signing/publish.
+          # Whichever completes second triggers another workflow_run invocation.
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$(git rev-parse HEAD)&per_page=100" > "$RUNNER_TEMP/main-release-checks.json"
+          python3 scripts/verify-release-checks.py "$RUNNER_TEMP/main-release-checks.json" "$GITHUB_REPOSITORY" "$(git rev-parse HEAD)"
           if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
             gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&per_page=50" \
               --jq '.workflow_runs | any(.name == "Security CI" and .conclusion == "success" and .head_branch == "main" and (.event == "push" or .event == "workflow_dispatch" or .event == "schedule"))' | grep -qx true || {
@@ -154,10 +163,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TRIGGER_RUN_ID: ${{ github.event.workflow_run.id }}
+          TRIGGER_WORKFLOW: ${{ github.event.workflow_run.name }}
         run: |
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
-          if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == workflow_run && "$TRIGGER_WORKFLOW" == "Security CI" ]]; then
             run_id="$TRIGGER_RUN_ID"
           else
             run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/security-ci.yml/runs?head_sha=$sha&branch=main&status=success&per_page=100" \
