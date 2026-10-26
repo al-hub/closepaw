@@ -1,0 +1,372 @@
+{
+  "date": "2026-10-26",
+  "issue": 165,
+  "final_state": "OPEN",
+  "source": "f9961d538c9639250d620da5168c8b880695c150",
+  "tree": "7813a99f3df9c795879bb5f03726798033b9943a",
+  "version": "0.1.90",
+  "code": 91,
+  "pr": 169,
+  "pr_head": "1a438eabe43a7a4a8645762c4157aef31035e845",
+  "tests": {
+    "jvm": 2873,
+    "android": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "evidence": "same-tree PR XML; main CI separately confirmed success"
+  },
+  "runs": {
+    "pr_security": 40252370625,
+    "pr_ui": 40252370635,
+    "main_security": 40253048486,
+    "main_ui": 40253048457,
+    "signed": 40253728307
+  },
+  "apk": {
+    "bytes": 116784123,
+    "sha256": "0819d27e3b15fa55dca1cea6eaaca6d2e8c628acd7a213c0fd9896a914ccce16",
+    "signer": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+    "signature": "official apksigner v3 report; separate host downloaded hash-matched public bytes",
+    "verification_zip_sha256": "babd1efc31e53783673d2e458fc38d8ef28556b5a682dcd3c4b32071be836da2"
+  },
+  "install": {
+    "task": "ec23e8ec-643e-49d9-8cce-780d697f5fdc",
+    "requests": 1,
+    "durable_state": "installed",
+    "current_version": "0.1.90",
+    "current_code": 91
+  },
+  "cleanup": {
+    "config_revision": 22,
+    "original_contents_restored": true,
+    "session_state": "ended",
+    "epoch": 2,
+    "terminal_enters": 0,
+    "clipboard_writes": 0
+  },
+  "events": [
+    {
+      "key": "termuxInputResult",
+      "task_id": "485c4d7f-c8a0-4feb-9c80-57fa4754ae7e",
+      "state": "succeeded",
+      "status": "succeeded",
+      "reason": "terminal_input_dispatched",
+      "attempted": true,
+      "acknowledged": true,
+      "unknown": false,
+      "app_result_verified": true,
+      "timing_ms": {
+        "validation": 1,
+        "native_action": 572,
+        "post_observation": 377,
+        "total": 951
+      },
+      "observation": {
+        "package": "com.termux",
+        "window": 3213,
+        "foreground_window": 3213,
+        "security_scan_complete": true,
+        "nodes_count": 16,
+        "navigation_actions": [
+          "home",
+          "back",
+          "open_app"
+        ]
+      }
+    },
+    {
+      "key": "calcTapResult",
+      "task_id": "e3a91870-071f-4b17-8eb0-9f5e3e9566d7",
+      "state": "succeeded",
+      "status": "succeeded",
+      "reason": "gesture_completed",
+      "attempted": true,
+      "acknowledged": true,
+      "unknown": false,
+      "app_result_verified": false,
+      "timing_ms": {
+        "validation": 0,
+        "native_action": 931,
+        "post_observation": 456,
+        "total": 1387
+      },
+      "observation": {
+        "package": "com.sec.android.app.popupcalculator",
+        "window": 3219,
+        "foreground_window": 3219,
+        "security_scan_complete": true,
+        "nodes_count": 39,
+        "navigation_actions": [
+          "home",
+          "back",
+          "open_app"
+        ]
+      }
+    },
+    {
+      "key": "scrollUp",
+      "task_id": "d2011125-3b97-4fc1-9f79-25cca416d0e3",
+      "state": "succeeded",
+      "status": "succeeded",
+      "reason": "action_acknowledged",
+      "attempted": true,
+      "acknowledged": true,
+      "unknown": false,
+      "app_result_verified": false,
+      "timing_ms": {
+        "validation": 0,
+        "native_action": 552,
+        "post_observation": 482,
+        "total": 1035
+      },
+      "observation": {
+        "package": "com.sec.android.app.popupcalculator",
+        "window": 3219,
+        "foreground_window": 3219,
+        "security_scan_complete": true,
+        "nodes_count": 39,
+        "navigation_actions": [
+          "home",
+          "back",
+          "open_app"
+        ]
+      }
+    },
+    {
+      "key": "visualScrollResult",
+      "task_id": "106f148c-d478-4594-9014-a3f37e7f1d23",
+      "state": "succeeded",
+      "status": "succeeded",
+      "reason": "gesture_completed",
+      "attempted": true,
+      "acknowledged": true,
+      "unknown": false,
+      "app_result_verified": false,
+      "timing_ms": {
+        "validation": 0,
+        "native_action": 1381,
+        "post_observation": 250,
+        "total": 1631
+      },
+      "observation": {
+        "package": "com.sec.android.app.popupcalculator",
+        "window": 3219,
+        "foreground_window": 3219,
+        "security_scan_complete": true,
+        "nodes_count": 39,
+        "navigation_actions": [
+          "home",
+          "back",
+          "open_app"
+        ]
+      }
+    },
+    {
+      "key": "chromeLongPress",
+      "task_id": "e2209e44-27f7-4ffe-a16f-a172024a7c72",
+      "state": "succeeded",
+      "status": "succeeded",
+      "reason": "action_acknowledged",
+      "attempted": true,
+      "acknowledged": true,
+      "unknown": false,
+      "app_result_verified": false,
+      "timing_ms": {
+        "validation": 0,
+        "native_action": 1567,
+        "post_observation": 2834,
+        "total": 4402
+      },
+      "observation": {
+        "package": "com.android.chrome",
+        "window": 3339,
+        "foreground_window": 3203,
+        "security_scan_complete": true,
+        "nodes_count": 10,
+        "navigation_actions": [
+          "home",
+          "back",
+          "open_app"
+        ]
+      }
+    },
+    {
+      "key": "v90Direct",
+      "task_id": "a25e7b42-0218-43ad-8d9c-0307e13dba39",
+      "state": "succeeded",
+      "status": "succeeded",
+      "reason": "action_acknowledged",
+      "attempted": true,
+      "acknowledged": true,
+      "unknown": false,
+      "app_result_verified": true,
+      "timing_ms": {
+        "validation": 0,
+        "native_action": 715,
+        "post_observation": 301,
+        "total": 1017
+      },
+      "observation": {
+        "package": "com.android.chrome",
+        "window": 3203,
+        "foreground_window": 3203,
+        "navigation_only": false,
+        "security_scan_complete": true,
+        "nodes_count": 41,
+        "navigation_actions": [
+          "home",
+          "back",
+          "open_app"
+        ]
+      }
+    },
+    {
+      "key": "v90Toolbar2",
+      "task_id": "ad34caab-c9de-48ad-9989-824f3469bf95",
+      "state": "succeeded",
+      "status": "succeeded",
+      "reason": "action_acknowledged",
+      "attempted": true,
+      "acknowledged": true,
+      "unknown": false,
+      "app_result_verified": false,
+      "timing_ms": {
+        "validation": 0,
+        "native_action": 738,
+        "post_observation": 1621,
+        "total": 2359
+      },
+      "observation": {
+        "package": "com.android.chrome",
+        "window": 3345,
+        "foreground_window": 3203,
+        "navigation_only": false,
+        "security_scan_complete": true,
+        "nodes_count": 10,
+        "navigation_actions": [
+          "home",
+          "back",
+          "open_app"
+        ]
+      }
+    },
+    {
+      "key": "v90Back",
+      "task_id": "6a692454-a30d-4810-b271-f7b4374a1681",
+      "state": "succeeded",
+      "status": "succeeded",
+      "reason": "system_button_acknowledged",
+      "attempted": true,
+      "acknowledged": true,
+      "unknown": false,
+      "app_result_verified": false,
+      "timing_ms": {
+        "validation": 0,
+        "native_action": 989,
+        "post_observation": 2233,
+        "total": 3222
+      },
+      "observation": {
+        "package": "com.android.chrome",
+        "window": 3346,
+        "foreground_window": 3203,
+        "navigation_only": true,
+        "security_scan_complete": true,
+        "nodes_count": 0,
+        "navigation_actions": [
+          "home",
+          "open_app"
+        ]
+      }
+    },
+    {
+      "key": "v90BackRefusal",
+      "task_id": "dc4f6e5d-7b0e-4525-b9cb-f6e7e45b5814",
+      "state": "failed",
+      "status": "failed",
+      "reason": "surface_navigation_only",
+      "attempted": false,
+      "acknowledged": false,
+      "unknown": false,
+      "app_result_verified": false,
+      "timing_ms": {
+        "validation": 0,
+        "native_action": 657,
+        "post_observation": 7,
+        "total": 665
+      }
+    },
+    {
+      "key": "v90SafeExit",
+      "task_id": "8461bb99-8faf-4430-a7d6-69861860975a",
+      "state": "succeeded",
+      "status": "succeeded",
+      "reason": "app_launch_acknowledged",
+      "attempted": true,
+      "acknowledged": true,
+      "unknown": false,
+      "app_result_verified": true,
+      "timing_ms": {
+        "validation": 0,
+        "native_action": 756,
+        "post_observation": 1442,
+        "total": 2199
+      },
+      "observation": {
+        "package": "com.termux",
+        "window": 3213,
+        "foreground_window": 3213,
+        "navigation_only": false,
+        "security_scan_complete": true,
+        "nodes_count": 16,
+        "navigation_actions": [
+          "home",
+          "back",
+          "open_app"
+        ]
+      }
+    },
+    {
+      "key": "v90MissingId",
+      "task_id": "105b0637-c04a-440f-a29b-bdffd331fc20",
+      "state": "failed",
+      "status": "failed",
+      "reason": "node_id_required",
+      "attempted": false,
+      "unknown": false
+    },
+    {
+      "key": "v90Replay",
+      "task_id": "3634f839-c6d2-42d4-8c61-6c5289f4d240",
+      "state": "failed",
+      "status": "failed",
+      "reason": "observation_required",
+      "attempted": false,
+      "unknown": false
+    },
+    {
+      "key": "v90UndisclosedId",
+      "task_id": "7c2a2029-116c-4457-913d-57d13d04eba9",
+      "state": "failed",
+      "status": "failed",
+      "reason": "target_not_in_observation",
+      "attempted": false,
+      "unknown": false
+    }
+  ],
+  "remaining": {
+    "BLOCKED": [
+      "Samsung IME semantic key identification",
+      "clipboard readable provenance at staging and before Paste"
+    ],
+    "NOT_TESTED": [
+      "complete two-app A/B/C mixed input",
+      "alternate IME",
+      "rotation",
+      "new physical X",
+      "visual long press/drag",
+      "matched A/B/C performance"
+    ]
+  }
+}
