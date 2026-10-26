@@ -1,3 +1,11 @@
+## 2026-10-26 #165 final acceptance / PR169 candidate
+
+- Read [current acceptance record](../dev/issue165-final-acceptance-20261026.md). Baseline main/tag be573fb89cf8ac6017032f8ffd2f73b9c96a443f, independently installed0.1.89/code90. PR166/168 historical CI/review/release evidence reused, not rerun as new acceptance.
+- Actual current APK: Termux official InputConnection `123` exact echo PASS/Enter0; calculator image-based tap/history transition PASS; native up-scroll PASS; visual scroll PASS for gesture/screen transition; Chrome native long_press/Paste toolbar appearance PASS. Single-sample monotonic timings and task IDs in record. Clipboard and Samsung semantic keys remain BLOCKED; no fail-open workaround.
+- Baseline config18 content restored through CAS20/equality=true, test UI session ended/epoch8. Termux has unsubmitted `123`; Chrome retains earlier synthetic draft and an empty linked popup after one Back/UNKNOWN. No repeated Back, underlying click or terminal command.
+- Dedicated PR169 tests-first; candidate0.1.90/code91: distinguish missing/undisclosed node IDs and document all node requirements; preserve native denial reason before unavailable revision metadata; allow only existing guarded Home/exact-launch navigation from a fully scanned empty OS-linked popup. No image/node/Back/click-through capability there. Exact candidate CI/review/release/install/physical acceptance still PENDING.
+- #165 stays OPEN until real IME/clipboard/mixed input/rotation/alternate-IME/X/performance gates are met. Do not claim overall completion or change other Work branches/experiments.
+
 ## 2026-10-25 #152 v0.1.87/code88 released and installed — one local recovery action needed
 
 - [Final report/acceptance matrix](../dev/issue152-bridge-diagnostics.md#2026-10-25-final-release-and-installed-device-checkpoint), [audit/raw XML](../dev/evidence/issue152/audit.json). PR160 merged; immutable APK/tag source e454e066f6ad27b319895c061ea11d8ab2e64561. Main Security40165899152/UI40165899208/Signed40166307998 success. PR/main raw JVM2775/UI11 failure/error/skip0, PNG8; local43 PASS.

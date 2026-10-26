@@ -6,6 +6,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GenericControlTest {
+    @Test fun terminalMissingOrUndisclosedNodeIsDistinguishedBeforeAnyNativeEffect() = runBlocking {
+        for (node in listOf<Int?>(null, 999)) {
+            val port = Port().apply { nativeValidation = true }
+            val control = GenericControl(port, { true })
+            val id = observe(control)
+            val request = buildJsonObject {
+                put("observation_id", id); put("action", "terminal_input")
+                put("text", "123"); put("terminal_authorized", true)
+                if (node != null) put("node_id", node)
+            }
+            val result = control.action(request)
+            assertFalse(result.success)
+            assertEquals(if (node == null) "node_id_required" else "target_not_in_observation", result.summary)
+            assertFalse(result.data.getValue("action_attempted").jsonPrimitive.boolean)
+            assertFalse(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+            assertFalse(control.action(request).success) // Refusal still consumes the observation.
+            assertEquals(0, port.writes)
+        }
+    }
     @Test fun outputBudgetDoesNotInvalidateCompletedSecurityTraversal() = runBlocking {
         val port = Port()
         port.frame = port.frame.copy(nodes = (1..60).map { ControlNode(it, "Button $it", clickable = true) })

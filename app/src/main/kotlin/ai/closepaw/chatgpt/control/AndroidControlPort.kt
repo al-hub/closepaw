@@ -238,7 +238,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         }
     }
     override suspend fun visual(frame: ControlFrame): VisualTargetProof? {
-        if (frame.reason != null || frame.truncated || frame.touchContext.isEmpty()) return null
+        if (frame.reason != null || frame.truncated || frame.navigationOnly || frame.touchContext.isEmpty()) return null
         val service = AgentService.instance ?: return null
         if (islandRefusal(sessionFor(service).id) != null) return null
         val bounds = withContext(Dispatchers.Main) {
@@ -468,13 +468,16 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             ) ?: reason(service)
             val inputTarget = nodes.filter { it.keyboardKey.isEmpty() && it.sourceWindowId == selected.selection.target &&
                 it.sourcePackage == pkg && it.editable && it.enabled && it.focused && it.focusable && !it.password }.singleOrNull()
-            block(ControlFrame(pkg, window.id, fingerprint, nodes, code, truncated,
+            val frame = ControlFrame(pkg, window.id, fingerprint, nodes, code, truncated,
                 truncationReasons, visited, deepest, touchContext(service, window, windows), root.windowId,
                 selected.signature, selected.diagnostics, revision, outputLimit,
                 verifiedApplicationPackage = if (code == null && !truncated &&
                     pkg == AndroidGeminiDraftUi.GOOGLE_HOST && geminiIdentityVerified) AndroidGeminiDraftUi.PACKAGE else null,
                 keyboard = selected.keyboard, inputTargetId = inputTarget?.id, inputTarget = inputTarget,
-                keyboardDiagnostics = selected.keyboard?.takeIf { it.readAllowed }?.let { keyboardScan.json() }), native)
+                keyboardDiagnostics = selected.keyboard?.takeIf { it.readAllowed }?.let { keyboardScan.json() })
+            block(EmptyOwnedSurfacePolicy.restrict(frame,
+                selected.selection.members.size > 1 && root.windowId in selected.selection.members &&
+                    window.id in selected.selection.members), native)
         } finally {
             owned.forEach { it.recycleCompat() }
             windows.forEach { runCatching { it.recycle() } }
