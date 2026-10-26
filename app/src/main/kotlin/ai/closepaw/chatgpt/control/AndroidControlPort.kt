@@ -259,7 +259,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val browser = browsers.all { resolved -> resolved?.activityInfo?.let {
                 it.packageName == pkg && it.enabled && it.exported
             } == true }
-            val generalWeb = browsers.all { it?.handleAllWebDataURI == true }
+            // Both HTTP and HTTPS must resolve to the same enabled, exported OS default handler.
+            // ResolveInfo has no handleAllWebDataURI property; do not infer trust from the handler.
+            val generalWeb = browser
             VerifiedReadDefaults.permits("read", active, bundled, userTier, ime, browser, generalWeb)
         }.getOrDefault(false)
     }
