@@ -773,7 +773,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val end = if (action in setOf("visual_drag","visual_scroll")) rect("image_end_rect")
                     ?: return@withTree ControlEffect(false,false,"visual_end_bounds_required") else null
                 val latest = (if (proof.scope == "display") visualDisplay(fresh) else if (action == "visual_key") visualKeyboard(fresh) else visual(fresh)) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
-                if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context || latest.sourceWindowId != proof.sourceWindowId || latest.scope != proof.scope || latest.sourceDisplayId != proof.sourceDisplayId || latest.rotation != proof.rotation)
+                if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context || latest.sourceWindowId != proof.sourceWindowId || latest.scope != proof.scope || latest.sourceDisplayId != proof.sourceDisplayId || latest.rotation != proof.rotation || latest.disclosedRegions != proof.disclosedRegions)
                     return@withTree ControlEffect(false,false,"visual_pixels_or_geometry_changed")
                 if (proof.scope == "display" && proof.displayGeneration != service.remoteDisplayChanges.version())
                     return@withTree ControlEffect(false,false,"display_window_changed_since_observation")

@@ -27,7 +27,7 @@ compositor surface inventory: a static untouchable overlay can be unreported.
 The final route therefore independently captures every disclosed app/IME region
 using takeScreenshotOfWindow and compares every output pixel against that isolated
 source at its exact OS coordinate. Returned display pixels must equal isolated
-owned pixels; mismatches/missing sources/geometry refuse without image delivery.
+owned pixels; missing sources/geometry refuse without image delivery. Differing compositor pixels are blacked out; only the exact matching pixel runs are disclosed. The proof retains disjoint verified regions, and coordinate mapping refuses ANY target rectangle containing an unverified pixel. Native recapture also requires identical verified regions; masking is never input authority.
 Window events/masking are defense in depth, never sole ownership authority. This
 may refuse animated screens or an IME whose isolated screenshot is unavailable;
 that outcome remains BLOCKED with a precise reason, not a raw display fallback.

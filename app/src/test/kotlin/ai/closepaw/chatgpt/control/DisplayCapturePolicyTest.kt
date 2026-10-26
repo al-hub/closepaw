@@ -18,7 +18,7 @@ class DisplayCapturePolicyTest {
     }
     @Test fun displayProofPreservesWholePixelCoordinateOriginAndRevocation() {
         val p=VisualTargetProof(ai.closepaw.model.ScreenImage(432,960,"image/jpeg",byteArrayOf(1),ai.closepaw.model.ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
-            "hash",TapBounds(0,0,1080,2400),"rotation0",System.currentTimeMillis(),scope="display",sourceDisplayId=0,rotation=0)
+            "hash",TapBounds(0,0,1080,2400),"rotation0",System.currentTimeMillis(),scope="display",sourceDisplayId=0,rotation=0,disclosedRegions=listOf(TapBounds(0,0,1080,2400)))
         assertEquals(TapBounds(100,2000,200,2100),p.map(TapBounds(40,800,80,840)))
         assertNull(p.map(TapBounds(0,0,433,960)))
         assertEquals(kotlinx.serialization.json.JsonPrimitive(0),p.metadata()["source_display_id"])

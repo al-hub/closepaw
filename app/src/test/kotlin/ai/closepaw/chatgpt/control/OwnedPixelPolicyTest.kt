@@ -18,4 +18,14 @@ class OwnedPixelPolicyTest {
         assertFalse(OwnedPixelPolicy.matches(display,4,IntArray(4){7},TapBounds(1,1,3,3),listOf(TapBounds(0,0,2,2))))
         assertFalse(OwnedPixelPolicy.matches(display,4,IntArray(4){7},TapBounds(1,1,3,3),emptyList()))
     }
+    @Test fun unknownPixelsAreMaskedAndCanNeverAuthorizeCoordinates() {
+        val actual=IntArray(16){7}; actual[6]=99
+        val window=TapBounds(1,1,3,3)
+        val runs=OwnedPixelPolicy.verifiedRuns(actual,4,IntArray(4){7},window,listOf(window))!!
+        assertTrue(OwnedPixelPolicy.contains(runs,TapBounds(1,1,2,2)))
+        assertFalse(OwnedPixelPolicy.contains(runs,TapBounds(2,1,3,2)))
+        assertFalse(OwnedPixelPolicy.contains(runs,window))
+        assertNull(OwnedPixelPolicy.verifiedRuns(actual,4,IntArray(4){7},window,listOf(window),limit=1))
+    }
+
 }

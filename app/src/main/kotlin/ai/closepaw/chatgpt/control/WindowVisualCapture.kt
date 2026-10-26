@@ -51,6 +51,7 @@ internal object WindowVisualCapture {
         } } ?: return failure(nativeReason)
         return try { withContext(Dispatchers.Default) {
             var bitmap: Bitmap? = null; var scaled: Bitmap? = null
+            var disclosed: List<TapBounds> = emptyList()
             try {
                 val buffer = captured.hardwareBuffer
                 if (buffer.width != window.right-window.left || buffer.height != window.bottom-window.top) return@withContext failure("screenshot_buffer_geometry_mismatch")
@@ -68,12 +69,18 @@ internal object WindowVisualCapture {
                         // Window-isolated verification never uses a display fallback.
                         val isolated=capturePixels(service,surface.windowId,surface.bounds)
                         val expected=isolated.pixels ?: return@withContext failure("display_isolated_"+isolated.reason)
-                        if(!OwnedPixelPolicy.matches(actual,source.width,expected,surface.bounds,surface.visible))
-                            return@withContext failure("display_owned_pixels_mismatch")
-                        surface.visible.forEach { verified.op(Rect(it.left,it.top,it.right,it.bottom),Region.Op.UNION) }
+                        val runs=OwnedPixelPolicy.verifiedRuns(actual,source.width,expected,surface.bounds,surface.visible)
+                            ?: return@withContext failure("display_pixel_verification_fragmented")
+                        runs.forEach { verified.op(Rect(it.left,it.top,it.right,it.bottom),Region.Op.UNION) }
                     }
-                    if(verified!=visibleRegion) return@withContext failure("display_unverified_pixel_region")
-                    val hidden = Region(0,0,source.width,source.height).apply { op(visibleRegion!!,Region.Op.DIFFERENCE) }
+                    if(verified.isEmpty) return@withContext failure("display_owned_pixels_unavailable")
+                    val parts=mutableListOf<TapBounds>();val partsIterator=RegionIterator(verified);val part=Rect()
+                    while(partsIterator.next(part)) {
+                        if(parts.size>=4096) return@withContext failure("display_pixel_verification_fragmented")
+                        parts.add(TapBounds(part.left,part.top,part.right,part.bottom))
+                    }
+                    disclosed=parts
+                    val hidden = Region(0,0,source.width,source.height).apply { op(verified,Region.Op.DIFFERENCE) }
                     val iterator=RegionIterator(hidden); val rect=Rect(); val canvas=Canvas(source); val paint=Paint().apply { color=Color.BLACK }
                     while(iterator.next(rect)) canvas.drawRect(rect,paint)
                 }
@@ -83,7 +90,7 @@ internal object WindowVisualCapture {
                 scaled = Bitmap.createScaledBitmap(source, maxOf(1,(source.width*ratio).toInt()), maxOf(1,(source.height*ratio).toInt()), true)
                 val image = scaled!!; val out = ByteArrayOutputStream()
                 if (!image.compress(Bitmap.CompressFormat.JPEG,80,out)) return@withContext failure("screenshot_compression_failed")
-                VisualCaptureResult(VisualTargetProof(ScreenImage(image.width,image.height,"image/jpeg",out.toByteArray(),ScreenImageSource.ACCESSIBILITY_SCREENSHOT),hash,window,context,System.currentTimeMillis()))
+                VisualCaptureResult(VisualTargetProof(ScreenImage(image.width,image.height,"image/jpeg",out.toByteArray(),ScreenImageSource.ACCESSIBILITY_SCREENSHOT),hash,window,context,System.currentTimeMillis(),disclosedRegions=disclosed))
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { failure("screenshot_conversion_failed") }
             finally { if (scaled !== bitmap) scaled?.recycle(); bitmap?.recycle() }
