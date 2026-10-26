@@ -35,7 +35,8 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val touchContext: String = "", val foregroundWindowId: Int = windowId, val windowContext: String = "",
     val windowDiagnostics: JsonObject? = null, val configurationRevision: Long = 0, val outputLimit: Int = 50,
     val verifiedApplicationPackage: String? = null, val keyboard: ControlKeyboard? = null, val inputTargetId: Int? = null, val inputTarget: ControlNode? = null, val visual: VisualTargetProof? = null,
-    val terminalSubmission: TerminalSubmission? = null, val keyboardDiagnostics: JsonObject? = null)
+    val terminalSubmission: TerminalSubmission? = null, val keyboardDiagnostics: JsonObject? = null,
+    val navigationOnly: Boolean = false)
 /** Logical identity is supplied only by a complete, guarded native application identity scan. */
 internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expected != null && reason == null &&
     (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
@@ -96,7 +97,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val visualEpoch = port.session()?.epoch
         port.presentation(ControlSession.VisualPhase.OBSERVING, visualEpoch)
         var frame = port.capture()
-        if (includeImage && frame.reason == null && !frame.truncated) {
+        if (includeImage && frame.reason == null && !frame.truncated && !frame.navigationOnly) {
             val visual = port.visual(frame)
             frame = if (visual == null) frame.copy(reason = "visual_observation_unavailable") else frame.copy(visual = visual)
         }
@@ -145,12 +146,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             put("configuration_revision", frame.configurationRevision)
             put("security_scan_complete", !frame.truncated); put("output_truncated", outputLimited)
             put("matched_node_count", candidates.size)
-            put("truncated", bounded.truncated); put("actionable", !bounded.truncated)
-            put("node_actions_allowed", !bounded.truncated)
-            put("node_tap_available", !bounded.truncated && bounded.touchContext.isNotEmpty())
+            put("truncated", bounded.truncated); put("navigation_only", bounded.navigationOnly)
+            put("actionable", !bounded.truncated && !bounded.navigationOnly)
+            put("node_actions_allowed", !bounded.truncated && !bounded.navigationOnly)
+            put("node_tap_available", !bounded.truncated && !bounded.navigationOnly && bounded.touchContext.isNotEmpty())
             put("global_navigation_validation_scope", "foreground_app_window")
             put("node_and_back_validation_scope", "full_screen_fingerprint")
-            put("navigation_actions", JsonArray((if (bounded.truncated) listOf("home", "open_app") else listOf("home", "back", "open_app")).map { JsonPrimitive(it) }))
+            put("navigation_actions", JsonArray((if (bounded.truncated || bounded.navigationOnly) listOf("home", "open_app") else listOf("home", "back", "open_app")).map { JsonPrimitive(it) }))
             put("truncation_reasons", JsonArray(bounded.truncationReasons.sorted().map { JsonPrimitive(it) }))
             put("visited_nodes", bounded.visitedNodes); put("max_depth", bounded.maxDepth)
             put("content_trust", "untrusted_screen_data"); put("image_included", false)
@@ -231,7 +233,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
         if (action in setOf("click", "tap", "long_press", "type", "input", "terminal_input", "terminal_submit", "focus", "key", "scroll", "expand", "collapse")) {
-            if (node == null || !node.enabled || node.password) return failure("target_unavailable")
+            if (id == null) return failure("node_id_required")
+            if (node == null) return failure("target_not_in_observation")
+            if (!node.enabled || node.password) return failure("target_unavailable")
             if ((action in setOf("click", "tap") && !node.clickable) || (action == "long_press" && !node.longClickable)) return failure("target_not_clickable")
             if ((action == "expand" && !node.expandable) || (action == "collapse" && !node.collapsible)) return failure("native_action_unavailable")
             if (action == "scroll" && (!node.scrollable || input["direction"]?.jsonPrimitive?.content !in (node.scrollDirections + setOf("up", "down")))) return failure("target_not_scrollable")
