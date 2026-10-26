@@ -785,7 +785,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     return@withTree ControlEffect(false,false,"visual_editor_privacy_changed")
                 if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
                     System.currentTimeMillis()-proof.at !in 0L..60_000L) return@withTree ControlEffect(false,false,"visual_proof_invalid_or_expired")
-                if ((action == "visual_key") != (proof.scope in setOf("keyboard", "display"))) return@withTree ControlEffect(false,false,"visual_scope_mismatch")
+                if (!VisualActionPolicy.scopeAllowed(action,proof.scope)) return@withTree ControlEffect(false,false,"visual_scope_mismatch")
                 if (action == "visual_key") VisualKeyboardPolicy.refusal(fresh, fresh.nodes.singleOrNull { it.id == node?.id }, proof.scope)?.let {
                     return@withTree ControlEffect(false,false,it)
                 }
@@ -793,12 +793,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     val a = input[prefix]?.jsonArray ?: return null
                     if (a.size != 4) return null
                     val numbers = a.map { it.jsonPrimitive.intOrNull ?: return null }
-                    val mapped = proof.map(TapBounds(numbers[0],numbers[1],numbers[2],numbers[3])) ?: return null
+                    val mapped = VisualActionPolicy.target(proof,action,TapBounds(numbers[0],numbers[1],numbers[2],numbers[3])) ?: return null
                     return Rect(mapped.left,mapped.top,mapped.right,mapped.bottom)
                 }
                 val start = rect("image_rect") ?: return@withTree ControlEffect(false,false,"visual_target_bounds_invalid")
                 val end = if (action in setOf("visual_drag","visual_scroll")) rect("image_end_rect")
                     ?: return@withTree ControlEffect(false,false,"visual_end_bounds_required") else null
+                if (!VisualActionPolicy.pathAllowed(proof,bounds(start),end?.let { bounds(it) }))
+                    return@withTree ControlEffect(false,false,"visual_path_pixels_unverified")
                 val latest = (if (proof.scope == "display") visualDisplay(fresh) else if (action == "visual_key") visualKeyboard(fresh) else visual(fresh)) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
                 if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context || latest.sourceWindowId != proof.sourceWindowId || latest.scope != proof.scope || latest.sourceDisplayId != proof.sourceDisplayId || latest.rotation != proof.rotation || latest.disclosedRegions != proof.disclosedRegions || latest.editorPrivacyGeneration != proof.editorPrivacyGeneration)
                     return@withTree ControlEffect(false,false,"visual_pixels_or_geometry_changed")
@@ -807,7 +809,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (action == "visual_key") visualKeyRect = start
                 else return@withTree tap(service, fresh, start, endBounds = end,
                     durationMs = if (action == "visual_long_press") 650 else if (end != null) 450 else 50) {
-                        if(!editorGenerationMatches(proof,service)) "visual_editor_privacy_changed" else editorImageRefusal(service,frame.packageName)
+                        if (proof.scope=="display" && proof.displayGeneration!=service.remoteDisplayChanges.version()) "display_window_changed_since_observation"
+                        else if(!editorGenerationMatches(proof,service)) "visual_editor_privacy_changed" else editorImageRefusal(service,frame.packageName)
                     }
             }
             val at = fresh.nodes.indexOfFirst { it.id == node?.id }
