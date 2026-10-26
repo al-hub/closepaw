@@ -7,9 +7,14 @@ import kotlinx.serialization.json.*
 /** Exact window snapshot and coordinate frame. Rotation/insets/scale are pinned
  * by native geometry, not guessed from resolution or a caller's display values. */
 internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: String, val window: TapBounds,
-    val context: String, val at: Long, val id: String = UUID.randomUUID().toString(), val scope: String = "app", val sourceWindowId: Int = -1) {
+    val context: String, val at: Long, val id: String = UUID.randomUUID().toString(), val scope: String = "app", val sourceWindowId: Int = -1,
+    val sourceDisplayId: Int = -1, val rotation: Int = -1, val applicationBounds: String = "", val imeBounds: String = "") {
     fun metadata() = buildJsonObject {
         put("scope", scope); put("source_window_id", sourceWindowId); put("visual_id", id); put("image_width", image.width); put("image_height", image.height)
+        put("source_display_id", sourceDisplayId); put("rotation", rotation)
+        put("source_width", window.right-window.left); put("source_height", window.bottom-window.top)
+        put("application_bounds", applicationBounds); put("ime_bounds", imeBounds)
+        put("masked_outside_owned_regions", scope == "display")
         put("window_bounds", "${window.left} ${window.top} ${window.right} ${window.bottom}")
         put("coordinate_space", "snapshot_image_pixels"); put("expires_in_ms", 60_000)
     }

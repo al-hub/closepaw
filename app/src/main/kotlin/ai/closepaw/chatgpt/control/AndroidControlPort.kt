@@ -164,7 +164,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     override fun clearSelections() { appSelections.clear() }
     override fun visualDisclosureAllowed(frame: ControlFrame): Boolean = reason(AgentService.instance) == null &&
         packageAllowed(frame.packageName, operation = "read") && (runtime?.snapshot()?.revision ?: 0L) == frame.configurationRevision &&
-        (frame.visual?.scope != "keyboard" || frame.keyboard?.let {
+        (frame.visual?.scope !in setOf("keyboard", "display") || (frame.visual?.scope == "display" && frame.keyboard == null) || frame.keyboard?.let {
             packageAllowed(it.packageName, operation = "read") &&
                 Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) == it.inputMethodId
         } == true)
@@ -241,27 +241,73 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 })
         }
     }
-    override suspend fun visual(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, false)
-    override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, true)
-    private suspend fun captureVisual(frame: ControlFrame, keyboardImage: Boolean): VisualTargetProof? {
-        if (frame.reason != null || frame.truncated || frame.navigationOnly || frame.touchContext.isEmpty()) return null
-        val service = AgentService.instance ?: return null
-        if (islandRefusal(sessionFor(service).id) != null) return null
+    private var visualFailureReason = "visual_observation_unavailable"
+    override fun visualFailure() = visualFailureReason
+    override suspend fun visual(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "app")
+    override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "keyboard")
+    override suspend fun visualDisplay(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "display")
+    private data class DisplayPlan(val bounds: TapBounds, val rotation: Int, val region: Region,
+        val appBounds: String, val imeBounds: String)
+    private fun displayPlan(service: AgentService, frame: ControlFrame): DisplayPlan? {
+        if (Build.VERSION.SDK_INT < 34) return null
+        val display = context.getSystemService(DisplayManager::class.java).getDisplay(android.view.Display.DEFAULT_DISPLAY) ?: return null
+        val size = android.graphics.Point(); display.getRealSize(size)
+        val windows = service.windows.orEmpty()
+        try {
+            val selected = controlledWindows(service,frame.foregroundWindowId,frame.packageName,windows)
+            if (selected.selection.reason != null || selected.signature != frame.windowContext) return null
+            val owned = (selected.selection.members + listOfNotNull(frame.keyboard?.windowId)).toSet()
+            val content = windows.filter { it.type != AccessibilityWindowInfo.TYPE_SYSTEM &&
+                !(it.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY && service.ownsRemoteControlIndicatorWindow(it.id)) }
+            if (windows.any { it.displayId != android.view.Display.DEFAULT_DISPLAY || it.isInPictureInPictureMode } ||
+                DisplayCapturePolicy.refusal(size.x>0 && size.y>0 && frame.touchContext.isNotEmpty(),display.displayId,display.rotation,content.map { it.id },owned) != null) return null
+            val app = windows.singleOrNull { it.id == frame.windowId } ?: return null
+            if (touchContext(service,app,windows) != frame.touchContext) return null
+            // Keep only OS-reported visible owned regions; system UI and our control
+            // overlays are also subtracted, so notifications/controls never leak.
+            val visible = Region()
+            for (w in windows.filter { it.id in owned }) {
+                val region=Region(); w.getRegionInScreen(region); visible.op(region,Region.Op.UNION)
+            }
+            for (w in windows.filter { it.id !in owned }) visible.op(windowBounds(w),Region.Op.DIFFERENCE)
+            visible.op(Rect(0,0,size.x,size.y),Region.Op.INTERSECT)
+            if (visible.isEmpty) return null
+            return DisplayPlan(TapBounds(0,0,size.x,size.y),display.rotation,visible,windowBounds(app).flattenToString(),
+                windows.singleOrNull { it.id == frame.keyboard?.windowId }?.let { windowBounds(it).flattenToString() }.orEmpty())
+        } finally { windows.forEach { runCatching { it.recycle() } } }
+    }
+    private suspend fun captureVisual(frame: ControlFrame, scope: String): VisualTargetProof? {
+        fun fail(code: String): VisualTargetProof? { visualFailureReason=code; return null }
+        visualFailureReason="visual_observation_unavailable"
+        if (frame.reason != null || frame.truncated || frame.navigationOnly || frame.touchContext.isEmpty()) return fail("visual_frame_unverified")
+        val service = AgentService.instance ?: return fail("accessibility_permission_missing")
+        islandRefusal(sessionFor(service).id)?.let { return fail(it) }
+        val keyboardImage = scope != "app"
         val keyboard = frame.keyboard
-        if (keyboardImage && (keyboard == null || !keyboard.readAllowed || !keyboard.interactAllowed ||
-            !packageAllowed(keyboard.packageName, operation = "read") || !packageAllowed(keyboard.packageName, operation = "interact") || frame.inputTarget == null)) return null
-        val captureId = if (keyboardImage) keyboard!!.windowId else frame.windowId
-        val bounds = withContext(Dispatchers.Main) {
+        if ((scope == "keyboard" || (scope == "display" && keyboard != null)) && (keyboard == null || !keyboard.readAllowed || !keyboard.interactAllowed ||
+            !packageAllowed(keyboard.packageName, operation = "read") || !packageAllowed(keyboard.packageName, operation = "interact") || (scope == "keyboard" && frame.inputTarget == null))) return fail("visual_keyboard_policy_denied")
+        val captureId = if (scope == "keyboard") keyboard!!.windowId else frame.windowId
+        val plan = if (scope=="display") withContext(Dispatchers.Main) { displayPlan(service,frame) } else null
+        if (scope=="display" && plan==null) return fail("display_surface_unverified")
+        val bounds = plan?.bounds ?: withContext(Dispatchers.Main) {
             val windows = service.windows.orEmpty()
             try { windows.singleOrNull { it.id == captureId }?.let { bounds(windowBounds(it)) } }
             finally { windows.forEach { runCatching { it.recycle() } } }
-        } ?: return null
+        } ?: return fail("visual_window_unavailable")
         probeThrottle.awaitSlot()
-        val proof = WindowVisualCapture.capture(service, captureId, bounds, frame.touchContext) ?: return null
+        val captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region)
+        val proof = captured.proof ?: return fail(captured.reason ?: "visual_observation_unavailable")
         val after = capture()
-        return proof.copy(scope = if (keyboardImage) "keyboard" else "app", sourceWindowId = captureId).takeIf {
-            GenericControlActionPolicy.refusal(frame, after, if (keyboardImage) "visual_key" else "visual_tap") == null &&
-                (!keyboardImage || (frame.keyboard == after.keyboard && frame.inputTarget == after.inputTarget)) }
+        val refusal=GenericControlActionPolicy.refusal(frame,after,if(keyboardImage) "visual_key" else "visual_tap")
+        if (refusal!=null) return fail("visual_post_" + refusal)
+        if (keyboardImage && (frame.keyboard != after.keyboard || frame.inputTarget != after.inputTarget)) return fail("visual_post_keyboard_changed")
+        if (plan!=null) {
+            val latest=withContext(Dispatchers.Main) { displayPlan(service,after) } ?: return fail("display_post_surface_changed")
+            if (latest.bounds!=plan.bounds || latest.rotation!=plan.rotation || latest.region!=plan.region) return fail("display_post_geometry_changed")
+        }
+        return proof.copy(scope=scope,sourceWindowId=if(scope=="display") -1 else captureId,
+            sourceDisplayId=if(plan!=null) 0 else -1,rotation=plan?.rotation ?: -1,
+            applicationBounds=plan?.appBounds.orEmpty(),imeBounds=plan?.imeBounds.orEmpty())
     }
 
     private suspend fun secureWindow(service: AgentService): String? = controlSpan("security_probe") { secureWindowChecked(service) }
@@ -680,7 +726,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val proof = frame.visual ?: return@withTree ControlEffect(false, false, "visual_observation_required")
                 if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
                     System.currentTimeMillis()-proof.at !in 0L..60_000L) return@withTree ControlEffect(false,false,"visual_proof_invalid_or_expired")
-                if ((action == "visual_key") != (proof.scope == "keyboard")) return@withTree ControlEffect(false,false,"visual_scope_mismatch")
+                if ((action == "visual_key") != (proof.scope in setOf("keyboard", "display"))) return@withTree ControlEffect(false,false,"visual_scope_mismatch")
                 if (action == "visual_key") VisualKeyboardPolicy.refusal(fresh, fresh.nodes.singleOrNull { it.id == node?.id }, proof.scope)?.let {
                     return@withTree ControlEffect(false,false,it)
                 }
@@ -694,8 +740,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val start = rect("image_rect") ?: return@withTree ControlEffect(false,false,"visual_target_bounds_invalid")
                 val end = if (action in setOf("visual_drag","visual_scroll")) rect("image_end_rect")
                     ?: return@withTree ControlEffect(false,false,"visual_end_bounds_required") else null
-                val latest = (if (action == "visual_key") visualKeyboard(fresh) else visual(fresh)) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
-                if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context || latest.sourceWindowId != proof.sourceWindowId || latest.scope != proof.scope)
+                val latest = (if (proof.scope == "display") visualDisplay(fresh) else if (action == "visual_key") visualKeyboard(fresh) else visual(fresh)) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
+                if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context || latest.sourceWindowId != proof.sourceWindowId || latest.scope != proof.scope || latest.sourceDisplayId != proof.sourceDisplayId || latest.rotation != proof.rotation)
                     return@withTree ControlEffect(false,false,"visual_pixels_or_geometry_changed")
                 if (action == "visual_key") visualKeyRect = start
                 else return@withTree tap(service, fresh, start, endBounds = end,

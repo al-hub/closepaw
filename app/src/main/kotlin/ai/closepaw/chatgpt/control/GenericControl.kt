@@ -66,6 +66,8 @@ internal interface ControlPort : IslandControlPort {
     }
     suspend fun visual(frame: ControlFrame): VisualTargetProof? = null
     suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = null
+    suspend fun visualDisplay(frame: ControlFrame): VisualTargetProof? = null
+    fun visualFailure(): String = "visual_observation_unavailable"
     fun visualDisclosureAllowed(frame: ControlFrame): Boolean = false
     suspend fun capture(): ControlFrame
     // Must recheck consent and action-scoped freshness/identity at the native action boundary.
@@ -95,13 +97,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         VisualImageCache.remove(current?.frame?.visual?.id); current = null
         chainStarted = now(); chainActions = 0; noProgress = 0
         if (!allowed()) return failure("generic_control_disabled")
-        if (imageScope !in setOf("app", "keyboard") || (imageScope == "keyboard" && !includeImage)) return failure("image_scope_invalid")
+        if (imageScope !in setOf("app", "keyboard", "display") || (imageScope != "app" && !includeImage)) return failure("image_scope_invalid")
         val visualEpoch = port.session()?.epoch
         port.presentation(ControlSession.VisualPhase.OBSERVING, visualEpoch)
         var frame = port.capture()
         if (includeImage && frame.reason == null && !frame.truncated && !frame.navigationOnly) {
-            val visual = if (imageScope == "keyboard") port.visualKeyboard(frame) else port.visual(frame)
-            frame = if (visual == null) frame.copy(reason = "visual_observation_unavailable") else frame.copy(visual = visual)
+            val visual = when(imageScope) { "keyboard" -> port.visualKeyboard(frame); "display" -> port.visualDisplay(frame); else -> port.visual(frame) }
+            frame = if (visual == null) frame.copy(reason = port.visualFailure()) else frame.copy(visual = visual)
         }
         val result = publish(frame, filter)
         port.presentation(if (result.success) ControlSession.VisualPhase.WAITING else ControlSession.VisualPhase.FAILED, visualEpoch)
@@ -229,7 +231,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         if (action.startsWith("visual_")) {
             val proof = frame.visual ?: return failure("visual_observation_required")
-            if ((action == "visual_key") != (proof.scope == "keyboard")) return failure("visual_scope_mismatch")
+            if ((action == "visual_key") != (proof.scope in setOf("keyboard", "display"))) return failure("visual_scope_mismatch")
             if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
                 now() - proof.at !in 0L..60_000L) return failure("visual_proof_invalid_or_expired")
         }

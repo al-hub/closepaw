@@ -116,7 +116,25 @@ class TerminalInputConnectionTest {
             val tapped=control.action(buildJsonObject { put("action","visual_tap");put("session_id",session.id);put("observation_id",visual.data.getValue("observation_id"));put("visual_id",visualMeta.getValue("visual_id"));put("visual_target_confirmed",true)
                 put("image_rect",JsonArray(listOf(ix-2,iy-2,ix+2,iy+2).map{JsonPrimitive(it)})) })
             assertTrue(tapped.toString(),tapped.success)
-            val cached=control.observe(includeImage=true);assertTrue(cached.toString(),cached.success)
+            // Native whole-display API, full-size coordinate origin, actual encoded
+            // bytes, and lock revocation. Dynamically authorize only the selected
+            // throwaway emulator IME; no change to its default IME or OS grants.
+            val imeId=android.provider.Settings.Secure.getString(service.contentResolver,android.provider.Settings.Secure.DEFAULT_INPUT_METHOD)
+            val imePackage=android.content.ComponentName.unflattenFromString(imeId)!!.packageName
+            prefs.edit().putString("runtime_control_v1",buildJsonObject {
+                put("revision",2); put("config",buildJsonObject {
+                    put("node_budget",4096);put("output_limit",80);put("apps",buildJsonObject {put("com.termux","interact");put(imePackage,"interact")})
+                })
+            }.toString()).commit()
+            settled()
+            val cached=control.observe(includeImage=true,imageScope="display");assertTrue(cached.toString(),cached.success)
+            val displayMeta=cached.data.getValue("visual").jsonObject
+            assertEquals(JsonPrimitive("display"),displayMeta["scope"])
+            assertEquals(JsonPrimitive(0),displayMeta["source_display_id"])
+            assertTrue(displayMeta.getValue("source_width").jsonPrimitive.int>0)
+            val image=VisualImageCache.imageFor(buildJsonObject {put("data",cached.data)})!!
+            val decoded=android.graphics.BitmapFactory.decodeByteArray(image.bytes,0,image.bytes.size)
+            assertEquals(image.width,decoded.width);assertEquals(image.height,decoded.height);decoded.recycle()
             val task=buildJsonObject { put("result",buildJsonObject { put("data",cached.data) }) }
             assertNotNull(VisualImageCache.imageFor(task))
             try {

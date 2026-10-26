@@ -16,7 +16,7 @@ internal object VisualKeyboardPolicy {
     }
 
     fun refusal(frame: ControlFrame, node: ControlNode?, scope: String): String? {
-        if (scope != "keyboard") return "keyboard_visual_required"
+        if (scope !in setOf("keyboard", "display")) return "keyboard_visual_required"
         val keyboard = frame.keyboard ?: return "keyboard_target_unverified"
         val field = frame.inputTarget ?: return "keyboard_input_target_unverified"
         if (!keyboard.readAllowed || !keyboard.interactAllowed || field.id != frame.inputTargetId ||
