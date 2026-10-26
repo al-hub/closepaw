@@ -75,7 +75,18 @@ class TerminalInputConnectionTest {
                         return control.observe()
                     previous=next
                 }
-                fail("Fixture screen did not settle at $fixtureStage: ${previous.reason}")
+                var windowSummary = ""
+                instrumentation.runOnMainSync {
+                    windowSummary = service.windows.orEmpty().joinToString(";") { window ->
+                        val root = window.root
+                        try {
+                            "type=${window.type},id=${window.id},display=${window.displayId},pkg=${root?.packageName ?: "none"}"
+                        } finally {
+                            root?.recycle()
+                        }
+                    }
+                }
+                fail("Fixture screen did not settle at $fixtureStage: ${previous.reason}; foreground=${previous.packageName}; windows=$windowSummary")
                 return control.observe()
             }
             val observed = settled(); assertTrue(observed.toString(), observed.success)
