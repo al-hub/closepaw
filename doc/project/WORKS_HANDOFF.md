@@ -1,3 +1,9 @@
+## 2026-10-26 #165 IME-window candidate — verification pending
+
+- See [compatibility continuation](../dev/issue165-ime-compatibility-20261026.md). Separate OS-selected IME image and visual/native label corroboration candidate0.1.91/code92; not yet released or installed. Original semantic key guards retained.
+- Clipboard remains BLOCKED by the focused-app/default-IME read boundary; no unchecked write or privilege/IME change. #165 stays OPEN. Existing0.1.90 evidence is unchanged.
+- Local Gradle distribution download is unavailable; exact candidate CI/review/device results must be verified before merging/releasing. No new UI session has been started.
+
 ## 2026-10-26 #165 v0.1.90/code91 delivered — overall acceptance OPEN
 
 - [Final acceptance/report](../dev/issue165-final-acceptance-20261026.md), [bounded task evidence](../dev/evidence/issue165/final-20261026.json). PR169 merged; immutable APK/main/tag f9961d538c9639250d620da5168c8b880695c150. Exact source tree matches reviewed PR1a438ea. Independent security-focused code review no findings; PR JVM2873/UI14 failure/error/skip0 raw ZIP/XML verified. Main Security40253048486/UI40253048457/Signed40253728307 PASS.
