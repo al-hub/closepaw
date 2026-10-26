@@ -28,4 +28,28 @@ class OwnedPixelPolicyTest {
         assertNull(OwnedPixelPolicy.verifiedRuns(actual,4,IntArray(4){7},window,listOf(window),limit=1))
     }
 
+    @Test fun identicalRowsCompactWithoutExpandingVerifiedCoverage() {
+        val window=TapBounds(0,0,4,100)
+        val actual=IntArray(400){7}
+        val isolated=IntArray(400){7}
+        val rects=OwnedPixelPolicy.verifiedRuns(actual,4,isolated,window,listOf(window),limit=1)
+        assertEquals(listOf(window),rects)
+        assertTrue(OwnedPixelPolicy.contains(rects!!,TapBounds(0,10,4,90)))
+        actual[50*4+2]=99
+        val gap=OwnedPixelPolicy.verifiedRuns(actual,4,isolated,window,listOf(window))!!
+        assertFalse(OwnedPixelPolicy.contains(gap,TapBounds(2,50,3,51)))
+        assertFalse(OwnedPixelPolicy.contains(gap,window))
+        assertNull(OwnedPixelPolicy.verifiedRuns(actual,4,isolated,window,listOf(window),limit=1))
+    }
+    @Test fun separateRegionsDoNotAccidentallyBridgeUnknownPixels() {
+        val window=TapBounds(0,0,4,4)
+        val actual=IntArray(16){7}
+        val isolated=IntArray(16){7}
+        val regions=listOf(TapBounds(0,0,4,1),TapBounds(0,3,4,4))
+        val result=OwnedPixelPolicy.verifiedRuns(actual,4,isolated,window,regions)!!
+        assertEquals(2,result.size)
+        assertFalse(OwnedPixelPolicy.contains(result,TapBounds(0,1,4,3)))
+        assertTrue(OwnedPixelPolicy.contains(result,regions.first()))
+    }
+
 }
