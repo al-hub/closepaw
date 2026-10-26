@@ -125,3 +125,12 @@ resolves the exact successful Security CI artifact rather than signing a UI arti
 Scheduled fallback starts a missing UI workflow once, never replays a failed UI run.
 Local release-gate tests cover missing/failed/running/wrong-SHA/PR/foreign-workflow evidence.
 The previous tag/assets remain immutable; the correction uses a new version.
+
+Independent follow-up review found that a sensitive editor could start/finish
+within an in-flight capture while endpoint privacy states matched. The image proof
+now pins the existing monotonic accessibility InputMethod generation at admission,
+checks it after capture and on cache disclosure, and revalidates it at native visual
+dispatch. Missing native privacy-generation capability refuses images. Cache clear
+alone is not in-flight revocation. A real native capture regression injects sensitive
+start+finish callbacks during capture and requires no proof/visual_editor_privacy_changed;
+all source/pixel/coverage checks remain. No editor strings or clipboard content is stored.

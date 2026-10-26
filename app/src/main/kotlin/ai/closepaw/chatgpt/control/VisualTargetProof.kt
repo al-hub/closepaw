@@ -9,7 +9,7 @@ import kotlinx.serialization.json.*
 internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: String, val window: TapBounds,
     val context: String, val at: Long, val id: String = UUID.randomUUID().toString(), val scope: String = "app", val sourceWindowId: Int = -1,
     val sourceDisplayId: Int = -1, val rotation: Int = -1, val applicationBounds: String = "", val imeBounds: String = "",
-    val sourceImeWindowId: Int = -1, val displayGeneration: Long = -1, val disclosedRegions: List<TapBounds> = emptyList()) {
+    val sourceImeWindowId: Int = -1, val displayGeneration: Long = -1, val disclosedRegions: List<TapBounds> = emptyList(), val editorPrivacyGeneration: Long = -1) {
     fun metadata() = buildJsonObject {
         put("scope", scope); put("source_window_id", sourceWindowId); put("visual_id", id); put("image_width", image.width); put("image_height", image.height)
         put("source_display_id", sourceDisplayId); put("rotation", rotation)

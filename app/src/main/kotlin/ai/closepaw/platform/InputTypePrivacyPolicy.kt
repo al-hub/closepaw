@@ -2,6 +2,7 @@ package ai.closepaw.platform
 
 /** Official EditorInfo input-type bits; NULL-class terminal flags are not text. */
 internal object InputTypePrivacyPolicy {
+    fun sameGeneration(expected: Long,current: Long?): Boolean = expected>=0 && expected==current
     fun password(inputType: Int): Boolean {
         val cls=inputType and 0x0f
         val variation=inputType and 0x0ff0
