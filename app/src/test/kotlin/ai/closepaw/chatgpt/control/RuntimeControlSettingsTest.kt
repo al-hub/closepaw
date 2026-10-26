@@ -42,6 +42,33 @@ class RuntimeControlSettingsTest {
         assertThrows(IllegalStateException::class.java) { store.change(0, "apply", config()) }
         assertEquals(0L, store.snapshot().revision)
     }
+
+    @Test fun ordinaryAppReadDefaultsWithoutPerAppGrantButExplicitDenyWins() {
+        var stored: String? = null
+        val settings = RuntimeControlSettings({ stored }, { stored = it })
+        // NORMAL is supplied by verified classifier, not inferred from a package name.
+        assertTrue(settings.access("example.normal", true, "read"))
+        assertTrue(settings.access("example.normal", true, "interact"))
+        // Unknown/CAUTIOUS surfaces must not become readable via a generic policy.
+        assertFalse(settings.access("example.unknown", false, "read"))
+        assertFalse(settings.access("example.unknown", false, "interact"))
+        val denied = buildJsonObject {
+            put("node_budget", 4096); put("output_limit", 50)
+            put("apps", buildJsonObject { put("example.normal", "deny") })
+        }
+        settings.change(0, "apply", denied)
+        assertFalse(settings.access("example.normal", true, "read"))
+        assertFalse(settings.access("example.normal", true, "interact"))
+        assertFalse(settings.access("example.normal", true, "launch"))
+    }
+    @Test fun cautiousAppReadOnlyGrantDoesNotAuthorizeInteraction() {
+        var stored: String? = null
+        val settings = RuntimeControlSettings({ stored }, { stored = it })
+        settings.change(0, "apply", config("read"))
+        assertTrue(settings.access("example.newapp", false, "read"))
+        assertFalse(settings.access("example.newapp", false, "interact"))
+        assertFalse(settings.access("example.another", false, "read"))
+    }
     @Test fun malformedAndOversizedSettingsAreRejected() {
         val invalid = buildJsonObject { put("node_budget", 4096); put("output_limit", 50)
             put("apps", buildJsonObject { put("not a package", "interact") }) }
