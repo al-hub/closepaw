@@ -91,6 +91,7 @@ internal object WindowVisualCapture {
     }
     private data class PixelResult(val pixels: IntArray? = null, val reason: String? = null)
     private suspend fun capturePixels(service: AccessibilityService,id: Int,bounds: TapBounds): PixelResult {
+        if(Build.VERSION.SDK_INT<34 || !bounds.valid) return PixelResult(reason="screenshot_geometry_unverified")
         var failure="screenshot_timeout"
         val captured=withTimeoutOrNull(5_000) { withContext(Dispatchers.Main) {
             suspendCancellableCoroutine<AccessibilityService.ScreenshotResult?> { continuation ->

@@ -69,7 +69,7 @@ replacement or privileged bypass is introduced.
 - Local Python suite:43 PASS. `git diff --check`: PASS.
 - Added pure policy/native-code mapping/full-display coordinate/no-replay tests.
 - Existing Android fixture now exercises actual display screenshot bytes/decoder,
-  source display metadata and cache revocation across lock/unlock. This is emulator
+  source display metadata and cache revocation across lock/unlock. The positive display fixture hides its observed IME once in the throwaway emulator; the default emulator IME whole-tree scan reported authentication_boundary and is not claimed as an IME-image PASS. The unreadable password IME still denies display images, and the original official InputConnection password-refusal assertion remains. This is emulator
   evidence only when CI succeeds, not Samsung/actual Termux acceptance.
 - Required exact-commit Security/UI CI, independent code/security review, main CI,
   original-key signed release, public bytes verification and phone installation

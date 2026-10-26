@@ -56,6 +56,7 @@ class TerminalInputConnectionTest {
             }
             val port = AndroidControlPort(service, runtime = settings.runtimeControl) { settings.genericControlEnabled }
             val control = GenericControl(port, { settings.genericControlEnabled })
+            var fixtureStage="initial_terminal"
             suspend fun settled(requireIme: Boolean = true): ai.closepaw.chatgpt.operations.OperationResult {
                 var previous=port.capture()
                 var stableSince=SystemClock.elapsedRealtime()
@@ -72,7 +73,7 @@ class TerminalInputConnectionTest {
                         return control.observe()
                     previous=next
                 }
-                fail("Fixture screen did not settle: ${previous.reason}")
+                fail("Fixture screen did not settle at $fixtureStage: ${previous.reason}")
                 return control.observe()
             }
             val observed = settled(); assertTrue(observed.toString(), observed.success)
@@ -116,17 +117,20 @@ class TerminalInputConnectionTest {
             val tapped=control.action(buildJsonObject { put("action","visual_tap");put("session_id",session.id);put("observation_id",visual.data.getValue("observation_id"));put("visual_id",visualMeta.getValue("visual_id"));put("visual_target_confirmed",true)
                 put("image_rect",JsonArray(listOf(ix-2,iy-2,ix+2,iy+2).map{JsonPrimitive(it)})) })
             assertTrue(tapped.toString(),tapped.success)
-            // Native whole-display API, full-size coordinate origin, actual encoded
-            // bytes, and lock revocation. Dynamically authorize only the selected
-            // throwaway emulator IME; no change to its default IME or OS grants.
-            val imeId=android.provider.Settings.Secure.getString(service.contentResolver,android.provider.Settings.Secure.DEFAULT_INPUT_METHOD)
-            val imePackage=android.content.ComponentName.unflattenFromString(imeId)!!.packageName
-            prefs.edit().putString("runtime_control_v1",buildJsonObject {
-                put("revision",2); put("config",buildJsonObject {
-                    put("node_budget",4096);put("output_limit",80);put("apps",buildJsonObject {put("com.termux","interact");put(imePackage,"interact")})
-                })
-            }.toString()).commit()
-            settled()
+            // Positive display capture uses the fixture app alone. The emulator's
+            // default IME exposes an authentication boundary when its whole tree
+            // is admitted; do not relax that production scan to make QA pass.
+            // Hide the observed IME once, using only this throwaway emulator.
+            fixtureStage="display_app_only"
+            val beforeDisplay=port.capture();assertNotNull(beforeDisplay.keyboard)
+            shell("input keyevent 4")
+            val imeGoneDeadline=SystemClock.elapsedRealtime()+10_000
+            var displayFrame=port.capture()
+            while(displayFrame.keyboard!=null && SystemClock.elapsedRealtime()<imeGoneDeadline) {
+                kotlinx.coroutines.delay(200);displayFrame=port.capture()
+            }
+            assertNull("Fixture IME did not hide",displayFrame.keyboard)
+            assertTrue(settled(requireIme=false).success)
             val cached=control.observe(includeImage=true,imageScope="display");assertTrue(cached.toString(),cached.success)
             val displayMeta=cached.data.getValue("visual").jsonObject
             assertEquals(JsonPrimitive("display"),displayMeta["scope"])
@@ -153,22 +157,18 @@ class TerminalInputConnectionTest {
             await { service.getSystemService(android.os.PowerManager::class.java).isInteractive &&
                 !service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked }
             assertNull("Unlock must not resurrect a revoked screenshot",VisualImageCache.imageFor(task))
+            fixtureStage="protected_editor"
             launch(true)
             await {
                 var denied = false
                 instrumentation.runOnMainSync { denied = service.inputMethod?.currentInputEditorInfo?.let { it.packageName == "com.termux" && it.inputType != 0 } == true }
                 denied
             }
-            // With the selected IME readable, its password surface must deny
-            // the entire display observation, not merely the terminal action.
+            // A display request with the unreadable password IME must never
+            // disclose an image. Retain the original official-connection refusal.
             val protectedDisplay=control.observe(includeImage=true,imageScope="display")
             assertFalse(protectedDisplay.toString(),protectedDisplay.success)
-            assertEquals(JsonPrimitive("authentication_boundary"),protectedDisplay.data["reason_code"])
             assertNull(VisualImageCache.imageFor(buildJsonObject {put("data",protectedDisplay.data)}))
-            // Restore the original terminal-only read scope before exercising
-            // its independent official InputConnection refusal below.
-            prefs.edit().putString("runtime_control_v1",
-                """{"revision":3,"config":{"node_budget":4096,"output_limit":80,"apps":{"com.termux":"interact"}}}""").commit()
             // Unlock/restartInput may remove the IME window. Re-observe only after
             // that OS transition settles; never bypass the secure-window guard.
             val protected = settled(requireIme=false)
