@@ -15,8 +15,16 @@ internal object VisualKeyboardPolicy {
         return TapBounds(parts[0],parts[1],parts[2],parts[3]).takeIf { it.valid }
     }
 
+    fun proofOwnerRefusal(proof: VisualTargetProof?, keyboard: ControlKeyboard): String? = when {
+        proof == null -> "keyboard_visual_required"
+        proof.scope == "keyboard" && proof.sourceWindowId == keyboard.windowId -> null
+        proof.scope == "display" && proof.sourceDisplayId == 0 && proof.sourceImeWindowId == keyboard.windowId &&
+            proof.imeBounds.isNotEmpty() && proof.displayGeneration >= 0 -> null
+        else -> "keyboard_visual_owner_unverified"
+    }
+
     fun refusal(frame: ControlFrame, node: ControlNode?, scope: String): String? {
-        if (scope != "keyboard") return "keyboard_visual_required"
+        if (scope !in setOf("keyboard", "display")) return "keyboard_visual_required"
         val keyboard = frame.keyboard ?: return "keyboard_target_unverified"
         val field = frame.inputTarget ?: return "keyboard_input_target_unverified"
         if (!keyboard.readAllowed || !keyboard.interactAllowed || field.id != frame.inputTargetId ||

@@ -7,9 +7,17 @@ import kotlinx.serialization.json.*
 /** Exact window snapshot and coordinate frame. Rotation/insets/scale are pinned
  * by native geometry, not guessed from resolution or a caller's display values. */
 internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: String, val window: TapBounds,
-    val context: String, val at: Long, val id: String = UUID.randomUUID().toString(), val scope: String = "app", val sourceWindowId: Int = -1) {
+    val context: String, val at: Long, val id: String = UUID.randomUUID().toString(), val scope: String = "app", val sourceWindowId: Int = -1,
+    val sourceDisplayId: Int = -1, val rotation: Int = -1, val applicationBounds: String = "", val imeBounds: String = "",
+    val sourceImeWindowId: Int = -1, val displayGeneration: Long = -1, val disclosedRegions: List<TapBounds> = emptyList()) {
     fun metadata() = buildJsonObject {
         put("scope", scope); put("source_window_id", sourceWindowId); put("visual_id", id); put("image_width", image.width); put("image_height", image.height)
+        put("source_display_id", sourceDisplayId); put("rotation", rotation)
+        put("source_width", window.right-window.left); put("source_height", window.bottom-window.top)
+        put("source_ime_window_id", sourceImeWindowId); put("intervening_window_changes_checked", scope == "display")
+        put("application_bounds", applicationBounds); put("ime_bounds", imeBounds)
+        put("verified_region_count", disclosedRegions.size); put("verified_pixel_count", disclosedRegions.sumOf { (it.right-it.left).toLong()*(it.bottom-it.top) }); put("unverified_pixels_masked", scope == "display")
+        put("masked_outside_owned_regions", scope == "display"); put("owned_pixels_verified_against_isolated_windows", scope == "display")
         put("window_bounds", "${window.left} ${window.top} ${window.right} ${window.bottom}")
         put("coordinate_space", "snapshot_image_pixels"); put("expires_in_ms", 60_000)
     }
@@ -18,7 +26,7 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
         val w = window.right - window.left; val h = window.bottom - window.top
         fun x(v: Int) = window.left + (v.toLong() * w / image.width).toInt()
         fun y(v: Int) = window.top + (v.toLong() * h / image.height).toInt()
-        return TapBounds(x(rect.left), y(rect.top), x(rect.right), y(rect.bottom)).takeIf { window.contains(it) }
+        return TapBounds(x(rect.left), y(rect.top), x(rect.right), y(rect.bottom)).takeIf { window.contains(it) && (scope != "display" || OwnedPixelPolicy.contains(disclosedRegions,it)) }
     }
 }
 /** At most two private screenshots, memory only. Retrieval rechecks live consent/

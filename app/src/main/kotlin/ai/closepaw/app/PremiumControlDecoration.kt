@@ -51,6 +51,24 @@ internal open class PremiumControlDecoration(
         // Never keep geometry from the pre-rotation/fold screen.
         target = null; effect = null
     }
+    /** Conservative screen-space bounds of every pixel this trusted decoration
+     * can paint. Its transparent full-screen interior is not an opaque window. */
+    internal fun screenshotMask(): Region {
+        getLocationOnScreen(position)
+        val left=position[0]; val top=position[1]
+        val outer=Rect(left,top,left+width,top+height)
+        val margin=kotlin.math.ceil(40*density.toDouble()).toInt()
+        val region=Region(outer)
+        val inner=Rect(outer).apply { inset(margin,margin) }
+        if (!inner.isEmpty) region.op(inner,Region.Op.DIFFERENCE)
+        fun mask(rect: RectF, padding: Int) {
+            val covered=Rect(); rect.roundOut(covered); covered.inset(-padding,-padding)
+            region.op(covered,Region.Op.UNION)
+        }
+        target?.let { mask(it,margin) }
+        effect?.let { mask(it.bounds,margin) }
+        return region
+    }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val interactive = service.getSystemService(PowerManager::class.java).isInteractive

@@ -21,6 +21,7 @@ class VisualKeyboardControlTest {
         override suspend fun capture() = frame
         override suspend fun visual(frame:ControlFrame) = proof("app",1)
         override suspend fun visualKeyboard(frame:ControlFrame) = proof("keyboard",2)
+        override suspend fun visualDisplay(frame:ControlFrame) = proof("display",-1)
         private fun proof(scope:String,id:Int) = VisualTargetProof(ScreenImage(100,100,"image/jpeg",byteArrayOf(1),ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
             "pixels",TapBounds(0,100,100,200),"geometry",System.currentTimeMillis(),scope=scope,sourceWindowId=id)
         override suspend fun perform(frame:ControlFrame,input:JsonObject,node:ControlNode?):ControlEffect {
@@ -64,4 +65,17 @@ class VisualKeyboardControlTest {
         val result=c.action(request(observed))
         assertFalse(result.success);assertEquals(0,p.calls)
     }
+    @Test fun explicitDisplayImageAuthorizesOnlyVerifiedImeKeyAndNoReplay() = runBlocking {
+        val p=Port(); val c=GenericControl(p,{true})
+        assertFalse(c.observe(imageScope="display").success)
+        val observed=c.observe(includeImage=true,imageScope="display")
+        assertTrue(observed.success)
+        val input=request(observed)
+        assertTrue(c.action(input).success)
+        assertFalse(c.action(input).success); assertEquals(1,p.calls)
+        val second=c.observe(includeImage=true,imageScope="display")
+        val tap=buildJsonObject { request(second).forEach { (k,v)->put(k,v) }; put("action","visual_tap") }
+        assertFalse(c.action(tap).success); assertEquals(1,p.calls)
+    }
+
 }

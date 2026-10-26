@@ -56,6 +56,7 @@ class TerminalInputConnectionTest {
             }
             val port = AndroidControlPort(service, runtime = settings.runtimeControl) { settings.genericControlEnabled }
             val control = GenericControl(port, { settings.genericControlEnabled })
+            var fixtureStage="initial_terminal"
             suspend fun settled(requireIme: Boolean = true): ai.closepaw.chatgpt.operations.OperationResult {
                 var previous=port.capture()
                 var stableSince=SystemClock.elapsedRealtime()
@@ -72,7 +73,7 @@ class TerminalInputConnectionTest {
                         return control.observe()
                     previous=next
                 }
-                fail("Fixture screen did not settle: ${previous.reason}")
+                fail("Fixture screen did not settle at $fixtureStage: ${previous.reason}")
                 return control.observe()
             }
             val observed = settled(); assertTrue(observed.toString(), observed.success)
@@ -116,7 +117,42 @@ class TerminalInputConnectionTest {
             val tapped=control.action(buildJsonObject { put("action","visual_tap");put("session_id",session.id);put("observation_id",visual.data.getValue("observation_id"));put("visual_id",visualMeta.getValue("visual_id"));put("visual_target_confirmed",true)
                 put("image_rect",JsonArray(listOf(ix-2,iy-2,ix+2,iy+2).map{JsonPrimitive(it)})) })
             assertTrue(tapped.toString(),tapped.success)
-            val cached=control.observe(includeImage=true);assertTrue(cached.toString(),cached.success)
+            // Positive display capture uses the fixture app alone. The emulator's
+            // default IME exposes an authentication boundary when its whole tree
+            // is admitted; do not relax that production scan to make QA pass.
+            // Hide the observed IME once, using only this throwaway emulator.
+            fixtureStage="display_app_only"
+            val beforeDisplay=port.capture();assertNotNull(beforeDisplay.keyboard)
+            shell("input keyevent 4")
+            val imeGoneDeadline=SystemClock.elapsedRealtime()+10_000
+            var displayFrame=port.capture()
+            while(displayFrame.keyboard!=null && SystemClock.elapsedRealtime()<imeGoneDeadline) {
+                kotlinx.coroutines.delay(200);displayFrame=port.capture()
+            }
+            assertNull("Fixture IME did not hide",displayFrame.keyboard)
+            assertTrue(settled(requireIme=false).success)
+            // Real renderer/native capture regression for the same display
+            // revalidation helper used by visual_key. This is not key-input PASS.
+            instrumentation.runOnMainSync { service.showRemoteControlActivity(); service.showRemoteControlTarget(android.graphics.Rect(100,300,500,600)) }
+            val cached=control.observe(includeImage=true,imageScope="display");assertTrue(cached.toString(),cached.success)
+            val cueFrame=port.capture()
+            val cueProof=port.visualDisplay(cueFrame);assertNotNull(port.visualFailure(),cueProof)
+            instrumentation.runOnMainSync { service.showRemoteControlTarget(android.graphics.Rect(100,300,500,600)) }
+            val recaptured=port.visualDisplay(cueFrame);assertNotNull(port.visualFailure(),recaptured)
+            assertEquals(cueProof!!.pixelHash,recaptured!!.pixelHash)
+            assertEquals(cueProof.disclosedRegions,recaptured.disclosedRegions)
+            val displayMeta=cached.data.getValue("visual").jsonObject
+            assertEquals(JsonPrimitive("display"),displayMeta["scope"])
+            assertEquals(JsonPrimitive(0),displayMeta["source_display_id"])
+            assertTrue(displayMeta.getValue("source_width").jsonPrimitive.int>0)
+            val image=VisualImageCache.imageFor(buildJsonObject {put("data",cached.data)})!!
+            val decoded=android.graphics.BitmapFactory.decodeByteArray(image.bytes,0,image.bytes.size)
+            assertEquals(image.width,decoded.width);assertEquals(image.height,decoded.height)
+            // The passive full-screen decoration must retain the fixture's
+            // light interior while masking its rendered perimeter/controls.
+            val center=decoded.getPixel(decoded.width/2,decoded.height/3)
+            assertTrue("Trusted transparent decoration hid the app interior",android.graphics.Color.red(center)>180)
+            decoded.recycle()
             val task=buildJsonObject { put("result",buildJsonObject { put("data",cached.data) }) }
             assertNotNull(VisualImageCache.imageFor(task))
             try {
@@ -130,12 +166,18 @@ class TerminalInputConnectionTest {
             await { service.getSystemService(android.os.PowerManager::class.java).isInteractive &&
                 !service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked }
             assertNull("Unlock must not resurrect a revoked screenshot",VisualImageCache.imageFor(task))
+            fixtureStage="protected_editor"
             launch(true)
             await {
                 var denied = false
                 instrumentation.runOnMainSync { denied = service.inputMethod?.currentInputEditorInfo?.let { it.packageName == "com.termux" && it.inputType != 0 } == true }
                 denied
             }
+            // A display request with the unreadable password IME must never
+            // disclose an image. Retain the original official-connection refusal.
+            val protectedDisplay=control.observe(includeImage=true,imageScope="display")
+            assertFalse(protectedDisplay.toString(),protectedDisplay.success)
+            assertNull(VisualImageCache.imageFor(buildJsonObject {put("data",protectedDisplay.data)}))
             // Unlock/restartInput may remove the IME window. Re-observe only after
             // that OS transition settles; never bypass the secure-window guard.
             val protected = settled(requireIme=false)

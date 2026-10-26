@@ -31,6 +31,8 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
         return try { node.windowId == id } finally { node.recycleCompat() }
     }
     fun ownsWindow(id: Int) = id >= 0 && (windows.any { owns(it, id) } || xStopOverlay.ownsWindow(id))
+    internal fun decorationScreenshotMask(id: Int? = null): Region? =
+        border?.takeIf { id == null || owns(it,id) }?.screenshotMask()
     fun controlCovers(rect: Rect): Boolean = xStopOverlay.covers(rect) || windows.filter { it !== border }.any {
         val point = IntArray(2); it.getLocationOnScreen(point)
         Rect.intersects(Rect(point[0], point[1], point[0] + it.width, point[1] + it.height), rect)
@@ -112,6 +114,7 @@ internal class RemoteControlIndicator(private val service: AccessibilityService,
         windows.clear(); border = null; panel = null
     }
     private inner class Border : PremiumControlDecoration(service, session)
+    internal fun clearScreenshotEffects() { border?.clearEffects() }
     fun target(rect: Rect) { border?.target(rect) }
     fun action(rect: Rect, kind: String, completed: Boolean?) { border?.action(rect, kind, completed) }
     fun tap(rect: Rect, x: Float, y: Float) { border?.tap(rect, x, y) }
