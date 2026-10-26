@@ -1,3 +1,11 @@
+## 2026-10-26 #165 unlocked-device follow-up — IME proof unavailable
+
+- [Current report](../dev/issue165-ime-compatibility-20261026.md#unlocked-device-follow-up--latest-actual-result), [updated evidence](../dev/evidence/issue165/ime-compatibility-20261026.json). Existing0.1.91/code92 unchanged; no new code/APK/install/CI.
+- Lock cleared. Complete OS-selected HoneyBoard scan admitted owner/read/interact/focused editable target. Native same-literal parent/child visual_key_candidate disclosure PASS; semantic clickable/isTextEntryKey contract unchanged. Separate IME image observations2 both visual_observation_unavailable, no delivered image/no key gesture. **IME proof FAIL, actual input BLOCKED; #165 OPEN.**
+- Source currently collapses native screenshot/buffer geometry/conversion and post-capture freshness failures into null. Exact failing branch unconfirmed: do not claim dimension mismatch, secure restriction or permanent OS limitation; do not guess coordinates or remove guards. Next narrow implementation work is separating that failure evidence and fixing only the confirmed branch.
+- Original Chrome launch UNKNOWN preserved; separate fresh observation confirmed Chrome; no replay. Known draft/caret32 unchanged, no input/clipboard write/Enter/search/send. Config22 → temporary23(HoneyBoard only) → CAS24 original contents; independent equality=true. Restore transport error handled with same request ID after read23, no second logical write.
+- Own session449a9a7b-7396-4e24-9d2f-bfd3dffae0cb ended viaeed20f77-5aa3-433b-91c6-2b2f32410677; independent ended/epoch4. Existing clipboard/API and layout/Termux/matrix/X/rotation/performance gaps remain. Prior screen-lock-only blocker below is historical.
+
 ## 2026-10-26 #165 v0.1.91/code92 delivered — acceptance OPEN
 
 - [Current compatibility report](../dev/issue165-ime-compatibility-20261026.md), [bounded evidence](../dev/evidence/issue165/ime-compatibility-20261026.json). PR170 merged; immutable source/tag4f6b58daf4216d67041af9306fd85c4ff4664f60, reviewed PR/main treec6775fcbf4fc72fae726340837435666a1f17c7f. Separate OS-selected IME image + native label/center corroboration visual_key path for character/space/backspace; original semantic guards remain. Visual layout and Termux canvas keys are not implemented by this minimal route.

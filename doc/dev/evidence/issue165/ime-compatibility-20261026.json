@@ -46,12 +46,14 @@
   "release": "PASS",
   "installation": "PASS",
   "device": {
-    "visual_keyboard": "BLOCKED: two device_locked read refusals; zero input attempts",
+    "visual_keyboard": "BLOCKED: separate IME proof unavailable on unlocked device; no key dispatch",
     "clipboard": "BLOCKED",
     "terminal_visual_keyboard": "NOT_TESTED",
     "rotation": "NOT_TESTED",
     "alternate_ime": "NOT_TESTED",
-    "physical_x": "NOT_TESTED"
+    "physical_x": "NOT_TESTED",
+    "ime_window_image": "FAIL: visual_observation_unavailable twice",
+    "visual_candidate_disclosure": "PASS: native parent/child literal candidates exposed"
   },
   "reused_evidence": "final-20261026.json; original source/version retained",
   "cleanup": {
@@ -59,8 +61,8 @@
     "settings_changed": false,
     "clipboard_writes": 0,
     "terminal_enters": 0,
-    "settings_revision": 22,
-    "settings_restore": "NOT_APPLICABLE: no settings mutation",
+    "settings_revision": 24,
+    "settings_restore": "PASS: CAS restore plus independent original-content equality",
     "ui_input_attempts": 0,
     "session_ended": true
   },
@@ -102,5 +104,54 @@
     "rotation/alternate IME/physical X",
     "visual long press/drag",
     "matched A/B/C timings"
-  ]
+  ],
+  "unlocked_followup": {
+    "installed_version": "0.1.91/code92",
+    "session_id": "449a9a7b-7396-4e24-9d2f-bfd3dffae0cb",
+    "start_task": "7cf9f4fe-4909-4489-b3ec-3b74e4212880",
+    "chrome_launch_task": "a1a5d664-0337-4c76-8701-6eaea6b28a7c",
+    "chrome_launch_original_verdict": "UNKNOWN/post_observation_unavailable; acknowledged; not replayed",
+    "fresh_chrome_observation": "1b5eb7bc-ddb5-48b1-ac4d-5a6ff4091647",
+    "input_field_unchanged": true,
+    "input_selection": [
+      32,
+      32
+    ],
+    "original_configuration_revision": 22,
+    "temporary_configuration_revision": 23,
+    "temporary_access": "OS-selected com.samsung.android.honeyboard interact only",
+    "ime_image_observations": [
+      "visual_observation_unavailable",
+      "visual_observation_unavailable"
+    ],
+    "ime_scan_observation": "5eb88ba5-ccb2-4a95-9949-7020c49943ab",
+    "ime_scan": {
+      "visited": 148,
+      "visible": 139,
+      "clickable": 5,
+      "text_entry_keys": 0,
+      "recognized_semantic_keys": 0,
+      "complete": true
+    },
+    "key_candidate_observation": "7acbff00-c1d2-475b-b9a5-f93fea0377dc",
+    "key_candidates": {
+      "count": 2,
+      "same_literal_parent_child": true,
+      "visual_key_candidate": true,
+      "clickable": false
+    },
+    "image_failure_stage": "not distinguished by current null-return capture/revalidation API; no dimension/API/secure cause asserted",
+    "native_key_attempts": 0,
+    "clipboard_writes": 0,
+    "terminal_enter": 0,
+    "restore_task": "da064799-edf1-4eff-aed7-726ce433c18b",
+    "restore_transport_failure": "initial connection error; independent read remained revision23; identical request_id reused, not a second logical mutation",
+    "restored_configuration_revision": 24,
+    "independent_settings_equal_original": true,
+    "end_task": "eed20f77-5aa3-433b-91c6-2b2f32410677",
+    "independent_final_session": {
+      "state": "ended",
+      "epoch": 4
+    }
+  }
 }

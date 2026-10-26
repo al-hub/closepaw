@@ -1,5 +1,7 @@
 # #165 IME compatibility continuation — 2026-10-26
 
+**Latest: device unlocked; native visual candidates exposed, but separate IME image proof still fails. See the unlocked follow-up below. This supersedes the earlier screen-lock blocker.**
+
 Baseline main11c270255774670f5f70df472feb01e7d347d296; APK0.1.90/code91 independently reachable.
 #165 OPEN. Initial control session ended/epoch0 after update. Final owned session cleanup is confirmed below.
 Previous evidence remains versioned in issue165-final-acceptance-20261026.md and final-20261026.json.
@@ -114,3 +116,44 @@ Next minimum action is one unlocked-device session to observe the actual IME ima
 corroborated labels, then one explicit synthetic key/effect check while preserving drafts.
 Use the installed APK; do not rebuild/reinstall solely to repeat this blocked check.
 Keep clipboard replacement/privilege/default-IME restrictions and do not close #165.
+
+
+## Unlocked-device follow-up — latest actual result
+
+The user unlocked the phone and authorized continuation. New session
+449a9a7b-7396-4e24-9d2f-bfd3dffae0cb/epoch3 started on installed0.1.91/code92.
+Chrome launch a1a5d664-0337-4c76-8701-6eaea6b28a7c was acknowledged but the original
+result remains UNKNOWN/post_observation_unavailable. It was not replayed; separate
+fresh observation confirmed Chrome and the known synthetic draft with caret32/32.
+
+Only the OS-selected com.samsung.android.honeyboard access was temporarily added:
+config22 → CAS23. Complete IME scan visited148/visible139/clickable5,
+text_entry_keys0/recognized_semantic_keys0; owner/read/interact/input_target_verified
+were all admitted. Filtered fresh observation exposed two same-literal native
+parent/child visual_key_candidate nodes, both nonclickable. **Candidate disclosure PASS
+is not input PASS.**
+
+Two read-only `include_image=true,image_scope=keyboard` observations, including a
+fresh single-letter filtered observation after the complete scan, both failed with
+`visual_observation_unavailable`, action_attempted=false. **IME image proof FAIL;
+actual key execution BLOCKED.** No image was supplied and no key gesture was attempted.
+The current API conflates native capture failure (including dimensions/conversion)
+and post-capture frame revalidation into a null result. The observation does not prove
+which branch failed. In particular it does not prove a secure-window restriction,
+raw-buffer/window dimension mismatch, or permanent OS inability to capture the IME.
+Do not relax geometry or use the app image as an IME coordinate substitute.
+
+Restore initially hit a connection error. An independent settings query still showed23;
+the identical request ID/payload was reused, yielding restore task
+da064799-edf1-4eff-aed7-726ce433c18b. CAS24 restored the complete original contents and
+an independent settings query confirmed equality=true. Session end
+eed20f77-5aa3-433b-91c6-2b2f32410677 and independent ended/epoch4 confirmed cleanup.
+Chrome draft/caret were unchanged; clipboard writes, key/native text attempts,
+terminal Enter, search and send0. No source/APK/install change in this follow-up.
+
+**#165 remains OPEN.** The physical lock has been cleared; the next implementation
+blocker is obtaining/revalidating an exact IME-window image proof. First distinguish
+capture API/buffer geometry/conversion versus fresh-frame rejection using bounded
+non-content failure evidence; only then change the confirmed failed branch. Reuse the
+existing candidate geometry/key/effect policies and all prior CI/device evidence.
+Clipboard provenance and the other implementation/acceptance gaps above remain open.
