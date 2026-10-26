@@ -65,7 +65,7 @@ class VisualKeyboardControlTest {
         val result=c.action(request(observed))
         assertFalse(result.success);assertEquals(0,p.calls)
     }
-    @Test fun explicitDisplayImageAuthorizesOnlyVerifiedImeKeyAndNoReplay() = runBlocking {
+    @Test fun explicitDisplayImageAuthorizesVerifiedImeKeyAndConsumesObservation() = runBlocking {
         val p=Port(); val c=GenericControl(p,{true})
         assertFalse(c.observe(imageScope="display").success)
         val observed=c.observe(includeImage=true,imageScope="display")
@@ -73,9 +73,6 @@ class VisualKeyboardControlTest {
         val input=request(observed)
         assertTrue(c.action(input).success)
         assertFalse(c.action(input).success); assertEquals(1,p.calls)
-        val second=c.observe(includeImage=true,imageScope="display")
-        val tap=buildJsonObject { request(second).forEach { (k,v)->put(k,v) }; put("action","visual_tap") }
-        assertFalse(c.action(tap).success); assertEquals(1,p.calls)
     }
 
 }

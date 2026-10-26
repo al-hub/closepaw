@@ -9,6 +9,8 @@
 - Visual named layout controls use the existing actual-image/label/IME/geometry/native guard path. Submission and IME-picker controls remain refused. Field text/selection must be preserved and two disjoint existing character-key locations must change. Each subsequent visual key requires a new image; no automatic visual layout sequence or replay.
 - Independent review of the layout candidate found one false confirmation risk from nested parent/child key bounds. Requiring disjoint rectangles fixed it; independent re-review found no remaining blocker. Separate independent reviews of the read/image and cursor changes found no blocking issues. Static review is separate from CI and physical acceptance.
 
+- Concurrent PR176 display app gestures are included in the same candidate: targets stay inside application bounds and outside IME; gesture paths require certified pixels and current display generation. No separate version95 release should be merged from176.
+
 ## Validation status at submission
 
 | Gate | Status | Evidence/limit |
