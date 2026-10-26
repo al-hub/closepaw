@@ -1,0 +1,106 @@
+{
+  "date": "2026-10-26",
+  "issue": 165,
+  "final_state": "OPEN",
+  "pr": 170,
+  "pr_head": "ee3ccea3dfe9f96b2b012f9bc095a4d8f15c3ab6",
+  "source": "4f6b58daf4216d67041af9306fd85c4ff4664f60",
+  "tree": "c6775fcbf4fc72fae726340837435666a1f17c7f",
+  "candidate_version": "0.1.91",
+  "candidate_code": 92,
+  "review": {
+    "kind": "independent static code/security review",
+    "findings_corrected": 3,
+    "unresolved": false,
+    "tree_verified": true
+  },
+  "tests": {
+    "evidence": "independently downloaded same-tree PR XML; main outcomes separately tracked",
+    "jvm": 2880,
+    "android": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "new_policy": 4,
+    "new_engine": 3,
+    "ui_png": 8
+  },
+  "artifacts": {
+    "jvm": {
+      "id": 12623098964,
+      "sha256": "18aab07ca7842f5fdfb70dd38be3e4e0be10474e1795893fdd3c67af6b262111"
+    },
+    "ui": {
+      "id": 12622832932,
+      "sha256": "6f0879dc0a02af46b071712f7a00fd5d44cd80e6f31ed0752d3efe28621de98b"
+    }
+  },
+  "runs": {
+    "pr_security": 40257707885,
+    "pr_ui": 40257707805,
+    "main_security": 40258531590,
+    "main_ui": 40258531596,
+    "signed": 40259082443
+  },
+  "main_ci": "PASS",
+  "release": "PASS",
+  "installation": "PASS",
+  "device": {
+    "visual_keyboard": "BLOCKED: two device_locked read refusals; zero input attempts",
+    "clipboard": "BLOCKED",
+    "terminal_visual_keyboard": "NOT_TESTED",
+    "rotation": "NOT_TESTED",
+    "alternate_ime": "NOT_TESTED",
+    "physical_x": "NOT_TESTED"
+  },
+  "reused_evidence": "final-20261026.json; original source/version retained",
+  "cleanup": {
+    "session_created": true,
+    "settings_changed": false,
+    "clipboard_writes": 0,
+    "terminal_enters": 0,
+    "settings_revision": 22,
+    "settings_restore": "NOT_APPLICABLE: no settings mutation",
+    "ui_input_attempts": 0,
+    "session_ended": true
+  },
+  "apk": {
+    "bytes": 116788219,
+    "sha256": "4e473b13da560e2ed5725ddc8a1afbc5246366615b992523dd88f58155007b04",
+    "signer": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+    "verification_zip_sha256": "4f1739e78efa770d00dbb2b2ef5be438cd795f63e7b583b07af9163771fe8958",
+    "signature": "official public-download apksigner v3 report, independently matched anonymous APK bytes; no second local apksigner invocation",
+    "anonymous_download_hash_and_crc": "PASS",
+    "package": "ai.closepaw",
+    "version": "0.1.91",
+    "code": 92,
+    "tag_object": "f28315d39daa93834409ddd19a63956a8d769f3c",
+    "tag_source_matches": true,
+    "two_native_runtimes": true
+  },
+  "install_task": "4a52ed9a-e40a-4f54-aca4-76c06742d5ab",
+  "install_requests": 1,
+  "installed_version": "0.1.91",
+  "installed_code": 92,
+  "independent_app_response": "reachable0.1.91/code92",
+  "session": {
+    "id": "e10fc69d-11c4-4e71-9cf7-c4a6a4bae40b",
+    "epoch": 2,
+    "state": "ended",
+    "end_task": "9db3d2bf-5d1f-4de1-b6a0-dcac3779186e",
+    "independently_confirmed": true
+  },
+  "original_config_revision": 22,
+  "remaining_implementation": [
+    "visual layout/submission controls excluded from this minimal route",
+    "Termux canvas dynamic key route not implemented",
+    "clipboard supported target-side readable provenance unavailable under current focused-app/default-IME contract"
+  ],
+  "remaining_acceptance": [
+    "new APK visual key input",
+    "two-app A/B/C matrix",
+    "rotation/alternate IME/physical X",
+    "visual long press/drag",
+    "matched A/B/C timings"
+  ]
+}

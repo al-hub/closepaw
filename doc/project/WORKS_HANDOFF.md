@@ -1,8 +1,11 @@
-## 2026-10-26 #165 IME-window candidate — verification pending
+## 2026-10-26 #165 v0.1.91/code92 delivered — acceptance OPEN
 
-- See [compatibility continuation](../dev/issue165-ime-compatibility-20261026.md). Separate OS-selected IME image and visual/native label corroboration candidate0.1.91/code92; not yet released or installed. Original semantic key guards retained.
-- Clipboard remains BLOCKED by the focused-app/default-IME read boundary; no unchecked write or privilege/IME change. #165 stays OPEN. Existing0.1.90 evidence is unchanged.
-- Local Gradle distribution download is unavailable; exact candidate CI/review/device results must be verified before merging/releasing. No new UI session has been started.
+- [Current compatibility report](../dev/issue165-ime-compatibility-20261026.md), [bounded evidence](../dev/evidence/issue165/ime-compatibility-20261026.json). PR170 merged; immutable source/tag4f6b58daf4216d67041af9306fd85c4ff4664f60, reviewed PR/main treec6775fcbf4fc72fae726340837435666a1f17c7f. Separate OS-selected IME image + native label/center corroboration visual_key path for character/space/backspace; original semantic guards remain. Visual layout and Termux canvas keys are not implemented by this minimal route.
+- PR Security40257707885/UI40257707805 and main Security40258531590/UI40258531596/Signed40259082443 PASS. Independent static code/security review3 findings fixed, unresolved=false. Raw same-tree PR JVM2880/UI14 failure,error,skip0,UI8PNG; main success separately confirmed.
+- Public APK116788219bytes SHA2564e473b13da560e2ed5725ddc8a1afbc5246366615b992523dd88f58155007b04; original signer/v3/package/version/tag/source and anonymous hash-matched bytes/CRC/two runtimes verified. Single update4a52ed9a-e40a-4f54-aca4-76c06742d5ab; durable installed/current0.1.91/code92 plus independent app response confirmed.
+- Actual device acceptance **BLOCKED**: first app discovery and one follow-up after an unlock request both device_locked/action_attempted=false. No new native input/screenshot acceptance PASS. Config22 read, no changes. Clipboard writes/terminal Enter/search/send/draft edits0. Own sessione10fc69d-11c4-4e71-9cf7-c4a6a4bae40b ended by9db3d2bf-5d1f-4de1-b6a0-dcac3779186e; independent ended/epoch2.
+- **#165 OPEN**: clipboard focused-app/default-IME readable-provenance boundary remains BLOCKED; visual layout/Termux canvas implementation and full A/B/C/rotation/alternate IME/X/gesture/performance acceptance remain incomplete. No unchecked writes, privilege bypass or default-IME change. Prior0.1.89/0.1.90 evidence retains its original version.
+- Next: ask only for an unlocked device, inspect installed91's actual separate IME image/labels, preserve existing drafts and Termux's unsubmitted123. Use current APK, no rebuild/reinstall for the blocked check. Never turn CI or a safe refusal into key-input PASS; current ended session cannot be silently resumed from old evidence.
 
 ## 2026-10-26 #165 v0.1.90/code91 delivered — overall acceptance OPEN
 

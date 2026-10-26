@@ -185,3 +185,8 @@ repeat the already accepted diagnostic/popup checks.
 Operation cleanup: the AI-created session is ended after acceptance. Termux retains
 unsubmitted123; Chrome's synthetic draft has only the additional ` 가A1!`. No terminal
 Enter, message send, search, clipboard write or deletion occurred in this work.
+
+
+## Subsequent v0.1.91 continuation
+
+[IME compatibility delivery and disposition](issue165-ime-compatibility-20261026.md) records PR170, verified v0.1.91/code92 delivery/install, and actual device_locked acceptance refusals. The above0.1.89/0.1.90 evidence retains its original source/version. #165 remains OPEN; a released minimal visual-key implementation is not actual Samsung input success.
