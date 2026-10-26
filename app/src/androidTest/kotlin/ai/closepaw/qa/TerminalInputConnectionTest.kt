@@ -134,7 +134,12 @@ class TerminalInputConnectionTest {
             assertTrue(displayMeta.getValue("source_width").jsonPrimitive.int>0)
             val image=VisualImageCache.imageFor(buildJsonObject {put("data",cached.data)})!!
             val decoded=android.graphics.BitmapFactory.decodeByteArray(image.bytes,0,image.bytes.size)
-            assertEquals(image.width,decoded.width);assertEquals(image.height,decoded.height);decoded.recycle()
+            assertEquals(image.width,decoded.width);assertEquals(image.height,decoded.height)
+            // The passive full-screen decoration must retain the fixture's
+            // light interior while masking its rendered perimeter/controls.
+            val center=decoded.getPixel(decoded.width/2,decoded.height/3)
+            assertTrue("Trusted transparent decoration hid the app interior",android.graphics.Color.red(center)>180)
+            decoded.recycle()
             val task=buildJsonObject { put("result",buildJsonObject { put("data",cached.data) }) }
             assertNotNull(VisualImageCache.imageFor(task))
             try {

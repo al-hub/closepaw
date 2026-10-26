@@ -32,7 +32,7 @@ frame, with source dimensions, rotation, app/IME bounds and masking metadata. So
 buffer dimensions must exactly match native display dimensions. No inferred insets
 or coordinate correction is admitted.
 
-Independent review of315adff found2 defects: a transient overlay between endpoint scans, and a stale window-only key provenance guard. The follow-up counts every window state/set event (including null/own owners), rejects intervening generations across capture/validation/cache/dispatch, and retains a separate source IME window ID for the native key guard. Matching endpoint geometry alone is insufficient. Added regression tests cover both findings.
+Independent review of315adff found2 defects: a transient overlay between endpoint scans, and a stale window-only key provenance guard. The follow-up counts every window state/set event (including null/own owners), rejects intervening generations across capture/validation/cache/dispatch, and retains a separate source IME window ID for the native key guard. Matching endpoint geometry alone is insufficient. Added regression tests cover both findings. A follow-up review found that the passive full-screen transparent decoration was subtracted as an opaque rectangle. It now supplies a conservative render mask for its perimeter/target/ripple pixels; bounded controls still mask their full rectangles. The native fixture asserts a visible app interior in the full-display image.
 
 A display image authorizes only the existing native-label-center `visual_key`
 route. General app visual gestures still require the app-window proof. Key dispatch

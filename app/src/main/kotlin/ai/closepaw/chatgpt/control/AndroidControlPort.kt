@@ -169,9 +169,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) == it.inputMethodId
         } == true) && (frame.visual?.scope != "display" || AgentService.instance?.let { service ->
             val proof=frame.visual ?: return@let false
-            val plan=displayPlan(service,frame) ?: return@let false
-            proof.displayGeneration == service.remoteDisplayChanges.version() && plan.bounds==proof.window && plan.rotation==proof.rotation &&
-                plan.appBounds==proof.applicationBounds && plan.imeBounds==proof.imeBounds
+            // Cache reads can run off Main; never read mutable decoration Views
+            // here. Native window-event generation invalidates the whole proof.
+            proof.displayGeneration == service.remoteDisplayChanges.version()
         } == true)
     override fun invalidate() { probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
     private fun reason(service: AgentService?): String? = when {
@@ -274,7 +274,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             for (w in windows.filter { it.id in owned }) {
                 val region=Region(); w.getRegionInScreen(region); visible.op(region,Region.Op.UNION)
             }
-            for (w in windows.filter { it.id !in owned }) visible.op(windowBounds(w),Region.Op.DIFFERENCE)
+            for (w in windows.filter { it.id !in owned }) {
+                val decoration=service.remoteDecorationScreenshotMask(w.id)
+                if (decoration!=null) visible.op(decoration,Region.Op.DIFFERENCE)
+                else visible.op(windowBounds(w),Region.Op.DIFFERENCE)
+            }
             visible.op(Rect(0,0,size.x,size.y),Region.Op.INTERSECT)
             if (visible.isEmpty) return null
             return DisplayPlan(TapBounds(0,0,size.x,size.y),display.rotation,visible,windowBounds(app).flattenToString(),

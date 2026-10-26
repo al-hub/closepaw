@@ -204,6 +204,7 @@ class AgentService : AccessibilityService() {
         }
     }
     internal fun isRemoteControlActivityAttached() = remoteControlIndicator.isAttached()
+    internal fun remoteDecorationScreenshotMask(id: Int) = remoteControlIndicator.decorationScreenshotMask(id)
     internal fun ownsRemoteControlIndicatorWindow(id: Int) = remoteControlIndicator.ownsWindow(id) ||
         overlayController?.ownsControlWindow(id) == true
     private var currentPlatformMode: PlatformMode = PlatformMode.ACCESSIBILITY
