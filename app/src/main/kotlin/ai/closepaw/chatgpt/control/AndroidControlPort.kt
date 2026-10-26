@@ -279,6 +279,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (decoration!=null) visible.op(decoration,Region.Op.DIFFERENCE)
                 else visible.op(windowBounds(w),Region.Op.DIFFERENCE)
             }
+            // Our decoration is known from its actual renderer even when the
+            // interactive-window list omits its passive full-screen surface.
+            service.remoteKnownDecorationScreenshotMask()?.let { visible.op(it,Region.Op.DIFFERENCE) }
             visible.op(Rect(0,0,size.x,size.y),Region.Op.INTERSECT)
             if (visible.isEmpty) return null
             val surfaces=mutableListOf<IsolatedVisualSurface>()
@@ -310,6 +313,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         if ((scope == "keyboard" || (scope == "display" && keyboard != null)) && (keyboard == null || !keyboard.readAllowed || !keyboard.interactAllowed ||
             !packageAllowed(keyboard.packageName, operation = "read") || !packageAllowed(keyboard.packageName, operation = "interact") || (scope == "keyboard" && frame.inputTarget == null))) return fail("visual_keyboard_policy_denied")
         val captureId = if (scope == "keyboard") keyboard!!.windowId else frame.windowId
+        if(scope=="display") {
+            // These are our pixel-only intent/ripple cues, never user controls.
+            // Remove them before planning both observations and key revalidation;
+            // the border, X, island and all source/coverage checks stay in place.
+            withContext(Dispatchers.Main) { service.clearRemoteDecorationScreenshotEffects() }
+            kotlinx.coroutines.delay(50)
+            islandRefusal(sessionFor(service).id)?.let {return fail(it)}
+        }
         val displayGeneration = service.remoteDisplayChanges.version()
         val plan = if (scope=="display") withContext(Dispatchers.Main) { displayPlan(service,frame) } else null
         if (scope=="display" && plan==null) return fail("display_surface_unverified")
@@ -697,7 +708,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         // This is an explicitly planned region from the consumed observation, never a touch.
         // Yield a few frames for the intent cue, then run the full native validation below.
         // No node/effect is retained across this delay and no security check is bypassed.
-        if (node != null && !node.password && frame.reason == null) {
+        if (node != null && !node.password && frame.reason == null && frame.visual?.scope != "display") {
             val previewed = withContext(Dispatchers.Main) {
                 val rect = Rect.unflattenFromString(node.bounds)
                 if (rect != null && reason(service) == null &&

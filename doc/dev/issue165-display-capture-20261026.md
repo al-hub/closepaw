@@ -62,6 +62,15 @@ cross-app solution has been established. Clipboard remains BLOCKED; no unreadabl
 clipboard is assumed empty, overwritten or blindly restored. No IME/permission
 replacement or privileged bypass is introduced.
 
+A final review found that the agent's own900ms intent cue could invalidate a
+display-backed key recapture. Display capture now clears only the passive cue/
+ripple effects and waits for rendering before planning; display-backed actions
+skip the pre-revalidation intent cue. Border/X/island and all equality/coverage
+checks stay active. Known decoration pixels are masked from the actual renderer
+independently of interactive-window enumeration. Native QA exercises cue→capture→
+new cue→recapture pixel/coverage equality using the actual helper called by keys;
+this is not actual Samsung key-effect PASS.
+
 ## Validation and delivery
 
 - Tests were added before implementation; local Gradle distribution fetch failed

@@ -204,6 +204,8 @@ class AgentService : AccessibilityService() {
         }
     }
     internal fun isRemoteControlActivityAttached() = remoteControlIndicator.isAttached()
+    internal fun clearRemoteDecorationScreenshotEffects() { remoteControlIndicator.clearScreenshotEffects() }
+    internal fun remoteKnownDecorationScreenshotMask() = remoteControlIndicator.decorationScreenshotMask()
     internal fun remoteDecorationScreenshotMask(id: Int) = remoteControlIndicator.decorationScreenshotMask(id)
     internal fun ownsRemoteControlIndicatorWindow(id: Int) = remoteControlIndicator.ownsWindow(id) ||
         overlayController?.ownsControlWindow(id) == true

@@ -131,7 +131,16 @@ class TerminalInputConnectionTest {
             }
             assertNull("Fixture IME did not hide",displayFrame.keyboard)
             assertTrue(settled(requireIme=false).success)
+            // Real renderer/native capture regression for the same display
+            // revalidation helper used by visual_key. This is not key-input PASS.
+            instrumentation.runOnMainSync { service.showRemoteControlActivity(); service.showRemoteControlTarget(android.graphics.Rect(100,300,500,600)) }
             val cached=control.observe(includeImage=true,imageScope="display");assertTrue(cached.toString(),cached.success)
+            val cueFrame=port.capture()
+            val cueProof=port.visualDisplay(cueFrame);assertNotNull(port.visualFailure(),cueProof)
+            instrumentation.runOnMainSync { service.showRemoteControlTarget(android.graphics.Rect(100,300,500,600)) }
+            val recaptured=port.visualDisplay(cueFrame);assertNotNull(port.visualFailure(),recaptured)
+            assertEquals(cueProof!!.pixelHash,recaptured!!.pixelHash)
+            assertEquals(cueProof.disclosedRegions,recaptured.disclosedRegions)
             val displayMeta=cached.data.getValue("visual").jsonObject
             assertEquals(JsonPrimitive("display"),displayMeta["scope"])
             assertEquals(JsonPrimitive(0),displayMeta["source_display_id"])
