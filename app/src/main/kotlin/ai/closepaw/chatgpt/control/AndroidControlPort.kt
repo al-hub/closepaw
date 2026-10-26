@@ -231,7 +231,37 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val home = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
         val launcher = if (resolveLauncher) context.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName else knownLauncher
         val normal = classifier.classify(pkg) == AppTier.NORMAL || pkg == launcher
-        return runtime?.access(pkg, normal, operation) ?: normal
+        // This default is deliberately read-only, selected by current OS evidence,
+        // and never substitutes an app category/package-name allowlist for trust.
+        val readDefault = !normal && operation == "read" && commonReadDefault(pkg)
+        return runtime?.access(pkg, normal || readDefault, operation) ?: (normal || readDefault)
+    }
+    private fun commonReadDefault(pkg: String): Boolean {
+        val session = session()
+        val active = session != null && session.explicit && session.state == ControlSession.State.ACTIVE
+        val bundled = classifier.bundledTier(pkg)
+        val userTier = classifier.userOverrides.value[pkg]
+        if (!active || bundled != null || userTier != null) return false
+        return runCatching {
+            val selected = Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+            val component = selected?.let(ComponentName::unflattenFromString)
+            val ime = component?.packageName == pkg && context.getSystemService(InputMethodManager::class.java)
+                .enabledInputMethodList.any { it.id == selected && it.packageName == pkg }
+            if (ime) return@runCatching VerifiedReadDefaults.permits("read", active, bundled, userTier, true, false, false)
+            // Public resolver evidence only: querying arbitrary role holders is
+            // privileged on Android. A chooser or a host-specific link handler
+            // cannot establish a selected general browser.
+            val browsers = listOf("http", "https").map { scheme ->
+                context.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW,
+                    android.net.Uri.parse("$scheme://example.invalid/")).addCategory(Intent.CATEGORY_BROWSABLE),
+                    android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            }
+            val browser = browsers.all { resolved -> resolved?.activityInfo?.let {
+                it.packageName == pkg && it.enabled && it.exported
+            } == true }
+            val generalWeb = browsers.all { it?.handleAllWebDataURI == true }
+            VerifiedReadDefaults.permits("read", active, bundled, userTier, ime, browser, generalWeb)
+        }.getOrDefault(false)
     }
     override suspend fun capture(): ControlFrame {
         val service = AgentService.instance
@@ -481,7 +511,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val key = if (keyboard) KeyboardKeyPolicy.identify(text, description, node.className?.toString().orEmpty(),
                     node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, node.isTextEntryKey) else null
                 val labelEvidence = if (keyboard) KeyboardKeyPolicy.identifyLabel(text, description) else null
-                val visualKey = if (keyboard && node.childCount <= 1) VisualKeyboardPolicy.literal(text, description) else null
+                val visualKey = if (keyboard && node.childCount <= 1) VisualKeyboardPolicy.identify(text, description) else null
                 if (keyboard) keyboardScan.record(text, description, node.className?.toString().orEmpty(),
                     node.isVisibleToUser, node.isEnabled, node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
                     node.isTextEntryKey, key != null)
@@ -860,7 +890,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (fresh.keyboard == null || !fresh.keyboard.readAllowed || !fresh.keyboard.interactAllowed || fresh.keyboard != frame.keyboard || fresh.inputTargetId == null ||
                     fresh.inputTargetId != frame.inputTargetId || (action == "key" && !target.isTextEntryKey) || expected.keyboardKey.isEmpty())
                     return@withTree ControlEffect(false, false, "keyboard_target_unverified")
-                val key = (if (action == "visual_key") VisualKeyboardPolicy.literal(currentText, target.contentDescription?.toString().orEmpty())
+                val key = (if (action == "visual_key") VisualKeyboardPolicy.identify(currentText, target.contentDescription?.toString().orEmpty())
                 else KeyboardKeyPolicy.identify(currentText, target.contentDescription?.toString().orEmpty(),
                     target.className?.toString().orEmpty(), target.isClickable || target.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, target.isTextEntryKey))
                     ?: return@withTree ControlEffect(false, false, "keyboard_key_unrecognized")

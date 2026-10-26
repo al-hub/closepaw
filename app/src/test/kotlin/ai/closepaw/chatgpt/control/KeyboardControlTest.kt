@@ -20,7 +20,8 @@ class KeyboardControlTest {
         override suspend fun apps(filter: String) = JsonArray(emptyList())
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
             calls++
-            this.frame = frame.copy(fingerprint = "post", inputTarget = field.copy(text = actual))
+            this.frame = frame.copy(fingerprint = "post", inputTarget = field.copy(text = actual,
+                selectionStart = actual.length, selectionEnd = actual.length))
             return effect
         }
     }

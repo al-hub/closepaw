@@ -15,7 +15,7 @@ internal object ControlResultPolicy {
                 before.packageName != after.packageName || before.windowId != after.windowId)
                 return Verdict(false, "keyboard_postcondition_unavailable")
             val field = before.inputTarget ?: return Verdict(false, "keyboard_input_target_unverified")
-            val key = (if (action == "visual_key") VisualKeyboardPolicy.literal(node.text, node.description)
+            val key = (if (action == "visual_key") VisualKeyboardPolicy.identify(node.text, node.description)
                 else KeyboardKeyPolicy.identify(node.text, node.description, node.className, node.clickable, node.textEntryKey))
                 ?: return Verdict(false, "keyboard_key_unrecognized")
             val candidate = after.inputTarget
@@ -26,13 +26,23 @@ internal object ControlResultPolicy {
                     KeyboardKeyPolicy.identify(it.text,it.description,it.className,it.clickable,it.textEntryKey) != null }.map { it.keyboardKey }.filter { it.isNotEmpty() }.sorted()
                 val afterKeys = after.nodes.filter { it.sourceWindowId == after.keyboard?.windowId &&
                     KeyboardKeyPolicy.identify(it.text,it.description,it.className,it.clickable,it.textEntryKey) != null }.map { it.keyboardKey }.filter { it.isNotEmpty() }.sorted()
-                return Verdict(sameField && candidate?.focused == true && candidate.text == field.text &&
+                val layoutChanged = if (action == "visual_key") VisualKeyboardPolicy.literalLayoutChanged(before,after)
+                    else beforeKeys != afterKeys && afterKeys.isNotEmpty()
+                return Verdict(sameField && candidate?.focused == true && candidate.editable && candidate.enabled && !candidate.password && candidate.text == field.text &&
                     candidate.selectionStart == field.selectionStart && candidate.selectionEnd == field.selectionEnd &&
-                    beforeKeys != afterKeys && afterKeys.isNotEmpty(), "keyboard_layout_unconfirmed")
+                    layoutChanged, "keyboard_layout_unconfirmed")
             }
             val expected = KeyboardKeyPolicy.expectedText(field, key)
             // Neither a gesture callback nor a layout/terminal screen change proves text/command success.
-            if (expected != null) return Verdict(sameField && candidate?.text == expected && candidate.focused && candidate.editable && candidate.enabled && !candidate.password, "keyboard_input_unconfirmed", true)
+            if (expected != null) {
+                // Exact text alone does not prove where the key left the caret.
+                // Preserve the untouched suffix for insertion/replacement/deletion,
+                // including composed Hangul and a deleted surrogate pair.
+                val expectedCaret = expected.length - (field.text.length - field.selectionEnd)
+                return Verdict(sameField && candidate?.text == expected && candidate.focused && candidate.editable &&
+                    candidate.enabled && !candidate.password && candidate.selectionStart == expectedCaret &&
+                    candidate.selectionEnd == expectedCaret, "keyboard_input_unconfirmed", true)
+            }
             return Verdict(false, "keyboard_effect_requires_external_verification")
         }
         fun owned(candidate: ControlNode): Boolean = candidate.keyboardKey.isEmpty() &&
