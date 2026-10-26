@@ -80,7 +80,7 @@ class TerminalInputConnectionTest {
                     windowSummary = service.windows.orEmpty().joinToString(";") { window ->
                         val root = window.root
                         try {
-                            "type=${window.type},id=${window.id},display=${window.displayId},pkg=${root?.packageName ?: "none"}"
+                            "type=${window.type},id=${window.id},display=${window.displayId},pkg=${root?.packageName ?: "none"},ownedIndicator=${window.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY && service.ownsRemoteControlIndicatorWindow(window.id)}"
                         } finally {
                             root?.recycle()
                         }
