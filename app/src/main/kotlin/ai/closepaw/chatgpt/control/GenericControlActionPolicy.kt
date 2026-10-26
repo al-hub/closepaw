@@ -15,7 +15,7 @@ internal object GenericControlActionPolicy {
         requiresCompleteTree(action) && expected.fingerprint != fresh.fingerprint -> "screen_changed"
         requiresCompleteTree(action) && (expected.truncated || fresh.truncated) -> "truncated_observation"
         requiresCompleteTree(action) && (expected.navigationOnly || fresh.navigationOnly) -> "surface_navigation_only"
-        action == "key" && (expected.keyboard != fresh.keyboard || expected.inputTargetId != fresh.inputTargetId) -> "keyboard_context_changed"
+        action in setOf("key", "visual_key") && (expected.keyboard != fresh.keyboard || expected.inputTargetId != fresh.inputTargetId) -> "keyboard_context_changed"
         (action in setOf("tap", "key") || action.startsWith("visual_")) && (expected.touchContext.isEmpty() || fresh.touchContext.isEmpty()) -> "touch_window_unavailable"
         (action in setOf("tap", "key") || action.startsWith("visual_")) && expected.touchContext != fresh.touchContext -> "touch_window_changed"
         else -> null

@@ -6,6 +6,10 @@ internal object KeyboardKeyPolicy {
     data class Key(val label: String, val kind: Kind)
     fun identify(text: String, description: String, className: String, clickable: Boolean, textEntryKey: Boolean = false): Key? {
         if (!clickable || !textEntryKey) return null
+        return identifyLabel(text, description)
+    }
+    /** Label taxonomy only; never sufficient to authorize a native key. */
+    fun identifyLabel(text: String, description: String): Key? {
         val label = if (text == " " || (text.isEmpty() && description == " ")) "Space" else text.ifBlank { description }.trim()
         if (label.isEmpty() || label.length > 32 || InputPayloadPolicy.sensitive(label) || label.any { it.isISOControl() }) return null
         if (text.isNotBlank() && description.isNotBlank() && text.trim() != description.trim()) return null

@@ -163,7 +163,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private val probeThrottle = ScreenProbeThrottle({ SystemClock.elapsedRealtime() })
     override fun clearSelections() { appSelections.clear() }
     override fun visualDisclosureAllowed(frame: ControlFrame): Boolean = reason(AgentService.instance) == null &&
-        packageAllowed(frame.packageName, operation = "read") && (runtime?.snapshot()?.revision ?: 0L) == frame.configurationRevision
+        packageAllowed(frame.packageName, operation = "read") && (runtime?.snapshot()?.revision ?: 0L) == frame.configurationRevision &&
+        (frame.visual?.scope != "keyboard" || frame.keyboard?.let {
+            packageAllowed(it.packageName, operation = "read") &&
+                Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) == it.inputMethodId
+        } == true)
     override fun invalidate() { probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
     private fun reason(service: AgentService?): String? = when {
         localAuthority?.refusal() != null -> localAuthority?.refusal()
@@ -237,19 +241,27 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 })
         }
     }
-    override suspend fun visual(frame: ControlFrame): VisualTargetProof? {
+    override suspend fun visual(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, false)
+    override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, true)
+    private suspend fun captureVisual(frame: ControlFrame, keyboardImage: Boolean): VisualTargetProof? {
         if (frame.reason != null || frame.truncated || frame.navigationOnly || frame.touchContext.isEmpty()) return null
         val service = AgentService.instance ?: return null
         if (islandRefusal(sessionFor(service).id) != null) return null
+        val keyboard = frame.keyboard
+        if (keyboardImage && (keyboard == null || !keyboard.readAllowed || !keyboard.interactAllowed ||
+            !packageAllowed(keyboard.packageName, operation = "read") || !packageAllowed(keyboard.packageName, operation = "interact") || frame.inputTarget == null)) return null
+        val captureId = if (keyboardImage) keyboard!!.windowId else frame.windowId
         val bounds = withContext(Dispatchers.Main) {
             val windows = service.windows.orEmpty()
-            try { windows.singleOrNull { it.id == frame.windowId }?.let { bounds(windowBounds(it)) } }
+            try { windows.singleOrNull { it.id == captureId }?.let { bounds(windowBounds(it)) } }
             finally { windows.forEach { runCatching { it.recycle() } } }
         } ?: return null
         probeThrottle.awaitSlot()
-        val proof = WindowVisualCapture.capture(service, frame.windowId, bounds, frame.touchContext) ?: return null
+        val proof = WindowVisualCapture.capture(service, captureId, bounds, frame.touchContext) ?: return null
         val after = capture()
-        return proof.takeIf { GenericControlActionPolicy.refusal(frame, after, "visual_tap") == null }
+        return proof.copy(scope = if (keyboardImage) "keyboard" else "app", sourceWindowId = captureId).takeIf {
+            GenericControlActionPolicy.refusal(frame, after, if (keyboardImage) "visual_key" else "visual_tap") == null &&
+                (!keyboardImage || (frame.keyboard == after.keyboard && frame.inputTarget == after.inputTarget)) }
     }
 
     private suspend fun secureWindow(service: AgentService): String? = controlSpan("security_probe") { secureWindowChecked(service) }
@@ -365,6 +377,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val hint = node.hintText?.toString().orEmpty()
                 val key = if (keyboard) KeyboardKeyPolicy.identify(text, description, node.className?.toString().orEmpty(),
                     node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, node.isTextEntryKey) else null
+                val labelEvidence = if (keyboard) KeyboardKeyPolicy.identifyLabel(text, description) else null
+                val visualKey = if (keyboard && node.childCount <= 1) VisualKeyboardPolicy.literal(text, description) else null
                 if (keyboard) keyboardScan.record(text, description, node.className?.toString().orEmpty(),
                     node.isVisibleToUser, node.isEnabled, node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
                     node.isTextEntryKey, key != null)
@@ -384,7 +398,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     put("child_count", node.childCount); put("actions", node.actionList.joinToString { it.id.toString() })
                 }
                 identity.append(json.toString()).append('\n')
-                if (expose && (!keyboard || key != null) && node.isVisibleToUser && !rect.isEmpty &&
+                if (expose && (!keyboard || key != null || labelEvidence != null) && node.isVisibleToUser && !rect.isEmpty &&
                     (text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable || node.isFocusable ||
                         node.actionList.any { it.id in setOf(AccessibilityNodeInfo.ACTION_CLICK, AccessibilityNodeInfo.ACTION_EXPAND, AccessibilityNodeInfo.ACTION_COLLAPSE) })) {
                     run {
@@ -404,7 +418,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                                 AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_RIGHT.id -> "right"
                                 else -> null
                             } }.toSet(), sourceWindowId = node.windowId, sourcePackage = node.packageName?.toString().orEmpty(),
-                            keyboardKey = key?.label.orEmpty(), textEntryKey = node.isTextEntryKey,
+                            keyboardKey = (key ?: labelEvidence)?.label.orEmpty(), textEntryKey = node.isTextEntryKey,
+                            visualKeyCandidate = key == null && visualKey != null,
                             terminal = terminalBinding?.evidence(node)))
                         native.add(node)
                     }
@@ -596,7 +611,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val admittedEpoch = sessionFor(service).epoch
         secureWindow(service)?.let { return ControlEffect(false, false, it) }
         val action = input.getValue("action").jsonPrimitive.content
-        if (action in setOf("input", "terminal_input", "terminal_submit", "focus", "key", "visual_tap", "visual_long_press", "visual_drag", "visual_scroll")) {
+        if (action in setOf("input", "terminal_input", "terminal_submit", "focus", "key", "visual_tap", "visual_long_press", "visual_drag", "visual_scroll", "visual_key")) {
             islandRefusal(input["session_id"]?.jsonPrimitive?.content.orEmpty())?.let {
                 return ControlEffect(false, false, it)
             }
@@ -660,10 +675,15 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
             if (!packageAllowed(fresh.packageName, operation = "interact"))
                 return@withTree ControlEffect(false, false, "runtime_interaction_not_allowed")
+            var visualKeyRect: Rect? = null
             if (action.startsWith("visual_")) {
                 val proof = frame.visual ?: return@withTree ControlEffect(false, false, "visual_observation_required")
                 if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
                     System.currentTimeMillis()-proof.at !in 0L..60_000L) return@withTree ControlEffect(false,false,"visual_proof_invalid_or_expired")
+                if ((action == "visual_key") != (proof.scope == "keyboard")) return@withTree ControlEffect(false,false,"visual_scope_mismatch")
+                if (action == "visual_key") VisualKeyboardPolicy.refusal(fresh, fresh.nodes.singleOrNull { it.id == node?.id }, proof.scope)?.let {
+                    return@withTree ControlEffect(false,false,it)
+                }
                 fun rect(prefix: String): Rect? {
                     val a = input[prefix]?.jsonArray ?: return null
                     if (a.size != 4) return null
@@ -674,17 +694,18 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val start = rect("image_rect") ?: return@withTree ControlEffect(false,false,"visual_target_bounds_invalid")
                 val end = if (action in setOf("visual_drag","visual_scroll")) rect("image_end_rect")
                     ?: return@withTree ControlEffect(false,false,"visual_end_bounds_required") else null
-                val latest = visual(fresh) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
-                if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context)
+                val latest = (if (action == "visual_key") visualKeyboard(fresh) else visual(fresh)) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
+                if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context || latest.sourceWindowId != proof.sourceWindowId || latest.scope != proof.scope)
                     return@withTree ControlEffect(false,false,"visual_pixels_or_geometry_changed")
-                return@withTree tap(service, fresh, start, endBounds = end,
+                if (action == "visual_key") visualKeyRect = start
+                else return@withTree tap(service, fresh, start, endBounds = end,
                     durationMs = if (action == "visual_long_press") 650 else if (end != null) 450 else 50)
             }
             val at = fresh.nodes.indexOfFirst { it.id == node?.id }
             val target = native.getOrNull(at) ?: return@withTree ControlEffect(false, false, "target_unavailable")
             val expected = fresh.nodes[at]
-            val expectedWindow = if (action == "key") fresh.keyboard?.windowId ?: -1 else fresh.windowId
-            val expectedPackage = if (action == "key") fresh.keyboard?.packageName.orEmpty() else fresh.packageName
+            val expectedWindow = if (action in setOf("key", "visual_key")) fresh.keyboard?.windowId ?: -1 else fresh.windowId
+            val expectedPackage = if (action in setOf("key", "visual_key")) fresh.keyboard?.packageName.orEmpty() else fresh.packageName
             if (!target.refresh() || !target.isVisibleToUser || !target.isEnabled || target.isPassword || target.windowId != expectedWindow || target.packageName?.toString() != expectedPackage)
                 return@withTree ControlEffect(false, false, "target_changed")
             val rect = Rect(); target.getBoundsInScreen(rect)
@@ -726,12 +747,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     ControlEffect(true, true, "terminal_input_dispatched")
                 } catch (_: Exception) { ControlEffect(true, false, "terminal_input_unknown") }
             }
-            if (action == "key") {
+            if (action in setOf("key", "visual_key")) {
                 if (fresh.keyboard == null || !fresh.keyboard.readAllowed || !fresh.keyboard.interactAllowed || fresh.keyboard != frame.keyboard || fresh.inputTargetId == null ||
-                    fresh.inputTargetId != frame.inputTargetId || !target.isTextEntryKey || expected.keyboardKey.isEmpty())
+                    fresh.inputTargetId != frame.inputTargetId || (action == "key" && !target.isTextEntryKey) || expected.keyboardKey.isEmpty())
                     return@withTree ControlEffect(false, false, "keyboard_target_unverified")
-                val key = KeyboardKeyPolicy.identify(currentText, target.contentDescription?.toString().orEmpty(),
-                    target.className?.toString().orEmpty(), target.isClickable || target.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, target.isTextEntryKey)
+                val key = (if (action == "visual_key") VisualKeyboardPolicy.literal(currentText, target.contentDescription?.toString().orEmpty())
+                else KeyboardKeyPolicy.identify(currentText, target.contentDescription?.toString().orEmpty(),
+                    target.className?.toString().orEmpty(), target.isClickable || target.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, target.isTextEntryKey))
                     ?: return@withTree ControlEffect(false, false, "keyboard_key_unrecognized")
                 if (key.kind == KeyboardKeyPolicy.Kind.SUBMIT && input["submit_authorized"]?.jsonPrimitive?.booleanOrNull != true)
                     return@withTree ControlEffect(false, false, "submission_authorization_required")
@@ -739,7 +761,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (field.text.length > 2000 || InputPayloadPolicy.sensitive(field.text) || (field.editable && key.kind in setOf(
                     KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE, KeyboardKeyPolicy.Kind.BACKSPACE) &&
                     KeyboardKeyPolicy.expectedText(field, key) == null)) return@withTree ControlEffect(false, false, "sensitive_input_refused")
-                return@withTree tap(service, fresh, rect, fresh.keyboard.windowId) {
+                val tapRect = rect
+                if (action == "visual_key" && (visualKeyRect == null || !rect.contains(visualKeyRect) || !visualKeyRect.contains(rect.centerX(), rect.centerY()) || frame.visual?.sourceWindowId != fresh.keyboard.windowId))
+                    return@withTree ControlEffect(false,false,"keyboard_visual_bounds_invalid")
+                return@withTree tap(service, fresh, tapRect, fresh.keyboard.windowId) {
                     // Reacquire the actual app input focus after the IME tree scan. Window/IME
                     // stability alone cannot prove that a user did not select a different field.
                     val appWindow = service.windows.orEmpty()
@@ -768,8 +793,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                             if (!target.refresh()) "keyboard_key_changed" else {
                                 target.getBoundsInScreen(keyBounds)
                                 if (latest.selection.reason != null || latest.signature != fresh.windowContext ||
-                                    latest.keyboard != fresh.keyboard || !target.isVisibleToUser || !target.isEnabled ||
-                                    !target.isTextEntryKey || target.isPassword || target.windowId != expectedWindow ||
+                                    latest.keyboard != fresh.keyboard || !packageAllowed(expectedPackage, operation = "read") ||
+                                    !packageAllowed(expectedPackage, operation = "interact") || !target.isVisibleToUser || !target.isEnabled ||
+                                    (action == "key" && !target.isTextEntryKey) || target.isPassword || target.windowId != expectedWindow ||
                                     target.packageName?.toString() != expectedPackage || keyBounds != rect ||
                                     target.text?.toString().orEmpty() != expected.text ||
                                     target.contentDescription?.toString().orEmpty().take(100) != expected.description ||
