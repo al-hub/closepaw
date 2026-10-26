@@ -86,7 +86,7 @@ class TerminalInputConnectionTest {
                         }
                     }
                 }
-                fail("Fixture screen did not settle at $fixtureStage: ${previous.reason}; foreground=${previous.packageName}; windows=$windowSummary")
+                fail("Fixture screen did not settle at $fixtureStage: ${previous.reason}; foreground=${previous.packageName}; selection=${previous.windowDiagnostics}; windows=$windowSummary")
                 return control.observe()
             }
             val observed = settled(); assertTrue(observed.toString(), observed.success)
