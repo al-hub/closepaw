@@ -321,8 +321,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         editorImageRefusal(service,frame.packageName)?.let {return fail(it)}
         val keyboardImage = scope != "app"
         val keyboard = frame.keyboard
-        if ((scope == "keyboard" || (scope == "display" && keyboard != null)) && (keyboard == null || !keyboard.readAllowed ||
-            !packageAllowed(keyboard.packageName, operation = "read") || (scope == "keyboard" && frame.inputTarget == null))) return fail("visual_keyboard_policy_denied")
+        if ((scope == "keyboard" || (scope == "display" && keyboard != null)) &&
+            VisualKeyboardPolicy.imageReadRefusal(keyboard, keyboard?.let { packageAllowed(it.packageName, operation = "read") } == true,
+                scope == "keyboard", frame.inputTarget != null) != null) return fail("visual_keyboard_policy_denied")
         val captureId = if (scope == "keyboard") keyboard!!.windowId else frame.windowId
         if(scope=="display") {
             // These are our pixel-only intent/ripple cues, never user controls.
