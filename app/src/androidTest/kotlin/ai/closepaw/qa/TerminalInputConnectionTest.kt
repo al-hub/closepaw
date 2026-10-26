@@ -154,6 +154,16 @@ class TerminalInputConnectionTest {
                 instrumentation.runOnMainSync { denied = service.inputMethod?.currentInputEditorInfo?.let { it.packageName == "com.termux" && it.inputType != 0 } == true }
                 denied
             }
+            // With the selected IME readable, its password surface must deny
+            // the entire display observation, not merely the terminal action.
+            val protectedDisplay=control.observe(includeImage=true,imageScope="display")
+            assertFalse(protectedDisplay.toString(),protectedDisplay.success)
+            assertEquals(JsonPrimitive("authentication_boundary"),protectedDisplay.data["reason_code"])
+            assertNull(VisualImageCache.imageFor(buildJsonObject {put("data",protectedDisplay.data)}))
+            // Restore the original terminal-only read scope before exercising
+            // its independent official InputConnection refusal below.
+            prefs.edit().putString("runtime_control_v1",
+                """{"revision":3,"config":{"node_budget":4096,"output_limit":80,"apps":{"com.termux":"interact"}}}""").commit()
             // Unlock/restartInput may remove the IME window. Re-observe only after
             // that OS transition settles; never bypass the secure-window guard.
             val protected = settled(requireIme=false)
