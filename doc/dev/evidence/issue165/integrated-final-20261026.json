@@ -1,0 +1,67 @@
+{
+  "issue": 165,
+  "status": "OPEN",
+  "candidate": {
+    "pr": 176,
+    "head": "cc637d8b09d75dc5f68075a204194dd1f3866166",
+    "version_name": "0.1.94",
+    "version_code": 95,
+    "merged": false
+  },
+  "merged_prs": {
+    "173": "f6826144aff3d96d17e840857701a52a8eba7ac6",
+    "174": "23f3d14e70fbda444ca98b90e4a9a587db13b01b",
+    "175": "64357eb6226c5297cae021dd161143c99b85ba84"
+  },
+  "review": {
+    "type": "independent_separate_agent_static_code_security",
+    "result": "PASS_NO_BLOCKING_FINDINGS",
+    "human_github_approval": false
+  },
+  "candidate_ci": {
+    "security": {
+      "run": 40330064211,
+      "job": 121597290670,
+      "result": "PASS",
+      "url": "https://github.com/al-hub/closepaw/actions/runs/40330064211"
+    },
+    "ui": {
+      "run": 40330064181,
+      "job": 121597419063,
+      "result": "PASS",
+      "instrumentation_tests_finished": 14,
+      "url": "https://github.com/al-hub/closepaw/actions/runs/40330064181"
+    },
+    "python_ci_tests": {
+      "termux_bridge": 55,
+      "bridge_core": 8,
+      "release_trust_boundary": 46
+    },
+    "local_expected_jvm_inventory": {
+      "classes": 330,
+      "tests": 2899,
+      "actual_raw_xml_independently_counted": false
+    }
+  },
+  "policy_blocker": {
+    "result": "BLOCKED",
+    "reason": "Unlisted browser and IME default to CAUTIOUS; OS selection proves ownership, not trusted non-sensitive classification. User contract requires unknown/uncertain fail-closed.",
+    "role_based_unknown_admission_implemented": false,
+    "app_specific_exception_added": false,
+    "runtime_configuration_changed": false
+  },
+  "release": "NOT_TESTED_HELD_UNTIL_REQUIRED_DEVELOPMENT_COMPLETE",
+  "public_apk_verification": "NOT_TESTED_NO_NEW_RELEASE",
+  "install": "NOT_TESTED_NO_NEW_RELEASE",
+  "initial_installed_version": "0.1.93/code94",
+  "candidate_physical_acceptance": "NOT_TESTED",
+  "clipboard_unreadable_provenance": "BLOCKED_NO_BYPASS",
+  "control_session_initial": {
+    "state": "ended",
+    "epoch": 12,
+    "new_session_started": false
+  },
+  "local_gradle": "BLOCKED_DISTRIBUTION_NETWORK_UNREACHABLE",
+  "local_python_unittest": "PASS_46",
+  "local_pytest": "NOT_RUN_PACKAGE_UNAVAILABLE"
+}
