@@ -162,7 +162,12 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private var windowDiagnostics: JsonObject? = null
     private val probeThrottle = ScreenProbeThrottle({ SystemClock.elapsedRealtime() })
     override fun clearSelections() { appSelections.clear() }
+    private fun editorImageRefusal(service: AgentService?, pkg: String): String? =
+        if(Build.VERSION.SDK_INT>=33 && (service?.inputMethod as? ai.closepaw.platform.GuardedAccessibilityInputMethod)?.imagePrivacy?.let {
+            it.packageName==pkg && it.sensitive
+        }==true) "visual_sensitive_editor" else null
     override fun visualDisclosureAllowed(frame: ControlFrame): Boolean = reason(AgentService.instance) == null &&
+        editorImageRefusal(AgentService.instance,frame.packageName)==null &&
         packageAllowed(frame.packageName, operation = "read") && (runtime?.snapshot()?.revision ?: 0L) == frame.configurationRevision &&
         (frame.visual?.scope !in setOf("keyboard", "display") || (frame.visual?.scope == "display" && frame.keyboard == null) || frame.keyboard?.let {
             packageAllowed(it.packageName, operation = "read") &&
@@ -308,6 +313,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         if (frame.reason != null || frame.truncated || frame.navigationOnly || frame.touchContext.isEmpty()) return fail("visual_frame_unverified")
         val service = AgentService.instance ?: return fail("accessibility_permission_missing")
         islandRefusal(sessionFor(service).id)?.let { return fail(it) }
+        editorImageRefusal(service,frame.packageName)?.let {return fail(it)}
         val keyboardImage = scope != "app"
         val keyboard = frame.keyboard
         if ((scope == "keyboard" || (scope == "display" && keyboard != null)) && (keyboard == null || !keyboard.readAllowed || !keyboard.interactAllowed ||
@@ -333,6 +339,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty()) { probeThrottle.awaitSlot() }
         val proof = captured.proof ?: return fail(captured.reason ?: "visual_observation_unavailable")
         val after = capture()
+        editorImageRefusal(service,frame.packageName)?.let {return fail(it)}
         if (scope=="display") {
             // Accessibility window events can be coalesced by the service's25ms
             // notification timeout. Drain that bounded delivery interval before

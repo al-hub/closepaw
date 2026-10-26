@@ -277,7 +277,7 @@ class AgentService : AccessibilityService() {
 
     @androidx.annotation.RequiresApi(33)
     override fun onCreateInputMethod(): android.accessibilityservice.InputMethod =
-        ai.closepaw.platform.GuardedAccessibilityInputMethod(this)
+        ai.closepaw.platform.GuardedAccessibilityInputMethod(this) { ai.closepaw.chatgpt.control.VisualImageCache.clear() }
 
     override fun onServiceConnected() {
         super.onServiceConnected()

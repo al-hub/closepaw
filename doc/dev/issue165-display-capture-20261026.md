@@ -100,3 +100,28 @@ Do not close #165 from a PR, CI, API existence or refusal alone.
   (`takeScreenshot` display versus `takeScreenshotOfWindow`, capability and error codes)
 - https://developer.android.com/about/versions/10/privacy/changes#clipboard-data
 - https://developer.android.com/reference/android/content/ClipboardManager#getPrimaryClip()
+
+
+## Main acceptance correction: editor privacy and release gate
+
+PR171/main58d0dd2 passed Security40298518722 and automatically published v0.1.92/code93
+via Signed40299540108, but main UI40298518652 failed the password-editor image assertion.
+The actual failing frame had no IME window yet: native EditorInfo was already a password
+editor while the canvas node did not expose a password flag. This is a real image privacy
+gap, not a reason to loosen the assertion or retry the input. **v0.1.92 was not installed
+by this Work and is not accepted for delivery.** Existing phone remains0.1.91/code92.
+
+The follow-up0.1.93/code94 tracks only current editor package/password classification
+from official accessibility InputMethod callbacks (no text). Password/text-visible/
+web/number-password input types deny new images and cached disclosure even with no IME
+window. Activation clears the image cache. The NULL-class Termux0x00080090 remains
+non-password and existing official binding/effect policy is unchanged. Capture admission
+and post-capture checks both verify this privacy state. Non-image terminal refusal
+coverage is retained.
+
+Signed Release now requires both canonical exact-main Security CI **and Premium UX UI**
+success before signing, and triggers when either workflow finishes. An UI-triggered run
+resolves the exact successful Security CI artifact rather than signing a UI artifact.
+Scheduled fallback starts a missing UI workflow once, never replays a failed UI run.
+Local release-gate tests cover missing/failed/running/wrong-SHA/PR/foreign-workflow evidence.
+The previous tag/assets remain immutable; the correction uses a new version.

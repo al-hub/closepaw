@@ -1,3 +1,5 @@
+> 2026-10-26 correction: new releases require **both exact-main Security CI and Premium UX UI success** before signing. Either workflow completion can trigger signing; the unsigned artifact always comes from the exact successful Security CI run. A missing UI run can be dispatched once by scheduled fallback; a failed UI run requires investigation. v0.1.92/code93 was automatically published before this gate and is not accepted for installation by #165; use the corrected release after its gates pass.
+
 # GitHub 저장소만으로 서명 APK 릴리스하기
 
 > al-hub/closepaw의 실제 운영 경로. 2026-10-22 KST v0.1.76/code77 main-only R8·검증된 native cache·artifact 서명·공개 확인·휴대폰 설치로 검증.
