@@ -24,4 +24,23 @@ class DisplayCapturePolicyTest {
         assertEquals(kotlinx.serialization.json.JsonPrimitive(0),p.metadata()["source_display_id"])
         assertEquals(kotlinx.serialization.json.JsonPrimitive(1080),p.metadata()["source_width"])
     }
+    @Test fun transientWindowCannotBeHiddenByMatchingEndpointSnapshots() {
+        val signal=ControlChangeSignal(); val before=signal.version()
+        assertNull(DisplayCapturePolicy.interveningChange(before,signal.version()))
+        signal.changed(); signal.changed() // overlay appeared then disappeared
+        assertEquals("display_window_changed_during_capture",DisplayCapturePolicy.interveningChange(before,signal.version()))
+    }
+    @Test fun displayKeyKeepsSeparateImeProvenanceAtNativeDispatch() {
+        val k=ControlKeyboard(6,"ime","ime/.Keyboard")
+        val p=VisualTargetProof(ai.closepaw.model.ScreenImage(432,960,"image/jpeg",byteArrayOf(1),ai.closepaw.model.ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
+            "hash",TapBounds(0,0,1080,2400),"rotation0",System.currentTimeMillis(),scope="display",sourceDisplayId=0,
+            sourceImeWindowId=6,imeBounds="0 1600 1080 2400",displayGeneration=0)
+        assertNull(VisualKeyboardPolicy.proofOwnerRefusal(p,k))
+        assertNotNull(VisualKeyboardPolicy.proofOwnerRefusal(p,k.copy(windowId=7)))
+        assertNotNull(VisualKeyboardPolicy.proofOwnerRefusal(p.copy(sourceDisplayId=1),k))
+        assertNotNull(VisualKeyboardPolicy.proofOwnerRefusal(p.copy(displayGeneration=-1),k))
+        assertNotNull(VisualKeyboardPolicy.proofOwnerRefusal(p.copy(scope="app"),k))
+        assertNull(VisualKeyboardPolicy.proofOwnerRefusal(p.copy(scope="keyboard",sourceWindowId=6),k))
+    }
+
 }

@@ -167,6 +167,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         (frame.visual?.scope !in setOf("keyboard", "display") || (frame.visual?.scope == "display" && frame.keyboard == null) || frame.keyboard?.let {
             packageAllowed(it.packageName, operation = "read") &&
                 Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) == it.inputMethodId
+        } == true) && (frame.visual?.scope != "display" || AgentService.instance?.let { service ->
+            val proof=frame.visual ?: return@let false
+            val plan=displayPlan(service,frame) ?: return@let false
+            proof.displayGeneration == service.remoteDisplayChanges.version() && plan.bounds==proof.window && plan.rotation==proof.rotation &&
+                plan.appBounds==proof.applicationBounds && plan.imeBounds==proof.imeBounds
         } == true)
     override fun invalidate() { probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
     private fun reason(service: AgentService?): String? = when {
@@ -287,6 +292,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         if ((scope == "keyboard" || (scope == "display" && keyboard != null)) && (keyboard == null || !keyboard.readAllowed || !keyboard.interactAllowed ||
             !packageAllowed(keyboard.packageName, operation = "read") || !packageAllowed(keyboard.packageName, operation = "interact") || (scope == "keyboard" && frame.inputTarget == null))) return fail("visual_keyboard_policy_denied")
         val captureId = if (scope == "keyboard") keyboard!!.windowId else frame.windowId
+        val displayGeneration = service.remoteDisplayChanges.version()
         val plan = if (scope=="display") withContext(Dispatchers.Main) { displayPlan(service,frame) } else null
         if (scope=="display" && plan==null) return fail("display_surface_unverified")
         val bounds = plan?.bounds ?: withContext(Dispatchers.Main) {
@@ -298,6 +304,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region)
         val proof = captured.proof ?: return fail(captured.reason ?: "visual_observation_unavailable")
         val after = capture()
+        if (scope=="display") {
+            // Accessibility window events can be coalesced by the service's25ms
+            // notification timeout. Drain that bounded delivery interval before
+            // comparing the monotonic generation; never replay a capture here.
+            kotlinx.coroutines.delay(75)
+            DisplayCapturePolicy.interveningChange(displayGeneration,service.remoteDisplayChanges.version())?.let { return fail(it) }
+        }
         val refusal=GenericControlActionPolicy.refusal(frame,after,if(keyboardImage) "visual_key" else "visual_tap")
         if (refusal!=null) return fail("visual_post_" + refusal)
         if (keyboardImage && (frame.keyboard != after.keyboard || frame.inputTarget != after.inputTarget)) return fail("visual_post_keyboard_changed")
@@ -307,7 +320,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         }
         return proof.copy(scope=scope,sourceWindowId=if(scope=="display") -1 else captureId,
             sourceDisplayId=if(plan!=null) 0 else -1,rotation=plan?.rotation ?: -1,
-            applicationBounds=plan?.appBounds.orEmpty(),imeBounds=plan?.imeBounds.orEmpty())
+            applicationBounds=plan?.appBounds.orEmpty(),imeBounds=plan?.imeBounds.orEmpty(),
+            sourceImeWindowId=if(plan!=null) keyboard?.windowId ?: -1 else -1,displayGeneration=if(plan!=null) displayGeneration else -1)
     }
 
     private suspend fun secureWindow(service: AgentService): String? = controlSpan("security_probe") { secureWindowChecked(service) }
@@ -743,6 +757,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val latest = (if (proof.scope == "display") visualDisplay(fresh) else if (action == "visual_key") visualKeyboard(fresh) else visual(fresh)) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
                 if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context || latest.sourceWindowId != proof.sourceWindowId || latest.scope != proof.scope || latest.sourceDisplayId != proof.sourceDisplayId || latest.rotation != proof.rotation)
                     return@withTree ControlEffect(false,false,"visual_pixels_or_geometry_changed")
+                if (proof.scope == "display" && proof.displayGeneration != service.remoteDisplayChanges.version())
+                    return@withTree ControlEffect(false,false,"display_window_changed_since_observation")
                 if (action == "visual_key") visualKeyRect = start
                 else return@withTree tap(service, fresh, start, endBounds = end,
                     durationMs = if (action == "visual_long_press") 650 else if (end != null) 450 else 50)
@@ -808,9 +824,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE, KeyboardKeyPolicy.Kind.BACKSPACE) &&
                     KeyboardKeyPolicy.expectedText(field, key) == null)) return@withTree ControlEffect(false, false, "sensitive_input_refused")
                 val tapRect = rect
-                if (action == "visual_key" && (visualKeyRect == null || !rect.contains(visualKeyRect) || !visualKeyRect.contains(rect.centerX(), rect.centerY()) || frame.visual?.sourceWindowId != fresh.keyboard.windowId))
+                if (action == "visual_key" && (visualKeyRect == null || !rect.contains(visualKeyRect) || !visualKeyRect.contains(rect.centerX(), rect.centerY()) || VisualKeyboardPolicy.proofOwnerRefusal(frame.visual,fresh.keyboard) != null))
                     return@withTree ControlEffect(false,false,"keyboard_visual_bounds_invalid")
                 return@withTree tap(service, fresh, tapRect, fresh.keyboard.windowId) {
+                    if (action == "visual_key" && frame.visual?.scope == "display" && frame.visual.displayGeneration != service.remoteDisplayChanges.version())
+                        return@tap "display_window_changed_since_observation"
                     // Reacquire the actual app input focus after the IME tree scan. Window/IME
                     // stability alone cannot prove that a user did not select a different field.
                     val appWindow = service.windows.orEmpty()

@@ -2,6 +2,8 @@ package ai.closepaw.chatgpt.control
 
 /** Full-display requests never grant authority to another application/overlay. */
 internal object DisplayCapturePolicy {
+    fun interveningChange(before: Long, after: Long): String? =
+        if (before < 0 || before != after) "display_window_changed_during_capture" else null
     fun refusal(geometryVerified: Boolean, displayId: Int, rotation: Int, contentWindows: List<Int>, owned: Set<Int>): String? = when {
         !geometryVerified || displayId != 0 || rotation !in 0..3 -> "display_geometry_unverified"
         contentWindows.isEmpty() || contentWindows.distinct().size != contentWindows.size || contentWindows.any { it !in owned } -> "display_unowned_window"

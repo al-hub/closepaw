@@ -91,6 +91,7 @@ class AgentService : AccessibilityService() {
     private var debugReceiversRegistered = false
     private var actionVisualizer: ActionVisualizerManager? = null
     internal val remoteControlChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
+    internal val remoteDisplayChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
     internal val remoteControlSession: ai.closepaw.chatgpt.control.ControlSession by lazy {
         val prefs = getSharedPreferences("remote-control-session", MODE_PRIVATE)
         ai.closepaw.chatgpt.control.ControlSession(prefs.getString("state", "idle") ?: "idle") {
@@ -381,6 +382,11 @@ class AgentService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Full-display captures must detect transient windows even if endpoint
+        // snapshots match. Count all owners (including null and our own overlays).
+        if (event?.eventType in setOf(AccessibilityEvent.TYPE_WINDOWS_CHANGED, AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)) {
+            remoteDisplayChanges.changed()
+        }
         // No node reads or text copying in the callback; events only wake the bounded observer.
         if (event != null && event.packageName?.toString() != packageName &&
             event.eventType in setOf(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
