@@ -21,9 +21,12 @@ import kotlin.coroutines.resume
  * Display pixels outside certified application/IME regions are blacked out before
  * hashing/compression; no raw bitmap or clipboard/screen text is logged. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+internal data class IsolatedVisualSurface(val windowId: Int, val bounds: TapBounds, val visible: List<TapBounds>)
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 internal object WindowVisualCapture {
     suspend fun capture(service: AccessibilityService, windowId: Int, window: TapBounds, context: String,
-        display: Boolean = false, visibleRegion: Region? = null): VisualCaptureResult {
+        display: Boolean = false, visibleRegion: Region? = null,
+        surfaces: List<IsolatedVisualSurface> = emptyList(), awaitSlot: suspend () -> Unit = {}): VisualCaptureResult {
         fun failure(code: String) = VisualCaptureResult(reason=code)
         if (Build.VERSION.SDK_INT < 34 || !window.valid || (display && visibleRegion == null)) return failure("screenshot_geometry_unverified")
         var nativeReason = "screenshot_timeout"
@@ -56,6 +59,20 @@ internal object WindowVisualCapture {
                 bitmap = try { hardware.copy(Bitmap.Config.ARGB_8888, display) } finally { hardware.recycle() }
                 val source = bitmap ?: return@withContext failure("screenshot_bitmap_copy_failed")
                 if (display) {
+                    if(surfaces.isEmpty()) return@withContext failure("display_isolated_sources_required")
+                    val actual=IntArray(source.width*source.height)
+                    source.getPixels(actual,0,source.width,0,0,source.width,source.height)
+                    val verified=Region()
+                    for(surface in surfaces) {
+                        awaitSlot()
+                        // Window-isolated verification never uses a display fallback.
+                        val isolated=capturePixels(service,surface.windowId,surface.bounds)
+                        val expected=isolated.pixels ?: return@withContext failure("display_isolated_"+isolated.reason)
+                        if(!OwnedPixelPolicy.matches(actual,source.width,expected,surface.bounds,surface.visible))
+                            return@withContext failure("display_owned_pixels_mismatch")
+                        surface.visible.forEach { verified.op(Rect(it.left,it.top,it.right,it.bottom),Region.Op.UNION) }
+                    }
+                    if(verified!=visibleRegion) return@withContext failure("display_unverified_pixel_region")
                     val hidden = Region(0,0,source.width,source.height).apply { op(visibleRegion!!,Region.Op.DIFFERENCE) }
                     val iterator=RegionIterator(hidden); val rect=Rect(); val canvas=Canvas(source); val paint=Paint().apply { color=Color.BLACK }
                     while(iterator.next(rect)) canvas.drawRect(rect,paint)
@@ -72,4 +89,36 @@ internal object WindowVisualCapture {
             finally { if (scaled !== bitmap) scaled?.recycle(); bitmap?.recycle() }
         } } finally { captured.hardwareBuffer.close() }
     }
+    private data class PixelResult(val pixels: IntArray? = null, val reason: String? = null)
+    private suspend fun capturePixels(service: AccessibilityService,id: Int,bounds: TapBounds): PixelResult {
+        var failure="screenshot_timeout"
+        val captured=withTimeoutOrNull(5_000) { withContext(Dispatchers.Main) {
+            suspendCancellableCoroutine<AccessibilityService.ScreenshotResult?> { continuation ->
+                try { service.takeScreenshotOfWindow(id,service.mainExecutor,object:AccessibilityService.TakeScreenshotCallback {
+                    override fun onSuccess(value: AccessibilityService.ScreenshotResult) {
+                        if(continuation.isActive) continuation.resume(value,onCancellation={ _:Throwable->value.hardwareBuffer.close() }) else value.hardwareBuffer.close()
+                    }
+                    override fun onFailure(code:Int) { failure=VisualCaptureFailure.native(code);if(continuation.isActive) continuation.resume(null) }
+                }) } catch(e:CancellationException) { throw e }
+                catch(_:SecurityException) { failure="screenshot_permission_denied";if(continuation.isActive) continuation.resume(null) }
+                catch(_:Exception) { failure="screenshot_dispatch_failed";if(continuation.isActive) continuation.resume(null) }
+            }
+        } } ?: return PixelResult(reason=failure)
+        try {
+            val buffer=captured.hardwareBuffer
+            val width=bounds.right-bounds.left;val height=bounds.bottom-bounds.top
+            if(buffer.width!=width || buffer.height!=height) return PixelResult(reason="screenshot_buffer_geometry_mismatch")
+            if(width.toLong()*height>8_000_000) return PixelResult(reason="screenshot_pixel_limit")
+            val hardware=Bitmap.wrapHardwareBuffer(buffer,captured.colorSpace) ?: return PixelResult(reason="screenshot_buffer_wrap_failed")
+            val software=try { hardware.copy(Bitmap.Config.ARGB_8888,false) } finally {hardware.recycle()}
+                ?: return PixelResult(reason="screenshot_bitmap_copy_failed")
+            try {
+                val pixels=IntArray(width*height);software.getPixels(pixels,0,width,0,0,width,height)
+                return PixelResult(pixels)
+            } finally {software.recycle()}
+        } catch(e:CancellationException) {throw e}
+        catch(_:Exception) {return PixelResult(reason="screenshot_conversion_failed")}
+        finally {captured.hardwareBuffer.close()}
+    }
+
 }

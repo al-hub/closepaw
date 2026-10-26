@@ -16,7 +16,7 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
         put("source_width", window.right-window.left); put("source_height", window.bottom-window.top)
         put("source_ime_window_id", sourceImeWindowId); put("intervening_window_changes_checked", scope == "display")
         put("application_bounds", applicationBounds); put("ime_bounds", imeBounds)
-        put("masked_outside_owned_regions", scope == "display")
+        put("masked_outside_owned_regions", scope == "display"); put("owned_pixels_verified_against_isolated_windows", scope == "display")
         put("window_bounds", "${window.left} ${window.top} ${window.right} ${window.bottom}")
         put("coordinate_space", "snapshot_image_pixels"); put("expires_in_ms", 60_000)
     }

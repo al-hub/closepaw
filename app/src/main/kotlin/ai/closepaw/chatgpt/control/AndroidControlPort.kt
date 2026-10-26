@@ -252,7 +252,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "keyboard")
     override suspend fun visualDisplay(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "display")
     private data class DisplayPlan(val bounds: TapBounds, val rotation: Int, val region: Region,
-        val appBounds: String, val imeBounds: String)
+        val appBounds: String, val imeBounds: String, val surfaces: List<IsolatedVisualSurface>)
     private fun displayPlan(service: AgentService, frame: ControlFrame): DisplayPlan? {
         if (Build.VERSION.SDK_INT < 34) return null
         val display = context.getSystemService(DisplayManager::class.java).getDisplay(android.view.Display.DEFAULT_DISPLAY) ?: return null
@@ -281,8 +281,22 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
             visible.op(Rect(0,0,size.x,size.y),Region.Op.INTERSECT)
             if (visible.isEmpty) return null
+            val surfaces=mutableListOf<IsolatedVisualSurface>()
+            val remaining=Region(visible)
+            // Highest owned window supplies overlapping pixels. The complete
+            // returned region must independently match isolated window sources.
+            for(w in windows.filter {it.id in owned}.sortedByDescending {it.layer}) {
+                val region=Region();w.getRegionInScreen(region);region.op(remaining,Region.Op.INTERSECT)
+                if(!region.isEmpty) {
+                    val parts=mutableListOf<TapBounds>();val iterator=RegionIterator(region);val rect=Rect()
+                    while(iterator.next(rect)) { if(parts.size>=256) return null; parts.add(bounds(rect)) }
+                    surfaces.add(IsolatedVisualSurface(w.id,bounds(windowBounds(w)),parts))
+                    remaining.op(region,Region.Op.DIFFERENCE)
+                }
+            }
+            if(!remaining.isEmpty || surfaces.isEmpty()) return null
             return DisplayPlan(TapBounds(0,0,size.x,size.y),display.rotation,visible,windowBounds(app).flattenToString(),
-                windows.singleOrNull { it.id == frame.keyboard?.windowId }?.let { windowBounds(it).flattenToString() }.orEmpty())
+                windows.singleOrNull { it.id == frame.keyboard?.windowId }?.let { windowBounds(it).flattenToString() }.orEmpty(),surfaces)
         } finally { windows.forEach { runCatching { it.recycle() } } }
     }
     private suspend fun captureVisual(frame: ControlFrame, scope: String): VisualTargetProof? {
@@ -305,7 +319,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             finally { windows.forEach { runCatching { it.recycle() } } }
         } ?: return fail("visual_window_unavailable")
         probeThrottle.awaitSlot()
-        val captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region)
+        val captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty()) { probeThrottle.awaitSlot() }
         val proof = captured.proof ?: return fail(captured.reason ?: "visual_observation_unavailable")
         val after = capture()
         if (scope=="display") {
@@ -320,7 +334,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         if (keyboardImage && (frame.keyboard != after.keyboard || frame.inputTarget != after.inputTarget)) return fail("visual_post_keyboard_changed")
         if (plan!=null) {
             val latest=withContext(Dispatchers.Main) { displayPlan(service,after) } ?: return fail("display_post_surface_changed")
-            if (latest.bounds!=plan.bounds || latest.rotation!=plan.rotation || latest.region!=plan.region) return fail("display_post_geometry_changed")
+            if (latest.bounds!=plan.bounds || latest.rotation!=plan.rotation || latest.region!=plan.region || latest.surfaces!=plan.surfaces) return fail("display_post_geometry_changed")
         }
         return proof.copy(scope=scope,sourceWindowId=if(scope=="display") -1 else captureId,
             sourceDisplayId=if(plan!=null) 0 else -1,rotation=plan?.rotation ?: -1,

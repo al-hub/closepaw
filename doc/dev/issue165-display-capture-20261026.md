@@ -22,6 +22,16 @@ no automatic fallback following a window/API/policy denial. Native stage failure
 have fixed non-content codes (including native secure/invalid-window/permission/
 interval failures, buffer geometry, conversion and post-capture changes).
 
+A subsequent review found that the interactive-window list is not a complete
+compositor surface inventory: a static untouchable overlay can be unreported.
+The final route therefore independently captures every disclosed app/IME region
+using takeScreenshotOfWindow and compares every output pixel against that isolated
+source at its exact OS coordinate. Returned display pixels must equal isolated
+owned pixels; mismatches/missing sources/geometry refuse without image delivery.
+Window events/masking are defense in depth, never sole ownership authority. This
+may refuse animated screens or an IME whose isolated screenshot is unavailable;
+that outcome remains BLOCKED with a precise reason, not a raw display fallback.
+
 The display route reuses the capture, proof/cache, selected-window security scan,
 OS-selected IME, app configuration, explicit session/epoch and input-effect guards.
 Only the default display with an unambiguous complete window set is supported.
