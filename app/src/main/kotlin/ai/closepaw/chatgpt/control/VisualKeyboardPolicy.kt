@@ -4,6 +4,11 @@ package ai.closepaw.chatgpt.control
  * separate OS-selected IME image. This route deliberately excludes layout and
  * submission keys. It does not relax semantic-key admission. */
 internal object VisualKeyboardPolicy {
+    /** Reading a verified IME surface does not grant permission to press keys. */
+    fun imageReadRefusal(keyboard: ControlKeyboard?, runtimeReadAllowed: Boolean, requiresTarget: Boolean, targetPresent: Boolean): String? =
+        if (keyboard == null || !keyboard.readAllowed || !runtimeReadAllowed || (requiresTarget && !targetPresent))
+            "visual_keyboard_policy_denied" else null
+
     fun literal(text: String, description: String): KeyboardKeyPolicy.Key? =
         KeyboardKeyPolicy.identifyLabel(text, description)?.takeIf {
             it.kind in setOf(KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE, KeyboardKeyPolicy.Kind.BACKSPACE)
