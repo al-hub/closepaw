@@ -3,6 +3,9 @@ package ai.closepaw.chatgpt.control
 import ai.closepaw.model.ScreenImage
 import ai.closepaw.model.ScreenImageSource
 import android.accessibilityservice.AccessibilityService
+import android.hardware.display.DisplayManager
+import android.view.Display
+import android.graphics.Point
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -57,7 +60,7 @@ internal object WindowVisualCapture {
             try {
                 val buffer = captured.hardwareBuffer
                 if (buffer.width != window.right-window.left || buffer.height != window.bottom-window.top) {
-                    recordGeometryMismatch(if (display) "display" else "window", buffer.width, buffer.height, window.right-window.left, window.bottom-window.top)
+                    recordGeometryMismatch(service, if (display) "display" else "window", buffer.width, buffer.height, window)
                     return@withContext failure("screenshot_buffer_geometry_mismatch")
                 }
                 if (buffer.width.toLong()*buffer.height > 8_000_000) return@withContext failure("screenshot_pixel_limit")
@@ -101,11 +104,27 @@ internal object WindowVisualCapture {
             finally { if (scaled !== bitmap) scaled?.recycle(); bitmap?.recycle() }
         } } finally { captured.hardwareBuffer.close() }
     }
-    private fun recordGeometryMismatch(scope: String, bufferWidth: Int, bufferHeight: Int, boundsWidth: Int, boundsHeight: Int) {
+    private fun recordGeometryMismatch(
+        service: AccessibilityService, scope: String, bufferWidth: Int, bufferHeight: Int, bounds: TapBounds
+    ) {
+        // Numeric geometry only. Never log screenshot data, package names or window text.
+        val displayInfo = runCatching {
+            val display = service.getSystemService(DisplayManager::class.java)
+                ?.getDisplay(Display.DEFAULT_DISPLAY)
+            val size = Point()
+            display?.getRealSize(size)
+            Triple(size.x, size.y, display?.rotation)
+        }.getOrNull()
         ControlDiagnostics.record("visual_geometry", "screenshot_buffer_geometry_mismatch", metrics = buildJsonObject {
             put("scope", scope)
             put("buffer_width", bufferWidth); put("buffer_height", bufferHeight)
-            put("bounds_width", boundsWidth); put("bounds_height", boundsHeight)
+            put("bounds_width", bounds.right - bounds.left); put("bounds_height", bounds.bottom - bounds.top)
+            put("bounds_left", bounds.left); put("bounds_top", bounds.top)
+            put("bounds_right", bounds.right); put("bounds_bottom", bounds.bottom)
+            displayInfo?.let { (width,height,rotation) ->
+                if (width > 0 && height > 0) { put("display_width", width); put("display_height", height) }
+                if (rotation != null) put("display_rotation", rotation)
+            }
         })
     }
     private data class PixelResult(val pixels: IntArray? = null, val reason: String? = null)
@@ -128,7 +147,7 @@ internal object WindowVisualCapture {
             val buffer=captured.hardwareBuffer
             val width=bounds.right-bounds.left;val height=bounds.bottom-bounds.top
             if(buffer.width!=width || buffer.height!=height) {
-                recordGeometryMismatch("isolated_window", buffer.width, buffer.height, width, height)
+                recordGeometryMismatch(service, "isolated_window", buffer.width, buffer.height, bounds)
                 return PixelResult(reason="screenshot_buffer_geometry_mismatch")
             }
             if(width.toLong()*height>8_000_000) return PixelResult(reason="screenshot_pixel_limit")
