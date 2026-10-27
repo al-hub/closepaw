@@ -7,8 +7,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.hardware.display.DisplayManager
-import android.hardware.display.VirtualDisplay
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
@@ -31,8 +29,14 @@ import android.util.Log
  *   marks the single-use grant consumed immediately after registration.
  * - onStop teardown is unconditional: revoke feed into the gate, stop the virtual display,
  *   release capture resources, stopForeground/stopSelf.
- * - No screenshot, frame read, or media encoding happens here; the virtual display surface
- *   stays empty until a future, separately-audited capture consumer is attached.
+ * - The only capture surface is the one-session, bounded diagnostic mirror scope
+ *   ([MediaProjectionFrameCapture]): it reads frame GEOMETRY (width/height/timestamp)
+ *   from the newest mirrored frame and closes every buffer immediately. A whole-display
+ *   mirror can never prove certified-window ownership or mask unknown overlays, so its
+ *   pixels are never exposed as images or coordinates; image delivery stays exclusively
+ *   with the accessibility screenshot path (WindowVisualCapture).
+ * - Revocation races fail closed: the [MediaProjectionFramePolicy] is invalidated before
+ *   any resource release, so no acquire can be legal after revocation.
  */
 class MediaProjectionCaptureService : Service() {
 
@@ -61,7 +65,8 @@ class MediaProjectionCaptureService : Service() {
 
     private lateinit var projectionManager: MediaProjectionManager
     private var projection: MediaProjection? = null
-    private var virtualDisplay: VirtualDisplay? = null
+    private var framePolicy: MediaProjectionFramePolicy? = null
+    private var frameScope: MediaProjectionFrameScope? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -96,7 +101,8 @@ class MediaProjectionCaptureService : Service() {
             projection = newProjection
             registerProjectionCallbacks(newProjection)
             consentGate.onConsumed(sessionId)
-            Log.i(TAG, "MediaProjection consent round consumed; holding projection in FGS (no capture surface)")
+            openDiagnosticMirrorScope(newProjection)
+            Log.i(TAG, "MediaProjection consent round consumed; one-session diagnostic mirror scope handled")
         } catch (e: Exception) {
             Log.w(TAG, "getMediaProjection failed; failing closed", e)
             consentGate.onRevoked()
@@ -105,21 +111,32 @@ class MediaProjectionCaptureService : Service() {
         return START_NOT_STICKY
     }
 
-    /** Create the main-screen virtual display with a null surface that renders/encodes nothing. */
-    private fun createIdleVirtualDisplay(projection: MediaProjection): VirtualDisplay? {
+    /** One-session, bounded, diagnostic-only geometry scope; null-surface idle mode removed. */
+    private fun openDiagnosticMirrorScope(projection: MediaProjection) {
         val metrics = resources.displayMetrics
-        val display = projection.createVirtualDisplay(
-            "ClosePaw#165-idle",
-            metrics.widthPixels,
-            metrics.heightPixels,
-            metrics.densityDpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            null, // null surface: capture pipeline is created but writes no frames.
-            null,
-            mainHandler
+        val policy = MediaProjectionFramePolicy()
+        framePolicy = policy
+        val scope = MediaProjectionFrameCapture.open(
+            policy, projection, metrics.widthPixels, metrics.heightPixels, metrics.densityDpi
         )
-        virtualDisplay = display
-        return display
+        frameScope = scope
+        if (scope == null) {
+            Log.i(TAG, "Mirror scope stayed closed; diagnostic geometry unavailable, capture remains disabled")
+            return
+        }
+        // Image acquisition may wait up to two seconds: never block Android's main thread.
+        Thread({
+            val current = frameScope
+            val currentPolicy = framePolicy
+            if (current === scope && currentPolicy != null) {
+                val geometry = MediaProjectionFrameCapture.latestDiagnosticGeometry(current, currentPolicy)
+                val dims = if (geometry.width != null && geometry.height != null) {
+                    "${geometry.width}x${geometry.height}"
+                } else "unknown"
+                Log.i(TAG, "Mirror frame geometry ${dims} (${geometry.reason}); " +
+                    "pixels never exposed, ownership proof stays with accessibility screenshots")
+            }
+        }, "ClosePawMirrorDiagnostic").start()
     }
 
     private fun registerProjectionCallbacks(newProjection: MediaProjection) {
@@ -143,8 +160,11 @@ class MediaProjectionCaptureService : Service() {
     }
 
     private fun teardownCaptureResources() {
-        virtualDisplay?.release()
-        virtualDisplay = null
+        // Invalidate first so any in-flight acquire loses the race and fails closed.
+        framePolicy?.invalidate()
+        framePolicy = null
+        runCatching { frameScope?.close() }
+        frameScope = null
         projection?.stop()
         projection = null
     }
