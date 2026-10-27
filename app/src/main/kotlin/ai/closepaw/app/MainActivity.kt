@@ -329,6 +329,7 @@ class MainActivity : ComponentActivity() {
                         showControlRecovery = true
                     },
                     onOverlayClick = { openOverlaySettings(this@MainActivity) },
+                    onRequestProjectionConsent = { requestProjectionConsent() },
                     repairModel = repairModel,
                     onFixBattery = {
                         handleOnboardingEffect(OnboardingEffect.OpenBatteryOptimization)
