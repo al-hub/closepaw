@@ -7,6 +7,7 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.SystemClock
 import android.util.Log
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -183,7 +184,7 @@ internal object MediaProjectionFrameCapture {
                             val valid = policy.acceptsMirrorGeometry(frame.width, frame.height)
                             val stillOpen = policy.acquireAllowed() && scope.isOpen()
                             result = if (!stillOpen) closed else MirroredFrameGeometry(
-                                frame.width, frame.height, System.currentTimeMillis(),
+                                frame.width, frame.height, SystemClock.elapsedRealtime(),
                                 if (valid) "mirror_geometry_verified" else "mirror_geometry_refused"
                             )
                         } finally {
