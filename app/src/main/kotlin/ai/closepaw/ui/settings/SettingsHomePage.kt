@@ -50,7 +50,8 @@ internal fun SettingsHomePage(
     appClassifier: AppClassifier,
     approvalMode: ApprovalMode,
     onNavigate: (SettingsPage) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onRequestProjectionConsent: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         PageMastheadIdentity(title = "Settings", onClose = onDismiss)
@@ -89,6 +90,11 @@ internal fun SettingsHomePage(
                 title = "System & Debug",
                 subtitle = permissionsSubtitle(isAccessibilityEnabled, isOverlayEnabled, debugMode),
                 onClick = { onNavigate(SettingsPage.PERMISSIONS_ADVANCED) }
+            )
+            SettingsNavigationRow(
+                title = "Screen capture consent (diagnostic)",
+                subtitle = "Show Android consent only · no pixels transferred",
+                onClick = onRequestProjectionConsent
             )
             ChatGptConnectionCard()
 
