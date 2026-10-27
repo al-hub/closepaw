@@ -38,6 +38,26 @@ class TerminalInputPolicyTest {
         assertFalse(TerminalInputPolicy.submitted(before,before,"printf fixture_ok","fixture_ok"))
         assertFalse(TerminalInputPolicy.submitted(before,after.copy(generation=4),"printf fixture_ok","fixture_ok"))
     }
+    @Test fun joinedPromptWithTrailingNewlinelessOutputIsVerifiedOnlyUnambiguously() {
+        val before=node("~ $ printf hi").terminal!!
+        val after=before.copy(echo="~ $ printf hi\nhi~ $")
+        assertTrue(TerminalInputPolicy.submitted(before,after,"printf hi","hi"))
+        assertFalse(TerminalInputPolicy.submitted(before,after,"printf hi","xhi"))
+        assertFalse(TerminalInputPolicy.submitted(before,after,"printf hi","hi "))
+    }
+    @Test fun ambiguousOrChangedJoinedOutputIsNeverConfirmed() {
+        val before=node("~ $ printf hi").terminal!!
+        val after=before.copy(echo="~ $ printf hi\nhi ~ ~~ $")
+        assertFalse(TerminalInputPolicy.submitted(before,after,"printf hi","hi"))
+        assertFalse(TerminalInputPolicy.submitted(before,before.copy(echo="~ $ printf hi\nok~ $"),"printf hi","hi"))
+        assertFalse(TerminalInputPolicy.submitted(before,before.copy(echo="~ $ printf hi\nhi"),"printf hi","hi"))
+    }
+    @Test fun noOutputOrStaleScreenStaysUnconfirmed() {
+        val before=node("~ $ printf hi").terminal!!
+        assertFalse(TerminalInputPolicy.submitted(before,before,"printf hi","hi"))
+        assertFalse(TerminalInputPolicy.submitted(before,null,"printf hi","hi"))
+        assertFalse(TerminalInputPolicy.submitted(before,before.copy(generation=9,echo="~ $ printf hi\nhi\n~ $"),"printf hi","hi"))
+    }
     @Test fun dollarInPendingCommandCannotBeMistakenForAnApprovedPrompt() = runBlocking {
         val attack=node("~ $ touch /tmp/unapproved; # $ printf ok")
         val issued=TerminalInputPolicy.submission(node().terminal!!,node("~ $ printf ok").terminal!!,"printf ok")

@@ -53,9 +53,18 @@ internal object TerminalInputPolicy {
             hiddenFormat(expectedOutput) || expectedOutput.isEmpty() || expectedOutput.length > 256 || expectedOutput.any { it.isISOControl() } || InputPayloadPolicy.sensitive(expectedOutput)) return false
         if (!after.echo.startsWith(before.echo + "\n") || expectedOutput in before.echo.lines()) return false
         val tail = after.echo.removePrefix(before.echo+"\n").lines()
+        // Harmless output lacking a trailing newline joins the returned prompt on
+        // its own line ($ printf hi -> "hi~ $"). Accept it only when the line is
+        // exactly the expected output followed by the documented default prompt.
+        // Anything else stays unconfirmed; no replay is ever issued.
         val prompt = before.echo.substringAfterLast('\n').removeSuffix(command).trimEnd()
-        return expectedOutput in tail && tail.lastOrNull() == prompt
+        val last = tail.lastOrNull()
+        val separatePrompt = expectedOutput in tail && last == prompt
+        val joinedPromptLine = last == expectedOutput + prompt && joinedPrompt(prompt)
+        return separatePrompt || joinedPromptLine
     }
+    private fun joinedPrompt(promptPart: String): Boolean = promptPart.length in 1..200 &&
+        Regex("(?:~(?:/[A-Za-z0-9._/-]+)?|/[A-Za-z0-9._/-]*) \\$").matches(promptPart)
     /** Termux getSelectedText trims row-ending spaces. No per-space success is
      * claimed: one whole commit is verified against the exact visible echo. */
     fun inserted(before: TerminalEvidence, after: TerminalEvidence?, text: String): Boolean = after != null &&
