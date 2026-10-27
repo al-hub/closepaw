@@ -66,6 +66,7 @@ class MediaProjectionConsentGate {
      * round or after a closed round; ignored while a grant is live so a new request cannot
      * silently invalidate an in-flight grant without an explicit [onRevoked].
      */
+    @Synchronized
     fun onRequestStarted(): Boolean {
         val current = state
         if (current is ProjectionConsentState.Granted) return false
@@ -83,6 +84,7 @@ class MediaProjectionConsentGate {
      *
      * @return the resulting state, or null when the event was ignored (no state change).
      */
+    @Synchronized
     fun onDecision(granted: Boolean, sessionId: String?): ProjectionConsentState? {
         val current = state
         if (granted) {
@@ -102,6 +104,7 @@ class MediaProjectionConsentGate {
      * Record that the consent round was cancelled (dialog dismissed / intent failed). Fails
      * closed for every live round; any live grant must instead go through [onRevoked].
      */
+    @Synchronized
     fun onCancelled(): Boolean {
         val current = state
         if (current != ProjectionConsentState.Requesting) return false
@@ -114,6 +117,7 @@ class MediaProjectionConsentGate {
      * callback, user revoke, or superseded by a new session). Fails closed unconditionally:
      * the only path back is a fresh OS consent round via [onRequestStarted].
      */
+    @Synchronized
     fun onRevoked(): Boolean {
         val current = state
         if (current is ProjectionConsentState.Revoked) return false
@@ -132,6 +136,7 @@ class MediaProjectionConsentGate {
      * consent can never be reused afterward. Only the holder of the exact granted
      * [sessionId] may consume it; wrong or stale ids are rejected without changing state.
      */
+    @Synchronized
     fun onConsumed(sessionId: String?): Boolean {
         val current = state
         val granted = current as? ProjectionConsentState.Granted ?: return false
@@ -141,6 +146,7 @@ class MediaProjectionConsentGate {
     }
 
     /** Whether a non-consumed grant is currently open. Read-only, never side-effecting. */
+    @Synchronized
     fun isProbeAllowed(): Boolean = state is ProjectionConsentState.Granted
 
     /**
@@ -148,6 +154,7 @@ class MediaProjectionConsentGate {
      * a generation/staleness guard for the caller to echo back into [onConsumed], NOT a
      * MediaProjection handle.
      */
+    @Synchronized
     fun usableSessionId(): String? =
         (state as? ProjectionConsentState.Granted)?.sessionId
 
@@ -156,10 +163,12 @@ class MediaProjectionConsentGate {
      * session id, or fail fast with [ConsentNotUsableException]. Callers must supply the
      * returned id to [onConsumed] exactly once when the projection is taken into use.
      */
+    @Synchronized
     fun requireUsableSessionId(): String =
         usableSessionId() ?: throw ConsentNotUsableException(state)
 
     /** Reset to a fresh gate (e.g., after teardown logging). Never resurrects a grant. */
+    @Synchronized
     fun reset() {
         state = ProjectionConsentState.NotRequested
     }
