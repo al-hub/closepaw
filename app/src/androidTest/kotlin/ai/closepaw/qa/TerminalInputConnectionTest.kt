@@ -171,7 +171,7 @@ class TerminalInputConnectionTest {
             val iy=((osBounds[1]+160-window[1]).toLong()*visualMeta.getValue("image_height").jsonPrimitive.int/(window[3]-window[1])).toInt()
             val tapped=control.action(buildJsonObject { put("action","visual_tap");put("session_id",session.id);put("observation_id",visual.data.getValue("observation_id"));put("visual_id",visualMeta.getValue("visual_id"));put("visual_target_confirmed",true)
                 put("image_rect",JsonArray(listOf(ix-2,iy-2,ix+2,iy+2).map{JsonPrimitive(it)})) })
-            assertTrue(tapped.toString(),tapped.success)
+            assertTrue("$tapped; recapture_reason=${port.visualFailure()}",tapped.success)
             // Positive display capture uses the fixture app alone. The emulator's
             // default IME exposes an authentication boundary when its whole tree
             // is admitted; do not relax that production scan to make QA pass.
