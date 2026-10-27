@@ -374,7 +374,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             finally { windows.forEach { runCatching { it.recycle() } } }
         } ?: return fail("visual_window_unavailable")
         probeThrottle.awaitSlot()
-        val captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty()) { probeThrottle.awaitSlot() }
+        var captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty()) { probeThrottle.awaitSlot() }
+        // Retry only an explicit OS screenshot rate refusal, before any action.
+        // Never retry a denied/masked/changed screen or replay a gesture.
+        if (captured.proof == null && captured.reason == "screenshot_throttled") {
+            probeThrottle.awaitSlot()
+            captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty()) { probeThrottle.awaitSlot() }
+        }
         val proof = captured.proof ?: return fail(captured.reason ?: "visual_observation_unavailable")
         val after = capture()
         if(!ai.closepaw.platform.InputTypePrivacyPolicy.sameGeneration(admittedEditorGeneration,editorGeneration(service))) return fail("visual_editor_privacy_changed")
