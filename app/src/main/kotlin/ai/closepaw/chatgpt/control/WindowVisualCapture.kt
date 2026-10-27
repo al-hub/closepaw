@@ -15,6 +15,8 @@ import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.coroutines.resume
 
 /** Explicit window OR display capture. A failed window call never falls back.
@@ -54,7 +56,10 @@ internal object WindowVisualCapture {
             var disclosed: List<TapBounds> = emptyList()
             try {
                 val buffer = captured.hardwareBuffer
-                if (buffer.width != window.right-window.left || buffer.height != window.bottom-window.top) return@withContext failure("screenshot_buffer_geometry_mismatch")
+                if (buffer.width != window.right-window.left || buffer.height != window.bottom-window.top) {
+                    recordGeometryMismatch(if (display) "display" else "window", buffer.width, buffer.height, window.right-window.left, window.bottom-window.top)
+                    return@withContext failure("screenshot_buffer_geometry_mismatch")
+                }
                 if (buffer.width.toLong()*buffer.height > 8_000_000) return@withContext failure("screenshot_pixel_limit")
                 val hardware = Bitmap.wrapHardwareBuffer(buffer, captured.colorSpace) ?: return@withContext failure("screenshot_buffer_wrap_failed")
                 bitmap = try { hardware.copy(Bitmap.Config.ARGB_8888, display) } finally { hardware.recycle() }
@@ -96,6 +101,13 @@ internal object WindowVisualCapture {
             finally { if (scaled !== bitmap) scaled?.recycle(); bitmap?.recycle() }
         } } finally { captured.hardwareBuffer.close() }
     }
+    private fun recordGeometryMismatch(scope: String, bufferWidth: Int, bufferHeight: Int, boundsWidth: Int, boundsHeight: Int) {
+        ControlDiagnostics.record("visual_geometry", "screenshot_buffer_geometry_mismatch", metrics = buildJsonObject {
+            put("scope", scope)
+            put("buffer_width", bufferWidth); put("buffer_height", bufferHeight)
+            put("bounds_width", boundsWidth); put("bounds_height", boundsHeight)
+        })
+    }
     private data class PixelResult(val pixels: IntArray? = null, val reason: String? = null)
     private suspend fun capturePixels(service: AccessibilityService,id: Int,bounds: TapBounds): PixelResult {
         if(Build.VERSION.SDK_INT<34 || !bounds.valid) return PixelResult(reason="screenshot_geometry_unverified")
@@ -115,7 +127,10 @@ internal object WindowVisualCapture {
         try {
             val buffer=captured.hardwareBuffer
             val width=bounds.right-bounds.left;val height=bounds.bottom-bounds.top
-            if(buffer.width!=width || buffer.height!=height) return PixelResult(reason="screenshot_buffer_geometry_mismatch")
+            if(buffer.width!=width || buffer.height!=height) {
+                recordGeometryMismatch("isolated_window", buffer.width, buffer.height, width, height)
+                return PixelResult(reason="screenshot_buffer_geometry_mismatch")
+            }
             if(width.toLong()*height>8_000_000) return PixelResult(reason="screenshot_pixel_limit")
             val hardware=Bitmap.wrapHardwareBuffer(buffer,captured.colorSpace) ?: return PixelResult(reason="screenshot_buffer_wrap_failed")
             val software=try { hardware.copy(Bitmap.Config.ARGB_8888,false) } finally {hardware.recycle()}
