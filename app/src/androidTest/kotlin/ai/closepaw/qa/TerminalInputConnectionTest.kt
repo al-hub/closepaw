@@ -86,7 +86,31 @@ class TerminalInputConnectionTest {
                         }
                     }
                 }
-                fail("Fixture screen did not settle at $fixtureStage: ${previous.reason}; foreground=${previous.packageName}; selection=${previous.windowDiagnostics}; windows=$windowSummary")
+                var sensitivitySummary = ""
+                instrumentation.runOnMainSync {
+                    val kinds = mutableListOf<String>()
+                    for (window in service.windows.orEmpty().filter {
+                        it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION ||
+                            it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD
+                    }) {
+                        val root = window.root ?: continue
+                        fun scan(node: android.view.accessibility.AccessibilityNodeInfo) {
+                            val resource = node.viewIdResourceName.orEmpty().substringAfterLast('/').lowercase()
+                            val sensitiveResource = listOf("password", "credential", "biometric", "lock_settings", "pin_entry", "otp", "permission_allow").any { resource.contains(it) }
+                            val sensitiveFlag = android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive
+                            if (node.isPassword || sensitiveFlag || sensitiveResource) {
+                                kinds.add("type=${window.type},visible=${node.isVisibleToUser},password=${node.isPassword},flag=$sensitiveFlag,resource=$sensitiveResource")
+                            }
+                            for (i in 0 until node.childCount) {
+                                val child = node.getChild(i) ?: continue
+                                try { scan(child) } finally { child.recycle() }
+                            }
+                        }
+                        try { scan(root) } finally { root.recycle() }
+                    }
+                    sensitivitySummary = kinds.take(12).joinToString(";") + ";count=${kinds.size}"
+                }
+                fail("Fixture screen did not settle at $fixtureStage: ${previous.reason}; foreground=${previous.packageName}; selection=${previous.windowDiagnostics}; windows=$windowSummary; sensitivity=$sensitivitySummary")
                 return control.observe()
             }
             val observed = settled(); assertTrue(observed.toString(), observed.success)
