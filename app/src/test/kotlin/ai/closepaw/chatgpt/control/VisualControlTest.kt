@@ -134,7 +134,8 @@ class VisualControlTest {
                 put("image_rect",JsonArray(listOf(10,10,20,20).map { JsonPrimitive(it) }))
             }
             val previousTask = buildJsonObject { put("result",buildJsonObject { put("data",previous.data) }) }
-            assertNotNull(VisualImageCache.imageFor(previousTask))
+            // Without a control-session read grant, a previous image must not be retrievable.
+            assertNull(VisualImageCache.imageFor(previousTask))
             failCapture = true
             captures.clear()
             val failed = control.observe(includeImage=true,imageScope=scope)
