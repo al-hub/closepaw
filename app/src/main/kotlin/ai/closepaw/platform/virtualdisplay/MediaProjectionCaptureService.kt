@@ -65,8 +65,8 @@ class MediaProjectionCaptureService : Service() {
 
     private lateinit var projectionManager: MediaProjectionManager
     private var projection: MediaProjection? = null
-    private var framePolicy: MediaProjectionFramePolicy? = null
-    private var frameScope: MediaProjectionFrameScope? = null
+    @Volatile private var framePolicy: MediaProjectionFramePolicy? = null
+    @Volatile private var frameScope: MediaProjectionFrameScope? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -78,6 +78,12 @@ class MediaProjectionCaptureService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // A duplicate/stale start intent must never tear down an already active,
+        // independently user-approved session or reuse its one-shot OS token.
+        if (projection != null) {
+            Log.i(TAG, "Duplicate projection start ignored while session is active")
+            return START_NOT_STICKY
+        }
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Int.MIN_VALUE) ?: Int.MIN_VALUE
         val resultData = intent?.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
         val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID)
@@ -165,8 +171,9 @@ class MediaProjectionCaptureService : Service() {
         framePolicy = null
         runCatching { frameScope?.close() }
         frameScope = null
-        projection?.stop()
+        val previousProjection = projection
         projection = null
+        runCatching { previousProjection?.stop() }
     }
 
     private fun startForegroundWithRequiredType() {
