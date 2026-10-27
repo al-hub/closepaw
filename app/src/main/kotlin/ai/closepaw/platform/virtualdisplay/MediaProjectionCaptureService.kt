@@ -79,7 +79,7 @@ class MediaProjectionCaptureService : Service() {
 
         // Fail closed: no valid single-use session id, no grant.
         val usable = consentGate.usableSessionId()
-        if (sessionId.isNullOrEmpty() || usable != sessionId) {
+        if (sessionId.isNullOrEmpty() || usable != sessionId || resultData == null) {
             Log.w(TAG, "onStartCommand: consent gate not usable (${consentGate.state::class.simpleName}); stopping")
             stopSelfSafely()
             return START_NOT_STICKY
