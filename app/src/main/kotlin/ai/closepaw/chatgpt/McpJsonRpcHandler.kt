@@ -238,11 +238,14 @@ internal class McpJsonRpcHandler(
     }
 
     private fun toolResult(id: JsonElement, structured: JsonObject): McpHttpResponse {
-        val summary = structured["summary"]?.jsonPrimitive?.content ?: "ClosePaw responded."
-        val content = structured["content"]?.jsonPrimitive?.content
+        // Resolve once after live consent/session/cache revocation checks. Metadata
+        // describes this actual response, never the earlier capture/ledger result.
+        val image = ai.closepaw.chatgpt.control.VisualImageCache.imageFor(structured)
+        val delivered = withImageDeliveryMetadata(structured, image != null)
+        val content = delivered["content"]?.jsonPrimitive?.content
             ?.takeIf { it.isNotBlank() }
-            ?: structured.toString()
-        val isError = structured["status"]?.jsonPrimitive?.content == "failed"
+            ?: delivered.toString()
+        val isError = delivered["status"]?.jsonPrimitive?.content == "failed"
         return jsonResult(
             id,
             buildJsonObject {
@@ -251,15 +254,29 @@ internal class McpJsonRpcHandler(
                         put("type", "text")
                         put("text", content)
                     })
-                    ai.closepaw.chatgpt.control.VisualImageCache.imageFor(structured)?.let { image ->
+                    image?.let { image ->
                         add(buildJsonObject { put("type", "image"); put("mimeType", image.mimeType)
                             put("data", java.util.Base64.getEncoder().encodeToString(image.bytes)) })
                     }
                 })
-                put("structuredContent", structured)
+                put("structuredContent", delivered)
                 put("isError", isError)
             }
         )
+    }
+
+    private fun withImageDeliveryMetadata(value: JsonObject, included: Boolean): JsonObject {
+        fun mark(data: JsonObject): JsonObject = if (data["visual"] is JsonObject)
+            JsonObject(data + ("image_included" to kotlinx.serialization.json.JsonPrimitive(included))) else data
+        // Keep the same supported query/task envelope selection as imageFor.
+        val result = value["result"] as? JsonObject
+        val nestedData = result?.get("data")
+        val data = (nestedData ?: value["data"]) as? JsonObject
+        if (data?.get("visual") is JsonObject) {
+            if (nestedData != null) return JsonObject(value + ("result" to JsonObject(result + ("data" to mark(data)))))
+            return JsonObject(value + ("data" to mark(data)))
+        }
+        return mark(value)
     }
 
     private fun jsonResult(id: JsonElement, result: JsonObject): McpHttpResponse =

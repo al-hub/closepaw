@@ -231,7 +231,30 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val home = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
         val launcher = if (resolveLauncher) context.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName else knownLauncher
         val normal = classifier.classify(pkg) == AppTier.NORMAL || pkg == launcher
-        return runtime?.access(pkg, normal, operation) ?: normal
+        // This default is deliberately read-only, selected by current OS evidence,
+        // and never substitutes an app category/package-name allowlist for trust.
+        val readDefault = !normal && operation == "read" && commonReadDefault(pkg)
+        return runtime?.access(pkg, normal || readDefault, operation) ?: (normal || readDefault)
+    }
+    private fun commonReadDefault(pkg: String): Boolean {
+        val session = session()
+        val active = session != null && session.explicit && session.state == ControlSession.State.ACTIVE
+        val bundled = classifier.bundledTier(pkg)
+        val userTier = classifier.userOverrides.value[pkg]
+        if (!active || bundled != null || userTier != null) return false
+        return runCatching {
+            val selected = Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+            val component = selected?.let(ComponentName::unflattenFromString)
+            val ime = component?.packageName == pkg && context.getSystemService(InputMethodManager::class.java)
+                .enabledInputMethodList.any { it.id == selected && it.packageName == pkg }
+            if (ime) return@runCatching VerifiedReadDefaults.permits("read", active, bundled, userTier, true, false, false)
+            // The resolved component alone cannot distinguish a browser from a
+            // host/path-scoped default link handler. Require the matched filter.
+            val browser = BrowserReadResolver.permits(pkg) { intent, flags ->
+                context.packageManager.resolveActivity(intent, flags)
+            }
+            VerifiedReadDefaults.permits("read", active, bundled, userTier, ime, browser, browser)
+        }.getOrDefault(false)
     }
     override suspend fun capture(): ControlFrame {
         val service = AgentService.instance
@@ -342,7 +365,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             finally { windows.forEach { runCatching { it.recycle() } } }
         } ?: return fail("visual_window_unavailable")
         probeThrottle.awaitSlot()
-        val captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty()) { probeThrottle.awaitSlot() }
+        var captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty()) { probeThrottle.awaitSlot() }
+        // Retry only an explicit OS screenshot rate refusal, before any action.
+        // Never retry a denied/masked/changed screen or replay a gesture.
+        if (captured.proof == null && captured.reason == "screenshot_throttled") {
+            probeThrottle.awaitSlot()
+            captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty()) { probeThrottle.awaitSlot() }
+        }
         val proof = captured.proof ?: return fail(captured.reason ?: "visual_observation_unavailable")
         val after = capture()
         if(!ai.closepaw.platform.InputTypePrivacyPolicy.sameGeneration(admittedEditorGeneration,editorGeneration(service))) return fail("visual_editor_privacy_changed")
@@ -481,7 +510,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val key = if (keyboard) KeyboardKeyPolicy.identify(text, description, node.className?.toString().orEmpty(),
                     node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, node.isTextEntryKey) else null
                 val labelEvidence = if (keyboard) KeyboardKeyPolicy.identifyLabel(text, description) else null
-                val visualKey = if (keyboard && node.childCount <= 1) VisualKeyboardPolicy.literal(text, description) else null
+                val visualKey = if (keyboard && node.childCount <= 1) VisualKeyboardPolicy.identify(text, description) else null
                 if (keyboard) keyboardScan.record(text, description, node.className?.toString().orEmpty(),
                     node.isVisibleToUser, node.isEnabled, node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
                     node.isTextEntryKey, key != null)
@@ -785,7 +814,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     return@withTree ControlEffect(false,false,"visual_editor_privacy_changed")
                 if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
                     System.currentTimeMillis()-proof.at !in 0L..60_000L) return@withTree ControlEffect(false,false,"visual_proof_invalid_or_expired")
-                if ((action == "visual_key") != (proof.scope in setOf("keyboard", "display"))) return@withTree ControlEffect(false,false,"visual_scope_mismatch")
+                if (!VisualActionPolicy.scopeAllowed(action,proof.scope)) return@withTree ControlEffect(false,false,"visual_scope_mismatch")
                 if (action == "visual_key") VisualKeyboardPolicy.refusal(fresh, fresh.nodes.singleOrNull { it.id == node?.id }, proof.scope)?.let {
                     return@withTree ControlEffect(false,false,it)
                 }
@@ -793,12 +822,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     val a = input[prefix]?.jsonArray ?: return null
                     if (a.size != 4) return null
                     val numbers = a.map { it.jsonPrimitive.intOrNull ?: return null }
-                    val mapped = proof.map(TapBounds(numbers[0],numbers[1],numbers[2],numbers[3])) ?: return null
+                    val mapped = VisualActionPolicy.target(proof,action,TapBounds(numbers[0],numbers[1],numbers[2],numbers[3])) ?: return null
                     return Rect(mapped.left,mapped.top,mapped.right,mapped.bottom)
                 }
                 val start = rect("image_rect") ?: return@withTree ControlEffect(false,false,"visual_target_bounds_invalid")
                 val end = if (action in setOf("visual_drag","visual_scroll")) rect("image_end_rect")
                     ?: return@withTree ControlEffect(false,false,"visual_end_bounds_required") else null
+                if (!VisualActionPolicy.pathAllowed(proof,bounds(start),end?.let { bounds(it) }))
+                    return@withTree ControlEffect(false,false,"visual_path_pixels_unverified")
                 val latest = (if (proof.scope == "display") visualDisplay(fresh) else if (action == "visual_key") visualKeyboard(fresh) else visual(fresh)) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
                 if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context || latest.sourceWindowId != proof.sourceWindowId || latest.scope != proof.scope || latest.sourceDisplayId != proof.sourceDisplayId || latest.rotation != proof.rotation || latest.disclosedRegions != proof.disclosedRegions || latest.editorPrivacyGeneration != proof.editorPrivacyGeneration)
                     return@withTree ControlEffect(false,false,"visual_pixels_or_geometry_changed")
@@ -807,7 +838,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (action == "visual_key") visualKeyRect = start
                 else return@withTree tap(service, fresh, start, endBounds = end,
                     durationMs = if (action == "visual_long_press") 650 else if (end != null) 450 else 50) {
-                        if(!editorGenerationMatches(proof,service)) "visual_editor_privacy_changed" else editorImageRefusal(service,frame.packageName)
+                        if (proof.scope=="display" && proof.displayGeneration!=service.remoteDisplayChanges.version()) "display_window_changed_since_observation"
+                        else if(!editorGenerationMatches(proof,service)) "visual_editor_privacy_changed" else editorImageRefusal(service,frame.packageName)
                     }
             }
             val at = fresh.nodes.indexOfFirst { it.id == node?.id }
@@ -860,7 +892,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (fresh.keyboard == null || !fresh.keyboard.readAllowed || !fresh.keyboard.interactAllowed || fresh.keyboard != frame.keyboard || fresh.inputTargetId == null ||
                     fresh.inputTargetId != frame.inputTargetId || (action == "key" && !target.isTextEntryKey) || expected.keyboardKey.isEmpty())
                     return@withTree ControlEffect(false, false, "keyboard_target_unverified")
-                val key = (if (action == "visual_key") VisualKeyboardPolicy.literal(currentText, target.contentDescription?.toString().orEmpty())
+                val key = (if (action == "visual_key") VisualKeyboardPolicy.identify(currentText, target.contentDescription?.toString().orEmpty())
                 else KeyboardKeyPolicy.identify(currentText, target.contentDescription?.toString().orEmpty(),
                     target.className?.toString().orEmpty(), target.isClickable || target.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, target.isTextEntryKey))
                     ?: return@withTree ControlEffect(false, false, "keyboard_key_unrecognized")

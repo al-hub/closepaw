@@ -67,6 +67,30 @@ class McpOperationContractTest {
         } finally { scope.cancel(); ledger.delete() }
     }
 
+    @Test fun rootVisualFallbackMetadataMatchesActualImageDespiteEmptyNestedData() {
+        val proof = ai.closepaw.chatgpt.control.VisualTargetProof(
+            ai.closepaw.model.ScreenImage(1,1,"image/jpeg",byteArrayOf(1), ai.closepaw.model.ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
+            "pixels", ai.closepaw.chatgpt.control.TapBounds(0,0,1,1), "window", System.currentTimeMillis())
+        for (nested in listOf(false, true)) {
+            var allowed = true
+            ai.closepaw.chatgpt.control.VisualImageCache.put(proof) { allowed }
+            val handler = handler { _, _ -> buildJsonObject {
+                put("visual", proof.metadata()); put("image_included", false)
+                if (nested) put("result", buildJsonObject { put("data", buildJsonObject {}) })
+                else put("data", buildJsonObject {})
+            } }
+            val request = """{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"query","arguments":{"operation_id":"android.screen.observe","operation_version":1,"schema_hash":"hash","input_json":"{}"}}}"""
+            fun response() = Json.parseToJsonElement(handler.handle(request).body!!).jsonObject.getValue("result").jsonObject
+            val delivered = response()
+            assertThat(delivered.getValue("content").jsonArray).hasSize(2)
+            assertThat(delivered.getValue("structuredContent").jsonObject.getValue("image_included").jsonPrimitive.boolean).isTrue()
+            allowed = false
+            val revoked = response()
+            assertThat(revoked.getValue("content").jsonArray).hasSize(1)
+            assertThat(revoked.getValue("structuredContent").jsonObject.getValue("image_included").jsonPrimitive.boolean).isFalse()
+        }
+    }
+
     @Test fun screenObserveQueryReturnsActualImageBlockAndRevocationRemovesIt() {
         val image = ai.closepaw.model.ScreenImage(2, 3, "image/jpeg", byteArrayOf(1,2,3),
             ai.closepaw.model.ScreenImageSource.ACCESSIBILITY_SCREENSHOT)
@@ -76,16 +100,47 @@ class McpOperationContractTest {
         ai.closepaw.chatgpt.control.VisualImageCache.put(proof) { allowed }
         val handler = handler { name, _ ->
             assertThat(name).isEqualTo("query")
-            buildJsonObject { put("status", "succeeded"); put("data", buildJsonObject { put("visual", proof.metadata()) }) }
+            buildJsonObject { put("status", "succeeded"); put("data", buildJsonObject { put("visual", proof.metadata()); put("image_included", false) }) }
         }
         val request = """{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"query","arguments":{"operation_id":"android.screen.observe","operation_version":1,"schema_hash":"hash","input_json":"{}"}}}"""
-        fun content() = Json.parseToJsonElement(handler.handle(request).body!!).jsonObject.getValue("result").jsonObject.getValue("content").jsonArray
-        val blocks = content()
+        fun response() = Json.parseToJsonElement(handler.handle(request).body!!).jsonObject.getValue("result").jsonObject
+        val delivered = response()
+        val blocks = delivered.getValue("content").jsonArray
+        assertThat(delivered.getValue("structuredContent").jsonObject.getValue("data").jsonObject.getValue("image_included").jsonPrimitive.boolean).isTrue()
+        assertThat(blocks[0].jsonObject.getValue("text").jsonPrimitive.content).contains("\"image_included\":true")
         assertThat(blocks.map { it.jsonObject.getValue("type").jsonPrimitive.content }).containsExactly("text", "image").inOrder()
         assertThat(blocks[1].jsonObject.getValue("data").jsonPrimitive.content).isEqualTo("AQID")
         assertThat(blocks[1].jsonObject.getValue("mimeType").jsonPrimitive.content).isEqualTo("image/jpeg")
         allowed = false
-        assertThat(content().map { it.jsonObject.getValue("type").jsonPrimitive.content }).containsExactly("text")
+        val revoked = response()
+        assertThat(revoked.getValue("content").jsonArray.map { it.jsonObject.getValue("type").jsonPrimitive.content }).containsExactly("text")
+        assertThat(revoked.getValue("structuredContent").jsonObject.getValue("data").jsonObject.getValue("image_included").jsonPrimitive.boolean).isFalse()
+    }
+
+    @Test fun getTaskImageMetadataMatchesActualBlockAfterRevocation() {
+        val image = ai.closepaw.model.ScreenImage(2, 3, "image/jpeg", byteArrayOf(1,2,3),
+            ai.closepaw.model.ScreenImageSource.ACCESSIBILITY_SCREENSHOT)
+        val proof = ai.closepaw.chatgpt.control.VisualTargetProof(image, "pixels",
+            ai.closepaw.chatgpt.control.TapBounds(0,0,2,3), "window", System.currentTimeMillis())
+        var allowed = true
+        ai.closepaw.chatgpt.control.VisualImageCache.put(proof) { allowed }
+        val handler = handler { name, _ ->
+            assertThat(name).isEqualTo("get_task")
+            buildJsonObject { put("status", "succeeded"); put("result", buildJsonObject {
+                put("data", buildJsonObject { put("visual", proof.metadata()); put("image_included", false) })
+            }) }
+        }
+        val request = """{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"get_task","arguments":{"task_id":"test-task"}}}"""
+        fun response() = Json.parseToJsonElement(handler.handle(request).body!!).jsonObject.getValue("result").jsonObject
+        fun included(result: JsonObject) = result.getValue("structuredContent").jsonObject.getValue("result").jsonObject
+            .getValue("data").jsonObject.getValue("image_included").jsonPrimitive.boolean
+        val delivered = response()
+        assertThat(included(delivered)).isTrue()
+        assertThat(delivered.getValue("content").jsonArray).hasSize(2)
+        allowed = false
+        val revoked = response()
+        assertThat(included(revoked)).isFalse()
+        assertThat(revoked.getValue("content").jsonArray).hasSize(1)
     }
 
     @Test fun malformedArgumentsAndUnsupportedProtocolDoNotCrashOrReflectUnknownVersion() {

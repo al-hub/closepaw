@@ -45,15 +45,48 @@ class TerminalInputConnectionTest {
         val before = prefs.all.toMap()
         val session = service.remoteControlSession
         try {
-            prefs.edit().putBoolean("generic_control_enabled", true).putString("runtime_control_v1",
-                """{"revision":1,"config":{"node_budget":4096,"output_limit":80,"apps":{"com.termux":"interact"}}}""").commit()
+            // This suite tests Termux's official InputConnection, not IME pixel
+            // admission. Explicitly deny reading the OS-selected IME so its
+            // genuinely sensitive nodes cannot be exposed by this fixture.
+            // Keyboard image disclosure is a separate fail-closed acceptance gate.
+            val selectedIme = android.provider.Settings.Secure.getString(
+                service.contentResolver, android.provider.Settings.Secure.DEFAULT_INPUT_METHOD)
+            val imePackage = selectedIme?.let(android.content.ComponentName::unflattenFromString)?.packageName
+            assertNotNull("Selected OS IME required for isolated terminal test", imePackage)
+            val runtimeConfig = buildJsonObject {
+                put("revision", 1)
+                put("config", buildJsonObject {
+                    put("node_budget", 4096); put("output_limit", 80)
+                    put("apps", buildJsonObject {
+                        put("com.termux", "interact")
+                        put(imePackage!!, "deny")
+                    })
+                })
+            }.toString()
+            prefs.edit().putBoolean("generic_control_enabled", true)
+                .putString("runtime_control_v1", runtimeConfig).commit()
             instrumentation.runOnMainSync { session.end(); assertTrue(session.start()) }
             fun launch(password: Boolean) = ApplicationProvider.getApplicationContext<android.content.Context>().startActivity(
                 Intent().setClassName("com.termux", "com.termux.TerminalFixtureActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("password", password))
             launch(false)
+            // A previous instrumentation Activity can leave the launcher or
+            // clipboard fixture foreground. Require the actual Termux window
+            // before accepting any native InputConnection binding.
+            await {
+                var foreground = false
+                instrumentation.runOnMainSync {
+                    val root = service.rootInActiveWindow
+                    try { foreground = root?.packageName?.toString() == "com.termux" }
+                    finally { root?.recycle() }
+                }
+                foreground
+            }
             await {
                 var ready = false
-                instrumentation.runOnMainSync { ready = TerminalInputBinding.capture(service) != null }
+                instrumentation.runOnMainSync {
+                    val binding = TerminalInputBinding.capture(service)
+                    ready = binding != null && service.inputMethod?.currentInputEditorInfo?.packageName == "com.termux"
+                }
                 ready
             }
             val port = AndroidControlPort(service, runtime = settings.runtimeControl) { settings.genericControlEnabled }
@@ -75,7 +108,42 @@ class TerminalInputConnectionTest {
                         return control.observe()
                     previous=next
                 }
-                fail("Fixture screen did not settle at $fixtureStage: ${previous.reason}")
+                var windowSummary = ""
+                instrumentation.runOnMainSync {
+                    windowSummary = service.windows.orEmpty().joinToString(";") { window ->
+                        val root = window.root
+                        try {
+                            "type=${window.type},id=${window.id},display=${window.displayId},pkg=${root?.packageName ?: "none"},ownedIndicator=${window.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY && service.ownsRemoteControlIndicatorWindow(window.id)}"
+                        } finally {
+                            root?.recycle()
+                        }
+                    }
+                }
+                var sensitivitySummary = ""
+                instrumentation.runOnMainSync {
+                    val kinds = mutableListOf<String>()
+                    for (window in service.windows.orEmpty().filter {
+                        it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION ||
+                            it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD
+                    }) {
+                        val root = window.root ?: continue
+                        fun scan(node: android.view.accessibility.AccessibilityNodeInfo) {
+                            val resource = node.viewIdResourceName.orEmpty().substringAfterLast('/').lowercase()
+                            val sensitiveResource = listOf("password", "credential", "biometric", "lock_settings", "pin_entry", "otp", "permission_allow").any { resource.contains(it) }
+                            val sensitiveFlag = android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive
+                            if (node.isPassword || sensitiveFlag || sensitiveResource) {
+                                kinds.add("type=${window.type},visible=${node.isVisibleToUser},password=${node.isPassword},flag=$sensitiveFlag,resource=$sensitiveResource")
+                            }
+                            for (i in 0 until node.childCount) {
+                                val child = node.getChild(i) ?: continue
+                                try { scan(child) } finally { child.recycle() }
+                            }
+                        }
+                        try { scan(root) } finally { root.recycle() }
+                    }
+                    sensitivitySummary = kinds.take(12).joinToString(";") + ";count=${kinds.size}"
+                }
+                fail("Fixture screen did not settle at $fixtureStage: ${previous.reason}; foreground=${previous.packageName}; selection=${previous.windowDiagnostics}; windows=$windowSummary; sensitivity=$sensitivitySummary")
                 return control.observe()
             }
             val observed = settled(); assertTrue(observed.toString(), observed.success)
@@ -118,7 +186,7 @@ class TerminalInputConnectionTest {
             val iy=((osBounds[1]+160-window[1]).toLong()*visualMeta.getValue("image_height").jsonPrimitive.int/(window[3]-window[1])).toInt()
             val tapped=control.action(buildJsonObject { put("action","visual_tap");put("session_id",session.id);put("observation_id",visual.data.getValue("observation_id"));put("visual_id",visualMeta.getValue("visual_id"));put("visual_target_confirmed",true)
                 put("image_rect",JsonArray(listOf(ix-2,iy-2,ix+2,iy+2).map{JsonPrimitive(it)})) })
-            assertTrue(tapped.toString(),tapped.success)
+            assertTrue("$tapped; recapture_reason=${port.visualFailure()}",tapped.success)
             // Positive display capture uses the fixture app alone. The emulator's
             // default IME exposes an authentication boundary when its whole tree
             // is admitted; do not relax that production scan to make QA pass.

@@ -7,6 +7,42 @@ import java.util.UUID
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.*
 
+/** A display proof can target the app or its separately authorized IME. Generic
+ * gestures stay within certified app pixels; IME interaction uses visual_key. */
+internal object VisualActionPolicy {
+    fun scopeAllowed(action: String, scope: String): Boolean = when (scope) {
+        "app" -> action != "visual_key"
+        "keyboard" -> action == "visual_key"
+        "display" -> true
+        else -> false
+    }
+    private fun bounds(value: String): TapBounds? {
+        val parts=value.split(' ')
+        if (parts.size!=4) return null
+        val n=parts.map { it.toIntOrNull() ?: return null }
+        return TapBounds(n[0],n[1],n[2],n[3]).takeIf { it.valid }
+    }
+    fun target(proof: VisualTargetProof, action: String, imageRect: TapBounds): TapBounds? {
+        val target=proof.map(imageRect) ?: return null
+        if (proof.scope=="display" && action!="visual_key") {
+            val app=bounds(proof.applicationBounds) ?: return null
+            if (!app.contains(target)) return null
+            if (proof.imeBounds.isNotEmpty()) {
+                val ime=bounds(proof.imeBounds) ?: return null
+                if (target.left<ime.right && target.right>ime.left && target.top<ime.bottom && target.bottom>ime.top) return null
+            }
+        }
+        return target
+    }
+    fun pathAllowed(proof: VisualTargetProof, start: TapBounds, end: TapBounds?): Boolean {
+        if (proof.scope!="display" || end==null) return true
+        // A conservative rectangle enclosing the gesture must contain no masked
+        // pixels. Native dispatch separately rechecks the live app region/path.
+        return OwnedPixelPolicy.contains(proof.disclosedRegions,TapBounds(minOf(start.left,end.left),minOf(start.top,end.top),
+            maxOf(start.right,end.right),maxOf(start.bottom,end.bottom)))
+    }
+}
+
 internal data class ControlNode(val id: Int, val text: String = "", val description: String = "", val resourceId: String = "",
     val clickable: Boolean = false, val editable: Boolean = false, val scrollable: Boolean = false,
     val enabled: Boolean = true, val password: Boolean = false, val empty: Boolean = true,
@@ -231,7 +267,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         if (action.startsWith("visual_")) {
             val proof = frame.visual ?: return failure("visual_observation_required")
-            if ((action == "visual_key") != (proof.scope in setOf("keyboard", "display"))) return failure("visual_scope_mismatch")
+            if (!VisualActionPolicy.scopeAllowed(action,proof.scope)) return failure("visual_scope_mismatch")
             if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
                 now() - proof.at !in 0L..60_000L) return failure("visual_proof_invalid_or_expired")
         }
