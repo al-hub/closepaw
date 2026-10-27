@@ -248,21 +248,12 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val ime = component?.packageName == pkg && context.getSystemService(InputMethodManager::class.java)
                 .enabledInputMethodList.any { it.id == selected && it.packageName == pkg }
             if (ime) return@runCatching VerifiedReadDefaults.permits("read", active, bundled, userTier, true, false, false)
-            // Public resolver evidence only: querying arbitrary role holders is
-            // privileged on Android. A chooser or a host-specific link handler
-            // cannot establish a selected general browser.
-            val browsers = listOf("http", "https").map { scheme ->
-                context.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW,
-                    android.net.Uri.parse("$scheme://example.invalid/")).addCategory(Intent.CATEGORY_BROWSABLE),
-                    android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            // The resolved component alone cannot distinguish a browser from a
+            // host/path-scoped default link handler. Require the matched filter.
+            val browser = BrowserReadResolver.permits(pkg) { intent, flags ->
+                context.packageManager.resolveActivity(intent, flags)
             }
-            val browser = browsers.all { resolved -> resolved?.activityInfo?.let {
-                it.packageName == pkg && it.enabled && it.exported
-            } == true }
-            // Both HTTP and HTTPS must resolve to the same enabled, exported OS default handler.
-            // ResolveInfo has no handleAllWebDataURI property; do not infer trust from the handler.
-            val generalWeb = browser
-            VerifiedReadDefaults.permits("read", active, bundled, userTier, ime, browser, generalWeb)
+            VerifiedReadDefaults.permits("read", active, bundled, userTier, ime, browser, browser)
         }.getOrDefault(false)
     }
     override suspend fun capture(): ControlFrame {
