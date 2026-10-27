@@ -13,6 +13,7 @@
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Package visibility: Allow querying launchable apps and Termux RUN_COMMAND (Android 11+) -->
@@ -103,6 +104,11 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="User-enabled persistent authenticated remote command endpoint for this device, with a visible connection notification and explicit Stop control" />
         </service>
+
+        <service
+            android:name=".platform.virtualdisplay.MediaProjectionCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <receiver android:name=".update.SelfUpdateReceiver" android:exported="false" />
         <receiver android:name=".chatgpt.ChatGptConnectionReceiver" android:exported="false">

@@ -10,6 +10,8 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import android.media.projection.MediaProjectionManager
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +26,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import ai.closepaw.BuildConfig
+import ai.closepaw.platform.virtualdisplay.MediaProjectionCaptureService
 import ai.closepaw.auth.AuthCredential
 import ai.closepaw.auth.AuthStore
 import ai.closepaw.history.ResumedSessionData
@@ -131,6 +134,41 @@ class MainActivity : ComponentActivity() {
     )
     private var oauthJob: kotlinx.coroutines.Job? = null
     private var pendingVoicePermissionRequest by mutableStateOf(false)
+
+    /**
+     * Issue #165: launches the real MediaProjectionManager system consent dialog and feeds the
+     * OS decision into the shared fail-closed [MediaProjectionConsentGate]. No auto-approve,
+     * no automation of the dialog, single-use token handled by the capture service.
+     */
+    private val projectionConsentLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            onProjectionConsentResult(result.resultCode, result.data)
+        }
+
+    internal fun requestProjectionConsent() {
+        if (!MediaProjectionCaptureService.consentGate.onRequestStarted()) {
+            Log.w(TAG, "requestProjectionConsent: a consent round is already live; ignoring")
+            return
+        }
+        val manager = getSystemService(MediaProjectionManager::class.java) ?: run {
+            MediaProjectionCaptureService.consentGate.onCancelled()
+            return
+        }
+        projectionConsentLauncher.launch(manager.createScreenCaptureIntent())
+    }
+
+    private fun onProjectionConsentResult(resultCode: Int, resultData: Intent?) {
+        val gate = MediaProjectionCaptureService.consentGate
+        val sessionId = java.util.UUID.randomUUID().toString()
+        val granted = resultCode == RESULT_OK && resultData != null
+        when (gate.onDecision(granted, sessionId.takeIf { granted })) {
+            is ai.closepaw.platform.virtualdisplay.ProjectionConsentState.Granted -> {
+                MediaProjectionCaptureService.startFromConsent(this, resultCode, resultData!!, sessionId)
+            }
+            is ai.closepaw.platform.virtualdisplay.ProjectionConsentState.Denied -> Log.i(TAG, "Projection consent denied by user")
+            else -> gate.onCancelled()
+        }
+    }
 
     internal fun isVoicePermissionRequestPending(): Boolean = pendingVoicePermissionRequest
 
