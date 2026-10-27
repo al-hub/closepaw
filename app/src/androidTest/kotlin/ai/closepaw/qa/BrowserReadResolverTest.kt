@@ -46,8 +46,14 @@ class BrowserReadResolverTest {
         assertFalse(admitted { value, _ -> value.filter = IntentFilter(Intent.ACTION_VIEW).apply {
             addCategory(Intent.CATEGORY_DEFAULT); addCategory(Intent.CATEGORY_BROWSABLE); addDataScheme("ftp")
         } })
-        assertFalse(admitted { value, _ -> value.filter.removeCategory(Intent.CATEGORY_DEFAULT) })
-        assertFalse(admitted { value, _ -> value.filter.removeCategory(Intent.CATEGORY_BROWSABLE) })
+        for (missing in listOf(Intent.CATEGORY_DEFAULT, Intent.CATEGORY_BROWSABLE)) {
+            assertFalse(admitted { value, scheme -> value.filter = IntentFilter(Intent.ACTION_VIEW).apply {
+                addDataScheme(scheme)
+                for (category in listOf(Intent.CATEGORY_DEFAULT, Intent.CATEGORY_BROWSABLE)) {
+                    if (category != missing) addCategory(category)
+                }
+            } })
+        }
     }
     @Test fun rejectsHostPathSchemeSpecificAndMimeScopedLinkHandlers() {
         assertFalse(admitted { value, _ -> value.filter.addDataAuthority("example.invalid", null) })
@@ -55,7 +61,7 @@ class BrowserReadResolverTest {
         assertFalse(admitted { value, _ -> value.filter.addDataSchemeSpecificPart("//example.invalid/", PatternMatcher.PATTERN_LITERAL) })
         assertFalse(admitted { value, _ -> value.filter.addDataType("text/html") })
         if (Build.VERSION.SDK_INT >= 35) {
-            assertFalse(admitted { value, _ -> value.filter.addUriRelativeFilterGroup(UriRelativeFilterGroup(true)) })
+            assertFalse(admitted { value, _ -> value.filter.addUriRelativeFilterGroup(UriRelativeFilterGroup(UriRelativeFilterGroup.ACTION_ALLOW)) })
         }
     }
     @Test fun rejectsChooserMissingEvidenceDisabledAndUnexportedResults() {
