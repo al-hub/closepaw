@@ -45,8 +45,26 @@ class TerminalInputConnectionTest {
         val before = prefs.all.toMap()
         val session = service.remoteControlSession
         try {
-            prefs.edit().putBoolean("generic_control_enabled", true).putString("runtime_control_v1",
-                """{"revision":1,"config":{"node_budget":4096,"output_limit":80,"apps":{"com.termux":"interact"}}}""").commit()
+            // This suite tests Termux's official InputConnection, not IME pixel
+            // admission. Explicitly deny reading the OS-selected IME so its
+            // genuinely sensitive nodes cannot be exposed by this fixture.
+            // Keyboard image disclosure is a separate fail-closed acceptance gate.
+            val selectedIme = android.provider.Settings.Secure.getString(
+                service.contentResolver, android.provider.Settings.Secure.DEFAULT_INPUT_METHOD)
+            val imePackage = selectedIme?.let(android.content.ComponentName::unflattenFromString)?.packageName
+            assertNotNull("Selected OS IME required for isolated terminal test", imePackage)
+            val runtimeConfig = buildJsonObject {
+                put("revision", 1)
+                put("config", buildJsonObject {
+                    put("node_budget", 4096); put("output_limit", 80)
+                    put("apps", buildJsonObject {
+                        put("com.termux", "interact")
+                        put(imePackage!!, "deny")
+                    })
+                })
+            }.toString()
+            prefs.edit().putBoolean("generic_control_enabled", true)
+                .putString("runtime_control_v1", runtimeConfig).commit()
             instrumentation.runOnMainSync { session.end(); assertTrue(session.start()) }
             fun launch(password: Boolean) = ApplicationProvider.getApplicationContext<android.content.Context>().startActivity(
                 Intent().setClassName("com.termux", "com.termux.TerminalFixtureActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("password", password))
