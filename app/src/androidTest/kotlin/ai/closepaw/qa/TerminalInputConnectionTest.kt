@@ -69,9 +69,24 @@ class TerminalInputConnectionTest {
             fun launch(password: Boolean) = ApplicationProvider.getApplicationContext<android.content.Context>().startActivity(
                 Intent().setClassName("com.termux", "com.termux.TerminalFixtureActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("password", password))
             launch(false)
+            // A previous instrumentation Activity can leave the launcher or
+            // clipboard fixture foreground. Require the actual Termux window
+            // before accepting any native InputConnection binding.
+            await {
+                var foreground = false
+                instrumentation.runOnMainSync {
+                    val root = service.rootInActiveWindow
+                    try { foreground = root?.packageName?.toString() == "com.termux" }
+                    finally { root?.recycle() }
+                }
+                foreground
+            }
             await {
                 var ready = false
-                instrumentation.runOnMainSync { ready = TerminalInputBinding.capture(service) != null }
+                instrumentation.runOnMainSync {
+                    val binding = TerminalInputBinding.capture(service)
+                    ready = binding != null && service.inputMethod?.currentInputEditorInfo?.packageName == "com.termux"
+                }
                 ready
             }
             val port = AndroidControlPort(service, runtime = settings.runtimeControl) { settings.genericControlEnabled }
