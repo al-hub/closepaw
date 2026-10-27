@@ -54,7 +54,7 @@ class MediaProjectionFramePolicyTest {
     @Test
     fun `concurrent open and invalidate converge closed`() {
         val policy = policy()
-        val allowed = listOf(false, false, false)
+        val allowed = BooleanArray(3)
         val threads = (0 until 3).map { i ->
             thread {
                 repeat(1_000) {
