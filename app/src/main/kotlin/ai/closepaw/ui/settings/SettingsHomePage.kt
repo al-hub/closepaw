@@ -51,7 +51,7 @@ internal fun SettingsHomePage(
     approvalMode: ApprovalMode,
     onNavigate: (SettingsPage) -> Unit,
     onDismiss: () -> Unit,
-    onRequestProjectionConsent: () -> Unit
+    onRequestProjectionConsent: () -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         PageMastheadIdentity(title = "Settings", onClose = onDismiss)
