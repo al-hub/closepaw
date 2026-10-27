@@ -106,7 +106,7 @@ class MediaProjectionCaptureService : Service() {
     }
 
     /** Create the main-screen virtual display with a null surface that renders/encodes nothing. */
-    fun createIdleVirtualDisplay(projection: MediaProjection): VirtualDisplay? {
+    private fun createIdleVirtualDisplay(projection: MediaProjection): VirtualDisplay? {
         val metrics = resources.displayMetrics
         val display = projection.createVirtualDisplay(
             "ClosePaw#165-idle",
@@ -162,7 +162,7 @@ class MediaProjectionCaptureService : Service() {
         }
         val notification: Notification = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("ClosePaw screen capture active")
-            .setContentText("Screen capture consent is active. Stop from the notification.")
+            .setContentText("Use Android screen-sharing controls to stop sharing.")
             .setSmallIcon(android.R.drawable.ic_menu_close_clear_cancel)
             .setOngoing(true)
             .build()
