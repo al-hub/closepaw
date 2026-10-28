@@ -17,9 +17,14 @@ public final class TerminalFixtureActivity extends Activity {
             // Android may grant the window later than an arbitrary postDelayed.
             // Bind only when actually served; never retry a text/submit action.
             terminal.requestFocus();
-            InputMethodManager manager = (InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
-            manager.restartInput(terminal);
-            manager.showSoftInput(terminal, InputMethodManager.SHOW_IMPLICIT);
+            // Let ViewRoot dispatch window focus to InputMethodManager first.
+            // Calling inline can precede native served-view readiness.
+            terminal.post(() -> {
+                if (!terminal.hasWindowFocus() || !terminal.isFocused()) return;
+                InputMethodManager manager = (InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
+                manager.restartInput(terminal);
+                manager.showSoftInput(terminal, InputMethodManager.SHOW_IMPLICIT);
+            });
         }
     }
     @Override public void onNewIntent(Intent intent) {

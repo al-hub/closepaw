@@ -11,6 +11,7 @@ import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Configurator
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import org.junit.Assert.*
@@ -45,15 +46,31 @@ internal class OsProjectionConsentFixture {
         assertNull(ProjectionImageTransport.active())
         assertFalse(ImageRevocationAuthority.isConsentGranted)
         // UiDevice must retain accessibility service binding during OS UI interaction.
-        instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        // UiDevice obtains UiAutomation itself; configure its flags too, or it
+        // reconnects with defaults and suppresses AgentService (including its IME).
+        Configurator.getInstance().setUiAutomationFlags(
+            UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         val device = UiDevice.getInstance(instrumentation)
         ActivityScenario.launch(MainActivity::class.java).use { activity ->
             activity.onActivity { it.requestProjectionConsent() }
             assertEquals(ProjectionConsentState.Requesting, gate.state)
+            // Both decisions must target the projection dialog after it owns
+            // focus, rather than a stale/generic SystemUI alert during launch.
+            val mode = By.res(Pattern.compile(
+                "com.android.systemui:id/screen_share_mode_(spinner|options)"
+            )).pkg("com.android.systemui")
+            val options = requireNotNull(device.wait(Until.findObject(mode), 10_000)) {
+                "OS projection sharing-mode control missing"
+            }
+            await("OS projection dialog did not gain focus") {
+                automation.windows.any { window ->
+                    val root = window.root
+                    try { window.isFocused && root?.packageName?.toString() == "com.android.systemui" }
+                    finally { root?.recycle() }
+                }
+            }
             if (approve) {
-                val options = requireNotNull(device.wait(Until.findObject(By.res(Pattern.compile(
-                    "com.android.systemui:id/screen_share_mode_(spinner|options)"
-                ))), 10_000)) { "OS projection sharing-mode control missing" }
                 options.click()
                 val resources = context.packageManager.getResourcesForApplication("com.android.systemui")
                 val entireScreenId = resources.getIdentifier(
@@ -64,7 +81,7 @@ internal class OsProjectionConsentFixture {
                 }.click()
             }
             val button = if (approve) "android:id/button1" else "android:id/button2"
-            requireNotNull(device.wait(Until.findObject(By.res(button).pkg("com.android.systemui")), 10_000)) {
+            requireNotNull(device.wait(Until.findObject(By.res(button).pkg("com.android.systemui").enabled(true).clickable(true)), 10_000)) {
                 "OS projection consent button missing: $button"
             }.click()
             if (approve) {
