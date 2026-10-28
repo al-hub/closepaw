@@ -273,6 +273,7 @@ internal class AndroidReadAppTool(
                 else -> "none"
             })
             put("ocr_attempted", shouldOcr)
+            put("ocr_derived_content", ocrContent.isNotBlank())
             put(
                 "capture_source",
                 when {

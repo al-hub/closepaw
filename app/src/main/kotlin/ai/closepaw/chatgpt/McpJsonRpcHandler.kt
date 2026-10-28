@@ -208,6 +208,19 @@ internal class McpJsonRpcHandler(
     }
 
     private fun toolResult(id: JsonElement, result: ReadAppToolResult): McpHttpResponse {
+        // OCR text originates from captured pixels even when the image block is omitted.
+        // Never downgrade revoked screenshot text into an unguarded text-only response.
+        val screenshotDerived = result.structured["text_source"]?.jsonPrimitive?.content == "on_device_ocr" ||
+            result.structured["capture_source"]?.jsonPrimitive?.content == "screenshot_ocr" ||
+            result.structured["ocr_derived_content"]?.jsonPrimitive?.booleanOrNull == true
+        if (screenshotDerived && (result.imageEpoch == null ||
+                !ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(result.imageEpoch))) {
+            return toolResult(id, buildJsonObject {
+                put("status", "failed")
+                put("reason_code", "image_consent_revoked")
+                put("summary", "Screenshot-derived content was revoked.")
+            })
+        }
         val admittedImageEpoch = result.imageEpoch?.takeIf {
             ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(it)
         }
@@ -240,7 +253,7 @@ internal class McpJsonRpcHandler(
                 put("structuredContent", structured)
                 put("isError", isError)
             }
-        ).copy(imageEpoch = admittedImageEpoch.takeIf { imageIncluded })
+        ).copy(imageEpoch = admittedImageEpoch.takeIf { imageIncluded || screenshotDerived })
     }
 
     private fun toolResult(id: JsonElement, structured: JsonObject): McpHttpResponse {
