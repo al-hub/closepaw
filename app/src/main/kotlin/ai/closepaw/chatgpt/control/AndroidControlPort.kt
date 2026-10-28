@@ -170,7 +170,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         if(Build.VERSION.SDK_INT>=33 && (service?.inputMethod as? ai.closepaw.platform.GuardedAccessibilityInputMethod)?.imagePrivacy?.let {
             it.packageName==pkg && it.sensitive
         }==true) "visual_sensitive_editor" else null
-    override fun visualDisclosureAllowed(frame: ControlFrame): Boolean = reason(AgentService.instance) == null &&
+    override fun visualDisclosureAllowed(frame: ControlFrame): Boolean = frame.visual?.sourceDisclosureAllowed() == true && reason(AgentService.instance) == null &&
         editorImageRefusal(AgentService.instance,frame.packageName)==null && editorGenerationMatches(frame.visual,AgentService.instance) &&
         packageAllowed(frame.packageName, operation = "read") && (runtime?.snapshot()?.revision ?: 0L) == frame.configurationRevision &&
         (frame.visual?.scope !in setOf("keyboard", "display") || (frame.visual?.scope == "display" && frame.keyboard == null) || frame.keyboard?.let {
@@ -339,7 +339,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         visualFailureReason="visual_observation_unavailable"
         if (frame.reason != null || frame.truncated || frame.navigationOnly || frame.touchContext.isEmpty()) return fail("visual_frame_unverified")
         val service = AgentService.instance ?: return fail("accessibility_permission_missing")
-        islandRefusal(sessionFor(service).id)?.let { return fail(it) }
+        val admittedSession = sessionFor(service)
+        val admittedSessionId = admittedSession.id
+        val admittedSessionEpoch = admittedSession.epoch
+        val sessionOwner = java.lang.ref.WeakReference(admittedSession)
+        islandRefusal(admittedSessionId)?.let { return fail(it) }
         val admittedEditorGeneration=editorGeneration(service) ?: return fail("visual_editor_privacy_unavailable")
         editorImageRefusal(service,frame.packageName)?.let {return fail(it)}
         val keyboardImage = scope != "app"
@@ -364,13 +368,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             try { windows.singleOrNull { it.id == captureId }?.let { bounds(windowBounds(it)) } }
             finally { windows.forEach { runCatching { it.recycle() } } }
         } ?: return fail("visual_window_unavailable")
+        val projection = if (scope == "display") ai.closepaw.platform.virtualdisplay.ProjectionImageTransport.active() else null
         probeThrottle.awaitSlot()
-        var captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty()) { probeThrottle.awaitSlot() }
+        var captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty(), projection = projection) { probeThrottle.awaitSlot() }
         // Retry only an explicit OS screenshot rate refusal, before any action.
         // Never retry a denied/masked/changed screen or replay a gesture.
         if (captured.proof == null && captured.reason == "screenshot_throttled") {
             probeThrottle.awaitSlot()
-            captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty()) { probeThrottle.awaitSlot() }
+            captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty(), projection = projection) { probeThrottle.awaitSlot() }
         }
         val proof = captured.proof ?: return fail(captured.reason ?: "visual_observation_unavailable")
         val after = capture()
@@ -390,7 +395,15 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val latest=withContext(Dispatchers.Main) { displayPlan(service,after) } ?: return fail("display_post_surface_changed")
             if (latest.bounds!=plan.bounds || latest.rotation!=plan.rotation || latest.region!=plan.region || latest.surfaces!=plan.surfaces) return fail("display_post_geometry_changed")
         }
-        return proof.copy(scope=scope,sourceWindowId=if(scope=="display") -1 else captureId,
+        val sourceCheck = proof.sourceDisclosureAllowed
+        val disclosureCheck: () -> Boolean = {
+            sourceCheck() && sessionOwner.get()?.let {
+                it.id == admittedSessionId && it.epoch == admittedSessionEpoch &&
+                    it.explicit && it.state == ControlSession.State.ACTIVE
+            } == true
+        }
+        if (!disclosureCheck()) return fail("visual_source_revoked_or_expired")
+        return proof.copy(sourceDisclosureAllowed=disclosureCheck,scope=scope,sourceWindowId=if(scope=="display") -1 else captureId,
             sourceDisplayId=if(plan!=null) 0 else -1,rotation=plan?.rotation ?: -1,
             applicationBounds=plan?.appBounds.orEmpty(),imeBounds=plan?.imeBounds.orEmpty(),
             sourceImeWindowId=if(plan!=null) keyboard?.windowId ?: -1 else -1,displayGeneration=if(plan!=null) displayGeneration else -1,editorPrivacyGeneration=admittedEditorGeneration)
@@ -810,6 +823,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             var visualKeyRect: Rect? = null
             if (action.startsWith("visual_")) {
                 val proof = frame.visual ?: return@withTree ControlEffect(false, false, "visual_observation_required")
+                if (!proof.sourceDisclosureAllowed()) return@withTree ControlEffect(false,false,"visual_source_revoked_or_expired")
                 if(!editorGenerationMatches(proof,service) || editorImageRefusal(service,frame.packageName)!=null)
                     return@withTree ControlEffect(false,false,"visual_editor_privacy_changed")
                 if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
@@ -838,7 +852,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (action == "visual_key") visualKeyRect = start
                 else return@withTree tap(service, fresh, start, endBounds = end,
                     durationMs = if (action == "visual_long_press") 650 else if (end != null) 450 else 50) {
-                        if (proof.scope=="display" && proof.displayGeneration!=service.remoteDisplayChanges.version()) "display_window_changed_since_observation"
+                        if (!proof.sourceDisclosureAllowed()) "visual_source_revoked_or_expired"
+                        else if (proof.scope=="display" && proof.displayGeneration!=service.remoteDisplayChanges.version()) "display_window_changed_since_observation"
                         else if(!editorGenerationMatches(proof,service)) "visual_editor_privacy_changed" else editorImageRefusal(service,frame.packageName)
                     }
             }
@@ -906,6 +921,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (action == "visual_key" && (visualKeyRect == null || !rect.contains(visualKeyRect) || !visualKeyRect.contains(rect.centerX(), rect.centerY()) || VisualKeyboardPolicy.proofOwnerRefusal(frame.visual,fresh.keyboard) != null))
                     return@withTree ControlEffect(false,false,"keyboard_visual_bounds_invalid")
                 return@withTree tap(service, fresh, tapRect, fresh.keyboard.windowId) {
+                    if (action=="visual_key" && frame.visual?.sourceDisclosureAllowed() != true)
+                        return@tap "visual_source_revoked_or_expired"
                     if(action=="visual_key" && (!editorGenerationMatches(frame.visual,service) || editorImageRefusal(service,frame.packageName)!=null))
                         return@tap "visual_editor_privacy_changed"
                     if (action == "visual_key" && frame.visual?.scope == "display" && frame.visual.displayGeneration != service.remoteDisplayChanges.version())

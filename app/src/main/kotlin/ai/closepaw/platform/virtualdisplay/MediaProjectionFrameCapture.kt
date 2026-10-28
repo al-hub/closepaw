@@ -13,63 +13,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * Lifecycle/race/freshness policy for the diagnostic-only MediaProjection mirror scope
- * of issue #165. Pure Kotlin (no Android types), so the ordering guarantees can be
- * proven by JVM unit tests.
- *
- * Rules:
- * - Fail closed by construction: a surface can be opened once per session, and
- *   [invalidate] (revocation/teardown) permanently arms it; after that no path —
- *   including a racing concurrent [openSurface] — can make acquisition legal again.
- * - Only geometry (width/height/timestamp) is observable. Pixel bytes are never
- *   copied, hashed, logged or returned by any API in this module.
- */
-class MediaProjectionFramePolicy(
-    private val maxFrameAgeMs: Long = 1_000L,
-    private val maxMirrorPixels: Long = 8_000_000L,
-) {
-    private val lock = Any()
-    private var opened = false
-    private var invalid = false
-
-    /** Open the single bounded capture surface; false if closed,already open or invalidated. */
-    fun openSurface(): Boolean = synchronized(lock) {
-        if (invalid || opened) false else { opened = true; true }
-    }
-
-    /** Recheck immediately before every acquire; revocation wins the race. */
-    fun acquireAllowed(): Boolean = synchronized(lock) { opened && !invalid }
-
-    /**
-     * Mark the session revoked/ending (projection onStop, service teardown). Never
-     * resurrected by [closeSurface] or a later [openSurface]; the only route back is a
-     * fresh OS consent round producing a new policy.
-     */
-    fun invalidate(): Boolean = synchronized(lock) {
-        val firstTime = !invalid
-        invalid = true
-        opened = false
-        firstTime
-    }
-
-    /** Release surface state after teardown. Idempotent; cannot undo [invalidate]. */
-    fun closeSurface(): Boolean = synchronized(lock) {
-        val openWas = opened
-        opened = false
-        invalid = true // one OS consent permits one bounded surface only
-        openWas
-    }
-
-    /** Mirrored frames above this pixel budget are refused (same cap as window screenshots). */
-    fun acceptsMirrorGeometry(width: Int, height: Int): Boolean =
-        width > 0 && height > 0 && width.toLong() * height <= maxMirrorPixels
-
-    /** A frame older than the bound, or with an unknown clock value, is never fresh. */
-    fun isFrameFresh(capturedAtMs: Long, nowMs: Long): Boolean =
-        capturedAtMs >= 0 && nowMs >= capturedAtMs && nowMs - capturedAtMs <= maxFrameAgeMs
-}
-
 /** Geometry-only description of the newest mirrored frame. No pixels are carried or logged. */
 data class MirroredFrameGeometry(
     val width: Int?,
@@ -82,8 +25,8 @@ data class MirroredFrameGeometry(
 
 /**
  * Owns the bounded [ImageReader] / [VirtualDisplay] pair for one OS consent round.
- * Buffers acquired are closed immediately after geometry is read; no bitmap, hash or
- * byte array ever escapes. Entire scope is torn down on revocation and can never be
+ * Every acquired buffer is closed by its consumer. Only ProjectionImageLease may copy
+ * fresh pixels for guarded display verification. The scope is torn down on revocation and cannot be
  * reopened after [MediaProjectionFrameScope.close] — a scope is strictly one-session.
  */
 internal class MediaProjectionFrameScope internal constructor(
@@ -107,10 +50,9 @@ internal class MediaProjectionFrameScope internal constructor(
 }
 
 /**
- * Static entry points for the diagnostic-only pixel channel of issue #165. Ownership
- * and region masking are exclusively the accessibility screenshot path's job
- * (WindowVisualCapture); the mirror scope exists only so capture geometry can be
- * verified against the display, never as an image source.
+ * Surface creation and geometry diagnostics for issue #165. ProjectionImageLease is
+ * the bounded pixel consumer; ownership and region masking remain exclusively in
+ * WindowVisualCapture. A raw mirror is never sufficient for image disclosure.
  */
 internal object MediaProjectionFrameCapture {
     private const val TAG = "MediaProjectionCapture"
@@ -140,7 +82,7 @@ internal object MediaProjectionFrameCapture {
             thread = HandlerThread("ClosePawMirrorFrame").apply { start() }
             reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, MAX_IMAGES)
             display = projection.createVirtualDisplay(
-                "ClosePaw#165-diagnostic-mirror",
+                "ClosePaw#165-mirror",
                 width, height, dpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 reader.surface,

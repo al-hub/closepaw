@@ -104,4 +104,12 @@ class MediaProjectionFramePolicyTest {
         assertTrue(policy.openSurface()) // policy survives independently of gate state
         assertTrue(policy.invalidate())
     }
+    @Test fun `delivery expires independently of observation lifetime`() {
+        val policy = policy()
+        assertTrue(policy.isDeliveryFresh(500, 10_500))
+        assertFalse(policy.isDeliveryFresh(500, 10_501))
+        assertFalse(policy.isDeliveryFresh(1_000, 999))
+        assertFalse(policy.isDeliveryFresh(-1, 100))
+    }
+
 }

@@ -16,12 +16,6 @@ package ai.closepaw.platform.virtualdisplay
  *   "implicitly granted" state; the only route back to a usable grant is a new OS decision.
  * - It exposes no screenshot, capture or coordinate capability whatsoever.
  *
- * NOT_IMPLEMENTED (intentionally out of this bounded task): the actual Android wiring —
- * launching the consent intent via MediaProjectionManager and registering
- * MediaProjection.Callback(onStop) to feed [onRevoked] / [onCancelled] — is not integrated
- * here. The real service layer must supply events; until that wiring lands, this gate is an
- * idle no-op that holds every capture consumer closed.
- *
  * Thread-safety: [state] reads/writes are atomic (`@Volatile`); event callbacks are expected
  * on the caller's lifecycle thread. Capture consumers must re-check [isProbeAllowed] after
  * any state read.
@@ -61,6 +55,10 @@ class MediaProjectionConsentGate {
     @Volatile var state: ProjectionConsentState = ProjectionConsentState.NotRequested
         private set
 
+    /** Monotonic consent round identity; old image leases can never revive. */
+    @Volatile var generation: Long = 0
+        private set
+
     /**
      * Mark that the caller surfaced the OS consent dialog. Only valid before any terminal
      * round or after a closed round; ignored while a grant is live so a new request cannot
@@ -71,6 +69,7 @@ class MediaProjectionConsentGate {
         val current = state
         if (current is ProjectionConsentState.Granted) return false
         if (current is ProjectionConsentState.Requesting) return false
+        generation++
         state = ProjectionConsentState.Requesting
         return true
     }
@@ -170,6 +169,7 @@ class MediaProjectionConsentGate {
     /** Reset to a fresh gate (e.g., after teardown logging). Never resurrects a grant. */
     @Synchronized
     fun reset() {
+        generation++
         state = ProjectionConsentState.NotRequested
     }
 }

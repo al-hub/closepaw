@@ -92,8 +92,8 @@ internal fun SettingsHomePage(
                 onClick = { onNavigate(SettingsPage.PERMISSIONS_ADVANCED) }
             )
             SettingsNavigationRow(
-                title = "Screen capture consent (diagnostic)",
-                subtitle = "Show Android consent only · no pixels transferred",
+                title = "Share screen images with ChatGPT",
+                subtitle = "Android approval required · masked images only during active control",
                 onClick = onRequestProjectionConsent
             )
             ChatGptConnectionCard()

@@ -267,6 +267,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         if (action.startsWith("visual_")) {
             val proof = frame.visual ?: return failure("visual_observation_required")
+            if (!proof.sourceDisclosureAllowed()) return failure("visual_source_revoked_or_expired")
             if (!VisualActionPolicy.scopeAllowed(action,proof.scope)) return failure("visual_scope_mismatch")
             if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
                 now() - proof.at !in 0L..60_000L) return failure("visual_proof_invalid_or_expired")

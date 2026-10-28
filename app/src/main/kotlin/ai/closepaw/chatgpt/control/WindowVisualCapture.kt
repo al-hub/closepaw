@@ -1,5 +1,6 @@
 package ai.closepaw.chatgpt.control
 
+import ai.closepaw.platform.virtualdisplay.ProjectionImageLease
 import ai.closepaw.model.ScreenImage
 import ai.closepaw.model.ScreenImageSource
 import android.accessibilityservice.AccessibilityService
@@ -31,11 +32,15 @@ internal data class IsolatedVisualSurface(val windowId: Int, val bounds: TapBoun
 internal object WindowVisualCapture {
     suspend fun capture(service: AccessibilityService, windowId: Int, window: TapBounds, context: String,
         display: Boolean = false, visibleRegion: Region? = null,
-        surfaces: List<IsolatedVisualSurface> = emptyList(), awaitSlot: suspend () -> Unit = {}): VisualCaptureResult {
+        surfaces: List<IsolatedVisualSurface> = emptyList(), projection: ProjectionImageLease? = null, awaitSlot: suspend () -> Unit = {}): VisualCaptureResult {
         fun failure(code: String) = VisualCaptureResult(reason=code)
         if (Build.VERSION.SDK_INT < 34 || !window.valid || (display && visibleRegion == null)) return failure("screenshot_geometry_unverified")
         var nativeReason = "screenshot_timeout"
-        val captured = withTimeoutOrNull(5_000) { withContext(Dispatchers.Main) {
+        // Projection is an explicit display-only source, never an ownership proof.
+        if (projection != null && !display) return failure("projection_display_scope_required")
+        val projected = if (projection != null) projection.capture()
+            ?: return failure("projection_frame_unavailable") else null
+        val captured = if (projected != null) null else withTimeoutOrNull(5_000) { withContext(Dispatchers.Main) {
             suspendCancellableCoroutine<AccessibilityService.ScreenshotResult?> { continuation ->
                 val callback = object : AccessibilityService.TakeScreenshotCallback {
                     override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
@@ -53,20 +58,26 @@ internal object WindowVisualCapture {
                 catch (_: SecurityException) { nativeReason="screenshot_permission_denied"; if (continuation.isActive) continuation.resume(null) }
                 catch (_: Exception) { nativeReason="screenshot_dispatch_failed"; if (continuation.isActive) continuation.resume(null) }
             }
-        } } ?: return failure(nativeReason)
+        } }
+        if (projected == null && captured == null) return failure(nativeReason)
         return try { withContext(Dispatchers.Default) {
             var bitmap: Bitmap? = null; var scaled: Bitmap? = null
             var disclosed: List<TapBounds> = emptyList()
             try {
-                val buffer = captured.hardwareBuffer
-                if (buffer.width != window.right-window.left || buffer.height != window.bottom-window.top) {
-                    recordGeometryMismatch(service, if (display) "display" else "window", buffer.width, buffer.height, window)
+                if (projected != null) {
+                    bitmap = projected.bitmap
+                } else {
+                    val buffer = captured!!.hardwareBuffer
+                    if (buffer.width.toLong()*buffer.height > 8_000_000) return@withContext failure("screenshot_pixel_limit")
+                    val hardware = Bitmap.wrapHardwareBuffer(buffer, captured.colorSpace) ?: return@withContext failure("screenshot_buffer_wrap_failed")
+                    bitmap = try { hardware.copy(Bitmap.Config.ARGB_8888, display) } finally { hardware.recycle() }
+                }
+                val source = bitmap ?: return@withContext failure("screenshot_bitmap_copy_failed")
+                if (source.width != window.right-window.left || source.height != window.bottom-window.top) {
+                    recordGeometryMismatch(service, if (display) "display" else "window", source.width, source.height, window)
                     return@withContext failure("screenshot_buffer_geometry_mismatch")
                 }
-                if (buffer.width.toLong()*buffer.height > 8_000_000) return@withContext failure("screenshot_pixel_limit")
-                val hardware = Bitmap.wrapHardwareBuffer(buffer, captured.colorSpace) ?: return@withContext failure("screenshot_buffer_wrap_failed")
-                bitmap = try { hardware.copy(Bitmap.Config.ARGB_8888, display) } finally { hardware.recycle() }
-                val source = bitmap ?: return@withContext failure("screenshot_bitmap_copy_failed")
+                if (source.width.toLong()*source.height > 8_000_000) return@withContext failure("screenshot_pixel_limit")
                 if (display) {
                     if(surfaces.isEmpty()) return@withContext failure("display_isolated_sources_required")
                     val actual=IntArray(source.width*source.height)
@@ -98,11 +109,21 @@ internal object WindowVisualCapture {
                 scaled = Bitmap.createScaledBitmap(source, maxOf(1,(source.width*ratio).toInt()), maxOf(1,(source.height*ratio).toInt()), true)
                 val image = scaled!!; val out = ByteArrayOutputStream()
                 if (!image.compress(Bitmap.CompressFormat.JPEG,80,out)) return@withContext failure("screenshot_compression_failed")
-                VisualCaptureResult(VisualTargetProof(ScreenImage(image.width,image.height,"image/jpeg",out.toByteArray(),ScreenImageSource.ACCESSIBILITY_SCREENSHOT),hash,window,context,System.currentTimeMillis(),disclosedRegions=disclosed))
+                val bytes = out.toByteArray()
+                if (bytes.size > 1_500_000) return@withContext failure("screenshot_byte_limit")
+                val sourceAllowed: () -> Boolean = if (projected == null) ({ true }) else {
+                    val lease = projected.lease; val at = projected.capturedAt
+                    val check: () -> Boolean = { lease.permitsDelivery(at) }
+                    check
+                }
+                if (!sourceAllowed()) return@withContext failure("projection_session_expired")
+                VisualCaptureResult(VisualTargetProof(ScreenImage(image.width,image.height,"image/jpeg",bytes,
+                    if (projected == null) ScreenImageSource.ACCESSIBILITY_SCREENSHOT else ScreenImageSource.MEDIA_PROJECTION),
+                    hash,window,context,System.currentTimeMillis(),disclosedRegions=disclosed,sourceDisclosureAllowed=sourceAllowed))
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { failure("screenshot_conversion_failed") }
             finally { if (scaled !== bitmap) scaled?.recycle(); bitmap?.recycle() }
-        } } finally { captured.hardwareBuffer.close() }
+        } } finally { captured?.hardwareBuffer?.close(); projected?.bitmap?.takeUnless { it.isRecycled }?.recycle() }
     }
     private fun recordGeometryMismatch(
         service: AccessibilityService, scope: String, bufferWidth: Int, bufferHeight: Int, bounds: TapBounds

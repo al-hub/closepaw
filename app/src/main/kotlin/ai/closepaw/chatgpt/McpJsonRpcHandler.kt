@@ -238,9 +238,9 @@ internal class McpJsonRpcHandler(
     }
 
     private fun toolResult(id: JsonElement, structured: JsonObject): McpHttpResponse {
-        // Resolve once after live consent/session/cache revocation checks. Metadata
-        // describes this actual response, never the earlier capture/ledger result.
-        val image = ai.closepaw.chatgpt.control.VisualImageCache.imageFor(structured)
+        // Bounded encoding rechecks live consent/session/source after conversion.
+        // Metadata describes this response, never an earlier capture/ledger result.
+        val image = ai.closepaw.chatgpt.control.VisualImageCache.encodedFor(structured)
         val delivered = withImageDeliveryMetadata(structured, image != null)
         val content = delivered["content"]?.jsonPrimitive?.content
             ?.takeIf { it.isNotBlank() }
@@ -256,7 +256,7 @@ internal class McpJsonRpcHandler(
                     })
                     image?.let { image ->
                         add(buildJsonObject { put("type", "image"); put("mimeType", image.mimeType)
-                            put("data", java.util.Base64.getEncoder().encodeToString(image.bytes)) })
+                            put("data", image.data) })
                     }
                 })
                 put("structuredContent", delivered)

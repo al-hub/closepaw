@@ -29,12 +29,10 @@ import android.util.Log
  *   marks the single-use grant consumed immediately after registration.
  * - onStop teardown is unconditional: revoke feed into the gate, stop the virtual display,
  *   release capture resources, stopForeground/stopSelf.
- * - The only capture surface is the one-session, bounded diagnostic mirror scope
- *   ([MediaProjectionFrameCapture]): it reads frame GEOMETRY (width/height/timestamp)
- *   from the newest mirrored frame and closes every buffer immediately. A whole-display
- *   mirror can never prove certified-window ownership or mask unknown overlays, so its
- *   pixels are never exposed as images or coordinates; image delivery stays exclusively
- *   with the accessibility screenshot path (WindowVisualCapture).
+ * - The single bounded mirror surface supplies explicit display-image requests only.
+ *   WindowVisualCapture verifies pixels against isolated accessibility screenshots and
+ *   masks everything else; native policy and active control consent remain mandatory.
+ *   No raw frame is cached, persisted, logged or returned directly to MCP.
  * - Revocation races fail closed: the [MediaProjectionFramePolicy] is invalidated before
  *   any resource release, so no acquire can be legal after revocation.
  */
@@ -67,6 +65,7 @@ class MediaProjectionCaptureService : Service() {
     private var projection: MediaProjection? = null
     @Volatile private var framePolicy: MediaProjectionFramePolicy? = null
     @Volatile private var frameScope: MediaProjectionFrameScope? = null
+    private var imageLease: ProjectionImageLease? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -112,8 +111,8 @@ class MediaProjectionCaptureService : Service() {
                 stopSelfSafely()
                 return START_NOT_STICKY
             }
-            openDiagnosticMirrorScope(newProjection)
-            Log.i(TAG, "MediaProjection consent round consumed; one-session diagnostic mirror scope handled")
+            openMirrorScope(newProjection)
+            Log.i(TAG, "MediaProjection consent round consumed; one-session mirror scope opened")
         } catch (e: Exception) {
             Log.w(TAG, "getMediaProjection failed; failing closed", e)
             consentGate.onRevoked()
@@ -122,8 +121,8 @@ class MediaProjectionCaptureService : Service() {
         return START_NOT_STICKY
     }
 
-    /** One-session, bounded, diagnostic-only geometry scope; null-surface idle mode removed. */
-    private fun openDiagnosticMirrorScope(projection: MediaProjection) {
+    /** One-session, bounded, geometry and guarded image scope; null-surface idle mode removed. */
+    private fun openMirrorScope(projection: MediaProjection) {
         val metrics = resources.displayMetrics
         val policy = MediaProjectionFramePolicy()
         framePolicy = policy
@@ -132,22 +131,10 @@ class MediaProjectionCaptureService : Service() {
         )
         frameScope = scope
         if (scope == null) {
-            Log.i(TAG, "Mirror scope stayed closed; diagnostic geometry unavailable, capture remains disabled")
+            Log.i(TAG, "Mirror scope stayed closed; diagnostic geometry unavailable, image transport unavailable")
             return
         }
-        // Image acquisition may wait up to two seconds: never block Android's main thread.
-        Thread({
-            val current = frameScope
-            val currentPolicy = framePolicy
-            if (current === scope && currentPolicy != null) {
-                val geometry = MediaProjectionFrameCapture.latestDiagnosticGeometry(current, currentPolicy)
-                val dims = if (geometry.width != null && geometry.height != null) {
-                    "${geometry.width}x${geometry.height}"
-                } else "unknown"
-                Log.i(TAG, "Mirror frame geometry ${dims} (${geometry.reason}); " +
-                    "pixels never exposed, ownership proof stays with accessibility screenshots")
-            }
-        }, "ClosePawMirrorDiagnostic").start()
+        imageLease = ProjectionImageLease(scope, policy, consentGate).also(ProjectionImageTransport::publish)
     }
 
     private fun registerProjectionCallbacks(newProjection: MediaProjection) {
@@ -174,6 +161,8 @@ class MediaProjectionCaptureService : Service() {
     private fun teardownCaptureResources() {
         // Invalidate first so any in-flight acquire loses the race and fails closed.
         framePolicy?.invalidate()
+        ProjectionImageTransport.remove(imageLease)
+        imageLease = null
         framePolicy = null
         runCatching { frameScope?.close() }
         frameScope = null

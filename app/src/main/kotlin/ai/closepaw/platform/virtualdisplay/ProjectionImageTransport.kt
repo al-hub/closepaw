@@ -1,0 +1,95 @@
+package ai.closepaw.platform.virtualdisplay
+
+import android.graphics.Bitmap
+import android.os.SystemClock
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
+
+/** No Context or projection token is retained here. Only the service can publish a lease.
+ * Raw frames stay invocation-local and must pass the accessibility ownership/masking path. */
+internal object ProjectionImageTransport {
+    @Volatile private var current: ProjectionImageLease? = null
+    fun active(): ProjectionImageLease? = current?.takeIf { it.isActive() }
+    @Synchronized fun publish(lease: ProjectionImageLease) { current = lease }
+    fun remove(lease: ProjectionImageLease?) {
+        synchronized(this) { if (current === lease) current = null }
+    }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+internal class ProjectionImageLease(
+    private val scope: MediaProjectionFrameScope,
+    private val policy: MediaProjectionFramePolicy,
+    private val consent: MediaProjectionConsentGate,
+) {
+    private val generation = consent.generation
+    fun isActive(): Boolean = consent.generation == generation && consent.state == ProjectionConsentState.Consumed &&
+        policy.acquireAllowed() && scope.isOpen()
+
+    fun permitsDelivery(capturedAt: Long): Boolean = isActive() &&
+        policy.isDeliveryFresh(capturedAt, SystemClock.elapsedRealtime())
+
+    /** Bounded acquisition, no cached pixels and no fallback. The caller owns the bitmap.
+     * ImageReader timestamps use the monotonic timebase; unknown/future/old values fail closed. */
+    suspend fun capture(): ProjectionBitmap? = withTimeoutOrNull(1_500) {
+        suspendCancellableCoroutine { continuation ->
+            val acquire = object : Runnable {
+                override fun run() {
+                    var bitmap: Bitmap? = null
+                    try {
+                        if (!continuation.isActive || !isActive()) {
+                            if (continuation.isActive) continuation.resume(null)
+                            return
+                        }
+                        val image = scope.reader.acquireLatestImage()
+                        if (image == null) {
+                            scope.handler.postDelayed(this, 25)
+                            return
+                        }
+                        val capturedAt = image.timestamp / 1_000_000
+                        try {
+                            if (image.timestamp > 0 && capturedAt <= SystemClock.elapsedRealtime() &&
+                                !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime())) {
+                                // Drain stalled pre-request buffers, then wait within the same deadline.
+                                scope.handler.postDelayed(this, 25)
+                                return
+                            }
+                            if (image.timestamp <= 0 || !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime()) ||
+                                !policy.acceptsMirrorGeometry(image.width, image.height) || image.planes.size != 1) {
+                                continuation.resume(null)
+                                return
+                            }
+                            val plane = image.planes[0]
+                            val width = image.width; val height = image.height
+                            val packed = ProjectionFramePacking.pack(plane.buffer, width, height, plane.rowStride, plane.pixelStride)
+                            if (packed == null) {
+                                continuation.resume(null)
+                                return
+                            }
+                            bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                            bitmap!!.copyPixelsFromBuffer(packed)
+                        } finally { image.close() }
+                        if (!isActive() || !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime())) {
+                            bitmap?.recycle(); bitmap = null
+                            continuation.resume(null)
+                        } else {
+                            val result = ProjectionBitmap(bitmap!!, this@ProjectionImageLease, capturedAt)
+                            bitmap = null
+                            continuation.resume(result, onCancellation = { _: Throwable -> result.bitmap.recycle() })
+                        }
+                    } catch (_: Exception) {
+                        bitmap?.recycle()
+                        if (continuation.isActive) continuation.resume(null)
+                    }
+                }
+            }
+            continuation.invokeOnCancellation { scope.handler.removeCallbacks(acquire) }
+            val posted = scope.handler.post(acquire)
+            if (!posted && continuation.isActive) continuation.resume(null)
+        }
+    }
+}
+
+internal data class ProjectionBitmap(val bitmap: Bitmap, val lease: ProjectionImageLease, val capturedAt: Long)

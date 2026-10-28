@@ -100,6 +100,7 @@ data class ScreenImage(
 
 enum class ScreenImageSource {
     ACCESSIBILITY_SCREENSHOT,
+    MEDIA_PROJECTION,
     VIRTUAL_DISPLAY_CAPTURE
 }
 
