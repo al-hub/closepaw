@@ -1,11 +1,15 @@
 package ai.closepaw.platform.virtualdisplay
 
 import ai.closepaw.chatgpt.control.ControlDiagnostics
+import android.graphics.Bitmap
 import android.media.Image
+import android.os.SystemClock
 import android.media.ImageReader
 import android.os.Handler
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.advanceTimeBy
@@ -17,6 +21,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.nio.ByteBuffer
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ProjectionImageLeaseTest {
@@ -81,4 +86,35 @@ class ProjectionImageLeaseTest {
         verify(exactly = 0) { reader.acquireLatestImage() }
         assertEquals("lease_not_active", lastEvent()["reason_code"]!!.jsonPrimitive.content)
     }
+    @Test fun `frame resumed at deadline is reclaimed when timeout wins`() = runTest {
+        val image = mockk<Image>(relaxed = true)
+        val plane = mockk<Image.Plane>()
+        val bitmap = mockk<Bitmap>(relaxed = true)
+        var queued: Runnable? = null
+        mockkStatic(SystemClock::class, Bitmap::class)
+        try {
+            every { SystemClock.elapsedRealtime() } returns 1000L
+            every { Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888) } returns bitmap
+            every { handler.post(any<Runnable>()) } answers { queued = firstArg(); true }
+            every { reader.acquireLatestImage() } returns image
+            every { image.timestamp } returns 1_000_000_000L
+            every { image.width } returns 1
+            every { image.height } returns 1
+            every { image.planes } returns arrayOf(plane)
+            every { plane.buffer } returns ByteBuffer.allocate(4)
+            every { plane.rowStride } returns 4
+            every { plane.pixelStride } returns 4
+            val capture = async { lease().capture() }
+            runCurrent()
+            advanceTimeBy(1_500)
+            checkNotNull(queued).run()
+            runCurrent()
+            assertNull(capture.await())
+            verify(exactly = 1) { image.close() }
+            verify(exactly = 1) { bitmap.recycle() }
+        } finally {
+            unmockkStatic(SystemClock::class, Bitmap::class)
+        }
+    }
+
 }
