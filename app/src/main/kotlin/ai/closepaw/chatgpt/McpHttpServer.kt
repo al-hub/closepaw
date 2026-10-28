@@ -137,9 +137,10 @@ internal class McpHttpServer(
             append("\r\n")
         }.toByteArray(StandardCharsets.ISO_8859_1)
         output.write(headers)
-        // Recheck revocation immediately before image bytes. A stopped session never starts a new body.
-        if (response.imageEpoch != null && !ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(response.imageEpoch)) return
-        if (response.imageEpoch != null) {
+        // Recheck the *outgoing* payload: a revoked image has already been replaced
+        // with a non-image 403 response, which must be sent to the caller.
+        if (outgoing.imageEpoch != null && !ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(outgoing.imageEpoch)) return
+        if (outgoing.imageEpoch != null) {
             // Bound the post-revocation exposure to at most one in-progress buffer write.
             // A revoked stream is deliberately truncated; clients must discard incomplete JSON.
             var offset = 0
