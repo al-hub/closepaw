@@ -81,6 +81,7 @@ internal class ProjectionImageLease(
                     }
                     override fun run() {
                         var bitmap: Bitmap? = null
+                        var operation = "acquire"
                         try {
                             if (!continuation.isActive) return
                             if (!isActive()) {
@@ -93,36 +94,52 @@ internal class ProjectionImageLease(
                                 return
                             }
                             var capturedAt = 0L
+                            var reason: String? = null
+                            var stale = false
                             try {
+                                operation = "image_metadata"
                                 val timestamp = image.timestamp
                                 capturedAt = timestamp / 1_000_000
-                                if (timestamp > 0 && capturedAt <= SystemClock.elapsedRealtime() &&
-                                    !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime())) {
-                                    retry("stale_frame")
-                                    return
+                                stale = timestamp > 0 && capturedAt <= SystemClock.elapsedRealtime() &&
+                                    !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime())
+                                if (!stale) {
+                                    reason = when {
+                                        timestamp <= 0 -> "invalid_timestamp"
+                                        !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime()) -> "timestamp_not_fresh"
+                                        !policy.acceptsMirrorGeometry(image.width, image.height) -> "geometry_refused"
+                                        image.planes.size != 1 -> "plane_count_refused"
+                                        else -> null
+                                    }
+                                    if (reason == null) {
+                                        val plane = image.planes[0]
+                                        val width = image.width; val height = image.height
+                                        operation = "packing"
+                                        val packed = ProjectionFramePacking.pack(plane.buffer, width, height, plane.rowStride, plane.pixelStride)
+                                        if (packed == null) {
+                                            reason = "packing_failed"
+                                        } else {
+                                            operation = "bitmap"
+                                            bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                                            bitmap!!.copyPixelsFromBuffer(packed)
+                                        }
+                                    }
                                 }
-                                val reason = when {
-                                    timestamp <= 0 -> "invalid_timestamp"
-                                    !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime()) -> "timestamp_not_fresh"
-                                    !policy.acceptsMirrorGeometry(image.width, image.height) -> "geometry_refused"
-                                    image.planes.size != 1 -> "plane_count_refused"
-                                    else -> null
+                            } finally {
+                                try { image.close() } catch (e: Exception) {
+                                    operation = "image_close"
+                                    throw e
                                 }
-                                if (reason != null) {
-                                    finish(reason)
-                                    return
-                                }
-                                val plane = image.planes[0]
-                                val width = image.width; val height = image.height
-                                val packed = ProjectionFramePacking.pack(plane.buffer, width, height, plane.rowStride, plane.pixelStride)
-                                if (packed == null) {
-                                    finish("packing_failed")
-                                    return
-                                }
-                                bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                                bitmap!!.copyPixelsFromBuffer(packed)
-                            } finally { image.close() }
-                            val reason = when {
+                            }
+                            if (stale) {
+                                retry("stale_frame")
+                                return
+                            }
+                            if (reason != null) {
+                                finish(reason!!)
+                                return
+                            }
+                            operation = "post_acquire"
+                            reason = when {
                                 !isActive() -> "lease_not_active"
                                 !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime()) -> "post_acquire_not_fresh"
                                 else -> null
@@ -137,7 +154,7 @@ internal class ProjectionImageLease(
                             }
                         } catch (_: Exception) {
                             bitmap?.recycle()
-                            finish("acquire_exception")
+                            finish("${operation}_exception")
                         }
                     }
                 }
@@ -170,3 +187,4 @@ internal class ProjectionImageLease(
 }
 
 internal data class ProjectionBitmap(val bitmap: Bitmap, val lease: ProjectionImageLease, val capturedAt: Long)
+

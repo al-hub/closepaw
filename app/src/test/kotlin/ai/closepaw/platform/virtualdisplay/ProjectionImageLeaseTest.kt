@@ -75,7 +75,7 @@ class ProjectionImageLeaseTest {
         every { image.timestamp } throws IllegalStateException("test")
         assertNull(lease().capture())
         verify(exactly = 1) { image.close() }
-        assertEquals("acquire_exception", lastEvent()["reason_code"]!!.jsonPrimitive.content)
+        assertEquals("image_metadata_exception", lastEvent()["reason_code"]!!.jsonPrimitive.content)
     }
 
     @Test fun `revoked lease does not read image`() = runTest {
@@ -117,4 +117,23 @@ class ProjectionImageLeaseTest {
         }
     }
 
+    @Test fun `close failure overrides refusal before completion`() = runTest {
+        val image = mockk<Image>(relaxed = true)
+        every { handler.post(any<Runnable>()) } answers { firstArg<Runnable>().run(); true }
+        every { reader.acquireLatestImage() } returns image
+        every { image.timestamp } returns 0L
+        every { image.close() } throws IllegalStateException("test")
+        assertNull(lease().capture())
+        verify(exactly = 1) { image.close() }
+        assertEquals("image_close_exception", lastEvent()["reason_code"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun `acquire exception is distinguished from metadata failure`() = runTest {
+        every { handler.post(any<Runnable>()) } answers { firstArg<Runnable>().run(); true }
+        every { reader.acquireLatestImage() } throws IllegalStateException("test")
+        assertNull(lease().capture())
+        assertEquals("acquire_exception", lastEvent()["reason_code"]!!.jsonPrimitive.content)
+    }
+
 }
+
