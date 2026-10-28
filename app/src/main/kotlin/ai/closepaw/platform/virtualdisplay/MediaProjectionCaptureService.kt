@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
+import ai.closepaw.security.ImageRevocationAuthority
 
 /**
  * Foreground service (`mediaProjection` FGS type) holding the OS-approved MediaProjection
@@ -49,6 +50,11 @@ class MediaProjectionCaptureService : Service() {
 
         /** Shared gate for the whole app; MainActivity feeds the OS decision, this service feeds onStop. */
         val consentGate = MediaProjectionConsentGate()
+
+        /** Synchronous barrier; resource cleanup may follow, but revocation must not be queued. */
+        fun revokeImageConsent() {
+            consentGate.revokeImageConsent()
+        }
 
         /** Launch the OS consent round from a user-visible Activity; never auto-started by the agent. */
         fun startFromConsent(context: Context, resultCode: Int, resultData: Intent, sessionId: String) {
@@ -95,17 +101,18 @@ class MediaProjectionCaptureService : Service() {
             return START_NOT_STICKY
         }
 
+        val imageEpoch = ImageRevocationAuthority.currentEpoch
         try {
             val newProjection = projectionManager.getMediaProjection(resultCode, resultData)
             if (newProjection == null) {
                 Log.w(TAG, "onStartCommand: OS returned no projection; revoking")
-                consentGate.onRevoked()
+                revokeImageConsent()
                 stopSelfSafely()
                 return START_NOT_STICKY
             }
             projection = newProjection
             registerProjectionCallbacks(newProjection)
-            if (!consentGate.onConsumed(sessionId)) {
+            if (!consentGate.onProjectionObtained(sessionId, imageEpoch)) {
                 Log.w(TAG, "Consent token already consumed or revoked; failing closed")
                 framePolicy?.invalidate()
                 stopSelfSafely()
@@ -115,7 +122,7 @@ class MediaProjectionCaptureService : Service() {
             Log.i(TAG, "MediaProjection consent round consumed; one-session mirror scope opened")
         } catch (e: Exception) {
             Log.w(TAG, "getMediaProjection failed; failing closed", e)
-            consentGate.onRevoked()
+            revokeImageConsent()
             stopSelfSafely()
         }
         return START_NOT_STICKY
@@ -142,7 +149,7 @@ class MediaProjectionCaptureService : Service() {
             object : MediaProjection.Callback() {
                 override fun onStop() {
                     Log.i(TAG, "MediaProjection.onStop: tearing down capture (revoked feed to gate)")
-                    consentGate.onRevoked()
+                    revokeImageConsent()
                     framePolicy?.invalidate()
                     mainHandler.post { teardownCaptureAndService() }
                 }
@@ -159,6 +166,7 @@ class MediaProjectionCaptureService : Service() {
     }
 
     private fun teardownCaptureResources() {
+        revokeImageConsent()
         // Invalidate first so any in-flight acquire loses the race and fails closed.
         framePolicy?.invalidate()
         ProjectionImageTransport.remove(imageLease)
@@ -201,7 +209,6 @@ class MediaProjectionCaptureService : Service() {
 
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: final capture teardown")
-        consentGate.onRevoked()
         teardownCaptureResources()
         super.onDestroy()
     }
