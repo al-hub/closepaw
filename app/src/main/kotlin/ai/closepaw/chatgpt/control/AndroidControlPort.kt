@@ -891,7 +891,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }, admittedEpoch)
             if (action in setOf("terminal_input", "terminal_submit")) {
                 // No Termux screen-selection absence proof exists for this binding.
-                TerminalInputPolicy.selectionRefusal()?.let { return@withTree ControlEffect(false, false, it) }                val text = input["text"]?.jsonPrimitive?.content.orEmpty()
+                TerminalInputPolicy.selectionRefusal()?.let { return@withTree ControlEffect(false, false, it) }
+                val text = input["text"]?.jsonPrimitive?.content.orEmpty()
                 val refusal = if (action == "terminal_submit") TerminalInputPolicy.submitRefusal(expected,text,
                     input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true, input["submit_authorized"]?.jsonPrimitive?.booleanOrNull == true, frame.terminalSubmission)
                     else TerminalInputPolicy.refusal(expected,text,input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true,
