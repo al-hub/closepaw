@@ -51,6 +51,7 @@ internal class ProjectionImageLease(
         var firstAgeBucket = "none"
         var lastAgeBucket = "none"
         var clockGapBucket = "none"
+        var lastUptimeAgeBucket = "none"
         fun bucket(ms: Long): String = when {
             ms < 0 -> "future"
             ms <= 1_000 -> "0_to_1s"
@@ -130,6 +131,7 @@ internal class ProjectionImageLease(
                                     if (firstAgeBucket == "none") firstAgeBucket = age
                                     lastAgeBucket = age
                                     clockGapBucket = bucket(elapsed - uptime)
+                                    lastUptimeAgeBucket = if (timestamp <= 0) "invalid" else bucket(uptime - capturedAt)
                                 }
                                 stale = timestamp > 0 && capturedAt <= SystemClock.elapsedRealtime() &&
                                     !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime())
@@ -212,6 +214,7 @@ internal class ProjectionImageLease(
                 put("first_age_bucket", firstAgeBucket)
                 put("last_age_bucket", lastAgeBucket)
                 put("clock_gap_bucket", clockGapBucket)
+                put("last_uptime_age_bucket", lastUptimeAgeBucket)
                 put("timestamp_same", sameTimestamps.coerceAtMost(1000))
                 put("timestamp_increasing", increasingTimestamps.coerceAtMost(1000))
                 put("timestamp_decreasing", decreasingTimestamps.coerceAtMost(1000))
