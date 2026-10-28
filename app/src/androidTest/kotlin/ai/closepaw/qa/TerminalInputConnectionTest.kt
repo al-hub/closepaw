@@ -1,6 +1,7 @@
 package ai.closepaw.qa
 
 import ai.closepaw.app.AgentService
+import ai.closepaw.security.ImageRevocationAuthority
 import ai.closepaw.chatgpt.McpExecutionSettings
 import ai.closepaw.chatgpt.control.*
 import android.app.UiAutomation
@@ -178,6 +179,9 @@ class TerminalInputConnectionTest {
             val submitted = control.action(buildJsonObject { put("action","terminal_submit");put("session_id",session.id);put("terminal_authorized",true);put("submit_authorized",true)
                 put("text",command);put("expected_output","fixture_ok");put("observation_id",submitObservation.data.getValue("observation_id"));put("node_id",terminalNode.getValue("node_id")) })
             assertTrue(submitted.toString(), submitted.success)
+            // Instrumentation-only consent fixture for accessibility pixel regressions.
+            // Production grants consent only after Android OS projection approval.
+            ImageRevocationAuthority.grantConsent()
             val visual = control.observe(includeImage=true); assertTrue(visual.toString(),visual.success)
             val visualMeta=visual.data.getValue("visual").jsonObject
             val osBounds=visual.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["resource_id"]?.jsonPrimitive?.content == "com.termux:id/terminal_view" }.getValue("bounds").jsonPrimitive.content.split(' ').map{it.toInt()}
@@ -272,6 +276,7 @@ class TerminalInputConnectionTest {
                 assertFalse(refused.success); assertEquals(JsonPrimitive(false), refused.data["action_attempted"])
             }
         } finally {
+            ImageRevocationAuthority.revokeConsent()
             instrumentation.runOnMainSync { session.end() }
             val edit = prefs.edit().clear()
             before.forEach { (k, v) -> when (v) { is Boolean -> edit.putBoolean(k, v); is String -> edit.putString(k, v); is Int -> edit.putInt(k, v); is Long -> edit.putLong(k, v) } }
