@@ -31,10 +31,10 @@ class MediaProjectionFramePolicyTest {
         val policy = policy()
         assertTrue(policy.openSurface())
         assertTrue(policy.closeSurface())
-        assertTrue(policy.openSurface()) // after graceful close, same single session can reopen
+        assertFalse(policy.openSurface()) // one-shot surface stays consumed even after graceful close
         assertTrue(policy.invalidate())
         assertFalse(policy.acquireAllowed())
-        assertTrue(policy.invalidate()) // idempotent
+        assertFalse(policy.invalidate()) // idempotent repeat reports no new transition
         assertFalse(policy.openSurface())
     }
 
