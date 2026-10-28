@@ -111,7 +111,7 @@ class MediaProjectionCaptureService : Service() {
         sessionOwner = owner
         val imageEpoch = ImageRevocationAuthority.currentEpoch
         try {
-            val newProjection = projectionManager.getMediaProjection(resultCode, resultData)
+            val newProjection = projectionManager.getMediaProjection(resultCode, requireNotNull(resultData))
             if (newProjection == null) {
                 Log.w(TAG, "onStartCommand: OS returned no projection; revoking")
                 owner.runIfCurrent(sessionOwner) { revokeImageConsent() }
