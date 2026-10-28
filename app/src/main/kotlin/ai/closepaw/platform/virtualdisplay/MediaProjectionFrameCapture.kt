@@ -57,7 +57,8 @@ class MediaProjectionFramePolicy(
     fun closeSurface(): Boolean = synchronized(lock) {
         val openWas = opened
         opened = false
-        !invalid && openWas
+        invalid = true // one OS consent permits one bounded surface only
+        openWas
     }
 
     /** Mirrored frames above this pixel budget are refused (same cap as window screenshots). */

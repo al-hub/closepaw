@@ -106,7 +106,12 @@ class MediaProjectionCaptureService : Service() {
             }
             projection = newProjection
             registerProjectionCallbacks(newProjection)
-            consentGate.onConsumed(sessionId)
+            if (!consentGate.onConsumed(sessionId)) {
+                Log.w(TAG, "Consent token already consumed or revoked; failing closed")
+                framePolicy?.invalidate()
+                stopSelfSafely()
+                return START_NOT_STICKY
+            }
             openDiagnosticMirrorScope(newProjection)
             Log.i(TAG, "MediaProjection consent round consumed; one-session diagnostic mirror scope handled")
         } catch (e: Exception) {
@@ -151,6 +156,7 @@ class MediaProjectionCaptureService : Service() {
                 override fun onStop() {
                     Log.i(TAG, "MediaProjection.onStop: tearing down capture (revoked feed to gate)")
                     consentGate.onRevoked()
+                    framePolicy?.invalidate()
                     mainHandler.post { teardownCaptureAndService() }
                 }
             },
