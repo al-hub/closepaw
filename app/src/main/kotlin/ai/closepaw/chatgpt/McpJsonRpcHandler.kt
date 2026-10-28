@@ -220,7 +220,7 @@ internal class McpJsonRpcHandler(
                 put("status", "failed")
                 put("reason_code", "image_consent_revoked")
                 put("summary", "Screenshot-derived content was revoked.")
-            })
+            }).copy(imageEpoch = result.imageEpoch)
         }
         val admittedImageEpoch = result.imageEpoch?.takeIf {
             ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(it)
@@ -233,6 +233,8 @@ internal class McpJsonRpcHandler(
             ?.takeIf { it.isNotBlank() }
             ?: summary
         val isError = structured["status"]?.jsonPrimitive?.content == "failed"
+        // Source provenance must survive revocation between the checks above.
+        // The final MCP writer denies revoked epochs, including text-only OCR.
         return jsonResult(
             id,
             buildJsonObject {
@@ -254,7 +256,7 @@ internal class McpJsonRpcHandler(
                 put("structuredContent", structured)
                 put("isError", isError)
             }
-        ).copy(imageEpoch = admittedImageEpoch.takeIf { imageIncluded || screenshotDerived })
+        ).copy(imageEpoch = if (screenshotDerived) result.imageEpoch else admittedImageEpoch.takeIf { imageIncluded })
     }
 
     private fun toolResult(id: JsonElement, structured: JsonObject): McpHttpResponse {
