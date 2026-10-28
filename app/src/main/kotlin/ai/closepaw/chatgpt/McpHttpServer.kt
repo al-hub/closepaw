@@ -116,7 +116,8 @@ internal class McpHttpServer(
     }
 
     private fun writeResponse(output: BufferedOutputStream, response: McpHttpResponse) {
-        val authorized = response.imageEpoch?.let {
+        val imageEpoch = response.imageEpoch
+        val authorized = imageEpoch?.let {
             ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(it)
         } ?: true
         val outgoing = if (authorized) response else McpHttpResponse(403, """{"error":"image_consent_revoked"}""")
@@ -138,18 +139,18 @@ internal class McpHttpServer(
         }.toByteArray(StandardCharsets.ISO_8859_1)
         output.write(headers)
         // Recheck revocation immediately before image bytes. A stopped session never starts a new body.
-        if (authorized && response.imageEpoch != null && !ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(response.imageEpoch)) return
-        if (authorized && response.imageEpoch != null) {
+        if (authorized && imageEpoch != null && !ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageEpoch)) return
+        if (authorized && imageEpoch != null) {
             // Bound the post-revocation exposure to at most one in-progress buffer write.
             // A revoked stream is deliberately truncated; clients must discard incomplete JSON.
             var offset = 0
             while (offset < bodyBytes.size) {
-                if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(response.imageEpoch)) return
+                if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageEpoch)) return
                 val count = minOf(4096, bodyBytes.size - offset)
                 output.write(bodyBytes, offset, count)
                 offset += count
             }
-            if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(response.imageEpoch)) return
+            if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageEpoch)) return
         } else {
             output.write(bodyBytes)
         }
