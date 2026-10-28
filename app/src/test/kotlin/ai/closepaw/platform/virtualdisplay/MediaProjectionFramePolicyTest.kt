@@ -32,7 +32,7 @@ class MediaProjectionFramePolicyTest {
         assertTrue(policy.openSurface())
         assertTrue(policy.closeSurface())
         assertFalse(policy.openSurface()) // one-shot surface stays consumed even after graceful close
-        assertTrue(policy.invalidate())
+        assertFalse(policy.invalidate()) // close already made the policy permanently invalid
         assertFalse(policy.acquireAllowed())
         assertFalse(policy.invalidate()) // idempotent repeat reports no new transition
         assertFalse(policy.openSurface())
