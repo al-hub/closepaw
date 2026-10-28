@@ -34,9 +34,10 @@ internal object TerminalInputPolicy {
             return "terminal_target_unverified"
         if (hiddenFormat(proof.echo)) return "terminal_target_unverified"
         if (InputPayloadPolicy.sensitive(proof.echo)) return "sensitive_input_refused"
-        // Explicit force consent relaxes only prompt recognition. Native binding,
-        // selection/composition, session and exact whole-echo checks still apply.
-        if (!forceAuthorized && !emptyPrompt(proof.echo)) return "empty_terminal_prompt_required"
+        // The IME surrounding buffer is not the terminal's selection state. Until
+        // that separate selection is proven absent, force must fail before dispatch.
+        if (forceAuthorized) return "terminal_selection_unverified"
+        if (!emptyPrompt(proof.echo)) return "empty_terminal_prompt_required"
         if (hiddenFormat(text) || text.isEmpty() || text.length > 256 || text.any { it.isISOControl() || it == '\u2028' || it == '\u2029' } || text.last().isWhitespace())
             return "terminal_single_line_text_required"
         if (InputPayloadPolicy.sensitive(text)) return "sensitive_input_refused"
