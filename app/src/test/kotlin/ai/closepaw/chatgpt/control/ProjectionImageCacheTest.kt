@@ -1,11 +1,16 @@
 package ai.closepaw.chatgpt.control
 
+import ai.closepaw.security.ImageRevocationAuthority
 import ai.closepaw.model.*
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
+import org.junit.Before
+import org.junit.After
 import org.junit.Test
 
 class ProjectionImageCacheTest {
+    @Before fun consent() { VisualImageCache.clear(); ImageRevocationAuthority.grantConsent() }
+    @After fun revoke() { VisualImageCache.clear(); ImageRevocationAuthority.revokeConsent() }
     private fun proof() = VisualTargetProof(
         ScreenImage(200,400,"image/jpeg",byteArrayOf(1),ScreenImageSource.MEDIA_PROJECTION),
         "hash",TapBounds(0,0,200,400),"rotation0",System.currentTimeMillis())

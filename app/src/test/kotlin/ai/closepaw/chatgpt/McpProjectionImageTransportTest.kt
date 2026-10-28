@@ -1,10 +1,15 @@
 package ai.closepaw.chatgpt
 
+import ai.closepaw.security.ImageRevocationAuthority
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
+import org.junit.Before
+import org.junit.After
 import org.junit.Test
 
 class McpProjectionImageTransportTest {
+    @Before fun consent() { ai.closepaw.chatgpt.control.VisualImageCache.clear(); ImageRevocationAuthority.grantConsent() }
+    @After fun revoke() { ai.closepaw.chatgpt.control.VisualImageCache.clear(); ImageRevocationAuthority.revokeConsent() }
     private fun handler(call: (String, JsonObject) -> JsonObject) =
         McpJsonRpcHandler(ClosePawStatusTool("test", 1), operationTools = McpOperationTools(call))
 

@@ -1,10 +1,15 @@
 package ai.closepaw.chatgpt.control
+import ai.closepaw.security.ImageRevocationAuthority
 import ai.closepaw.model.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
+import org.junit.Before
+import org.junit.After
 import org.junit.Test
 class VisualControlTest {
+    @Before fun consent() { VisualImageCache.clear(); ImageRevocationAuthority.grantConsent() }
+    @After fun revoke() { VisualImageCache.clear(); ImageRevocationAuthority.revokeConsent() }
     @Test fun cachedTaskImageIsRevokedWhenNativeDisclosureFailsEvenWithActiveSession() = runBlocking {
         var locked=false
         val session=ControlSession().also { it.start() }
