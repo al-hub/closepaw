@@ -28,7 +28,8 @@ import ai.closepaw.security.ImageRevocationAuthority
  *   before getMediaProjection, satisfying the Android 14+ single-use token requirement.
  * - The projection is never reused across rounds: [MediaProjectionConsentGate.onConsumed]
  *   marks the single-use grant consumed immediately after registration.
- * - onStop teardown is unconditional: revoke feed into the gate, stop the virtual display,
+ * - Current-session onStop revokes the gate and stops the virtual display; stale callbacks
+ *   cannot revoke or tear down a newer consent round. For the owning session,
  *   release capture resources, stopForeground/stopSelf.
  * - The single bounded mirror surface supplies explicit display-image requests only.
  *   WindowVisualCapture verifies pixels against isolated accessibility screenshots and
@@ -70,6 +71,7 @@ class MediaProjectionCaptureService : Service() {
 
     private lateinit var projectionManager: MediaProjectionManager
     private var projection: MediaProjection? = null
+    private var sessionOwner: MediaProjectionSessionOwner? = null
     @Volatile private var framePolicy: MediaProjectionFramePolicy? = null
     @Volatile private var frameScope: MediaProjectionFrameScope? = null
     private var imageLease: ProjectionImageLease? = null
@@ -95,25 +97,30 @@ class MediaProjectionCaptureService : Service() {
         val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID)
 
         // Fail closed: no valid single-use session id, no grant.
-        val usable = consentGate.usableSessionId()
-        if (sessionId.isNullOrEmpty() || usable != sessionId || resultData == null) {
+        val owner = synchronized(consentGate) {
+            if (!sessionId.isNullOrEmpty() && consentGate.usableSessionId() == sessionId && resultData != null) {
+                MediaProjectionSessionOwner(consentGate)
+            } else null
+        }
+        if (owner == null) {
             Log.w(TAG, "onStartCommand: consent gate not usable (${consentGate.state::class.simpleName}); stopping")
             stopSelfSafely()
             return START_NOT_STICKY
         }
 
+        sessionOwner = owner
         val imageEpoch = ImageRevocationAuthority.currentEpoch
         try {
             val newProjection = projectionManager.getMediaProjection(resultCode, resultData)
             if (newProjection == null) {
                 Log.w(TAG, "onStartCommand: OS returned no projection; revoking")
-                revokeImageConsent()
+                owner.runIfCurrent(sessionOwner) { revokeImageConsent() }
                 stopSelfSafely()
                 return START_NOT_STICKY
             }
             projection = newProjection
-            registerProjectionCallbacks(newProjection)
-            if (!consentGate.onProjectionObtained(sessionId, imageEpoch)) {
+            registerProjectionCallbacks(newProjection, owner)
+            if (!consentGate.onProjectionObtained(requireNotNull(sessionId), imageEpoch)) {
                 Log.w(TAG, "Consent token already consumed or revoked; failing closed")
                 framePolicy?.invalidate()
                 stopSelfSafely()
@@ -123,7 +130,7 @@ class MediaProjectionCaptureService : Service() {
             Log.i(TAG, "MediaProjection consent round consumed; one-session mirror scope opened")
         } catch (e: Exception) {
             Log.w(TAG, "getMediaProjection failed; failing closed", e)
-            revokeImageConsent()
+            owner.runIfCurrent(sessionOwner) { revokeImageConsent() }
             stopSelfSafely()
         }
         return START_NOT_STICKY
@@ -145,14 +152,22 @@ class MediaProjectionCaptureService : Service() {
         imageLease = ProjectionImageLease(scope, policy, consentGate).also(ProjectionImageTransport::publish)
     }
 
-    private fun registerProjectionCallbacks(newProjection: MediaProjection) {
+    private fun registerProjectionCallbacks(newProjection: MediaProjection, owner: MediaProjectionSessionOwner) {
         newProjection.registerCallback(
             object : MediaProjection.Callback() {
                 override fun onStop() {
-                    Log.i(TAG, "MediaProjection.onStop: tearing down capture (revoked feed to gate)")
-                    revokeImageConsent()
-                    framePolicy?.invalidate()
-                    mainHandler.post { teardownCaptureAndService() }
+                    owner.runIfCurrent(sessionOwner) {
+                        if (projection !== newProjection) return@runIfCurrent
+                        Log.i(TAG, "MediaProjection.onStop: tearing down owning capture session")
+                        revokeImageConsent()
+                        framePolicy?.invalidate()
+                        mainHandler.post {
+                            // Consent or projection ownership may change while this is queued.
+                            owner.runIfCurrent(sessionOwner) {
+                                if (projection === newProjection) teardownCaptureAndService()
+                            }
+                        }
+                    }
                 }
             },
             mainHandler
@@ -167,7 +182,9 @@ class MediaProjectionCaptureService : Service() {
     }
 
     private fun teardownCaptureResources() {
-        revokeImageConsent()
+        sessionOwner?.runIfCurrent(sessionOwner) { revokeImageConsent() }
+        // Detach before stop(): its callback can be delivered after a newer session starts.
+        sessionOwner = null
         // Invalidate first so any in-flight acquire loses the race and fails closed.
         framePolicy?.invalidate()
         ProjectionImageTransport.remove(imageLease)
