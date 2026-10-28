@@ -890,7 +890,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 else -> "선택한 항목을 누르고 있습니다"
             }, admittedEpoch)
             if (action in setOf("terminal_input", "terminal_submit")) {
-                val text = input["text"]?.jsonPrimitive?.content.orEmpty()
+                // No Termux screen-selection absence proof exists for this binding.
+                return@withTree ControlEffect(false, false, TerminalInputPolicy.selectionRefusal())
+                /*                val text = input["text"]?.jsonPrimitive?.content.orEmpty()
                 val refusal = if (action == "terminal_submit") TerminalInputPolicy.submitRefusal(expected,text,
                     input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true, input["submit_authorized"]?.jsonPrimitive?.booleanOrNull == true, frame.terminalSubmission)
                     else TerminalInputPolicy.refusal(expected,text,input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true,
@@ -909,6 +911,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     binding.commit(if (action == "terminal_submit") "\n" else text)
                     ControlEffect(true, true, "terminal_input_dispatched")
                 } catch (_: Exception) { ControlEffect(true, false, "terminal_input_unknown") }
+                */
             }
             if (action in setOf("key", "visual_key")) {
                 if (fresh.keyboard == null || !fresh.keyboard.readAllowed || !fresh.keyboard.interactAllowed || fresh.keyboard != frame.keyboard || fresh.inputTargetId == null ||
