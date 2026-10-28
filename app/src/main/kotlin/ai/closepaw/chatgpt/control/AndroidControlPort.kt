@@ -891,7 +891,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val text = input["text"]?.jsonPrimitive?.content.orEmpty()
                 val refusal = if (action == "terminal_submit") TerminalInputPolicy.submitRefusal(expected,text,
                     input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true, input["submit_authorized"]?.jsonPrimitive?.booleanOrNull == true, frame.terminalSubmission)
-                    else TerminalInputPolicy.refusal(expected,text,input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true)
+                    else TerminalInputPolicy.refusal(expected,text,input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true,
+                        input["terminal_force_authorized"]?.jsonPrimitive?.booleanOrNull == true)
                 refusal?.let {
                     return@withTree ControlEffect(false, false, it)
                 }
