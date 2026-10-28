@@ -306,7 +306,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             }
             if (action == "terminal_input") {
                 TerminalInputPolicy.refusal(node, input["text"]?.jsonPrimitive?.content.orEmpty(),
-                    input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true)?.let { return failure(it) }
+                    input["terminal_authorized"]?.jsonPrimitive?.booleanOrNull == true,
+                    input["terminal_force_authorized"]?.jsonPrimitive?.booleanOrNull == true)?.let { return failure(it) }
             }
             if (action == "input") {
                 val plan = UnifiedInputPolicy.plan(node, input["text"]?.jsonPrimitive?.content.orEmpty(),
