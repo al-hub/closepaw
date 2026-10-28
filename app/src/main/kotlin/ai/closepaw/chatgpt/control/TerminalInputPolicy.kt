@@ -7,6 +7,9 @@ internal data class TerminalEvidence(val echo: String, val generation: Long, val
 /** Issued only after this engine verified a complete insertion at a known prompt. */
 internal data class TerminalSubmission(val prompt: TerminalEvidence, val pending: TerminalEvidence, val command: String)
 internal object TerminalInputPolicy {
+    // Termux screen selection is separate from the InputConnection buffer.
+    // No reliable selection-absence proof is available for this binding yet.
+    fun selectionRefusal(): String = "terminal_selection_unverified"
     // Termux's documented Samsung char-based mode omits TYPE_CLASS_TEXT (0x1),
     // so this exact class-NULL value is not a standard password editor. Package,
     // view ID/class, native password flags and visible empty-prompt guards still apply.
@@ -34,10 +37,9 @@ internal object TerminalInputPolicy {
             return "terminal_target_unverified"
         if (hiddenFormat(proof.echo)) return "terminal_target_unverified"
         if (InputPayloadPolicy.sensitive(proof.echo)) return "sensitive_input_refused"
-        // The IME surrounding buffer is not the terminal's selection state. Until
-        // that separate selection is proven absent, force must fail before dispatch.
-        if (forceAuthorized) return "terminal_selection_unverified"
-        if (!emptyPrompt(proof.echo)) return "empty_terminal_prompt_required"
+        // Explicit force consent relaxes only prompt recognition. Native binding,
+        // selection/composition, session and exact whole-echo checks still apply.
+        if (!forceAuthorized && !emptyPrompt(proof.echo)) return "empty_terminal_prompt_required"
         if (hiddenFormat(text) || text.isEmpty() || text.length > 256 || text.any { it.isISOControl() || it == '\u2028' || it == '\u2029' } || text.last().isWhitespace())
             return "terminal_single_line_text_required"
         if (InputPayloadPolicy.sensitive(text)) return "sensitive_input_refused"
