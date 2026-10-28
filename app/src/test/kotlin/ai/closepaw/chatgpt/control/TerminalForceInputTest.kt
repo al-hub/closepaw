@@ -135,6 +135,11 @@ class TerminalForceInputTest {
         assertNull(TerminalInputPolicy.submission(node().terminal!!, port.frame.nodes.single().terminal!!, "x"))
     }
 
+    @Test fun nativeImeBufferCannotProveTerminalSelectionAbsent() {
+        assertTrue(TerminalInputPolicy.nativeCursorSafe("", 0, 0))
+        assertEquals("terminal_selection_unverified", TerminalInputPolicy.selectionRefusal())
+    }
+
     @Test fun nativeCursorContextRejectsSelectionAndExistingText() {
         assertFalse(TerminalInputPolicy.nativeCursorSafe(null, 0, 0))
         assertFalse(TerminalInputPolicy.nativeCursorSafe("existing", 0, 0))

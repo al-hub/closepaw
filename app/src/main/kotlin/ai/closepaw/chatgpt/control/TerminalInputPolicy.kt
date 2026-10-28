@@ -7,6 +7,9 @@ internal data class TerminalEvidence(val echo: String, val generation: Long, val
 /** Issued only after this engine verified a complete insertion at a known prompt. */
 internal data class TerminalSubmission(val prompt: TerminalEvidence, val pending: TerminalEvidence, val command: String)
 internal object TerminalInputPolicy {
+    // Termux screen selection is separate from the InputConnection buffer.
+    // No reliable selection-absence proof is available for this binding yet.
+    fun selectionRefusal(): String = "terminal_selection_unverified"
     // Termux's documented Samsung char-based mode omits TYPE_CLASS_TEXT (0x1),
     // so this exact class-NULL value is not a standard password editor. Package,
     // view ID/class, native password flags and visible empty-prompt guards still apply.
