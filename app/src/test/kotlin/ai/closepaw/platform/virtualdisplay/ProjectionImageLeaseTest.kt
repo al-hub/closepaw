@@ -85,6 +85,7 @@ class ProjectionImageLeaseTest {
             assertEquals("over_60s", metrics["first_age_bucket"]!!.jsonPrimitive.content)
             assertEquals("over_60s", metrics["last_age_bucket"]!!.jsonPrimitive.content)
             assertEquals("10_to_60s", metrics["clock_gap_bucket"]!!.jsonPrimitive.content)
+            assertEquals("over_60s", metrics["last_uptime_age_bucket"]!!.jsonPrimitive.content)
             assertEquals("1", metrics["timestamp_same"]!!.jsonPrimitive.content)
             assertEquals("1", metrics["timestamp_increasing"]!!.jsonPrimitive.content)
             assertEquals("0", metrics["timestamp_decreasing"]!!.jsonPrimitive.content)
