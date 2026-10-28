@@ -43,6 +43,21 @@ internal class ProjectionImageLease(
         var lastObservation = "none"
         var emptyReads = 0
         var staleReads = 0
+        // Keep only bounded categories/counts in diagnostics; never log raw timestamps or pixels.
+        var previousTimestamp: Long? = null
+        var sameTimestamps = 0
+        var increasingTimestamps = 0
+        var decreasingTimestamps = 0
+        var firstAgeBucket = "none"
+        var lastAgeBucket = "none"
+        var clockGapBucket = "none"
+        fun bucket(ms: Long): String = when {
+            ms < 0 -> "future"
+            ms <= 1_000 -> "0_to_1s"
+            ms <= 10_000 -> "1_to_10s"
+            ms <= 60_000 -> "10_to_60s"
+            else -> "over_60s"
+        }
         var pendingFrame: ProjectionBitmap? = null
         fun releasePendingFrame() {
             val frame = synchronized(lock) { pendingFrame.also { pendingFrame = null } }
@@ -100,6 +115,22 @@ internal class ProjectionImageLease(
                                 operation = "image_metadata"
                                 val timestamp = image.timestamp
                                 capturedAt = timestamp / 1_000_000
+                                val elapsed = SystemClock.elapsedRealtime()
+                                val uptime = SystemClock.uptimeMillis()
+                                synchronized(lock) {
+                                    previousTimestamp?.let { previous ->
+                                        when {
+                                            timestamp == previous -> sameTimestamps++
+                                            timestamp > previous -> increasingTimestamps++
+                                            else -> decreasingTimestamps++
+                                        }
+                                    }
+                                    previousTimestamp = timestamp
+                                    val age = if (timestamp <= 0) "invalid" else bucket(elapsed - capturedAt)
+                                    if (firstAgeBucket == "none") firstAgeBucket = age
+                                    lastAgeBucket = age
+                                    clockGapBucket = bucket(elapsed - uptime)
+                                }
                                 stale = timestamp > 0 && capturedAt <= SystemClock.elapsedRealtime() &&
                                     !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime())
                                 if (!stale) {
@@ -178,6 +209,12 @@ internal class ProjectionImageLease(
                 put("last_observation", lastObservation)
                 put("null_reads", emptyReads.coerceAtMost(1000))
                 put("stale_reads", staleReads.coerceAtMost(1000))
+                put("first_age_bucket", firstAgeBucket)
+                put("last_age_bucket", lastAgeBucket)
+                put("clock_gap_bucket", clockGapBucket)
+                put("timestamp_same", sameTimestamps.coerceAtMost(1000))
+                put("timestamp_increasing", increasingTimestamps.coerceAtMost(1000))
+                put("timestamp_decreasing", decreasingTimestamps.coerceAtMost(1000))
                 put("lease_active_after", isActive())
             }
         }
