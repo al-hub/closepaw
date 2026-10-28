@@ -7,9 +7,9 @@ import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
+import java.nio.ByteBuffer
 import org.junit.After
 import org.junit.Test
 
@@ -18,11 +18,17 @@ class McpImageRevocationWriteTest {
 
     private fun write(response: McpHttpResponse, sink: OutputStream): String {
         val server = McpHttpServer(port = 0, handler = McpJsonRpcHandler(ClosePawStatusTool("0.1.0", 1)))
-        val method = McpHttpServer::class.java.getDeclaredMethod(
-            "writeResponse", BufferedOutputStream::class.java, McpHttpResponse::class.java)
-        method.isAccessible = true
-        val output = BufferedOutputStream(sink)
-        method.invoke(server, output, response)
+        server.writeResponse(object : McpResponseTransport {
+            override fun write(bytes: ByteBuffer): Int {
+                val count = bytes.remaining()
+                val chunk = ByteArray(count)
+                bytes.get(chunk)
+                sink.write(chunk)
+                return count
+            }
+            override fun awaitWritable(timeoutMillis: Long) = error("Memory sink is always writable")
+            override fun close() = sink.close()
+        }, response)
         return ""
     }
 
