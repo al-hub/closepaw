@@ -8,6 +8,16 @@ import kotlinx.serialization.json.*
 import org.junit.Test
 
 class McpOperationContractTest {
+    // JVM fixture only: simulate a valid image-consent epoch, not Android OS approval.
+    @org.junit.Before fun validImageConsentFixture() {
+        ai.closepaw.security.ImageRevocationAuthority.grantConsent()
+    }
+
+    @org.junit.After fun clearImageConsentFixture() {
+        ai.closepaw.chatgpt.control.VisualImageCache.clear()
+        ai.closepaw.security.ImageRevocationAuthority.revokeConsent()
+    }
+
     private fun handler(call: (String, JsonObject) -> JsonObject = { _, _ -> buildJsonObject { put("status", "succeeded") } }) =
         McpJsonRpcHandler(ClosePawStatusTool("test", 1), operationTools = McpOperationTools(call))
 

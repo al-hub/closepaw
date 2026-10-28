@@ -5,6 +5,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class McpProjectionImageTransportTest {
+    // JVM fixture only: simulate a valid image-consent epoch, not Android OS approval.
+    @org.junit.Before fun validImageConsentFixture() {
+        ai.closepaw.security.ImageRevocationAuthority.grantConsent()
+    }
+
+    @org.junit.After fun clearImageConsentFixture() {
+        ai.closepaw.chatgpt.control.VisualImageCache.clear()
+        ai.closepaw.security.ImageRevocationAuthority.revokeConsent()
+    }
+
     private fun handler(call: (String, JsonObject) -> JsonObject) =
         McpJsonRpcHandler(ClosePawStatusTool("test", 1), operationTools = McpOperationTools(call))
 

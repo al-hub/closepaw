@@ -20,12 +20,14 @@ class VisualImageCacheRevocationTest {
 
     @Before
     fun cleanCacheState() {
+        ai.closepaw.security.ImageRevocationAuthority.grantConsent()
         VisualImageCache.clear()
     }
 
     @After
     fun cleanupCacheState() {
         VisualImageCache.clear()
+        ai.closepaw.security.ImageRevocationAuthority.revokeConsent()
     }
 
     private fun proof(atMs: Long = System.currentTimeMillis(), imageSeed: Byte = 1) =

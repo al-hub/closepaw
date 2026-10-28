@@ -6,6 +6,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ProjectionImageCacheTest {
+    // JVM fixture only: simulate a valid image-consent epoch, not Android OS approval.
+    @org.junit.Before fun validImageConsentFixture() {
+        ai.closepaw.security.ImageRevocationAuthority.grantConsent()
+    }
+
+    @org.junit.After fun clearImageConsentFixture() {
+        ai.closepaw.chatgpt.control.VisualImageCache.clear()
+        ai.closepaw.security.ImageRevocationAuthority.revokeConsent()
+    }
+
     private fun proof() = VisualTargetProof(
         ScreenImage(200,400,"image/jpeg",byteArrayOf(1),ScreenImageSource.MEDIA_PROJECTION),
         "hash",TapBounds(0,0,200,400),"rotation0",System.currentTimeMillis())

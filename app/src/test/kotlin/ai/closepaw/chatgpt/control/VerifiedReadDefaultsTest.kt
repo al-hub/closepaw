@@ -6,6 +6,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class VerifiedReadDefaultsTest {
+    // JVM fixture only: simulate a valid image-consent epoch, not Android OS approval.
+    @org.junit.Before fun validImageConsentFixture() {
+        ai.closepaw.security.ImageRevocationAuthority.grantConsent()
+    }
+
+    @org.junit.After fun clearImageConsentFixture() {
+        ai.closepaw.chatgpt.control.VisualImageCache.clear()
+        ai.closepaw.security.ImageRevocationAuthority.revokeConsent()
+    }
+
     private fun admitted(operation: String = "read", active: Boolean = true, bundled: AppTier? = null,
         userTier: AppTier? = null, ime: Boolean = false, browser: Boolean = false, web: Boolean = false) =
         VerifiedReadDefaults.permits(operation, active, bundled, userTier, ime, browser, web)

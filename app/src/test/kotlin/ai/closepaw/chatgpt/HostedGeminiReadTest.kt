@@ -26,6 +26,7 @@ class HostedGeminiReadTest {
     private var verified = true
 
     @Before fun setup() {
+        ai.closepaw.security.ImageRevocationAuthority.grantConsent()
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { service.remoteControlSession } returns ai.closepaw.chatgpt.control.ControlSession()
         mockkConstructor(AccessibilityPlatform::class, AndroidGeminiDraftUi::class, AccessibilityScreenshotCapturer::class)
@@ -48,6 +49,7 @@ class HostedGeminiReadTest {
     }
 
     @After fun teardown() {
+        ai.closepaw.security.ImageRevocationAuthority.revokeConsent()
         unmockkAll()
         Dispatchers.resetMain()
     }

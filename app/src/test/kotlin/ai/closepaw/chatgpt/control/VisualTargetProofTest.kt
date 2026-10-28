@@ -4,6 +4,16 @@ import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 class VisualTargetProofTest {
+    // JVM fixture only: simulate a valid image-consent epoch, not Android OS approval.
+    @org.junit.Before fun validImageConsentFixture() {
+        ai.closepaw.security.ImageRevocationAuthority.grantConsent()
+    }
+
+    @org.junit.After fun clearImageConsentFixture() {
+        ai.closepaw.chatgpt.control.VisualImageCache.clear()
+        ai.closepaw.security.ImageRevocationAuthority.revokeConsent()
+    }
+
     private fun proof() = VisualTargetProof(ScreenImage(200,400,"image/jpeg",byteArrayOf(1),ScreenImageSource.ACCESSIBILITY_SCREENSHOT),"hash",TapBounds(40,100,440,900),"rotation0",System.currentTimeMillis())
     @Test fun imageScaleAndWindowInsetsMapExactlyWithoutGuessingDisplayCoordinates() {
         val p = proof()

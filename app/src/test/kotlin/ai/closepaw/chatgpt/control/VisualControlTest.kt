@@ -5,6 +5,16 @@ import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 class VisualControlTest {
+    // JVM fixture only: simulate a valid image-consent epoch, not Android OS approval.
+    @org.junit.Before fun validImageConsentFixture() {
+        ai.closepaw.security.ImageRevocationAuthority.grantConsent()
+    }
+
+    @org.junit.After fun clearImageConsentFixture() {
+        ai.closepaw.chatgpt.control.VisualImageCache.clear()
+        ai.closepaw.security.ImageRevocationAuthority.revokeConsent()
+    }
+
     @Test fun cachedTaskImageIsRevokedWhenNativeDisclosureFailsEvenWithActiveSession() = runBlocking {
         var locked=false
         val session=ControlSession().also { it.start() }
