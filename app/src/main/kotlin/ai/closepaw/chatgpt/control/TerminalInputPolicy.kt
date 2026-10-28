@@ -12,6 +12,8 @@ internal object TerminalInputPolicy {
     // view ID/class, native password flags and visible empty-prompt guards still apply.
     private fun hiddenFormat(text: String) = text.any { Character.getType(it) == Character.FORMAT.toInt() }
     fun inputTypeAllowed(type: Int) = type == 0 || type == 0x00080090
+    fun nativeCursorSafe(text: CharSequence?, start: Int, end: Int): Boolean =
+        text != null && text.isEmpty() && start == 0 && end == 0
     fun supported(pkg: String, resource: String, className: String) = pkg == "com.termux" &&
         resource == "com.termux:id/terminal_view" && className in setOf("com.termux.view.TerminalView", "android.view.View")
     fun echo(description: String): String? = description.takeIf { it.length in 1..8192 &&
@@ -25,12 +27,16 @@ internal object TerminalInputPolicy {
             (line == "$" || Regex("(?:~(?:/[A-Za-z0-9._/-]+)?|/[A-Za-z0-9._/-]*) \\$").matches(line)) &&
             !InputPayloadPolicy.sensitive(line)
     }
-    fun refusal(node: ControlNode, text: String, authorized: Boolean): String? {
+    fun refusal(node: ControlNode, text: String, authorized: Boolean, forceAuthorized: Boolean = false): String? {
         val proof = node.terminal ?: return "terminal_binding_unverified"
         if (!authorized) return "terminal_input_authorization_required"
         if (!node.enabled || !node.focused || node.password || !supported(node.sourcePackage, node.resourceId, node.className))
             return "terminal_target_unverified"
-        if (!emptyPrompt(proof.echo)) return "empty_terminal_prompt_required"
+        if (hiddenFormat(proof.echo)) return "terminal_target_unverified"
+        if (InputPayloadPolicy.sensitive(proof.echo)) return "sensitive_input_refused"
+        // Explicit force consent relaxes only prompt recognition. Native binding,
+        // selection/composition, session and exact whole-echo checks still apply.
+        if (!forceAuthorized && !emptyPrompt(proof.echo)) return "empty_terminal_prompt_required"
         if (hiddenFormat(text) || text.isEmpty() || text.length > 256 || text.any { it.isISOControl() || it == '\u2028' || it == '\u2029' } || text.last().isWhitespace())
             return "terminal_single_line_text_required"
         if (InputPayloadPolicy.sensitive(text)) return "sensitive_input_refused"

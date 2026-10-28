@@ -8,12 +8,14 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.put
 
 internal data class McpHttpResponse(
     val statusCode: Int,
     val body: String? = null,
     val contentType: String = "application/json",
+    val imageEpoch: Long? = null,
 )
 
 internal class McpJsonRpcHandler(
@@ -207,12 +209,32 @@ internal class McpJsonRpcHandler(
     }
 
     private fun toolResult(id: JsonElement, result: ReadAppToolResult): McpHttpResponse {
+        // OCR text originates from captured pixels even when the image block is omitted.
+        // Never downgrade revoked screenshot text into an unguarded text-only response.
+        val screenshotDerived = result.structured["text_source"]?.jsonPrimitive?.content == "on_device_ocr" ||
+            result.structured["capture_source"]?.jsonPrimitive?.content == "screenshot_ocr" ||
+            result.structured["ocr_derived_content"]?.jsonPrimitive?.booleanOrNull == true
+        if (screenshotDerived && (result.imageEpoch == null ||
+                !ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(result.imageEpoch))) {
+            return toolResult(id, buildJsonObject {
+                put("status", "failed")
+                put("reason_code", "image_consent_revoked")
+                put("summary", "Screenshot-derived content was revoked.")
+            }).copy(imageEpoch = result.imageEpoch)
+        }
+        val admittedImageEpoch = result.imageEpoch?.takeIf {
+            ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(it)
+        }
+        val imageIncluded = admittedImageEpoch != null &&
+            !result.imageBase64.isNullOrBlank() && !result.imageMimeType.isNullOrBlank()
         val structured = result.structured
         val summary = structured["summary"]?.jsonPrimitive?.content ?: "ClosePaw responded."
         val content = structured["content"]?.jsonPrimitive?.content
             ?.takeIf { it.isNotBlank() }
             ?: summary
         val isError = structured["status"]?.jsonPrimitive?.content == "failed"
+        // Source provenance must survive revocation between the checks above.
+        // The final MCP writer denies revoked epochs, including text-only OCR.
         return jsonResult(
             id,
             buildJsonObject {
@@ -221,7 +243,7 @@ internal class McpJsonRpcHandler(
                         put("type", "text")
                         put("text", content)
                     })
-                    val imageData = result.imageBase64
+                    val imageData = result.imageBase64.takeIf { imageIncluded }
                     val imageMimeType = result.imageMimeType
                     if (!imageData.isNullOrBlank() && !imageMimeType.isNullOrBlank()) {
                         add(buildJsonObject {
@@ -234,13 +256,18 @@ internal class McpJsonRpcHandler(
                 put("structuredContent", structured)
                 put("isError", isError)
             }
-        )
+        ).copy(imageEpoch = if (screenshotDerived) result.imageEpoch else admittedImageEpoch.takeIf { imageIncluded })
     }
 
     private fun toolResult(id: JsonElement, structured: JsonObject): McpHttpResponse {
         // Bounded encoding rechecks live consent/session/source after conversion.
         // Metadata describes this response, never an earlier capture/ledger result.
-        val image = ai.closepaw.chatgpt.control.VisualImageCache.encodedFor(structured)
+        val imageEpoch = ai.closepaw.security.ImageRevocationAuthority.currentEpoch
+        val image = if (ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageEpoch))
+            ai.closepaw.chatgpt.control.VisualImageCache.encodedFor(structured)?.takeIf {
+                ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageEpoch)
+            }
+        else null
         val delivered = withImageDeliveryMetadata(structured, image != null)
         val content = delivered["content"]?.jsonPrimitive?.content
             ?.takeIf { it.isNotBlank() }
@@ -262,7 +289,7 @@ internal class McpJsonRpcHandler(
                 put("structuredContent", delivered)
                 put("isError", isError)
             }
-        )
+        ).copy(imageEpoch = imageEpoch.takeIf { image != null })
     }
 
     private fun withImageDeliveryMetadata(value: JsonObject, included: Boolean): JsonObject {

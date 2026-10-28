@@ -11,6 +11,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import ai.closepaw.security.ImageRevocationAuthority
+import org.junit.Before
 import org.junit.After
 import org.junit.Test
 
@@ -27,9 +29,13 @@ class McpImageResponseEncodingTest {
 
     private val json = Json
 
+    @Before
+    fun consentGrantedForImageTests() { ImageRevocationAuthority.grantConsent() }
+
     @After
     fun cleanCacheState() {
         VisualImageCache.clear()
+        ImageRevocationAuthority.revokeConsent()
     }
 
     private val imageBytes = byteArrayOf(0x00, 0x01, 0x02, (0xFF).toByte(), 0x7F, 0x10)
@@ -176,6 +182,7 @@ class McpImageResponseEncodingTest {
                     },
                     imageBase64 = base64,
                     imageMimeType = mime,
+                    imageEpoch = ImageRevocationAuthority.currentEpoch,
                 )
             },
         )
@@ -227,4 +234,13 @@ class McpImageResponseEncodingTest {
         assertThat(top["jsonrpc"]!!.jsonPrimitive.content).isEqualTo("2.0")
         assertThat(response.contentType).isEqualTo("application/json")
     }
+    @Test
+    fun stopSharingRevokesCachedVisualEvenWhenEntryWasNotExplicitlyCleared() {
+        VisualImageCache.put(proof) { true }
+        ImageRevocationAuthority.revokeConsent()
+        val response = call(operationHandler(), "discover_operations")
+        assertThat(contentArray(response.body!!).map { it["type"]!!.jsonPrimitive.content })
+            .containsExactly("text")
+    }
+
 }

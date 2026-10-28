@@ -1,5 +1,7 @@
 package ai.closepaw.platform.virtualdisplay
 
+import ai.closepaw.security.ImageRevocationAuthority
+
 /**
  * Minimal, fail-closed state/lifecycle tracker for the optional MediaProjection media-capture
  * consent of issue #165.
@@ -142,6 +144,27 @@ class MediaProjectionConsentGate {
         if (sessionId == null || sessionId != granted.sessionId) return false
         state = ProjectionConsentState.Consumed
         return true
+    }
+
+    /**
+     * Called by the capture service ONLY after getMediaProjection returned a real handle
+     * and callback registration succeeded. The Activity result alone must never grant
+     * image consent. Serialize token consumption with revocation, and reject setup that
+     * raced with any image-authority epoch change.
+     */
+    @Synchronized
+    internal fun onProjectionObtained(sessionId: String, expectedImageEpoch: Long): Boolean {
+        if (!onConsumed(sessionId)) return false
+        if (ImageRevocationAuthority.grantConsentIfCurrent(expectedImageEpoch)) return true
+        onRevoked()
+        return false
+    }
+
+    /** Shared synchronous barrier for Stop, teardown, and service destruction. */
+    @Synchronized
+    internal fun revokeImageConsent() {
+        onRevoked()
+        ImageRevocationAuthority.revokeConsent()
     }
 
     /** Whether a non-consumed grant is currently open. Read-only, never side-effecting. */

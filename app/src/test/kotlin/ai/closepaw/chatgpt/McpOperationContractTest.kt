@@ -1,6 +1,8 @@
 package ai.closepaw.chatgpt
 
 import ai.closepaw.chatgpt.operations.*
+import ai.closepaw.security.ImageRevocationAuthority
+import org.junit.After
 import kotlinx.coroutines.*
 import java.io.File
 import com.google.common.truth.Truth.assertThat
@@ -8,6 +10,10 @@ import kotlinx.serialization.json.*
 import org.junit.Test
 
 class McpOperationContractTest {
+    @After fun cleanupImageConsentFixture() {
+        ai.closepaw.chatgpt.control.VisualImageCache.clear()
+        ImageRevocationAuthority.revokeConsent()
+    }
     private fun handler(call: (String, JsonObject) -> JsonObject = { _, _ -> buildJsonObject { put("status", "succeeded") } }) =
         McpJsonRpcHandler(ClosePawStatusTool("test", 1), operationTools = McpOperationTools(call))
 
@@ -68,6 +74,8 @@ class McpOperationContractTest {
     }
 
     @Test fun rootVisualFallbackMetadataMatchesActualImageDespiteEmptyNestedData() {
+        // Test-only consent fixture: production must obtain real OS projection consent.
+        ImageRevocationAuthority.grantConsent()
         val proof = ai.closepaw.chatgpt.control.VisualTargetProof(
             ai.closepaw.model.ScreenImage(1,1,"image/jpeg",byteArrayOf(1), ai.closepaw.model.ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
             "pixels", ai.closepaw.chatgpt.control.TapBounds(0,0,1,1), "window", System.currentTimeMillis())
@@ -92,6 +100,8 @@ class McpOperationContractTest {
     }
 
     @Test fun screenObserveQueryReturnsActualImageBlockAndRevocationRemovesIt() {
+        // Test-only consent fixture: production must obtain real OS projection consent.
+        ImageRevocationAuthority.grantConsent()
         val image = ai.closepaw.model.ScreenImage(2, 3, "image/jpeg", byteArrayOf(1,2,3),
             ai.closepaw.model.ScreenImageSource.ACCESSIBILITY_SCREENSHOT)
         val proof = ai.closepaw.chatgpt.control.VisualTargetProof(image, "pixels",
@@ -118,6 +128,8 @@ class McpOperationContractTest {
     }
 
     @Test fun getTaskImageMetadataMatchesActualBlockAfterRevocation() {
+        // Test-only consent fixture: production must obtain real OS projection consent.
+        ImageRevocationAuthority.grantConsent()
         val image = ai.closepaw.model.ScreenImage(2, 3, "image/jpeg", byteArrayOf(1,2,3),
             ai.closepaw.model.ScreenImageSource.ACCESSIBILITY_SCREENSHOT)
         val proof = ai.closepaw.chatgpt.control.VisualTargetProof(image, "pixels",

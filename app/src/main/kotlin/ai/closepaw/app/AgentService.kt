@@ -10,6 +10,7 @@ import android.view.Display
 import android.view.SurfaceView
 import android.view.accessibility.AccessibilityEvent
 import ai.closepaw.debug.ActionDebugReceiver
+import ai.closepaw.platform.virtualdisplay.MediaProjectionCaptureService
 import ai.closepaw.protocol.Op
 import ai.closepaw.protocol.PlatformMode
 import ai.closepaw.protocol.SessionConfig
@@ -171,7 +172,13 @@ class AgentService : AccessibilityService() {
     internal fun showRemoteControlTarget(rect: android.graphics.Rect) { runCatching { remoteControlIndicator.target(rect) } }
     internal fun remoteControlCovers(rect: android.graphics.Rect) = remoteControlIndicator.controlCovers(rect) ||
         overlayController?.controlCovers(rect) == true
+    private fun revokeImageSharing() {
+        MediaProjectionCaptureService.revokeImageConsent()
+        stopService(Intent(this, MediaProjectionCaptureService::class.java))
+    }
+
     internal fun stopRemoteAndLocalControl() {
+        revokeImageSharing()
         ai.closepaw.chatgpt.control.VisualImageCache.clear()
         remoteControlSession.end()
         hideRemoteControlActivity(force = true)
@@ -323,9 +330,7 @@ class AgentService : AccessibilityService() {
                         onStop = {
                             // A single visible emergency X must stop both independently
                             // tracked control sessions, not just the agent task.
-                            remoteControlSession.end()
-                            hideRemoteControlActivity(force = true)
-                            submitOp(Op.Shutdown)
+                            stopRemoteAndLocalControl()
                         },
                         onTakeover = { submitOp(Op.Takeover) },
                         onResume = { submitOp(Op.Resume) },
@@ -420,6 +425,7 @@ class AgentService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        revokeImageSharing()
         ai.closepaw.chatgpt.control.VisualImageCache.clear()
         controlUiRestoreJob?.cancel()
         runCatching { unregisterReceiver(controlScreenReceiver) }
@@ -653,6 +659,7 @@ class AgentService : AccessibilityService() {
     }
 
     fun stopAgent() {
+        revokeImageSharing()
         submitOp(Op.Shutdown)
         overlayController?.hideAll()
         updateStatus("🛑 Agent stopped")

@@ -1,9 +1,20 @@
 package ai.closepaw.chatgpt.control
 import ai.closepaw.model.*
+import ai.closepaw.security.ImageRevocationAuthority
+import org.junit.Before
+import org.junit.After
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 class VisualTargetProofTest {
+    @Before fun activeConsentFixture() {
+        VisualImageCache.clear()
+        ImageRevocationAuthority.grantConsent()
+    }
+    @After fun cleanupConsentFixture() {
+        VisualImageCache.clear()
+        ImageRevocationAuthority.revokeConsent()
+    }
     private fun proof() = VisualTargetProof(ScreenImage(200,400,"image/jpeg",byteArrayOf(1),ScreenImageSource.ACCESSIBILITY_SCREENSHOT),"hash",TapBounds(40,100,440,900),"rotation0",System.currentTimeMillis())
     @Test fun imageScaleAndWindowInsetsMapExactlyWithoutGuessingDisplayCoordinates() {
         val p = proof()

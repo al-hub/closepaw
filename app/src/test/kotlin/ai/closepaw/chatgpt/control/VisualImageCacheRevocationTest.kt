@@ -2,6 +2,7 @@ package ai.closepaw.chatgpt.control
 
 import ai.closepaw.model.ScreenImage
 import ai.closepaw.model.ScreenImageSource
+import ai.closepaw.security.ImageRevocationAuthority
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.After
@@ -21,11 +22,14 @@ class VisualImageCacheRevocationTest {
     @Before
     fun cleanCacheState() {
         VisualImageCache.clear()
+        // JVM fixture: model an explicit active image-consent epoch; production requires OS consent.
+        ImageRevocationAuthority.grantConsent()
     }
 
     @After
     fun cleanupCacheState() {
         VisualImageCache.clear()
+        ImageRevocationAuthority.revokeConsent()
     }
 
     private fun proof(atMs: Long = System.currentTimeMillis(), imageSeed: Byte = 1) =

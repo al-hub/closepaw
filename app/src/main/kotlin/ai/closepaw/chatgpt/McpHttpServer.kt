@@ -1,15 +1,19 @@
 package ai.closepaw.chatgpt
 
+import ai.closepaw.security.ImageRevocationAuthority
+import java.io.IOException
 import java.io.DataInputStream
 import java.io.EOFException
 import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
-import java.net.ServerSocket
-import java.net.Socket
+import java.net.SocketTimeoutException
+import java.nio.ByteBuffer
+import java.nio.channels.ServerSocketChannel
+import java.nio.channels.SocketChannel
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal class McpHttpServer(
@@ -20,19 +24,26 @@ internal class McpHttpServer(
     private val running = AtomicBoolean(false)
     private val acceptExecutor = Executors.newSingleThreadExecutor()
     private val requestExecutor = Executors.newCachedThreadPool()
-    @Volatile private var serverSocket: ServerSocket? = null
+    @Volatile private var serverSocket: ServerSocketChannel? = null
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
-        val socket = ServerSocket()
-        socket.reuseAddress = true
-        socket.bind(InetSocketAddress(InetAddress.getByName(LOOPBACK_HOST), port))
+        val socket = ServerSocketChannel.open()
+        socket.socket().reuseAddress = true
+        socket.socket().bind(InetSocketAddress(InetAddress.getByName(LOOPBACK_HOST), port))
         serverSocket = socket
         acceptExecutor.execute {
             while (running.get()) {
                 try {
                     val client = socket.accept()
-                    requestExecutor.execute { handleClient(client) }
+                    requestExecutor.execute {
+                        // A timed out, revoked or disconnected response is terminal.
+                        try {
+                            handleClient(client)
+                        } catch (_: IOException) {
+                            // handleClient closes the channel on every exit.
+                        }
+                    }
                 } catch (_: Exception) {
                     if (!running.get()) break
                 }
@@ -48,11 +59,11 @@ internal class McpHttpServer(
         requestExecutor.shutdownNow()
     }
 
-    private fun handleClient(socket: Socket) {
-        socket.use { client ->
+    private fun handleClient(channel: SocketChannel) {
+        channel.use {
+            val client = channel.socket()
             client.soTimeout = SOCKET_TIMEOUT_MS
             val input = BufferedInputStream(client.getInputStream())
-            val output = BufferedOutputStream(client.getOutputStream())
             val headerBytes = readHeaders(input) ?: return
             val headerText = headerBytes.toString(StandardCharsets.ISO_8859_1)
             val lines = headerText.split("\r\n")
@@ -92,7 +103,7 @@ internal class McpHttpServer(
                     }
                 }
             }
-            writeResponse(output, response)
+            writeResponse(SocketMcpResponseTransport(channel), response)
         }
     }
 
@@ -115,9 +126,19 @@ internal class McpHttpServer(
         return null
     }
 
-    private fun writeResponse(output: BufferedOutputStream, response: McpHttpResponse) {
-        val bodyBytes = response.body?.toByteArray(StandardCharsets.UTF_8) ?: ByteArray(0)
-        val reason = when (response.statusCode) {
+    internal fun writeResponse(
+        transport: McpResponseTransport,
+        response: McpHttpResponse,
+        timeoutMillis: Long = SOCKET_TIMEOUT_MS.toLong(),
+    ) = transport.use {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+        val imageEpoch = response.imageEpoch
+        val authorized = imageEpoch?.let {
+            ImageRevocationAuthority.isConsentStillValid(it)
+        } ?: true
+        val outgoing = if (authorized) response else McpHttpResponse(403, """{"error":"image_consent_revoked"}""")
+        val bodyBytes = outgoing.body?.toByteArray(StandardCharsets.UTF_8) ?: ByteArray(0)
+        val reason = when (outgoing.statusCode) {
             200 -> "OK"
             204 -> "No Content"
             400 -> "Bad Request"
@@ -125,16 +146,43 @@ internal class McpHttpServer(
             else -> "Error"
         }
         val headers = buildString {
-            append("HTTP/1.1 ${response.statusCode} $reason\r\n")
-            append("Content-Type: ${response.contentType}\r\n")
+            append("HTTP/1.1 ${outgoing.statusCode} $reason\r\n")
+            append("Content-Type: ${outgoing.contentType}\r\n")
             append("Content-Length: ${bodyBytes.size}\r\n")
             append("Cache-Control: no-store\r\n")
             append("Connection: close\r\n")
             append("\r\n")
         }.toByteArray(StandardCharsets.ISO_8859_1)
-        output.write(headers)
-        output.write(bodyBytes)
-        output.flush()
+        val guardedEpoch = imageEpoch?.takeIf { authorized }
+        for (bytes in listOf(headers, bodyBytes)) {
+            val buffer = ByteBuffer.wrap(bytes)
+            while (buffer.hasRemaining()) {
+                if (Thread.currentThread().isInterrupted) return@use
+                val remaining = deadline - System.nanoTime()
+                if (remaining <= 0) throw SocketTimeoutException("MCP response write timed out")
+                // Only a bounded NONBLOCKING write may run under the authority monitor.
+                // Readiness waits and transport close must stay outside it. Checking and
+                // writing atomically prevents any new image bytes after revoke returns.
+                val count = synchronized(ImageRevocationAuthority) {
+                    if (guardedEpoch != null && !ImageRevocationAuthority.isConsentStillValid(guardedEpoch)) {
+                        return@use
+                    }
+                    val limit = buffer.limit()
+                    buffer.limit(minOf(limit, buffer.position() + 4096))
+                    try {
+                        transport.write(buffer)
+                    } finally {
+                        buffer.limit(limit)
+                    }
+                }
+                if (count == 0) {
+                    // Poll consent even if the peer never becomes writable. No flush or
+                    // buffered close can deliver queued application bytes after revoke.
+                    transport.awaitWritable(minOf(WRITE_POLL_MS, maxOf(1L,
+                        TimeUnit.NANOSECONDS.toMillis(remaining))))
+                }
+            }
+        }
     }
 
     companion object {
@@ -143,6 +191,7 @@ internal class McpHttpServer(
         const val DEFAULT_MCP_PATH = "/mcp"
         private const val MAX_HEADER_BYTES = 16 * 1024
         private const val MAX_BODY_BYTES = 64 * 1024
+        private const val WRITE_POLL_MS = 25L
         private const val SOCKET_TIMEOUT_MS = 15_000
     }
 }
