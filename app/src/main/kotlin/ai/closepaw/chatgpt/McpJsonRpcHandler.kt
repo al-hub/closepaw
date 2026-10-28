@@ -14,6 +14,7 @@ internal data class McpHttpResponse(
     val statusCode: Int,
     val body: String? = null,
     val contentType: String = "application/json",
+    val imageEpoch: Long? = null,
 )
 
 internal class McpJsonRpcHandler(
@@ -207,6 +208,11 @@ internal class McpJsonRpcHandler(
     }
 
     private fun toolResult(id: JsonElement, result: ReadAppToolResult): McpHttpResponse {
+        val admittedImageEpoch = result.imageEpoch?.takeIf {
+            ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(it)
+        }
+        val imageIncluded = admittedImageEpoch != null &&
+            !result.imageBase64.isNullOrBlank() && !result.imageMimeType.isNullOrBlank()
         val structured = result.structured
         val summary = structured["summary"]?.jsonPrimitive?.content ?: "ClosePaw responded."
         val content = structured["content"]?.jsonPrimitive?.content
@@ -221,10 +227,7 @@ internal class McpJsonRpcHandler(
                         put("type", "text")
                         put("text", content)
                     })
-                    val imagePermitted = result.imageEpoch?.let {
-                        ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(it)
-                    } == true
-                    val imageData = result.imageBase64.takeIf { imagePermitted }
+                    val imageData = result.imageBase64.takeIf { imageIncluded }
                     val imageMimeType = result.imageMimeType
                     if (!imageData.isNullOrBlank() && !imageMimeType.isNullOrBlank()) {
                         add(buildJsonObject {
@@ -237,7 +240,7 @@ internal class McpJsonRpcHandler(
                 put("structuredContent", structured)
                 put("isError", isError)
             }
-        )
+        ).copy(imageEpoch = admittedImageEpoch.takeIf { imageIncluded })
     }
 
     private fun toolResult(id: JsonElement, structured: JsonObject): McpHttpResponse {
@@ -270,7 +273,7 @@ internal class McpJsonRpcHandler(
                 put("structuredContent", delivered)
                 put("isError", isError)
             }
-        )
+        ).copy(imageEpoch = imageEpoch.takeIf { image != null })
     }
 
     private fun withImageDeliveryMetadata(value: JsonObject, included: Boolean): JsonObject {

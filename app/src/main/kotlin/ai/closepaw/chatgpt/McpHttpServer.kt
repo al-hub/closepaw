@@ -116,8 +116,12 @@ internal class McpHttpServer(
     }
 
     private fun writeResponse(output: BufferedOutputStream, response: McpHttpResponse) {
-        val bodyBytes = response.body?.toByteArray(StandardCharsets.UTF_8) ?: ByteArray(0)
-        val reason = when (response.statusCode) {
+        val authorized = response.imageEpoch?.let {
+            ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(it)
+        } ?: true
+        val outgoing = if (authorized) response else McpHttpResponse(403, """{"error":"image_consent_revoked"}""")
+        val bodyBytes = outgoing.body?.toByteArray(StandardCharsets.UTF_8) ?: ByteArray(0)
+        val reason = when (outgoing.statusCode) {
             200 -> "OK"
             204 -> "No Content"
             400 -> "Bad Request"
@@ -125,15 +129,30 @@ internal class McpHttpServer(
             else -> "Error"
         }
         val headers = buildString {
-            append("HTTP/1.1 ${response.statusCode} $reason\r\n")
-            append("Content-Type: ${response.contentType}\r\n")
+            append("HTTP/1.1 ${outgoing.statusCode} $reason\r\n")
+            append("Content-Type: ${outgoing.contentType}\r\n")
             append("Content-Length: ${bodyBytes.size}\r\n")
             append("Cache-Control: no-store\r\n")
             append("Connection: close\r\n")
             append("\r\n")
         }.toByteArray(StandardCharsets.ISO_8859_1)
         output.write(headers)
-        output.write(bodyBytes)
+        // Recheck revocation immediately before image bytes. A stopped session never starts a new body.
+        if (response.imageEpoch != null && !ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(response.imageEpoch)) return
+        if (response.imageEpoch != null) {
+            // Bound the post-revocation exposure to at most one in-progress buffer write.
+            // A revoked stream is deliberately truncated; clients must discard incomplete JSON.
+            var offset = 0
+            while (offset < bodyBytes.size) {
+                if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(response.imageEpoch)) return
+                val count = minOf(4096, bodyBytes.size - offset)
+                output.write(bodyBytes, offset, count)
+                offset += count
+            }
+            if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(response.imageEpoch)) return
+        } else {
+            output.write(bodyBytes)
+        }
         output.flush()
     }
 

@@ -1,5 +1,8 @@
 package ai.closepaw.chatgpt
 
+import ai.closepaw.security.ImageRevocationAuthority
+import org.junit.Before
+import org.junit.After
 import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -13,6 +16,8 @@ import org.junit.Test
 /** Regression coverage for the image-bearing MCP contract used by ChatGPT Text/Voice. */
 class McpBrowserReadTransportTest {
     private val json = Json
+    @Before fun grantImageConsent() { ImageRevocationAuthority.grantConsent() }
+    @After fun revokeImageConsent() { ImageRevocationAuthority.revokeConsent() }
 
     @Test
     fun screenshotOcrTextIsModelReadableWithoutInterpretingImageBlock() {
@@ -28,6 +33,7 @@ class McpBrowserReadTransportTest {
                     put("capture_source", "screenshot_ocr")
                 },
                 imageBase64 = "AQID",
+                imageEpoch = ImageRevocationAuthority.currentEpoch,
                 imageMimeType = "image/jpeg",
             )
         })
@@ -52,6 +58,7 @@ class McpBrowserReadTransportTest {
                     put("content", "")
                 },
                 imageBase64 = "AQID",
+                imageEpoch = ImageRevocationAuthority.currentEpoch,
                 imageMimeType = "image/jpeg",
             )
         })
@@ -68,6 +75,20 @@ class McpBrowserReadTransportTest {
         assertThat(result["structuredContent"]!!.jsonObject["screenshot_attached"]!!
             .jsonPrimitive.content).isEqualTo("true")
         assertThat(result["isError"]!!.jsonPrimitive.content).isEqualTo("false")
+    }
+
+    @Test
+    fun readAppImageIsSuppressedAfterStopSharingEvenWhenBase64WasPrepared() {
+        ImageRevocationAuthority.revokeConsent()
+        val result = call(ReadAppTool {
+            ReadAppToolResult(
+                structured = buildJsonObject { put("status", "succeeded"); put("summary", "readable text") },
+                imageBase64 = "AQID",
+                imageMimeType = "image/jpeg",
+                imageEpoch = ImageRevocationAuthority.currentEpoch,
+            )
+        })
+        assertThat(result["content"]!!.jsonArray).hasSize(1)
     }
 
     @Test
@@ -100,6 +121,7 @@ class McpBrowserReadTransportTest {
                     put("content", "Readable browser text")
                 },
                 imageBase64 = "AQID",
+                imageEpoch = ImageRevocationAuthority.currentEpoch,
                 imageMimeType = null,
             )
         })
