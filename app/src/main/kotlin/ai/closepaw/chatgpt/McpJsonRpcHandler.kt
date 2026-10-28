@@ -212,7 +212,7 @@ internal class McpJsonRpcHandler(
         // Never downgrade revoked screenshot text into an unguarded text-only response.
         val screenshotDerived = result.structured["text_source"]?.jsonPrimitive?.content == "on_device_ocr" ||
             result.structured["capture_source"]?.jsonPrimitive?.content == "screenshot_ocr" ||
-            result.structured["ocr_derived_content"]?.jsonPrimitive?.booleanOrNull == true
+            result.structured["ocr_derived_content"]?.jsonPrimitive?.content == "true"
         if (screenshotDerived && (result.imageEpoch == null ||
                 !ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(result.imageEpoch))) {
             return toolResult(id, buildJsonObject {

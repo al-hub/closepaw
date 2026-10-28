@@ -120,6 +120,7 @@ internal class McpHttpServer(
             ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(it)
         } ?: true
         val outgoing = if (authorized) response else McpHttpResponse(403, """{"error":"image_consent_revoked"}""")
+        val outgoingEpoch = outgoing.imageEpoch
         val bodyBytes = outgoing.body?.toByteArray(StandardCharsets.UTF_8) ?: ByteArray(0)
         val reason = when (outgoing.statusCode) {
             200 -> "OK"
@@ -139,18 +140,18 @@ internal class McpHttpServer(
         output.write(headers)
         // Recheck the *outgoing* payload: a revoked image has already been replaced
         // with a non-image 403 response, which must be sent to the caller.
-        if (outgoing.imageEpoch != null && !ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(outgoing.imageEpoch)) return
-        if (outgoing.imageEpoch != null) {
+        if (outgoing.imageEpoch != null && !ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(outgoingEpoch)) return
+        if (outgoingEpoch != null) {
             // Bound the post-revocation exposure to at most one in-progress buffer write.
             // A revoked stream is deliberately truncated; clients must discard incomplete JSON.
             var offset = 0
             while (offset < bodyBytes.size) {
-                if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(response.imageEpoch)) return
+                if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(outgoingEpoch)) return
                 val count = minOf(4096, bodyBytes.size - offset)
                 output.write(bodyBytes, offset, count)
                 offset += count
             }
-            if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(response.imageEpoch)) return
+            if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(outgoingEpoch)) return
         } else {
             output.write(bodyBytes)
         }
