@@ -147,38 +147,37 @@ class TerminalInputConnectionTest {
                 fail("Fixture screen did not settle at $fixtureStage: ${previous.reason}; foreground=${previous.packageName}; selection=${previous.windowDiagnostics}; windows=$windowSummary; sensitivity=$sensitivitySummary")
                 return control.observe()
             }
+            // A valid IME buffer does not establish that the terminal's separate
+            // screen selection is absent. Both normal and forced native commits
+            // must stop before dispatch; this also preserves the fixture's echo.
             val observed = settled(); assertTrue(observed.toString(), observed.success)
             val target = observed.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["terminal_input_supported"]?.jsonPrimitive?.booleanOrNull == true }
-            val input = buildJsonObject { put("action", "terminal_input"); put("session_id", session.id)
-                put("observation_id", observed.data.getValue("observation_id")); put("node_id", target.getValue("node_id"))
-                put("terminal_authorized", true); put("text", "한글 A1!") }
-            val result = control.action(input); assertTrue("$result; ${ControlDiagnostics.snapshot()}", result.success)
-            assertFalse(control.action(input).success)
-            var priorGeneration=0L
-            instrumentation.runOnMainSync { priorGeneration=TerminalInputBinding.capture(service)?.generation ?: 0 }
-            launch(false)
-            await {
-                var ready=false
-                instrumentation.runOnMainSync {
-                    val binding=TerminalInputBinding.capture(service)
-                    val root=service.rootInActiveWindow
-                    val focus=root?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
-                    try { ready=binding != null && binding.generation > priorGeneration && focus != null &&
-                        binding.evidence(focus)?.echo?.let(TerminalInputPolicy::emptyPrompt) == true }
-                    finally { if(focus !== root) focus?.recycle(); root?.recycle() }
+            val dispatchBefore = TerminalInputBinding.dispatchCount.get()
+            for (force in listOf(false, true)) {
+                val fresh = if (force) settled() else observed
+                val input = buildJsonObject {
+                    put("action", "terminal_input"); put("session_id", session.id)
+                    put("observation_id", fresh.data.getValue("observation_id")); put("node_id", target.getValue("node_id"))
+                    put("terminal_authorized", true); put("terminal_force_authorized", force); put("text", "한글 A1!")
                 }
-                ready
+                val result = control.action(input)
+                assertFalse(result.toString(), result.success)
+                assertEquals(JsonPrimitive(false), result.data["action_attempted"])
+                assertEquals(JsonPrimitive("terminal_selection_unverified"), result.data["reason_code"])
+                assertEquals(dispatchBefore, TerminalInputBinding.dispatchCount.get())
             }
-            val pending = settled(); assertTrue(pending.success)
-            val terminalNode = pending.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["terminal_input_supported"]?.jsonPrimitive?.booleanOrNull == true }
-            val command = "printf fixture_ok"
-            val typed = control.action(buildJsonObject { put("action","terminal_input");put("session_id",session.id);put("terminal_authorized",true)
-                put("text",command);put("observation_id",pending.data.getValue("observation_id"));put("node_id",terminalNode.getValue("node_id")) })
-            assertTrue(typed.toString(), typed.success)
-            val submitObservation = settled(); assertTrue(submitObservation.success)
-            val submitted = control.action(buildJsonObject { put("action","terminal_submit");put("session_id",session.id);put("terminal_authorized",true);put("submit_authorized",true)
-                put("text",command);put("expected_output","fixture_ok");put("observation_id",submitObservation.data.getValue("observation_id"));put("node_id",terminalNode.getValue("node_id")) })
-            assertTrue(submitted.toString(), submitted.success)
+            val afterBlocked = settled()
+            assertTrue(afterBlocked.toString(), afterBlocked.success)
+            var echoAfter: String? = null
+            instrumentation.runOnMainSync {
+                val root = service.rootInActiveWindow
+                val focus = root?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
+                try { echoAfter = focus?.let { TerminalInputBinding.capture(service)?.evidence(it)?.echo } }
+                finally { if (focus !== root) focus?.recycle(); root?.recycle() }
+            }
+            assertNotNull(echoAfter)
+            assertTrue(TerminalInputPolicy.emptyPrompt(echoAfter!!))
+            assertEquals(dispatchBefore, TerminalInputBinding.dispatchCount.get())
             // Instrumentation-only consent fixture for accessibility pixel regressions.
             // Production grants consent only after Android OS projection approval.
             ImageRevocationAuthority.grantConsent()

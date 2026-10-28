@@ -285,7 +285,7 @@ Actions:
     private fun buildSchema(): JSONObject {
         val properties = JSONObject().apply {
             put("input_method", JSONObject().put("type", "string").put("enum", JSONArray(listOf("auto", "direct", "clipboard", "keyboard"))))
-            put("terminal_input_authorized", JSONObject().put("type", "boolean").put("description", "Explicit permission to commit single-line terminal text without Enter. Requires a supported native binding, empty prompt and user approval."))
+            put("terminal_input_authorized", JSONObject().put("type", "boolean").put("description", "Terminal input is currently blocked because terminal selection cannot be verified; approval does not bypass this block."))
             put("clipboard_consent", JSONObject().put("type", "boolean"))
             put("clipboard_replace_authorized", JSONObject().put("type", "boolean").put("description", "Explicit consent to replace clipboard; no automatic restoration. Always requires user approval."))
             put("agent_thought", JSONObject().apply {

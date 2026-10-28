@@ -126,6 +126,21 @@ internal class AndroidOperationRuntime(
         })
         registry.register(TermuxBridgeStatusOperation.descriptor { settings.enabled },
             TermuxBridgeStatusOperation(termuxBridge::diagnosticSnapshot))
+        registry.register(SelfMonitoringOperation.descriptor { settings.genericControlEnabled }, SelfMonitoringOperation(
+            local = {
+                val service = AgentService.instance
+                val keyguard = context.getSystemService(android.app.KeyguardManager::class.java)
+                val power = context.getSystemService(android.os.PowerManager::class.java)
+                SelfMonitoringOperation.LocalState(
+                    accessibilityConnected = service != null,
+                    sessionState = service?.remoteControlSession?.state?.name?.lowercase(java.util.Locale.ROOT),
+                    deviceLocked = keyguard.isKeyguardLocked || !power.isInteractive,
+                    controlEnabled = settings.genericControlEnabled,
+                    remoteExecutionEnabled = settings.enabled,
+                    projectionLeaseActive = ai.closepaw.platform.virtualdisplay.ProjectionImageTransport.active() != null,
+                )
+            },
+        ))
         registry.register(OperationDescriptor(
             id="linux.shell.exec", description="Execute a noninteractive shell command in paired Termux. Returns a task ID for output, errors and process exit code. No interactive terminal input is supported. For private-network/SSH failures, discover network.tailscale.status and network.tailscale.ensure_connected. Do not automatically replay writes or unknown outcomes.",
             readOnly=false, permissions=listOf("remote_execution", "termux_local_bridge"), effects=listOf("shell_execution"), cancellationSupported=true,
