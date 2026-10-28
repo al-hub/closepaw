@@ -849,8 +849,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (!VisualActionPolicy.pathAllowed(proof,bounds(start),end?.let { bounds(it) }))
                     return@withTree ControlEffect(false,false,"visual_path_pixels_unverified")
                 val latest = (if (proof.scope == "display") visualDisplay(fresh) else if (action == "visual_key") visualKeyboard(fresh) else visual(fresh)) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
-                if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context || latest.sourceWindowId != proof.sourceWindowId || latest.scope != proof.scope || latest.sourceDisplayId != proof.sourceDisplayId || latest.rotation != proof.rotation || latest.disclosedRegions != proof.disclosedRegions || latest.editorPrivacyGeneration != proof.editorPrivacyGeneration)
+                if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context || latest.sourceWindowId != proof.sourceWindowId || latest.scope != proof.scope || latest.sourceDisplayId != proof.sourceDisplayId || latest.rotation != proof.rotation || latest.disclosedRegions != proof.disclosedRegions || latest.editorPrivacyGeneration != proof.editorPrivacyGeneration) {
+                    ControlDiagnostics.record("visual_revalidation", "visual_pixels_or_geometry_changed", metrics = VisualRevalidationDiagnostics.metrics(proof, latest))
                     return@withTree ControlEffect(false,false,"visual_pixels_or_geometry_changed")
+                }
                 if (proof.scope == "display" && proof.displayGeneration != service.remoteDisplayChanges.version())
                     return@withTree ControlEffect(false,false,"display_window_changed_since_observation")
                 if (action == "visual_key") visualKeyRect = start
