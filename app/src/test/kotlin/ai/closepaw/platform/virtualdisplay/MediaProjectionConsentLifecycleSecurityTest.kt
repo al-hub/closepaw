@@ -101,11 +101,17 @@ class MediaProjectionConsentLifecycleSecurityTest {
         // No grant-shaped event can reinstall a usable session...
         assertThat(gate.onDecision(granted = true, sessionId = S1)).isNull()
         assertThat(gate.onConsumed(S1)).isFalse()
-        assertThat(gate.onRequestStarted()).isFalse() // Requesting state was destroyed
+        assertThat(gate.state).isEqualTo(ProjectionConsentState.Revoked)
+        assertThat(gate.isProbeAllowed()).isFalse()
         assertThat(gate.usableSessionId()).isNull()
 
         // ...only a brand-new OS decision round.
         assertThat(gate.onRequestStarted()).isTrue()
+        assertThat(gate.state).isEqualTo(ProjectionConsentState.Requesting)
+        assertThat(gate.onRequestStarted()).isFalse() // Cannot start a duplicate round.
+        assertThat(gate.usableSessionId()).isNull()
+        assertThat(gate.isProbeAllowed()).isFalse()
+        assertThat(gate.onConsumed(S1)).isFalse()
         assertThat(gate.onDecision(granted = true, sessionId = S2))
             .isEqualTo(ProjectionConsentState.Granted(S2))
         assertThat(gate.usableSessionId()).isEqualTo(S2)

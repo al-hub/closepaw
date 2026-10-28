@@ -54,8 +54,19 @@ class McpImageResponseEncodingTest {
         },
     )
 
-    private fun call(handler: McpJsonRpcHandler, name: String, id: Int = 1) = handler.handle(
-        """{"jsonrpc":"2.0","id":$id,"method":"tools/call","params":{"name":"$name","arguments":{}}}"""
+    private fun call(
+        handler: McpJsonRpcHandler,
+        name: String,
+        id: Int = 1,
+        arguments: kotlinx.serialization.json.JsonObject = kotlinx.serialization.json.buildJsonObject {},
+    ) = handler.handle(
+        """{"jsonrpc":"2.0","id":$id,"method":"tools/call","params":{"name":"$name","arguments":$arguments}}"""
+    )
+
+    // read_app requires an app argument before the response encoder is reached.
+    private fun callReadApp(handler: McpJsonRpcHandler) = call(
+        handler, "read_app",
+        arguments = kotlinx.serialization.json.buildJsonObject { put("app", "samsung_internet") },
     )
 
     private fun result(body: String): kotlinx.serialization.json.JsonObject =
@@ -173,7 +184,7 @@ class McpImageResponseEncodingTest {
     fun `read_app image fields are passed through verbatim into an image part`() {
         val encoded = Base64.getEncoder().encodeToString(imageBytes)
         val handler = readAppHandler(base64 = encoded, mime = "image/png")
-        val response = call(handler, "read_app")
+        val response = callReadApp(handler)
 
         assertThat(response.statusCode).isEqualTo(200)
         val parts = contentArray(response.body!!)
@@ -188,7 +199,7 @@ class McpImageResponseEncodingTest {
     @Test
     fun `read_app failure result is flagged isError and ships no image`() {
         val handler = readAppHandler(status = "failed", base64 = null, mime = null)
-        val response = call(handler, "read_app")
+        val response = callReadApp(handler)
         assertThat(result(response.body!!)["isError"]!!.jsonPrimitive.content).isEqualTo("true")
         assertThat(contentArray(response.body!!).map { it["type"]!!.jsonPrimitive.content })
             .containsExactly("text")
@@ -199,7 +210,7 @@ class McpImageResponseEncodingTest {
         val encoded = "aGVsbG8="
         for ((b64, mime) in listOf(null to "image/png", encoded to "", "" to "image/png", null to null)) {
             val handler = readAppHandler(base64 = b64, mime = mime)
-            val response = call(handler, "read_app")
+            val response = callReadApp(handler)
             assertThat(contentArray(response.body!!).map { it["type"]!!.jsonPrimitive.content })
                 .containsExactly("text")
         }

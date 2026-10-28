@@ -65,7 +65,9 @@ class MediaProjectionFrameAgeSizePolicyTest {
         val policy = MediaProjectionFramePolicy(maxMirrorPixels = BUDGET_PX)
         assertThat(policy.acceptsMirrorGeometry(1_000, 1_000)).isTrue()
         assertThat(policy.acceptsMirrorGeometry(1_000, 1_001)).isFalse()
-        assertThat(policy.acceptsMirrorGeometry(4_096, 256)).isTrue() // exactly BUDGET_PX
+        assertThat(policy.acceptsMirrorGeometry(1, 1_000_000)).isTrue()
+        assertThat(policy.acceptsMirrorGeometry(1, 1_000_001)).isFalse() // Exactly one pixel over.
+        assertThat(policy.acceptsMirrorGeometry(4_096, 256)).isFalse() // 1,048,576 > BUDGET_PX
     }
 
     @Test
