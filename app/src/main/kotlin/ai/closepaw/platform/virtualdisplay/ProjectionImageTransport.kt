@@ -84,15 +84,17 @@ internal class ProjectionImageLease(
                                 retry("no_frame_available")
                                 return
                             }
-                            val capturedAt = image.timestamp / 1_000_000
+                            var capturedAt = 0L
                             try {
-                                if (image.timestamp > 0 && capturedAt <= SystemClock.elapsedRealtime() &&
+                                val timestamp = image.timestamp
+                                capturedAt = timestamp / 1_000_000
+                                if (timestamp > 0 && capturedAt <= SystemClock.elapsedRealtime() &&
                                     !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime())) {
                                     retry("stale_frame")
                                     return
                                 }
                                 val reason = when {
-                                    image.timestamp <= 0 -> "invalid_timestamp"
+                                    timestamp <= 0 -> "invalid_timestamp"
                                     !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime()) -> "timestamp_not_fresh"
                                     !policy.acceptsMirrorGeometry(image.width, image.height) -> "geometry_refused"
                                     image.planes.size != 1 -> "plane_count_refused"
