@@ -1,13 +1,6 @@
 package ai.closepaw.chatgpt.control
 
 import kotlinx.coroutines.runBlocking
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.ExtractedText
-import android.view.inputmethod.InputConnection
-import android.text.InputType
-import io.mockk.every
-import io.mockk.mock
-import io.mockk.clearMocks
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -121,44 +114,12 @@ class TerminalForceInputTest {
         assertNull(TerminalInputPolicy.submission(node().terminal!!, port.frame.nodes.single().terminal!!, "x"))
     }
 
-    @Test fun captureRespectsCursorAndSelectionSafety() {
-        val mockService = mock<AgentService>()
-        val mockInputMethod = mock<GuardedAccessibilityInputMethod>()
-        val mockConnection = mock<InputConnection>()
-
-        // Common setup for mockInputMethod
-        every { mockInputMethod.generation } returns 1L
-        every { mockInputMethod.currentInputStarted } returns true
-        every { mockInputMethod.currentInputEditorInfo } returns EditorInfo().apply {
-            packageName = "com.termux"
-            fieldId = 1
-            inputType = InputType.TYPE_CLASS_TEXT
-        }
-        every { mockService.inputMethod } returns mockInputMethod
-        every { mockService.packageManager } returns mockk() // Mock PackageManager
-        // Mock getResourcesForApplication to avoid NullPointerException for resource name lookup
-        every { mockService.packageManager.getResourcesForApplication(any()) } returns mockk()
-        every { mockService.packageManager.getResourcesForApplication(any()).getResourceName(any()) } returns "com.termux:id/terminal_view"
-
-
-        // Case 1: Existing text (unsafe)
-        every { mockInputMethod.currentInputConnection } returns mockConnection
-        every { mockConnection.getSurroundingText(any(), any(), any()) }
-            .returns(ExtractedText().apply { text = "existing text" })
-        assertNull(TerminalInputBinding.capture(mockService))
-
-        // Case 2: Selection exists (unsafe)
-        clearMocks(mockConnection) // Clear previous stubbing
-        every { mockInputMethod.currentInputConnection } returns mockConnection
-        every { mockConnection.getSurroundingText(any(), any(), any()) }
-            .returns(ExtractedText().apply { text = ""; selectionStart = 1; selectionEnd = 2 })
-        assertNull(TerminalInputBinding.capture(mockService))
-
-        // Case 3: No text, no selection (safe)
-        clearMocks(mockConnection) // Clear previous stubbing
-        every { mockInputMethod.currentInputConnection } returns mockConnection
-        every { mockConnection.getSurroundingText(any(), any(), any()) }
-            .returns(ExtractedText().apply { text = ""; selectionStart = 0; selectionEnd = 0 })
-        assertNotNull(TerminalInputBinding.capture(mockService))
+    @Test fun nativeCursorContextRejectsSelectionAndExistingText() {
+        assertFalse(TerminalInputPolicy.nativeCursorSafe(null, 0, 0))
+        assertFalse(TerminalInputPolicy.nativeCursorSafe("existing", 0, 0))
+        assertFalse(TerminalInputPolicy.nativeCursorSafe("", 1, 1))
+        assertFalse(TerminalInputPolicy.nativeCursorSafe("", 0, 1))
+        assertFalse(TerminalInputPolicy.nativeCursorSafe("", -1, -1))
+        assertTrue(TerminalInputPolicy.nativeCursorSafe("", 0, 0))
     }
 }
