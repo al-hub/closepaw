@@ -137,24 +137,32 @@ internal class McpHttpServer(
             append("Connection: close\r\n")
             append("\r\n")
         }.toByteArray(StandardCharsets.ISO_8859_1)
-        output.write(headers)
-        // Recheck revocation immediately before image bytes. A stopped session never starts a new body.
-        if (authorized && imageEpoch != null && !ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageEpoch)) return
         if (authorized && imageEpoch != null) {
-            // Bound the post-revocation exposure to at most one in-progress buffer write.
-            // A revoked stream is deliberately truncated; clients must discard incomplete JSON.
+            // Coordinate each physical write/flush with the synchronous consent
+            // transition. A buffered stream must never flush a previously queued
+            // image chunk after revokeConsent() has returned.
+            synchronized(ai.closepaw.security.ImageRevocationAuthority) {
+                if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageEpoch)) return
+                output.write(headers)
+                output.flush()
+            }
             var offset = 0
             while (offset < bodyBytes.size) {
-                if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageEpoch)) return
-                val count = minOf(4096, bodyBytes.size - offset)
-                output.write(bodyBytes, offset, count)
-                offset += count
+                synchronized(ai.closepaw.security.ImageRevocationAuthority) {
+                    if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageEpoch)) return
+                    val count = minOf(4096, bodyBytes.size - offset)
+                    output.write(bodyBytes, offset, count)
+                    output.flush()
+                    offset += count
+                }
             }
-            if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageEpoch)) return
         } else {
+            // This path is non-image content, including the explicit 403
+            // generated above for a revoked image response.
+            output.write(headers)
             output.write(bodyBytes)
+            output.flush()
         }
-        output.flush()
     }
 
     companion object {
