@@ -21,6 +21,19 @@ import org.junit.runner.RunWith
 /** Actual Android accessibility InputMethod binding to a separate noneditable fixture app. */
 @RunWith(AndroidJUnit4::class)
 class TerminalInputConnectionTest {
+    @Test fun deniedOsProjectionConsentCannotAuthorizeDisplayImages() {
+        val fixture = OsProjectionConsentFixture()
+        try {
+            fixture.deny()
+            assertEquals(ai.closepaw.platform.virtualdisplay.ProjectionConsentState.Denied,
+                ai.closepaw.platform.virtualdisplay.MediaProjectionCaptureService.consentGate.state)
+            assertNull(ai.closepaw.platform.virtualdisplay.ProjectionImageTransport.active())
+            assertFalse(ImageRevocationAuthority.isConsentGranted)
+        } finally {
+            fixture.stop()
+        }
+    }
+
     @Test fun officialInputConnectionCommitsExactEchoAndRefusesPasswordBinding() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
@@ -45,6 +58,7 @@ class TerminalInputConnectionTest {
         val prefs = service.getSharedPreferences("mcp_execution", 0)
         val before = prefs.all.toMap()
         val session = service.remoteControlSession
+        val projectionFixture = OsProjectionConsentFixture()
         try {
             // This suite tests Termux's official InputConnection, not IME pixel
             // admission. Explicitly deny reading the OS-selected IME so its
@@ -66,6 +80,7 @@ class TerminalInputConnectionTest {
             }.toString()
             prefs.edit().putBoolean("generic_control_enabled", true)
                 .putString("runtime_control_v1", runtimeConfig).commit()
+            projectionFixture.grant()
             instrumentation.runOnMainSync { session.end(); assertTrue(session.start()) }
             fun launch(password: Boolean) = ApplicationProvider.getApplicationContext<android.content.Context>().startActivity(
                 Intent().setClassName("com.termux", "com.termux.TerminalFixtureActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("password", password))
@@ -179,9 +194,10 @@ class TerminalInputConnectionTest {
             val submitted = control.action(buildJsonObject { put("action","terminal_submit");put("session_id",session.id);put("terminal_authorized",true);put("submit_authorized",true)
                 put("text",command);put("expected_output","fixture_ok");put("observation_id",submitObservation.data.getValue("observation_id"));put("node_id",terminalNode.getValue("node_id")) })
             assertTrue(submitted.toString(), submitted.success)
-            // Instrumentation-only consent fixture for accessibility pixel regressions.
-            // Production grants consent only after Android OS projection approval.
-            ImageRevocationAuthority.grantConsent()
+            // The real OS-approved service must still own a live display lease;
+            // process-local image consent alone cannot authorize these regressions.
+            assertNotNull(ai.closepaw.platform.virtualdisplay.ProjectionImageTransport.active())
+            assertTrue(ImageRevocationAuthority.isConsentGranted)
             val visual = control.observe(includeImage=true); assertTrue(visual.toString(),visual.success)
             val visualMeta=visual.data.getValue("visual").jsonObject
             val osBounds=visual.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["resource_id"]?.jsonPrimitive?.content == "com.termux:id/terminal_view" }.getValue("bounds").jsonPrimitive.content.split(' ').map{it.toInt()}
@@ -252,6 +268,9 @@ class TerminalInputConnectionTest {
             await { service.getSystemService(android.os.PowerManager::class.java).isInteractive &&
                 !service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked }
             assertNull("Unlock must not resurrect a revoked screenshot",VisualImageCache.imageFor(task))
+            // Lock may stop OS projection. Obtain fresh OS consent so the password
+            // refusal is exercised with a live source, not an absent projection.
+            projectionFixture.grant()
             fixtureStage="protected_editor"
             launch(true)
             await {
@@ -261,6 +280,8 @@ class TerminalInputConnectionTest {
             }
             // A display request with the unreadable password IME must never
             // disclose an image. Retain the original official-connection refusal.
+            assertNotNull(ai.closepaw.platform.virtualdisplay.ProjectionImageTransport.active())
+            assertTrue(ImageRevocationAuthority.isConsentGranted)
             val protectedDisplay=control.observe(includeImage=true,imageScope="display")
             assertFalse(protectedDisplay.toString(),protectedDisplay.success)
             assertNull(VisualImageCache.imageFor(buildJsonObject {put("data",protectedDisplay.data)}))
@@ -276,6 +297,7 @@ class TerminalInputConnectionTest {
                 assertFalse(refused.success); assertEquals(JsonPrimitive(false), refused.data["action_attempted"])
             }
         } finally {
+            projectionFixture.stop()
             ImageRevocationAuthority.revokeConsent()
             instrumentation.runOnMainSync { session.end() }
             val edit = prefs.edit().clear()
