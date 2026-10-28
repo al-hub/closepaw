@@ -95,6 +95,31 @@ class ProjectionImageLeaseTest {
         }
     }
 
+    @Test fun `uptime fresh timestamp remains refused when elapsed age is stale`() = runTest {
+        val image = mockk<Image>(relaxed = true)
+        mockkStatic(SystemClock::class)
+        try {
+            every { SystemClock.elapsedRealtime() } returns 100_000L
+            every { SystemClock.uptimeMillis() } returns 90_000L
+            every { image.timestamp } returns 89_500_000_000L
+            every { reader.acquireLatestImage() } returns image
+            every { handler.post(any<Runnable>()) } answers { firstArg<Runnable>().run(); true }
+            every { handler.postDelayed(any<Runnable>(), 25L) } returns false
+
+            assertNull(lease().capture())
+            val event = lastEvent()
+            val metrics = event["metrics"]!!.jsonObject
+            assertEquals("handler_post_rejected", event["reason_code"]!!.jsonPrimitive.content)
+            assertEquals("stale_frame", metrics["last_observation"]!!.jsonPrimitive.content)
+            assertEquals("1", metrics["stale_reads"]!!.jsonPrimitive.content)
+            assertEquals("10_to_60s", metrics["last_age_bucket"]!!.jsonPrimitive.content)
+            assertEquals("0_to_1s", metrics["last_uptime_age_bucket"]!!.jsonPrimitive.content)
+            verify(exactly = 1) { image.close() }
+        } finally {
+            unmockkStatic(SystemClock::class)
+        }
+    }
+
     @Test fun `rejected retry reports handler failure`() = runTest {
         every { handler.post(any<Runnable>()) } answers { firstArg<Runnable>().run(); true }
         every { handler.postDelayed(any<Runnable>(), 25L) } returns false
