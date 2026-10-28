@@ -1,6 +1,7 @@
 package ai.closepaw.chatgpt
 
 import ai.closepaw.app.AgentService
+import ai.closepaw.security.ImageRevocationAuthority
 import ai.closepaw.perception.PerceptionConfig
 import ai.closepaw.platform.AccessibilityPlatform
 import ai.closepaw.platform.AccessibilityScreenshotCapturer
@@ -23,6 +24,7 @@ internal data class ReadAppToolResult(
     val structured: JsonObject,
     val imageBase64: String? = null,
     val imageMimeType: String? = null,
+    val imageEpoch: Long? = null,
 )
 
 internal fun interface ReadAppTool {
@@ -161,9 +163,10 @@ internal class AndroidReadAppTool(
             traceRecorder = NoopTraceRecorder,
         )
         controlSession.feedback("화면 캡처 중")
+        val capturedImageEpoch = ImageRevocationAuthority.currentEpoch
         val screenshot = screenshotCapturer.captureIfEnabled(
             windowId = null,
-            enabled = true,
+            enabled = ImageRevocationAuthority.isConsentStillValid(capturedImageEpoch),
         )
 
         // Drop both text and image if focus changed while Android captured the screenshot.
@@ -171,7 +174,9 @@ internal class AndroidReadAppTool(
             code = "target_changed", summary = "Target foreground changed during screen capture.",
             screenshotAttempts = 1,
         )
-        val image = screenshot?.image
+        val image = screenshot?.image?.takeIf {
+            ImageRevocationAuthority.isConsentStillValid(capturedImageEpoch)
+        }
         val accessibilityContent = targetText
         val accessibilityQuality = if (isGemini) {
             GeminiScreenReadPolicy.assess(accessibilityContent, hasScreenshot = image != null).readQuality
@@ -291,10 +296,11 @@ internal class AndroidReadAppTool(
 
         ReadAppToolResult(
             structured = structured,
-            imageBase64 = image?.bytes?.let { bytes ->
-                Base64.encodeToString(bytes, Base64.NO_WRAP)
-            },
+            imageBase64 = image?.bytes?.takeIf {
+                ImageRevocationAuthority.isConsentStillValid(capturedImageEpoch)
+            }?.let { bytes -> Base64.encodeToString(bytes, Base64.NO_WRAP) },
             imageMimeType = image?.mimeType,
+            imageEpoch = capturedImageEpoch,
         )
         } finally {
             controlSession.feedback("화면 읽기 종료 · 결과 확인")

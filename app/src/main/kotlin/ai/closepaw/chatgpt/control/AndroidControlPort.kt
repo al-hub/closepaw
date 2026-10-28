@@ -337,6 +337,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private suspend fun captureVisual(frame: ControlFrame, scope: String): VisualTargetProof? {
         fun fail(code: String): VisualTargetProof? { visualFailureReason=code; return null }
         visualFailureReason="visual_observation_unavailable"
+        val imageConsentEpoch = ai.closepaw.security.ImageRevocationAuthority.currentEpoch
+        if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageConsentEpoch)) return fail("screen_share_revoked")
         if (frame.reason != null || frame.truncated || frame.navigationOnly || frame.touchContext.isEmpty()) return fail("visual_frame_unverified")
         val service = AgentService.instance ?: return fail("accessibility_permission_missing")
         val admittedSession = sessionFor(service)
@@ -369,6 +371,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             finally { windows.forEach { runCatching { it.recycle() } } }
         } ?: return fail("visual_window_unavailable")
         val projection = if (scope == "display") ai.closepaw.platform.virtualdisplay.ProjectionImageTransport.active() else null
+        if (scope == "display" && projection == null) return fail("screen_share_not_active")
         probeThrottle.awaitSlot()
         var captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty(), projection = projection) { probeThrottle.awaitSlot() }
         // Retry only an explicit OS screenshot rate refusal, before any action.
@@ -397,6 +400,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         }
         val sourceCheck = proof.sourceDisclosureAllowed
         val disclosureCheck: () -> Boolean = {
+            ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageConsentEpoch) &&
             sourceCheck() && sessionOwner.get()?.let {
                 it.id == admittedSessionId && it.epoch == admittedSessionEpoch &&
                     it.explicit && it.state == ControlSession.State.ACTIVE

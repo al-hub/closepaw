@@ -34,11 +34,13 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
  * session and expiration; invalidation removes the old image. Never in task ledger. */
 internal data class EncodedVisualImage(val mimeType: String, val data: String)
 internal object VisualImageCache {
-    private data class Entry(val proof: VisualTargetProof, val allowed: () -> Boolean)
+    private data class Entry(val proof: VisualTargetProof, val allowed: () -> Boolean, val imageEpoch: Long)
     private val images = linkedMapOf<String, Entry>()
     @Synchronized fun put(proof: VisualTargetProof, allowed: () -> Boolean) {
         prune(); while (images.size >= 2) images.remove(images.keys.first())
-        images[proof.id] = Entry(proof, allowed)
+        val epoch = ai.closepaw.security.ImageRevocationAuthority.currentEpoch
+        if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(epoch)) return
+        images[proof.id] = Entry(proof, allowed, epoch)
     }
     @Synchronized fun clear() { images.clear() }
     @Synchronized fun remove(id: String?) { if (id != null) images.remove(id) }
@@ -59,6 +61,11 @@ internal object VisualImageCache {
         val data=((result["result"] as? JsonObject)?.get("data") ?: result["data"]) as? JsonObject
         val visual=(data?.get("visual") ?: result["visual"]) as? JsonObject ?: return null
         val id=(visual["visual_id"] as? JsonPrimitive)?.content ?: return null
-        return images[id]?.proof?.image
+        val entry = images[id] ?: return null
+        if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(entry.imageEpoch)) {
+            images.remove(id)
+            return null
+        }
+        return entry.proof.image
     }
 }

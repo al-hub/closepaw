@@ -221,7 +221,10 @@ internal class McpJsonRpcHandler(
                         put("type", "text")
                         put("text", content)
                     })
-                    val imageData = result.imageBase64
+                    val imagePermitted = result.imageEpoch?.let {
+                        ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(it)
+                    } == true
+                    val imageData = result.imageBase64.takeIf { imagePermitted }
                     val imageMimeType = result.imageMimeType
                     if (!imageData.isNullOrBlank() && !imageMimeType.isNullOrBlank()) {
                         add(buildJsonObject {
@@ -240,7 +243,12 @@ internal class McpJsonRpcHandler(
     private fun toolResult(id: JsonElement, structured: JsonObject): McpHttpResponse {
         // Bounded encoding rechecks live consent/session/source after conversion.
         // Metadata describes this response, never an earlier capture/ledger result.
-        val image = ai.closepaw.chatgpt.control.VisualImageCache.encodedFor(structured)
+        val imageEpoch = ai.closepaw.security.ImageRevocationAuthority.currentEpoch
+        val image = if (ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageEpoch))
+            ai.closepaw.chatgpt.control.VisualImageCache.encodedFor(structured)?.takeIf {
+                ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageEpoch)
+            }
+        else null
         val delivered = withImageDeliveryMetadata(structured, image != null)
         val content = delivered["content"]?.jsonPrimitive?.content
             ?.takeIf { it.isNotBlank() }

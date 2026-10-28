@@ -54,6 +54,7 @@ class MediaProjectionCaptureService : Service() {
         /** Synchronous barrier; resource cleanup may follow, but revocation must not be queued. */
         fun revokeImageConsent() {
             consentGate.revokeImageConsent()
+            ai.closepaw.chatgpt.control.VisualImageCache.clear()
         }
 
         /** Launch the OS consent round from a user-visible Activity; never auto-started by the agent. */
