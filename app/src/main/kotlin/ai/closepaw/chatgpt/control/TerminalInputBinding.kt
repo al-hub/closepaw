@@ -25,10 +25,13 @@ internal class TerminalInputBinding private constructor(
             val editor = input.currentInputEditorInfo ?: error("terminal_editor_missing")
             check(editor.packageName == "com.termux" && editor.fieldId == fieldId && TerminalInputPolicy.inputTypeAllowed(editor.inputType))
             val connection = input.currentInputConnection ?: error("terminal_connection_missing")
+            dispatchCount.incrementAndGet()
             connection.commitText(text, 1, null) // void dispatch; exact echo must still be observed.
         } else throw UnsupportedOperationException("terminal_input_api_unavailable")
     }
     companion object {
+        // Counts only dispatch attempts, with no text or device identifiers.
+        internal val dispatchCount = java.util.concurrent.atomic.AtomicLong()
         fun capture(service: AgentService): TerminalInputBinding? {
             if (Build.VERSION.SDK_INT < 33) return null
             val input = service.inputMethod as? GuardedAccessibilityInputMethod ?: return null
