@@ -2,6 +2,9 @@ package ai.closepaw.platform.virtualdisplay
 
 import android.graphics.Bitmap
 import android.os.SystemClock
+import ai.closepaw.chatgpt.control.ControlDiagnostics
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
@@ -32,64 +35,156 @@ internal class ProjectionImageLease(
         policy.isDeliveryFresh(capturedAt, SystemClock.elapsedRealtime())
 
     /** Bounded acquisition, no cached pixels and no fallback. The caller owns the bitmap.
-     * ImageReader timestamps use the monotonic timebase; unknown/future/old values fail closed. */
-    suspend fun capture(): ProjectionBitmap? = withTimeoutOrNull(1_500) {
-        suspendCancellableCoroutine { continuation ->
-            val acquire = object : Runnable {
-                override fun run() {
-                    var bitmap: Bitmap? = null
-                    try {
-                        if (!continuation.isActive || !isActive()) {
-                            if (continuation.isActive) continuation.resume(null)
-                            return
+     * Timestamp timebase depends on the image source; retain the existing fail-closed freshness check. */
+    suspend fun capture(): ProjectionBitmap? {
+        data class Attempt(val reason: String, val frame: ProjectionBitmap? = null)
+        val lock = Any()
+        var stopped = false
+        var lastObservation = "none"
+        var emptyReads = 0
+        var staleReads = 0
+        var pendingFrame: ProjectionBitmap? = null
+        fun releasePendingFrame() {
+            val frame = synchronized(lock) { pendingFrame.also { pendingFrame = null } }
+            frame?.bitmap?.recycle()
+        }
+        var attempt: Attempt? = null
+        try {
+        attempt = withTimeoutOrNull(1_500) {
+            suspendCancellableCoroutine<Attempt> { continuation ->
+                fun finish(reason: String, frame: ProjectionBitmap? = null) {
+                    val accepted = synchronized(lock) {
+                        if (stopped) false else {
+                            stopped = true
+                            pendingFrame = frame
+                            true
                         }
-                        val image = scope.reader.acquireLatestImage()
-                        if (image == null) {
+                    }
+                    if (!accepted) {
+                        frame?.bitmap?.recycle()
+                        return
+                    }
+                    continuation.resume(Attempt(reason, frame), onCancellation = { _: Throwable ->
+                        releasePendingFrame()
+                    })
+                }
+                val acquire = object : Runnable {
+                    fun retry(observation: String) {
+                        val posted = synchronized(lock) {
+                            if (stopped || !continuation.isActive) return
+                            lastObservation = observation
+                            if (observation == "no_frame_available") emptyReads++
+                            if (observation == "stale_frame") staleReads++
                             scope.handler.postDelayed(this, 25)
-                            return
                         }
-                        val capturedAt = image.timestamp / 1_000_000
+                        if (!posted) finish("handler_post_rejected")
+                    }
+                    override fun run() {
+                        var bitmap: Bitmap? = null
+                        var operation = "acquire"
                         try {
-                            if (image.timestamp > 0 && capturedAt <= SystemClock.elapsedRealtime() &&
-                                !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime())) {
-                                // Drain stalled pre-request buffers, then wait within the same deadline.
-                                scope.handler.postDelayed(this, 25)
+                            if (!continuation.isActive) return
+                            if (!isActive()) {
+                                finish("lease_not_active")
                                 return
                             }
-                            if (image.timestamp <= 0 || !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime()) ||
-                                !policy.acceptsMirrorGeometry(image.width, image.height) || image.planes.size != 1) {
-                                continuation.resume(null)
+                            val image = scope.reader.acquireLatestImage()
+                            if (image == null) {
+                                retry("no_frame_available")
                                 return
                             }
-                            val plane = image.planes[0]
-                            val width = image.width; val height = image.height
-                            val packed = ProjectionFramePacking.pack(plane.buffer, width, height, plane.rowStride, plane.pixelStride)
-                            if (packed == null) {
-                                continuation.resume(null)
+                            var capturedAt = 0L
+                            var reason: String? = null
+                            var stale = false
+                            try {
+                                operation = "image_metadata"
+                                val timestamp = image.timestamp
+                                capturedAt = timestamp / 1_000_000
+                                stale = timestamp > 0 && capturedAt <= SystemClock.elapsedRealtime() &&
+                                    !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime())
+                                if (!stale) {
+                                    reason = when {
+                                        timestamp <= 0 -> "invalid_timestamp"
+                                        !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime()) -> "timestamp_not_fresh"
+                                        !policy.acceptsMirrorGeometry(image.width, image.height) -> "geometry_refused"
+                                        image.planes.size != 1 -> "plane_count_refused"
+                                        else -> null
+                                    }
+                                    if (reason == null) {
+                                        val plane = image.planes[0]
+                                        val width = image.width; val height = image.height
+                                        operation = "packing"
+                                        val packed = ProjectionFramePacking.pack(plane.buffer, width, height, plane.rowStride, plane.pixelStride)
+                                        if (packed == null) {
+                                            reason = "packing_failed"
+                                        } else {
+                                            operation = "bitmap"
+                                            bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                                            bitmap!!.copyPixelsFromBuffer(packed)
+                                        }
+                                    }
+                                }
+                            } finally {
+                                try { image.close() } catch (e: Exception) {
+                                    operation = "image_close"
+                                    throw e
+                                }
+                            }
+                            if (stale) {
+                                retry("stale_frame")
                                 return
                             }
-                            bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                            bitmap!!.copyPixelsFromBuffer(packed)
-                        } finally { image.close() }
-                        if (!isActive() || !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime())) {
-                            bitmap?.recycle(); bitmap = null
-                            continuation.resume(null)
-                        } else {
-                            val result = ProjectionBitmap(bitmap!!, this@ProjectionImageLease, capturedAt)
-                            bitmap = null
-                            continuation.resume(result, onCancellation = { _: Throwable -> result.bitmap.recycle() })
+                            if (reason != null) {
+                                finish(reason!!)
+                                return
+                            }
+                            operation = "post_acquire"
+                            reason = when {
+                                !isActive() -> "lease_not_active"
+                                !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime()) -> "post_acquire_not_fresh"
+                                else -> null
+                            }
+                            if (reason != null) {
+                                bitmap?.recycle(); bitmap = null
+                                finish(reason)
+                            } else {
+                                val frame = ProjectionBitmap(bitmap!!, this@ProjectionImageLease, capturedAt)
+                                bitmap = null
+                                finish("captured", frame)
+                            }
+                        } catch (_: Exception) {
+                            bitmap?.recycle()
+                            finish("${operation}_exception")
                         }
-                    } catch (_: Exception) {
-                        bitmap?.recycle()
-                        if (continuation.isActive) continuation.resume(null)
                     }
                 }
+                continuation.invokeOnCancellation {
+                    synchronized(lock) {
+                        stopped = true
+                        scope.handler.removeCallbacks(acquire)
+                    }
+                }
+                val posted = synchronized(lock) {
+                    if (stopped || !continuation.isActive) true else scope.handler.post(acquire)
+                }
+                if (!posted) finish("handler_post_rejected")
             }
-            continuation.invokeOnCancellation { scope.handler.removeCallbacks(acquire) }
-            val posted = scope.handler.post(acquire)
-            if (!posted && continuation.isActive) continuation.resume(null)
         }
+        } finally {
+            if (attempt?.frame == null) releasePendingFrame()
+        }
+        val metrics = synchronized(lock) {
+            buildJsonObject {
+                put("last_observation", lastObservation)
+                put("null_reads", emptyReads.coerceAtMost(1000))
+                put("stale_reads", staleReads.coerceAtMost(1000))
+                put("lease_active_after", isActive())
+            }
+        }
+        ControlDiagnostics.record("projection_frame_acquire", attempt?.reason ?: "timeout", metrics = metrics)
+        return attempt?.frame
     }
 }
 
 internal data class ProjectionBitmap(val bitmap: Bitmap, val lease: ProjectionImageLease, val capturedAt: Long)
+
