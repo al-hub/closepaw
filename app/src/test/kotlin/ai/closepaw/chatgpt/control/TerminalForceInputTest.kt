@@ -11,7 +11,7 @@ class TerminalForceInputTest {
         bounds = "0 0 200 300", focused = true, sourceWindowId = 1, sourcePackage = "com.termux",
         terminal = TerminalEvidence(echo, 3, 11))
 
-    private class Port(initial: ControlNode) : ControlPort {
+    private class Port(initial: ControlNode, private val expectedText: String = "x") : ControlPort {
         var frame = ControlFrame("com.termux", 1, "before", listOf(initial))
         var calls = 0
         var after: ControlNode? = initial.copy(terminal = initial.terminal!!.copy(echo = initial.terminal.echo + "x"))
@@ -22,7 +22,7 @@ class TerminalForceInputTest {
         override suspend fun apps(filter: String) = JsonArray(emptyList())
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
             assertEquals("terminal_input", input.getValue("action").jsonPrimitive.content)
-            assertEquals("x", input.getValue("text").jsonPrimitive.content)
+            assertEquals(expectedText, input.getValue("text").jsonPrimitive.content)
             calls++
             this.frame = frame.copy(fingerprint = "after", nodes = listOfNotNull(after))
             return ControlEffect(true, acknowledged, "terminal_input_dispatched")
@@ -84,6 +84,27 @@ class TerminalForceInputTest {
         val port = Port(initial).apply { acknowledged = false }; val control = GenericControl(port, { true })
         val input = request(control)
         assertFalse(control.action(input).success); assertFalse(control.action(input).success); assertEquals(1, port.calls)
+    }
+
+    @Test fun middleInsertionWithoutTrustedCursorEvidenceRemainsUnknownAndIsNotReplayed() = runBlocking {
+        val initial = node("~ $ echo ABCD")
+        val port = Port(initial, "X").apply {
+            after = initial.copy(terminal = initial.terminal!!.copy(echo = "~ $ echo ABCXD"))
+        }
+        val control = GenericControl(port, { true })
+        val input = buildJsonObject {
+            put("action", "terminal_input"); put("node_id", 1)
+            put("observation_id", control.observe().data.getValue("observation_id"))
+            put("terminal_authorized", true); put("terminal_force_authorized", true); put("text", "X")
+        }
+        val result = control.action(input)
+        assertFalse(result.success)
+        assertEquals(JsonPrimitive(true), result.data["action_attempted"])
+        assertEquals(JsonPrimitive(true), result.data["action_acknowledged"])
+        assertEquals(JsonPrimitive(true), result.data["outcome_unknown"])
+        assertEquals(JsonPrimitive("terminal_echo_unconfirmed"), result.data["reason_code"])
+        assertFalse(control.action(input).success)
+        assertEquals(1, port.calls)
     }
 
     @Test fun changedTargetSessionOrRevokedControlStopsBeforeDispatch() = runBlocking {
