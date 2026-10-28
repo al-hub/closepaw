@@ -43,12 +43,20 @@ internal class ProjectionImageLease(
         var lastObservation = "none"
         var emptyReads = 0
         var staleReads = 0
-        val attempt = withTimeoutOrNull(1_500) {
+        var pendingFrame: ProjectionBitmap? = null
+        fun releasePendingFrame() {
+            val frame = synchronized(lock) { pendingFrame.also { pendingFrame = null } }
+            frame?.bitmap?.recycle()
+        }
+        var attempt: Attempt? = null
+        try {
+        attempt = withTimeoutOrNull(1_500) {
             suspendCancellableCoroutine<Attempt> { continuation ->
                 fun finish(reason: String, frame: ProjectionBitmap? = null) {
                     val accepted = synchronized(lock) {
                         if (stopped) false else {
                             stopped = true
+                            pendingFrame = frame
                             true
                         }
                     }
@@ -57,7 +65,7 @@ internal class ProjectionImageLease(
                         return
                     }
                     continuation.resume(Attempt(reason, frame), onCancellation = { _: Throwable ->
-                        frame?.bitmap?.recycle()
+                        releasePendingFrame()
                     })
                 }
                 val acquire = object : Runnable {
@@ -144,6 +152,9 @@ internal class ProjectionImageLease(
                 }
                 if (!posted) finish("handler_post_rejected")
             }
+        }
+        } finally {
+            if (attempt?.frame == null) releasePendingFrame()
         }
         val metrics = synchronized(lock) {
             buildJsonObject {
