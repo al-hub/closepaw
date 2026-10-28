@@ -32,6 +32,28 @@ class McpImageRevocationWriteTest {
         assertThat(bytes).contains("image_consent_revoked")
     }
 
+    @Test fun stopSharingAfterFirstFlushedImageChunkPreventsRemainingBody() {
+        ImageRevocationAuthority.grantConsent()
+        val epoch = ImageRevocationAuthority.currentEpoch
+        val payload = "BEGIN_PIXELS" + "Q".repeat(64000) + "END_PIXELS"
+        val raw = ByteArrayOutputStream()
+        var writes = 0
+        val sink = object : OutputStream() {
+            override fun write(b: Int) { raw.write(b) }
+            override fun write(bytes: ByteArray, off: Int, len: Int) {
+                raw.write(bytes, off, len)
+                writes++
+                // Header is the first flushed write. Stop after one image chunk.
+                if (writes == 2) ImageRevocationAuthority.revokeConsent()
+            }
+        }
+        write(McpHttpResponse(200, payload, imageEpoch = epoch), sink)
+        val transmitted = raw.toString("UTF-8")
+        assertThat(transmitted).contains("BEGIN_PIXELS")
+        assertThat(transmitted).doesNotContain("END_PIXELS")
+        assertThat(ImageRevocationAuthority.isConsentGranted).isFalse()
+    }
+
     @Test fun revocationDuringChunkedImageWriteTruncatesResponse() {
         ImageRevocationAuthority.grantConsent()
         val epoch = ImageRevocationAuthority.currentEpoch
