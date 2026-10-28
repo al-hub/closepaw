@@ -1,6 +1,7 @@
 package ai.closepaw.qa
 
 import ai.closepaw.app.AgentService
+import ai.closepaw.security.ImageRevocationAuthority
 import ai.closepaw.chatgpt.McpExecutionSettings
 import ai.closepaw.chatgpt.control.*
 import android.app.UiAutomation
@@ -178,6 +179,9 @@ class TerminalInputConnectionTest {
             val submitted = control.action(buildJsonObject { put("action","terminal_submit");put("session_id",session.id);put("terminal_authorized",true);put("submit_authorized",true)
                 put("text",command);put("expected_output","fixture_ok");put("observation_id",submitObservation.data.getValue("observation_id"));put("node_id",terminalNode.getValue("node_id")) })
             assertTrue(submitted.toString(), submitted.success)
+            // Instrumentation-only consent fixture for accessibility pixel regressions.
+            // Production grants consent only after Android OS projection approval.
+            ImageRevocationAuthority.grantConsent()
             val visual = control.observe(includeImage=true); assertTrue(visual.toString(),visual.success)
             val visualMeta=visual.data.getValue("visual").jsonObject
             val osBounds=visual.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["resource_id"]?.jsonPrimitive?.content == "com.termux:id/terminal_view" }.getValue("bounds").jsonPrimitive.content.split(' ').map{it.toInt()}
@@ -201,6 +205,11 @@ class TerminalInputConnectionTest {
             }
             assertNull("Fixture IME did not hide",displayFrame.keyboard)
             assertTrue(settled(requireIme=false).success)
+            // Full-display positive cases require a real OS-approved projection.
+            // This emulator does not grant MediaProjection: retain the complete
+            // positive regression when a projection fixture exists, and otherwise
+            // assert fail-closed behavior rather than bypassing production consent.
+            if (ai.closepaw.platform.virtualdisplay.ProjectionImageTransport.active() != null) {
             // Real renderer/native capture regression for the same display
             // revalidation helper used by visual_key. This is not key-input PASS.
             instrumentation.runOnMainSync { service.showRemoteControlActivity(); service.showRemoteControlTarget(android.graphics.Rect(100,300,500,600)) }
@@ -248,6 +257,11 @@ class TerminalInputConnectionTest {
             await { service.getSystemService(android.os.PowerManager::class.java).isInteractive &&
                 !service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked }
             assertNull("Unlock must not resurrect a revoked screenshot",VisualImageCache.imageFor(task))
+            } else {
+                val noProjection = port.visualDisplay(port.capture())
+                assertNull("No OS projection must never disclose display pixels", noProjection)
+                assertEquals("screen_share_not_active", port.visualFailure())
+            }
             fixtureStage="protected_editor"
             launch(true)
             await {
@@ -272,6 +286,7 @@ class TerminalInputConnectionTest {
                 assertFalse(refused.success); assertEquals(JsonPrimitive(false), refused.data["action_attempted"])
             }
         } finally {
+            ImageRevocationAuthority.revokeConsent()
             instrumentation.runOnMainSync { session.end() }
             val edit = prefs.edit().clear()
             before.forEach { (k, v) -> when (v) { is Boolean -> edit.putBoolean(k, v); is String -> edit.putString(k, v); is Int -> edit.putInt(k, v); is Long -> edit.putLong(k, v) } }

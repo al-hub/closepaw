@@ -1,10 +1,15 @@
 package ai.closepaw.chatgpt.control
+import ai.closepaw.security.ImageRevocationAuthority
 import ai.closepaw.model.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
+import org.junit.Before
+import org.junit.After
 import org.junit.Test
 class VisualControlTest {
+    @Before fun consent() { VisualImageCache.clear(); ImageRevocationAuthority.grantConsent() }
+    @After fun revoke() { VisualImageCache.clear(); ImageRevocationAuthority.revokeConsent() }
     @Test fun cachedTaskImageIsRevokedWhenNativeDisclosureFailsEvenWithActiveSession() = runBlocking {
         var locked=false
         val session=ControlSession().also { it.start() }
@@ -90,6 +95,70 @@ class VisualControlTest {
         assertTrue(VisualActionPolicy.pathAllowed(proof,TapBounds(10,10,20,20),TapBounds(10,50,20,60)))
         assertFalse(VisualActionPolicy.scopeAllowed("visual_key","app"))
         assertFalse(VisualActionPolicy.scopeAllowed("visual_tap","unknown"))
+    }
+
+    @Test fun geometryMismatchDiagnosticFailsClosedWithoutCaptureFallback() = runBlocking {
+        for ((scope, reason) in listOf(
+            "app" to "screenshot_buffer_geometry_mismatch",
+            "keyboard" to "screenshot_buffer_geometry_mismatch",
+            "display" to "screenshot_buffer_geometry_mismatch",
+            "display" to "display_isolated_screenshot_buffer_geometry_mismatch"
+        )) {
+            val session = ControlSession().also { it.start() }
+            var failCapture = false
+            var dispatches = 0
+            val captures = mutableListOf<String>()
+            val proof = VisualTargetProof(
+                ScreenImage(100,100,"image/jpeg",byteArrayOf(1),ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
+                "pixels",TapBounds(0,0,100,100),"geometry",System.currentTimeMillis(),scope=scope)
+            val port = object : ControlPort {
+                override fun session() = session
+                override suspend fun capture() = ControlFrame("example",1,"same",emptyList(),touchContext="geometry")
+                override suspend fun apps(filter:String) = JsonArray(emptyList())
+                private fun image(requestedScope:String): VisualTargetProof? {
+                    captures.add(requestedScope)
+                    return if (failCapture) null else proof
+                }
+                override suspend fun visual(frame:ControlFrame) = image("app")
+                override suspend fun visualKeyboard(frame:ControlFrame) = image("keyboard")
+                override suspend fun visualDisplay(frame:ControlFrame) = image("display")
+                override fun visualFailure() = reason
+                override suspend fun perform(frame:ControlFrame,input:JsonObject,node:ControlNode?):ControlEffect {
+                    dispatches++
+                    return ControlEffect(true,true,"gesture_completed")
+                }
+            }
+            val control = GenericControl(port,{true})
+            val previous = control.observe(includeImage=true,imageScope=scope)
+            assertTrue(previous.success)
+            val staleAction = buildJsonObject {
+                put("action","visual_tap")
+                put("observation_id",previous.data.getValue("observation_id"))
+                put("visual_id",previous.data.getValue("visual").jsonObject.getValue("visual_id"))
+                put("visual_target_confirmed",true)
+                put("image_rect",JsonArray(listOf(10,10,20,20).map { JsonPrimitive(it) }))
+            }
+            val previousTask = buildJsonObject { put("result",buildJsonObject { put("data",previous.data) }) }
+            // Without a control-session read grant, a previous image must not be retrievable.
+            assertNull(VisualImageCache.imageFor(previousTask))
+            failCapture = true
+            captures.clear()
+            val failed = control.observe(includeImage=true,imageScope=scope)
+            assertFalse(reason,failed.success)
+            assertEquals(reason,failed.summary)
+            assertEquals(JsonPrimitive(reason),failed.data["reason_code"])
+            assertEquals(JsonPrimitive(false),failed.data["action_attempted"])
+            assertEquals(JsonPrimitive(false),failed.data["outcome_unknown"])
+            assertEquals(listOf(scope),captures)
+            assertNull(VisualImageCache.imageFor(previousTask))
+            assertFalse(failed.data.containsKey("visual"))
+            assertFalse(failed.data.containsKey("observation_id"))
+            assertFalse(failed.data.containsKey("nodes"))
+            val rejected = control.action(staleAction)
+            assertFalse(rejected.success)
+            assertEquals("observation_required",rejected.summary)
+            assertEquals(0,dispatches)
+        }
     }
 
 }

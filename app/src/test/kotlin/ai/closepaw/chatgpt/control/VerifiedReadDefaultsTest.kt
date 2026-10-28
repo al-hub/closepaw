@@ -1,11 +1,14 @@
 package ai.closepaw.chatgpt.control
 
+import ai.closepaw.security.ImageRevocationAuthority
+import org.junit.After
 import ai.closepaw.protocol.AppTier
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 
 class VerifiedReadDefaultsTest {
+    @After fun cleanupConsent() { VisualImageCache.clear(); ImageRevocationAuthority.revokeConsent() }
     private fun admitted(operation: String = "read", active: Boolean = true, bundled: AppTier? = null,
         userTier: AppTier? = null, ime: Boolean = false, browser: Boolean = false, web: Boolean = false) =
         VerifiedReadDefaults.permits(operation, active, bundled, userTier, ime, browser, web)
@@ -44,6 +47,8 @@ class VerifiedReadDefaultsTest {
         assertFalse(settings.access("example.ime", false, "interact"))
     }
     @Test fun selectedOwnerLossRevokesDeferredImageWithoutConfigurationWrite() {
+        VisualImageCache.clear()
+        ImageRevocationAuthority.grantConsent()
         for (usingIme in listOf(true, false)) {
             var selected = true
             val proof = VisualTargetProof(ai.closepaw.model.ScreenImage(1, 1, "image/jpeg", byteArrayOf(1),

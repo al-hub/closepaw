@@ -40,7 +40,7 @@ internal class TerminalInputBinding private constructor(
             if (resource != "com.termux:id/terminal_view") return null
             val connection = input.currentInputConnection ?: return null
             val around = connection.getSurroundingText(1, 1, 0) ?: return null
-            if (around.text.isNotEmpty() || around.selectionStart != 0 || around.selectionEnd != 0 || input.generation != generation) return null
+            if (!TerminalInputPolicy.nativeCursorSafe(around.text, around.selectionStart, around.selectionEnd) || input.generation != generation) return null
             return TerminalInputBinding(generation, editor.fieldId, input)
         }
     }
