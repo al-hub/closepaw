@@ -37,6 +37,29 @@ class OperationDispatcherTest {
         val dispatcher = OperationDispatcher(registry, OperationTaskStore(File.createTempFile("tasks", ".json").apply { delete() }), CoroutineScope(SupervisorJob() + Dispatchers.Default))
         assertEquals("write_operation_requires_execute", dispatcher.query(args("shell"))["error_code"]?.jsonPrimitive?.content)
     }
+    @Test fun readOnlyQueryIsNotConfusedWithWriteExecutePermission() {
+        val registry = OperationRegistry()
+        val handler = object: OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation) =
+                OperationResult(stdout = "read_only_ok")
+        }
+        registry.register(OperationDescriptor("diagnostic.status", "Read-only status", inputSchema = schema, readOnly = true), handler)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val file = File.createTempFile("readonly-status", ".json").apply { delete() }
+        try {
+            val dispatcher = OperationDispatcher(
+                registry, OperationTaskStore(file), scope,
+                executeAllowed = { true }, operationAllowed = { false },
+            )
+            // A read operation must use query; execute is gated even when it is read-only.
+            assertEquals("permission_denied", dispatcher.execute(args("diagnostic.status"))["error_code"]?.jsonPrimitive?.content)
+            val queried = dispatcher.query(args("diagnostic.status"))
+            assertEquals("succeeded", queried["status"]?.jsonPrimitive?.content)
+        } finally {
+            scope.cancel()
+            file.delete()
+        }
+    }
     @Test fun invalidInputsDoNotReachHandler() {
         val registry = OperationRegistry()
         registry.register(OperationDescriptor("shell", "Shell", inputSchema = schema, readOnly = false), object: OperationHandler {
