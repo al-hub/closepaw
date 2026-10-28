@@ -92,6 +92,29 @@ class McpBrowserReadTransportTest {
     }
 
     @Test
+    fun screenshotOcrTextIsRedactedAfterConsentRevocation() {
+        val oldEpoch = ImageRevocationAuthority.currentEpoch
+        ImageRevocationAuthority.revokeConsent()
+        val leakedText = "SECRET_FROM_PREVIOUS_SCREENSHOT"
+        val result = call(ReadAppTool {
+            ReadAppToolResult(
+                structured = buildJsonObject {
+                    put("status", "succeeded")
+                    put("content", leakedText)
+                    put("text_source", "on_device_ocr")
+                    put("ocr_derived_content", true)
+                },
+                imageBase64 = null,
+                imageEpoch = oldEpoch,
+            )
+        })
+        assertThat(result["isError"]!!.jsonPrimitive.content).isEqualTo("true")
+        assertThat(result["structuredContent"]!!.jsonObject["reason_code"]!!.jsonPrimitive.content)
+            .isEqualTo("image_consent_revoked")
+        assertThat(result.toString()).doesNotContain(leakedText)
+    }
+
+    @Test
     fun accessibilityFailureIsReportedAsToolErrorWithoutImage() {
         val result = call(ReadAppTool {
             ReadAppToolResult(
