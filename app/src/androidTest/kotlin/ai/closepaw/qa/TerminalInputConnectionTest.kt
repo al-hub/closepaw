@@ -205,6 +205,11 @@ class TerminalInputConnectionTest {
             }
             assertNull("Fixture IME did not hide",displayFrame.keyboard)
             assertTrue(settled(requireIme=false).success)
+            // Full-display positive cases require a real OS-approved projection.
+            // This emulator does not grant MediaProjection: retain the complete
+            // positive regression when a projection fixture exists, and otherwise
+            // assert fail-closed behavior rather than bypassing production consent.
+            if (ai.closepaw.platform.virtualdisplay.ProjectionImageTransport.active() != null) {
             // Real renderer/native capture regression for the same display
             // revalidation helper used by visual_key. This is not key-input PASS.
             instrumentation.runOnMainSync { service.showRemoteControlActivity(); service.showRemoteControlTarget(android.graphics.Rect(100,300,500,600)) }
@@ -252,6 +257,11 @@ class TerminalInputConnectionTest {
             await { service.getSystemService(android.os.PowerManager::class.java).isInteractive &&
                 !service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked }
             assertNull("Unlock must not resurrect a revoked screenshot",VisualImageCache.imageFor(task))
+            } else {
+                val noProjection = port.visualDisplay(port.capture())
+                assertNull("No OS projection must never disclose display pixels", noProjection)
+                assertEquals("screen_share_not_active", port.visualFailure())
+            }
             fixtureStage="protected_editor"
             launch(true)
             await {
