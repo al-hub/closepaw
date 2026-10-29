@@ -69,6 +69,28 @@ class MonitoringRecoveryGateTest {
         assertFalse(unknownClock.tryConsume("restart", 1, true, true))
     }
 
+    @Test fun `stop returning prevents later dispatches`() {
+        val gate = MonitoringRecoveryGate("restart", 1000)
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val stopped = CountDownLatch(1)
+        val dispatchThread = thread {
+            gate.tryDispatch("restart", { MonitoringRecoveryGate.State(1, true, true) }) {
+                entered.countDown()
+                check(release.await(2, java.util.concurrent.TimeUnit.SECONDS))
+            }
+        }
+        check(entered.await(2, java.util.concurrent.TimeUnit.SECONDS))
+        val stopThread = thread { gate.stop(); stopped.countDown() }
+        assertFalse(stopped.await(50, java.util.concurrent.TimeUnit.MILLISECONDS))
+        release.countDown()
+        dispatchThread.join(2000); stopThread.join(2000)
+        assertTrue(stopped.await(2, java.util.concurrent.TimeUnit.SECONDS))
+        assertFalse(gate.tryDispatch("restart", { MonitoringRecoveryGate.State(2, true, true) }) {
+            org.junit.Assert.fail("dispatch after stop")
+        })
+    }
+
     @Test fun `concurrent attempts have at most one winner`() {
         val gate = MonitoringRecoveryGate("restart", 1000)
         val latch = CountDownLatch(1)
