@@ -79,6 +79,30 @@ class MediaProjectionFramePolicyTest {
     }
 
     @Test
+    fun `clock gap cannot establish which source timestamp is fresh`() {
+        val policy = policy()
+        // The same numeric timestamp could be a fresh uptime timestamp or an
+        // old elapsed-realtime timestamp. The clock gap alone cannot distinguish them.
+        val timestamp = 89_500L
+        val uptime = 90_000L
+        val elapsed = 100_000L
+        assertTrue(policy.isFrameFresh(timestamp, uptime))
+        assertFalse(policy.isFrameFresh(timestamp, elapsed))
+        // The current fail-closed path uses elapsed, including at delivery.
+        assertFalse(policy.isDeliveryFresh(timestamp, elapsed))
+    }
+
+    @Test
+    fun `suspend makes uptime-only delivery age insufficient`() {
+        val policy = policy()
+        val captureUptime = 90_000L
+        val captureElapsed = 100_000L
+        // During suspend uptime does not advance, but elapsed realtime does.
+        assertTrue(policy.isDeliveryFresh(captureUptime, captureUptime + 100))
+        assertFalse(policy.isDeliveryFresh(captureElapsed, captureElapsed + 60_100))
+    }
+
+    @Test
     fun `mirror geometry is capped`() {
         val policy = MediaProjectionFramePolicy(maxMirrorPixels = 8_000_000)
         assertTrue(policy.acceptsMirrorGeometry(1080, 2400))
