@@ -44,7 +44,7 @@ internal class ProjectionImageLease(
         var emptyReads = 0
         var staleReads = 0
         var uptimeFreshElapsedStale = 0
-        // Keep only bounded categories/counts in diagnostics; never log raw timestamps or pixels.
+        // Keep bounded categories/counts and the two clock samples below; never log pixels.
         var previousTimestamp: Long? = null
         var sameTimestamps = 0
         var increasingTimestamps = 0

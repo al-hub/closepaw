@@ -103,6 +103,22 @@ class MediaProjectionFramePolicyTest {
     }
 
     @Test
+    fun `receipt clock offset can rejuvenate a pre-suspend buffer even with known uptime source`() {
+        val policy = policy()
+        val sourceUptimeMs = 89_500L
+        val actualCaptureElapsedMs = 99_500L
+        // The buffer was queued before 60 seconds of suspend and acquired after it.
+        val receiptUptimeMs = 90_000L
+        val receiptElapsedMs = 160_000L
+        val guessedCaptureElapsedMs = sourceUptimeMs + (receiptElapsedMs - receiptUptimeMs)
+        // A perfectly paired receipt sample still cannot recover the capture-time offset.
+        assertTrue(policy.isFrameFresh(guessedCaptureElapsedMs, receiptElapsedMs))
+        assertTrue(policy.isDeliveryFresh(guessedCaptureElapsedMs, receiptElapsedMs))
+        assertFalse(policy.isFrameFresh(actualCaptureElapsedMs, receiptElapsedMs))
+        assertFalse(policy.isDeliveryFresh(actualCaptureElapsedMs, receiptElapsedMs))
+    }
+
+    @Test
     fun `mirror geometry is capped`() {
         val policy = MediaProjectionFramePolicy(maxMirrorPixels = 8_000_000)
         assertTrue(policy.acceptsMirrorGeometry(1080, 2400))
