@@ -77,6 +77,9 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".chatgpt.SelfMonitoringConsentActivity"
+            android:exported="false" android:excludeFromRecents="true" />
+
         <activity
             android:name=".ui.viewer.VirtualDisplayViewerActivity"
             android:theme="@style/Theme.ClosePaw.FullScreen"

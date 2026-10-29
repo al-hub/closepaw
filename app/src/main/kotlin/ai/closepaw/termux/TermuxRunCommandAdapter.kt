@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ComponentName
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
@@ -52,10 +53,11 @@ class TermuxRunCommandAdapter(private val context: Context) {
         executable: String,
         args: List<String>,
         stdinBase64: String? = null,
-        timeoutMs: Long = DEFAULT_TIMEOUT_MS
+        timeoutMs: Long = DEFAULT_TIMEOUT_MS,
+        dispatchGuard: ((() -> Unit) -> Boolean)? = null,
     ): RunCommandResult {
         return withTimeoutOrNull(timeoutMs) {
-            awaitRunCommand(executable, args, stdinBase64)
+            awaitRunCommand(executable, args, stdinBase64, dispatchGuard)
         } ?: throw RunCommandError.Timeout(timeoutMs)
     }
 
@@ -69,7 +71,8 @@ class TermuxRunCommandAdapter(private val context: Context) {
     private suspend fun awaitRunCommand(
         executable: String,
         args: List<String>,
-        stdinBase64: String?
+        stdinBase64: String?,
+        dispatchGuard: ((() -> Unit) -> Boolean)?,
     ): RunCommandResult =
         suspendCancellableCoroutine { continuation ->
             val appContext = context.applicationContext
@@ -158,12 +161,23 @@ class TermuxRunCommandAdapter(private val context: Context) {
                 // restrictions reject plain startService for cross-app service starts even
                 // when the caller is a foreground Activity. Termux's RunCommandService
                 // declares dataSync FGS type and calls startForeground() during onStartCommand.
-                val started =
+                var started: ComponentName? = null
+                val dispatch = {
+                    check(continuation.isActive) { "monitor_dispatch_cancelled" }
+                    started =
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         appContext.startForegroundService(runCommandIntent)
                     } else {
                         appContext.startService(runCommandIntent)
                     }
+                    Unit
+                }
+                if (dispatchGuard != null) {
+                    if (!dispatchGuard(dispatch)) {
+                        fail(RunCommandError.StartRestricted("Scoped recovery authority expired or stopped"))
+                        return@suspendCancellableCoroutine
+                    }
+                } else dispatch()
                 if (started == null) {
                     fail(RunCommandError.StartRestricted("Android returned null while starting Termux RunCommandService"))
                 }

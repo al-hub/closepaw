@@ -87,6 +87,7 @@ internal class AndroidOperationRuntime(
             }
         }.register(registry)
         SelfUpdateOperations(AndroidSelfUpdater.get(context)).register(registry)
+        SelfMonitoringOperations(context, scope, settings, termuxBridge).register(registry)
         TailscaleOperations(
             TailscaleRecovery(AndroidTailscalePlatform(context), { settings.tailscaleRecoveryEnabled }, record = tailscaleDiagnostics::record),
             { settings.tailscaleRecoveryEnabled },
@@ -245,6 +246,8 @@ internal class AndroidOperationRuntime(
                 GenericControlOperations.ACTION, GenericControlOperations.SEQUENCE, GenericControlOperations.ISLAND_DRAG, GenericControlOperations.CONFIGURE, GenericControlOperations.FEEDBACK_TEST,
                 "android.control.session.start", "android.control.session.wait", "android.control.session.end" -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
+                SelfMonitoringOperations.START -> settings.enabled && settings.genericControlEnabled
+                SelfMonitoringOperations.STOP -> true
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled
                 "gemini.question.ask" -> settings.geminiQuestionEnabled

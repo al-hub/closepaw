@@ -136,6 +136,7 @@ class ChatGptMcpService : Service() {
     }
 
     override fun onDestroy() {
+        SelfMonitoringAuthority.stop(reason = "interrupted")
         reconnect.stop()
         server.stop()
         started.set(false)

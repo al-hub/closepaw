@@ -54,6 +54,7 @@ class MediaProjectionCaptureService : Service() {
 
         /** Synchronous barrier; resource cleanup may follow, but revocation must not be queued. */
         fun revokeImageConsent() {
+            ai.closepaw.chatgpt.SelfMonitoringAuthority.stop(reason = "interrupted")
             consentGate.revokeImageConsent()
             ai.closepaw.chatgpt.control.VisualImageCache.clear()
         }

@@ -74,6 +74,7 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     }
     var changed: () -> Unit = {}
     var interrupt: () -> Unit = {}
+    var stopMonitoring: () -> Unit = {}
     var label: String = if (state == State.PAUSED) "사용자 제어 중 · 일시정지" else "AI 제어 준비"
         private set
     @Synchronized fun start(): Boolean {
@@ -127,6 +128,7 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         label = text; changed()
     }
     private fun transition(next: State, text: String) {
+        if (next != State.ACTIVE) stopMonitoring()
         state = next; epoch++; label = text
         progressDetail = null
         if (next == State.ACTIVE) visualPhase = VisualPhase.PREPARING
