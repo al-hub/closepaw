@@ -120,6 +120,27 @@ class ProjectionImageLeaseTest {
         }
     }
 
+    @Test fun `one elapsed sample classifies a frame at freshness boundary`() = runTest {
+        val image = mockk<Image>(relaxed = true)
+        mockkStatic(SystemClock::class)
+        try {
+            // The next clock read crosses the boundary. Geometry refusal proves
+            // that initial timestamp checks consistently used the first sample.
+            every { SystemClock.elapsedRealtime() } returnsMany listOf(100_000L, 100_001L)
+            every { SystemClock.uptimeMillis() } returns 100_000L
+            every { image.timestamp } returns 99_000_000_000L
+            every { image.width } returns 0
+            every { image.height } returns 1
+            every { reader.acquireLatestImage() } returns image
+            every { handler.post(any<Runnable>()) } answers { firstArg<Runnable>().run(); true }
+            assertNull(lease().capture())
+            assertEquals("geometry_refused", lastEvent()["reason_code"]!!.jsonPrimitive.content)
+            verify(exactly = 1) { image.close() }
+        } finally {
+            unmockkStatic(SystemClock::class)
+        }
+    }
+
     @Test fun `rejected retry reports handler failure`() = runTest {
         every { handler.post(any<Runnable>()) } answers { firstArg<Runnable>().run(); true }
         every { handler.postDelayed(any<Runnable>(), 25L) } returns false
