@@ -6,6 +6,16 @@ import org.junit.Test
 class TerminalInputPolicyTest {
     private fun node(echo: String = "~ $") = ControlNode(1, className = "com.termux.view.TerminalView", resourceId = "com.termux:id/terminal_view",
         bounds = "0 0 200 300", focused = true, focusable = true, sourceWindowId = 1, sourcePackage = "com.termux", terminal = TerminalEvidence(echo, 3, 11))
+    @Test fun observationSeparatesBindingFromActualInputAvailability() {
+        val proven = node().json()
+        assertEquals(JsonPrimitive(true), proven["terminal_binding_verified"])
+        assertEquals(JsonPrimitive(false), proven["terminal_input_supported"])
+        assertEquals(JsonPrimitive("terminal_selection_unverified"), proven["terminal_input_block_reason"])
+        val absent = node().copy(terminal = null).json()
+        assertEquals(JsonPrimitive(false), absent["terminal_binding_verified"])
+        assertEquals(JsonPrimitive(false), absent["terminal_input_supported"])
+        assertNull(absent["terminal_input_block_reason"])
+    }
     @Test fun onlyDocumentedNullClassTerminalModesAreAccepted() {
         assertTrue(TerminalInputPolicy.inputTypeAllowed(0)); assertTrue(TerminalInputPolicy.inputTypeAllowed(0x00080090))
         for (type in listOf(0x81,0x91,0x80091,0x12,0x01)) assertFalse(TerminalInputPolicy.inputTypeAllowed(type))
