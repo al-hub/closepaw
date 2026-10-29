@@ -57,6 +57,10 @@ class ProjectionImageLeaseTest {
         val event = lastEvent()
         assertEquals("timeout", event["reason_code"]!!.jsonPrimitive.content)
         assertEquals("no_frame_available", event["metrics"]!!.jsonObject["last_observation"]!!.jsonPrimitive.content)
+        val metrics = event["metrics"]!!.jsonObject
+        assertEquals("unverified", metrics["source_clock_contract"]!!.jsonPrimitive.content)
+        org.junit.Assert.assertFalse(metrics.containsKey("first_clock_sample"))
+        org.junit.Assert.assertFalse(metrics.containsKey("last_clock_sample"))
         verify { handler.removeCallbacks(any<Runnable>()) }
     }
 
@@ -97,7 +101,17 @@ class ProjectionImageLeaseTest {
             assertEquals("2000000000", last["image_timestamp_ns"]!!.jsonPrimitive.content)
             assertEquals("100000", last["received_elapsed_ms"]!!.jsonPrimitive.content)
             assertEquals("80000", last["received_uptime_ms"]!!.jsonPrimitive.content)
+            // Diagnostics retain only the endpoints, even after multiple acquisitions.
+            val sampleKeys = setOf("image_timestamp_ns", "acquire_started_elapsed_ms",
+                "received_elapsed_ms", "received_uptime_ms", "sample_finished_elapsed_ms")
+            assertEquals(sampleKeys, first.keys)
+            assertEquals(sampleKeys, last.keys)
+            assertEquals(setOf("first_clock_sample", "last_clock_sample"),
+                metrics.keys.filter { it.endsWith("clock_sample") }.toSet())
+            assertEquals("100000", first["acquire_started_elapsed_ms"]!!.jsonPrimitive.content)
+            assertEquals("100000", last["sample_finished_elapsed_ms"]!!.jsonPrimitive.content)
             verify(exactly = 3) { image.close() }
+            verify(exactly = 0) { image.planes }
         } finally {
             unmockkStatic(SystemClock::class)
         }
@@ -114,7 +128,8 @@ class ProjectionImageLeaseTest {
             every { handler.post(any<Runnable>()) } answers { firstArg<Runnable>().run(); true }
             every { handler.postDelayed(any<Runnable>(), 25L) } returns false
 
-            assertNull(lease().capture())
+            val activeLease = lease()
+            assertNull(activeLease.capture())
             val event = lastEvent()
             val metrics = event["metrics"]!!.jsonObject
             assertEquals("handler_post_rejected", event["reason_code"]!!.jsonPrimitive.content)
@@ -123,7 +138,11 @@ class ProjectionImageLeaseTest {
             assertEquals("1", metrics["uptime_fresh_elapsed_stale"]!!.jsonPrimitive.content)
             assertEquals("10_to_60s", metrics["last_age_bucket"]!!.jsonPrimitive.content)
             assertEquals("0_to_1s", metrics["last_uptime_age_bucket"]!!.jsonPrimitive.content)
+            assertEquals("unverified", metrics["source_clock_contract"]!!.jsonPrimitive.content)
             verify(exactly = 1) { image.close() }
+            verify(exactly = 0) { image.planes }
+            // The same source value must not acquire a fresh delivery lifetime.
+            org.junit.Assert.assertFalse(activeLease.permitsDelivery(89_500L))
         } finally {
             unmockkStatic(SystemClock::class)
         }
@@ -146,6 +165,10 @@ class ProjectionImageLeaseTest {
             every { handler.post(any<Runnable>()) } answers { firstArg<Runnable>().run(); true }
             assertNull(lease().capture())
             assertEquals("geometry_refused", lastEvent()["reason_code"]!!.jsonPrimitive.content)
+            val sample = lastEvent()["metrics"]!!.jsonObject["first_clock_sample"]!!.jsonObject
+            assertEquals("100000", sample["acquire_started_elapsed_ms"]!!.jsonPrimitive.content)
+            assertEquals("100000", sample["received_elapsed_ms"]!!.jsonPrimitive.content)
+            assertEquals("100001", sample["sample_finished_elapsed_ms"]!!.jsonPrimitive.content)
             verify(exactly = 1) { image.close() }
         } finally {
             unmockkStatic(SystemClock::class)
