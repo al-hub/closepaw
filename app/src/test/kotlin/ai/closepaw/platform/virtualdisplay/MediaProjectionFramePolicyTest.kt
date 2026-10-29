@@ -136,4 +136,23 @@ class MediaProjectionFramePolicyTest {
         assertFalse(policy.isDeliveryFresh(-1, 100))
     }
 
+    @Test
+    fun `device clock samples reproduce the projection freshness refusal`() {
+        // Observed with user-approved v0.1.99 on Galaxy Android 16.
+        // These samples are evidence, not a general producer clock contract.
+        val policy = policy()
+        val samples = listOf(
+            Triple(596111006200151L, 792317482L, 596111022L),
+            Triple(596112508350502L, 792318976L, 596112516L),
+        )
+        for ((timestampNs, elapsedMs, uptimeMs) in samples) {
+            val sourceMs = timestampNs / 1_000_000L
+            assertTrue(policy.isFrameFresh(sourceMs, uptimeMs))
+            assertFalse(policy.isFrameFresh(sourceMs, elapsedMs))
+            assertFalse(policy.isDeliveryFresh(sourceMs, elapsedMs))
+        }
+        // Mapping remains prohibited without a trusted clock contract.
+        assertFalse(policy.isFrameFresh(-1, samples.last().second))
+    }
+
 }
