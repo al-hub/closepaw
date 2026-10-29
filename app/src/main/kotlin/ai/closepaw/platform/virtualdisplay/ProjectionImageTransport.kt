@@ -43,6 +43,7 @@ internal class ProjectionImageLease(
         var lastObservation = "none"
         var emptyReads = 0
         var staleReads = 0
+        var uptimeFreshElapsedStale = 0
         // Keep only bounded categories/counts in diagnostics; never log raw timestamps or pixels.
         var previousTimestamp: Long? = null
         var sameTimestamps = 0
@@ -52,6 +53,10 @@ internal class ProjectionImageLease(
         var lastAgeBucket = "none"
         var clockGapBucket = "none"
         var lastUptimeAgeBucket = "none"
+        // Two metadata samples per attempt, never pixels or wall-clock/user data.
+        // Categories alone cannot establish drift/offset against a screen change.
+        var firstClockSample: kotlinx.serialization.json.JsonObject? = null
+        var lastClockSample: kotlinx.serialization.json.JsonObject? = null
         fun bucket(ms: Long): String = when {
             ms < 0 -> "future"
             ms <= 1_000 -> "0_to_1s"
@@ -104,6 +109,7 @@ internal class ProjectionImageLease(
                                 finish("lease_not_active")
                                 return
                             }
+                            val acquireStartedElapsed = SystemClock.elapsedRealtime()
                             val image = scope.reader.acquireLatestImage()
                             if (image == null) {
                                 retry("no_frame_available")
@@ -119,6 +125,15 @@ internal class ProjectionImageLease(
                                 val elapsed = SystemClock.elapsedRealtime()
                                 val uptime = SystemClock.uptimeMillis()
                                 synchronized(lock) {
+                                    val sample = buildJsonObject {
+                                        put("image_timestamp_ns", timestamp)
+                                        put("acquire_started_elapsed_ms", acquireStartedElapsed)
+                                        put("received_elapsed_ms", elapsed)
+                                        put("received_uptime_ms", uptime)
+                                        put("sample_finished_elapsed_ms", SystemClock.elapsedRealtime())
+                                    }
+                                    if (firstClockSample == null) firstClockSample = sample
+                                    lastClockSample = sample
                                     previousTimestamp?.let { previous ->
                                         when {
                                             timestamp == previous -> sameTimestamps++
@@ -132,6 +147,11 @@ internal class ProjectionImageLease(
                                     lastAgeBucket = age
                                     clockGapBucket = bucket(elapsed - uptime)
                                     lastUptimeAgeBucket = if (timestamp <= 0) "invalid" else bucket(uptime - capturedAt)
+                                    // Evidence only: agreement with uptime cannot prove the source clock.
+                                    if (timestamp > 0 && policy.isFrameFresh(capturedAt, uptime) &&
+                                        capturedAt <= elapsed && !policy.isFrameFresh(capturedAt, elapsed)) {
+                                        uptimeFreshElapsedStale++
+                                    }
                                 }
                                 // Classify this image against one clock sample. Multiple reads
                                 // can cross the freshness boundary between these two checks.
@@ -213,6 +233,7 @@ internal class ProjectionImageLease(
                 put("last_observation", lastObservation)
                 put("null_reads", emptyReads.coerceAtMost(1000))
                 put("stale_reads", staleReads.coerceAtMost(1000))
+                put("uptime_fresh_elapsed_stale", uptimeFreshElapsedStale.coerceAtMost(1000))
                 put("first_age_bucket", firstAgeBucket)
                 put("last_age_bucket", lastAgeBucket)
                 put("clock_gap_bucket", clockGapBucket)
@@ -221,6 +242,10 @@ internal class ProjectionImageLease(
                 put("timestamp_increasing", increasingTimestamps.coerceAtMost(1000))
                 put("timestamp_decreasing", decreasingTimestamps.coerceAtMost(1000))
                 put("lease_active_after", isActive())
+                put("consent_generation", generation)
+                put("source_clock_contract", "unverified")
+                firstClockSample?.let { put("first_clock_sample", it) }
+                lastClockSample?.let { put("last_clock_sample", it) }
             }
         }
         ControlDiagnostics.record("projection_frame_acquire", attempt?.reason ?: "timeout", metrics = metrics)
