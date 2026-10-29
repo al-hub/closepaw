@@ -184,6 +184,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         } == true)
     override fun invalidate() { probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
     private fun reason(service: AgentService?): String? = when {
+        ai.closepaw.chatgpt.SelfMonitoringAuthority.snapshot()?.phase == "awaiting_consent" -> "device_monitoring_consent_required"
         localAuthority?.refusal() != null -> localAuthority?.refusal()
         !allowed() -> "generic_control_disabled"
         session()?.refusal(session()?.id) != null -> session()?.refusal(session()?.id)

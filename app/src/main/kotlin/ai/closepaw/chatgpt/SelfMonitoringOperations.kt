@@ -19,6 +19,7 @@ internal class SelfMonitoringOperations(
     private fun state(session: ControlSession, id: String, epoch: Long) = MonitoringRecoveryGate.State(
         SystemClock.elapsedRealtime(),
         scope.isActive && settings.enabled && settings.genericControlEnabled &&
+            AgentService.instance?.getActiveSession()?.state?.value !in setOf(ai.closepaw.protocol.SessionState.Running, ai.closepaw.protocol.SessionState.TakeoverPending) &&
             AgentService.instance?.remoteControlSession === session && session.id == id && session.epoch == epoch &&
             session.state == ControlSession.State.ACTIVE,
         !context.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&

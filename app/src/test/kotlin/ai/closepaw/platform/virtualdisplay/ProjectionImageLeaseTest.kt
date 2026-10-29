@@ -90,6 +90,13 @@ class ProjectionImageLeaseTest {
             assertEquals("1", metrics["timestamp_same"]!!.jsonPrimitive.content)
             assertEquals("1", metrics["timestamp_increasing"]!!.jsonPrimitive.content)
             assertEquals("0", metrics["timestamp_decreasing"]!!.jsonPrimitive.content)
+            assertEquals("unverified", metrics["source_clock_contract"]!!.jsonPrimitive.content)
+            val first = metrics["first_clock_sample"]!!.jsonObject
+            val last = metrics["last_clock_sample"]!!.jsonObject
+            assertEquals("1000000000", first["image_timestamp_ns"]!!.jsonPrimitive.content)
+            assertEquals("2000000000", last["image_timestamp_ns"]!!.jsonPrimitive.content)
+            assertEquals("100000", last["received_elapsed_ms"]!!.jsonPrimitive.content)
+            assertEquals("80000", last["received_uptime_ms"]!!.jsonPrimitive.content)
             verify(exactly = 3) { image.close() }
         } finally {
             unmockkStatic(SystemClock::class)
@@ -128,7 +135,9 @@ class ProjectionImageLeaseTest {
         try {
             // The next clock read crosses the boundary. Geometry refusal proves
             // that initial timestamp checks consistently used the first sample.
-            every { SystemClock.elapsedRealtime() } returnsMany listOf(100_000L, 100_001L)
+            // Acquisition bracketing precedes the classification sample. The
+            // diagnostic end sample crosses the boundary but must not reclassify.
+            every { SystemClock.elapsedRealtime() } returnsMany listOf(100_000L, 100_000L, 100_001L)
             every { SystemClock.uptimeMillis() } returns 100_000L
             every { image.timestamp } returns 99_000_000_000L
             every { image.width } returns 0

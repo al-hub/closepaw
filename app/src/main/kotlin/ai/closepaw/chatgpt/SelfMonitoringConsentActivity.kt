@@ -8,6 +8,8 @@ import android.view.WindowManager
 
 /** Non-exported, device-only approval. Remote operations cannot approve this dialog. */
 class SelfMonitoringConsentActivity : Activity() {
+    internal var consentDialog: AlertDialog? = null
+        private set
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -15,9 +17,9 @@ class SelfMonitoringConsentActivity : Activity() {
         val id = intent.getStringExtra("monitor_id")
         val grant = SelfMonitoringAuthority.snapshot()
         if (id == null || grant?.id != id || grant.phase != "awaiting_consent") { finish(); return }
-        val service = ai.closepaw.app.AgentService.instance
-        val session = service?.remoteControlSession
-        if (session?.id != grant.sessionId || session.epoch != grant.epoch ||
+        val session = ai.closepaw.app.AgentService.instance?.remoteControlSession
+            ?: run { SelfMonitoringAuthority.stop(id, "interrupted"); finish(); return }
+        if (session.id != grant.sessionId || session.epoch != grant.epoch ||
             session.state != ai.closepaw.chatgpt.control.ControlSession.State.ACTIVE) {
             SelfMonitoringAuthority.stop(id, "interrupted"); finish(); return
         }
@@ -40,6 +42,7 @@ class SelfMonitoringConsentActivity : Activity() {
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).filterTouchesWhenObscured = true
         }
+        consentDialog = dialog
         dialog.show()
     }
 }
