@@ -151,7 +151,9 @@ class TerminalInputConnectionTest {
             // screen selection is absent. Both normal and forced native commits
             // must stop before dispatch; this also preserves the fixture's echo.
             val observed = settled(); assertTrue(observed.toString(), observed.success)
-            val target = observed.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["terminal_input_supported"]?.jsonPrimitive?.booleanOrNull == true }
+            val target = observed.data.getValue("nodes").jsonArray.map { it.jsonObject }.single { it["terminal_binding_verified"]?.jsonPrimitive?.booleanOrNull == true }
+            assertEquals(JsonPrimitive(false), target["terminal_input_supported"])
+            assertEquals(JsonPrimitive("terminal_selection_unverified"), target["terminal_input_block_reason"])
             val dispatchBefore = TerminalInputBinding.dispatchCount.get()
             for (force in listOf(false, true)) {
                 val fresh = if (force) settled() else observed
