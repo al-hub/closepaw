@@ -18,9 +18,11 @@ internal object ProjectionFrameClockValidation {
 
     /**
      * Returns capture time in elapsedRealtime milliseconds, or null on ambiguity.
-     * The two samples bracket acquisition and must have a stable suspend offset.
-     * A valid uptime timestamp is mapped into the elapsed clock only after the
-     * caller supplies an explicitly verified source contract.
+     * Bracket samples ensure consistent acquisition-time clocks, but cannot
+     * establish the offset at an earlier frame's capture time. In particular,
+     * suspension before acquisition can make a stale UPTIME frame look fresh.
+     * Refuse UPTIME until trusted capture-through-acquisition offset evidence
+     * exists, even if the producer's UPTIME clock is documented.
      */
     fun normalize(
         timestampNs: Long,
@@ -30,8 +32,8 @@ internal object ProjectionFrameClockValidation {
         maxAgeMs: Long = 1_000L,
         maxOffsetDriftMs: Long = 50L,
     ): Long? {
-        if (source == SourceClock.UNKNOWN || timestampNs <= 0L ||
-            !before.valid() || !after.valid() ||
+        if (source == SourceClock.UNKNOWN || source == SourceClock.UPTIME ||
+            timestampNs <= 0L || !before.valid() || !after.valid() ||
             after.uptimeMs < before.uptimeMs || after.elapsedMs < before.elapsedMs ||
             maxAgeMs < 0L || maxOffsetDriftMs < 0L
         ) return null
@@ -41,17 +43,8 @@ internal object ProjectionFrameClockValidation {
         if (endOffset < startOffset || endOffset - startOffset > maxOffsetDriftMs) return null
 
         val sourceMs = timestampNs / 1_000_000L
-        val normalized = when (source) {
-            SourceClock.UNKNOWN -> return null
-            SourceClock.ELAPSED_REALTIME -> sourceMs
-            SourceClock.UPTIME -> {
-                if (sourceMs > after.uptimeMs || before.uptimeMs - sourceMs > maxAgeMs) return null
-                if (sourceMs > Long.MAX_VALUE - endOffset) return null
-                sourceMs + endOffset
-            }
-        }
-        if (normalized < 0L || normalized > after.elapsedMs) return null
-        if (after.elapsedMs - normalized > maxAgeMs) return null
-        return normalized
+        if (sourceMs < 0L || sourceMs > after.elapsedMs) return null
+        if (after.elapsedMs - sourceMs > maxAgeMs) return null
+        return sourceMs
     }
 }
