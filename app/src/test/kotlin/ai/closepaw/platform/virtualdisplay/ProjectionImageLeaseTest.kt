@@ -82,6 +82,7 @@ class ProjectionImageLeaseTest {
             assertEquals("timeout", event["reason_code"]!!.jsonPrimitive.content)
             assertEquals("stale_frame", metrics["last_observation"]!!.jsonPrimitive.content)
             assertEquals("3", metrics["stale_reads"]!!.jsonPrimitive.content)
+            assertEquals("0", metrics["uptime_fresh_elapsed_stale"]!!.jsonPrimitive.content)
             assertEquals("over_60s", metrics["first_age_bucket"]!!.jsonPrimitive.content)
             assertEquals("over_60s", metrics["last_age_bucket"]!!.jsonPrimitive.content)
             assertEquals("10_to_60s", metrics["clock_gap_bucket"]!!.jsonPrimitive.content)
@@ -112,6 +113,7 @@ class ProjectionImageLeaseTest {
             assertEquals("handler_post_rejected", event["reason_code"]!!.jsonPrimitive.content)
             assertEquals("stale_frame", metrics["last_observation"]!!.jsonPrimitive.content)
             assertEquals("1", metrics["stale_reads"]!!.jsonPrimitive.content)
+            assertEquals("1", metrics["uptime_fresh_elapsed_stale"]!!.jsonPrimitive.content)
             assertEquals("10_to_60s", metrics["last_age_bucket"]!!.jsonPrimitive.content)
             assertEquals("0_to_1s", metrics["last_uptime_age_bucket"]!!.jsonPrimitive.content)
             verify(exactly = 1) { image.close() }
