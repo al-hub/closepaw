@@ -43,6 +43,7 @@ internal class ProjectionImageLease(
         var lastObservation = "none"
         var emptyReads = 0
         var staleReads = 0
+        var uptimeFreshElapsedStale = 0
         // Keep only bounded categories/counts in diagnostics; never log raw timestamps or pixels.
         var previousTimestamp: Long? = null
         var sameTimestamps = 0
@@ -132,6 +133,11 @@ internal class ProjectionImageLease(
                                     lastAgeBucket = age
                                     clockGapBucket = bucket(elapsed - uptime)
                                     lastUptimeAgeBucket = if (timestamp <= 0) "invalid" else bucket(uptime - capturedAt)
+                                    // Evidence only: agreement with uptime cannot prove the source clock.
+                                    if (timestamp > 0 && policy.isFrameFresh(capturedAt, uptime) &&
+                                        capturedAt <= elapsed && !policy.isFrameFresh(capturedAt, elapsed)) {
+                                        uptimeFreshElapsedStale++
+                                    }
                                 }
                                 // Classify this image against one clock sample. Multiple reads
                                 // can cross the freshness boundary between these two checks.
@@ -213,6 +219,7 @@ internal class ProjectionImageLease(
                 put("last_observation", lastObservation)
                 put("null_reads", emptyReads.coerceAtMost(1000))
                 put("stale_reads", staleReads.coerceAtMost(1000))
+                put("uptime_fresh_elapsed_stale", uptimeFreshElapsedStale.coerceAtMost(1000))
                 put("first_age_bucket", firstAgeBucket)
                 put("last_age_bucket", lastAgeBucket)
                 put("clock_gap_bucket", clockGapBucket)
