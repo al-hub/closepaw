@@ -43,6 +43,7 @@ class SelfMonitoringConsentActivity : Activity() {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).filterTouchesWhenObscured = true
         }
         consentDialog = dialog
+        dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         dialog.show()
     }
 }

@@ -72,7 +72,11 @@ class SelfMonitoringRuntimeTest {
             }
             // Emulator-only button action. Production remote UI operations are
             // blocked above and cannot invoke this on-device approval path.
-            instrumentation.runOnMainSync { activity!!.consentDialog!!.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick() }
+            instrumentation.runOnMainSync {
+                val dialog = activity!!.consentDialog!!
+                assertTrue(dialog.window!!.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE != 0)
+                dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+            }
             await { SelfMonitoringAuthority.snapshot()?.phase == "finished" }
             assertEquals(1, dispatches.get())
             assertEquals(3, probes.get()) // observation, final preflight, independent post-check
