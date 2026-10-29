@@ -8,6 +8,45 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 class MonitoringRecoveryGateTest {
+    private fun MonitoringRecoveryGate.tryConsume(action: String, now: Long, active: Boolean, unlocked: Boolean) =
+        tryDispatch(action, { MonitoringRecoveryGate.State(now, active, unlocked) }) {}
+
+    @Test fun `state is sampled at dispatch and unknown state stops authority`() {
+        val gate = MonitoringRecoveryGate("restart", 1000)
+        var invoked = 0
+        assertFalse(gate.tryDispatch("restart", { throw IllegalStateException("unavailable") }) { invoked++ })
+        assertFalse(gate.tryDispatch("restart", { MonitoringRecoveryGate.State(1, true, true) }) { invoked++ })
+        org.junit.Assert.assertEquals(0, invoked)
+
+        val expired = MonitoringRecoveryGate("restart", 1000)
+        assertFalse(expired.tryDispatch("restart", { MonitoringRecoveryGate.State(1000, true, true) }) { invoked++ })
+        org.junit.Assert.assertEquals(0, invoked)
+    }
+
+    @Test fun `dispatch exception consumes authority and never replays`() {
+        val gate = MonitoringRecoveryGate("restart", 1000)
+        var invoked = 0
+        try {
+            gate.tryDispatch("restart", { MonitoringRecoveryGate.State(1, true, true) }) {
+                invoked++
+                throw IllegalStateException("unknown outcome")
+            }
+            org.junit.Assert.fail("dispatch exception expected")
+        } catch (_: IllegalStateException) {
+            // Outcome is unknown; authority stays consumed.
+        }
+        assertFalse(gate.tryDispatch("restart", { MonitoringRecoveryGate.State(2, true, true) }) { invoked++ })
+        org.junit.Assert.assertEquals(1, invoked)
+    }
+
+    @Test fun `stopped gate does not sample or dispatch`() {
+        val gate = MonitoringRecoveryGate("restart", 1000)
+        var calls = 0
+        gate.stop()
+        assertFalse(gate.tryDispatch("restart", { calls++; MonitoringRecoveryGate.State(1, true, true) }) { calls++ })
+        org.junit.Assert.assertEquals(0, calls)
+    }
+
     @Test fun `only approved action within active unlocked period can be consumed`() {
         val gate = MonitoringRecoveryGate("bounded_restart", 1000)
         assertFalse(gate.tryConsume("other", 500, true, true))
