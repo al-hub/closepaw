@@ -16,6 +16,7 @@ import io.mockk.mockkConstructor
 import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.unmockkAll
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.advanceTimeBy
@@ -26,6 +27,30 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TermuxRunCommandAdapterTest {
+
+    @Test fun `scoped recovery denial reaches no Android service start`() = runTest {
+        mockkStatic(PendingIntent::class)
+        every { PendingIntent.getBroadcast(any(), any(), any(), any()) } returns mockk(relaxed = true)
+        mockkConstructor(Intent::class, IntentFilter::class)
+        every { anyConstructed<Intent>().setPackage(any()) } answers { self as Intent }
+        every { anyConstructed<Intent>().setClassName(any<String>(), any<String>()) } answers { self as Intent }
+        every { anyConstructed<Intent>().setAction(any()) } answers { self as Intent }
+        every { anyConstructed<Intent>().putExtra(any<String>(), any<String>()) } answers { self as Intent }
+        every { anyConstructed<Intent>().putExtra(any<String>(), any<Boolean>()) } answers { self as Intent }
+        every { anyConstructed<Intent>().putExtra(any<String>(), any<Array<String>>()) } answers { self as Intent }
+        every { anyConstructed<Intent>().putExtra(any<String>(), any<PendingIntent>()) } answers { self as Intent }
+        val context = mockContext()
+        var checks = 0
+        val result = runCatching {
+            TermuxRunCommandAdapter(context).run("/bin/echo", listOf("fixture"), timeoutMs = 5000,
+                dispatchGuard = { checks++; false })
+        }
+        assertThat(result.exceptionOrNull()).isInstanceOf(RunCommandError.StartRestricted::class.java)
+        assertThat(checks).isEqualTo(1)
+        verify(exactly = 0) { context.startForegroundService(any()) }
+        verify(exactly = 0) { context.startService(any()) }
+        verify(exactly = 1) { context.unregisterReceiver(any()) }
+    }
 
     @After
     fun tearDown() {

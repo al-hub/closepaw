@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -137,6 +138,18 @@ class TermuxBridgeManager internal constructor(
 
     suspend fun restart(): TermuxBridgeStatus =
         awaitInFlight(OperationKind.Restart) { mutex.withLock { restartLocked() } }
+
+    /** Monitoring uses the existing fixed start command, never setup/maintenance.
+     * Unlike restart(), this work is owned by its caller, with no manager-scope
+     * detached job. Stop/expiry authority wraps the actual Android service start.
+     * A caller must perform a separate passive post-check; this result is not health proof. */
+    internal suspend fun recoverForMonitoring(guard: (() -> Unit) -> Boolean) = mutex.withLock {
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        check(fetchHealth() == HealthProbe.Unavailable) { "monitor_recovery_not_offline" }
+        check(detectTermuxInstall() == TermuxInstallState.Available) { "monitor_recovery_unavailable" }
+        commandRunner.runShellGuarded(START_BRIDGE_COMMAND, START_TIMEOUT_MS, guard)
+        Unit
+    }
 
     // Android uses bounded readiness probes. Ongoing process recovery belongs to the
     // Termux-side supervisor, including variants without RUN_COMMAND.

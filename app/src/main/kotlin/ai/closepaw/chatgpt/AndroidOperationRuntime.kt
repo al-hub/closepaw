@@ -87,6 +87,7 @@ internal class AndroidOperationRuntime(
             }
         }.register(registry)
         SelfUpdateOperations(AndroidSelfUpdater.get(context)).register(registry)
+        SelfMonitoringOperations(context, scope, settings, termuxBridge).register(registry)
         TailscaleOperations(
             TailscaleRecovery(AndroidTailscalePlatform(context), { settings.tailscaleRecoveryEnabled }, record = tailscaleDiagnostics::record),
             { settings.tailscaleRecoveryEnabled },
@@ -238,13 +239,15 @@ internal class AndroidOperationRuntime(
         })
         dispatcher = OperationDispatcher(registry, store, scope,
             operationEpoch = { id -> if (id in setOf("android.ui.action", "android.ui.sequence", "android.control.island.drag", "android.control.feedback_test",
-                    "app.screen.read", "gemini.draft.insert", "gemini.question.ask"))
+                    "app.screen.read", "gemini.draft.insert", "gemini.question.ask", SelfMonitoringOperations.START))
                 AgentService.instance?.remoteControlSession?.epoch ?: -1L else 0L },
             executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled || settings.genericControlEnabled },
             operationAllowed = { id -> when(id) {
                 GenericControlOperations.ACTION, GenericControlOperations.SEQUENCE, GenericControlOperations.ISLAND_DRAG, GenericControlOperations.CONFIGURE, GenericControlOperations.FEEDBACK_TEST,
                 "android.control.session.start", "android.control.session.wait", "android.control.session.end" -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
+                SelfMonitoringOperations.START -> settings.enabled && settings.genericControlEnabled
+                SelfMonitoringOperations.STOP -> true
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled
                 "gemini.question.ask" -> settings.geminiQuestionEnabled

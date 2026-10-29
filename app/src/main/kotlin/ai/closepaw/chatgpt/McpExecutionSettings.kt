@@ -8,7 +8,10 @@ internal class McpExecutionSettings(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("mcp_execution", Context.MODE_PRIVATE)
     var enabled: Boolean
         get() = prefs.getBoolean("enabled", false)
-        set(value) { check(prefs.edit().putBoolean("enabled", value).commit()) }
+        set(value) {
+            if (!value) SelfMonitoringAuthority.stop(reason = "interrupted")
+            check(prefs.edit().putBoolean("enabled", value).commit())
+        }
     var geminiDraftEnabled: Boolean
         get() = prefs.getBoolean("gemini_draft_enabled", false)
         set(value) { check(prefs.edit().putBoolean("gemini_draft_enabled", value).commit()) }
@@ -20,7 +23,10 @@ internal class McpExecutionSettings(context: Context) {
         set(value) { prefs.edit().putBoolean("tailscale_recovery_enabled", value).apply() }
     var genericControlEnabled: Boolean
         get() = prefs.getBoolean("generic_control_enabled", false)
-        set(value) { check(prefs.edit().putBoolean("generic_control_enabled", value).commit()) }
+        set(value) {
+            if (!value) SelfMonitoringAuthority.stop(reason = "interrupted")
+            check(prefs.edit().putBoolean("generic_control_enabled", value).commit())
+        }
     var selfUpdateEnabled: Boolean
         get() = prefs.getBoolean("self_update_enabled", false)
         set(value) { check(prefs.edit().putBoolean("self_update_enabled", value).commit()) }

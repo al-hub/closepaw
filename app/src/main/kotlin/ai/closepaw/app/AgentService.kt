@@ -97,7 +97,9 @@ class AgentService : AccessibilityService() {
         val prefs = getSharedPreferences("remote-control-session", MODE_PRIVATE)
         ai.closepaw.chatgpt.control.ControlSession(prefs.getString("state", "idle") ?: "idle") {
             prefs.edit().putString("state", it).apply()
-        }.apply { changed = { serviceScope.launch {
+        }.apply {
+            stopMonitoring = { ai.closepaw.chatgpt.SelfMonitoringAuthority.stop(reason = "interrupted") }
+            changed = { serviceScope.launch {
             if (remoteControlSession.state !in setOf(ai.closepaw.chatgpt.control.ControlSession.State.ACTIVE,
                     ai.closepaw.chatgpt.control.ControlSession.State.IDLE)) actionVisualizer?.clear()
             showRemoteControlActivity()
@@ -523,6 +525,7 @@ class AgentService : AccessibilityService() {
     private val controlScreenReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
             if (intent?.action == android.content.Intent.ACTION_SCREEN_OFF) {
+                ai.closepaw.chatgpt.SelfMonitoringAuthority.stop(reason = "interrupted")
                 ai.closepaw.chatgpt.control.VisualImageCache.clear()
                 controlUiRestoreJob?.cancel()
                 remoteControlIndicator.hide()

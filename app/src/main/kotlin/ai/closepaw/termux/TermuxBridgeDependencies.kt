@@ -17,6 +17,9 @@ import org.json.JSONException
 import org.json.JSONObject
 
 internal interface TermuxCommandRunner {
+    /** Refuse by default: adapters must enforce authority at the external dispatch boundary. */
+    suspend fun runShellGuarded(command: String, timeoutMs: Long, guard: (() -> Unit) -> Boolean): RunCommandResult =
+        throw UnsupportedOperationException("guarded_recovery_unavailable")
     suspend fun runShell(
         command: String,
         stdinBase64: String? = null,
@@ -52,6 +55,9 @@ internal enum class TermuxInstallState {
 
 internal class AndroidTermuxCommandRunner(context: Context) : TermuxCommandRunner {
     private val adapter = TermuxRunCommandAdapter(context)
+
+    override suspend fun runShellGuarded(command: String, timeoutMs: Long, guard: (() -> Unit) -> Boolean): RunCommandResult =
+        adapter.run("/data/data/com.termux/files/usr/bin/bash", listOf("-c", command), timeoutMs = timeoutMs, dispatchGuard = guard)
 
     override suspend fun runShell(
         command: String,

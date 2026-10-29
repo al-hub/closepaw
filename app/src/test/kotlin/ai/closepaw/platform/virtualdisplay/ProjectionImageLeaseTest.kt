@@ -82,6 +82,7 @@ class ProjectionImageLeaseTest {
             assertEquals("timeout", event["reason_code"]!!.jsonPrimitive.content)
             assertEquals("stale_frame", metrics["last_observation"]!!.jsonPrimitive.content)
             assertEquals("3", metrics["stale_reads"]!!.jsonPrimitive.content)
+            assertEquals("0", metrics["uptime_fresh_elapsed_stale"]!!.jsonPrimitive.content)
             assertEquals("over_60s", metrics["first_age_bucket"]!!.jsonPrimitive.content)
             assertEquals("over_60s", metrics["last_age_bucket"]!!.jsonPrimitive.content)
             assertEquals("10_to_60s", metrics["clock_gap_bucket"]!!.jsonPrimitive.content)
@@ -89,6 +90,13 @@ class ProjectionImageLeaseTest {
             assertEquals("1", metrics["timestamp_same"]!!.jsonPrimitive.content)
             assertEquals("1", metrics["timestamp_increasing"]!!.jsonPrimitive.content)
             assertEquals("0", metrics["timestamp_decreasing"]!!.jsonPrimitive.content)
+            assertEquals("unverified", metrics["source_clock_contract"]!!.jsonPrimitive.content)
+            val first = metrics["first_clock_sample"]!!.jsonObject
+            val last = metrics["last_clock_sample"]!!.jsonObject
+            assertEquals("1000000000", first["image_timestamp_ns"]!!.jsonPrimitive.content)
+            assertEquals("2000000000", last["image_timestamp_ns"]!!.jsonPrimitive.content)
+            assertEquals("100000", last["received_elapsed_ms"]!!.jsonPrimitive.content)
+            assertEquals("80000", last["received_uptime_ms"]!!.jsonPrimitive.content)
             verify(exactly = 3) { image.close() }
         } finally {
             unmockkStatic(SystemClock::class)
@@ -112,8 +120,32 @@ class ProjectionImageLeaseTest {
             assertEquals("handler_post_rejected", event["reason_code"]!!.jsonPrimitive.content)
             assertEquals("stale_frame", metrics["last_observation"]!!.jsonPrimitive.content)
             assertEquals("1", metrics["stale_reads"]!!.jsonPrimitive.content)
+            assertEquals("1", metrics["uptime_fresh_elapsed_stale"]!!.jsonPrimitive.content)
             assertEquals("10_to_60s", metrics["last_age_bucket"]!!.jsonPrimitive.content)
             assertEquals("0_to_1s", metrics["last_uptime_age_bucket"]!!.jsonPrimitive.content)
+            verify(exactly = 1) { image.close() }
+        } finally {
+            unmockkStatic(SystemClock::class)
+        }
+    }
+
+    @Test fun `one elapsed sample classifies a frame at freshness boundary`() = runTest {
+        val image = mockk<Image>(relaxed = true)
+        mockkStatic(SystemClock::class)
+        try {
+            // The next clock read crosses the boundary. Geometry refusal proves
+            // that initial timestamp checks consistently used the first sample.
+            // Acquisition bracketing precedes the classification sample. The
+            // diagnostic end sample crosses the boundary but must not reclassify.
+            every { SystemClock.elapsedRealtime() } returnsMany listOf(100_000L, 100_000L, 100_001L)
+            every { SystemClock.uptimeMillis() } returns 100_000L
+            every { image.timestamp } returns 99_000_000_000L
+            every { image.width } returns 0
+            every { image.height } returns 1
+            every { reader.acquireLatestImage() } returns image
+            every { handler.post(any<Runnable>()) } answers { firstArg<Runnable>().run(); true }
+            assertNull(lease().capture())
+            assertEquals("geometry_refused", lastEvent()["reason_code"]!!.jsonPrimitive.content)
             verify(exactly = 1) { image.close() }
         } finally {
             unmockkStatic(SystemClock::class)

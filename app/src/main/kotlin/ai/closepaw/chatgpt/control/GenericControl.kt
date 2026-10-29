@@ -54,7 +54,9 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
     val scrollDirections: Set<String> = emptySet(), val sourceWindowId: Int = -1,
     val sourcePackage: String = "", val keyboardKey: String = "", val textEntryKey: Boolean = false, val visualKeyCandidate: Boolean = false, val terminal: TerminalEvidence? = null) {
     fun json() = buildJsonObject {
-        put("terminal_input_supported", terminal != null)
+        put("terminal_input_supported", terminal != null && TerminalInputPolicy.selectionRefusal() == null)
+        put("terminal_binding_verified", terminal != null)
+        if (terminal != null) put("terminal_input_block_reason", TerminalInputPolicy.selectionRefusal())
         put("focused", focused); put("focusable", focusable); put("set_text_supported", setText); put("paste_supported", paste)
         put("selection_start", selectionStart); put("selection_end", selectionEnd)
         put("scroll_directions", JsonArray(scrollDirections.sorted().map { JsonPrimitive(it) }))
