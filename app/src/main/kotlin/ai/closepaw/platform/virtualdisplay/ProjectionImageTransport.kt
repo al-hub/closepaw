@@ -133,12 +133,14 @@ internal class ProjectionImageLease(
                                     clockGapBucket = bucket(elapsed - uptime)
                                     lastUptimeAgeBucket = if (timestamp <= 0) "invalid" else bucket(uptime - capturedAt)
                                 }
-                                stale = timestamp > 0 && capturedAt <= SystemClock.elapsedRealtime() &&
-                                    !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime())
+                                // Classify this image against one clock sample. Multiple reads
+                                // can cross the freshness boundary between these two checks.
+                                stale = timestamp > 0 && capturedAt <= elapsed &&
+                                    !policy.isFrameFresh(capturedAt, elapsed)
                                 if (!stale) {
                                     reason = when {
                                         timestamp <= 0 -> "invalid_timestamp"
-                                        !policy.isFrameFresh(capturedAt, SystemClock.elapsedRealtime()) -> "timestamp_not_fresh"
+                                        !policy.isFrameFresh(capturedAt, elapsed) -> "timestamp_not_fresh"
                                         !policy.acceptsMirrorGeometry(image.width, image.height) -> "geometry_refused"
                                         image.planes.size != 1 -> "plane_count_refused"
                                         else -> null
