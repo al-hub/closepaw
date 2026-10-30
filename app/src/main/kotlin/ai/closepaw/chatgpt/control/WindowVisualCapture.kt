@@ -32,13 +32,14 @@ internal data class IsolatedVisualSurface(val windowId: Int, val bounds: TapBoun
 internal object WindowVisualCapture {
     suspend fun capture(service: AccessibilityService, windowId: Int, window: TapBounds, context: String,
         display: Boolean = false, visibleRegion: Region? = null,
-        surfaces: List<IsolatedVisualSurface> = emptyList(), projection: ProjectionImageLease? = null, awaitSlot: suspend () -> Unit = {}): VisualCaptureResult {
+        surfaces: List<IsolatedVisualSurface> = emptyList(), projection: ProjectionImageLease? = null,
+        requestId: String? = null, awaitSlot: suspend () -> Unit = {}): VisualCaptureResult {
         fun failure(code: String) = VisualCaptureResult(reason=code)
         if (Build.VERSION.SDK_INT < 34 || !window.valid || (display && visibleRegion == null)) return failure("screenshot_geometry_unverified")
         var nativeReason = "screenshot_timeout"
         // Projection is an explicit display-only source, never an ownership proof.
         if (projection != null && !display) return failure("projection_display_scope_required")
-        val projected = if (projection != null) projection.capture()
+        val projected = if (projection != null) projection.capture(requestId)
             ?: return failure("projection_frame_unavailable") else null
         val captured = if (projected != null) null else withTimeoutOrNull(5_000) { withContext(Dispatchers.Main) {
             suspendCancellableCoroutine<AccessibilityService.ScreenshotResult?> { continuation ->
