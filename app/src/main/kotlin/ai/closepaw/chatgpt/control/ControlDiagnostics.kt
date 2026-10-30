@@ -20,6 +20,14 @@ internal object ControlDiagnostics {
             put("metrics", metrics)
         })
     }
+    /** Export-safe projection subset. Both MCP and diagnostic ZIP must serialize this exact object. */
+    @Synchronized fun projectionSnapshot(): JsonObject = buildJsonObject {
+        val projection = events.filter { it["stage"]?.jsonPrimitive?.content == "projection_frame_acquire" }
+            .takeLast(16)
+        put("schema_version", 1)
+        put("stored_events", projection.size)
+        put("events", JsonArray(projection))
+    }
     @Synchronized fun snapshot(): JsonObject = buildJsonObject {
         put("sequence_traces", JsonArray(traces.toList())); put("stored_events", events.size); put("events", JsonArray(events.toList()))
     }
