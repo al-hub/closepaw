@@ -21,6 +21,9 @@ internal object ControlDiagnostics {
         })
     }
     /** Export-safe projection subset. Both MCP and diagnostic ZIP must serialize this exact object. */
+    /** Canonical redacted export payload; both remote reads and ZIP serialization use it. */
+    @Synchronized fun projectionExportJson(): String = projectionSnapshot().toString()
+
     @Synchronized fun projectionSnapshot(): JsonObject = buildJsonObject {
         val projection = events.filter { it["stage"]?.jsonPrimitive?.content == "projection_frame_acquire" }
             .takeLast(16)
