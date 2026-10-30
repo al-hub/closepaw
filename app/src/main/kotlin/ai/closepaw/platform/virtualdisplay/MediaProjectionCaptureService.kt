@@ -138,11 +138,11 @@ class MediaProjectionCaptureService : Service() {
 
     /** One-session, bounded, geometry and guarded image scope; null-surface idle mode removed. */
     private fun openMirrorScope(projection: MediaProjection) {
-        val metrics = resources.displayMetrics
+        val geometry = VirtualDisplayConfig.fromPhysicalDisplay(this)
         val policy = MediaProjectionFramePolicy()
         framePolicy = policy
         val scope = MediaProjectionFrameCapture.open(
-            policy, projection, metrics.widthPixels, metrics.heightPixels, metrics.densityDpi
+            policy, projection, geometry.width, geometry.height, geometry.densityDpi
         )
         frameScope = scope
         if (scope == null) {
