@@ -89,7 +89,8 @@ internal object WindowVisualCapture {
                         // Window-isolated verification never uses a display fallback.
                         val isolated=capturePixels(service,surface.windowId,surface.bounds)
                         val expected=isolated.pixels ?: return@withContext failure("display_isolated_"+isolated.reason)
-                        val runs=OwnedPixelPolicy.verifiedRuns(actual,source.width,expected,surface.bounds,surface.visible)
+                        val runs=OwnedPixelPolicy.verifiedRegions(actual,source.width,expected,surface.bounds,surface.visible,
+                            limit = 4096 / surfaces.size)
                             ?: return@withContext failure("display_pixel_verification_fragmented")
                         runs.forEach { verified.op(Rect(it.left,it.top,it.right,it.bottom),Region.Op.UNION) }
                     }

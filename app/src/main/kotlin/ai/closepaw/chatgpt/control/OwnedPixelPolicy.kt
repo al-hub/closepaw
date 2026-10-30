@@ -62,6 +62,53 @@ internal object OwnedPixelPolicy {
         }
         return result
     }
+    /** Preserve a conservative subset when exact run segmentation exceeds the
+     * budget. Every pixel of each tile must independently match; mismatches and
+     * region gaps are discarded, never filled. This trades coverage for bounded
+     * metadata, without weakening ownership or gesture-path admission. */
+    fun verifiedRegions(display: IntArray, displayWidth: Int, isolated: IntArray, window: TapBounds,
+        rows: List<TapBounds>, limit: Int = 4096): List<TapBounds>? {
+        val width = window.right - window.left
+        val height = window.bottom - window.top
+        if (!window.valid || displayWidth <= 0 || display.size % displayWidth != 0 ||
+            isolated.size.toLong() != width.toLong() * height || limit <= 0 || rows.isEmpty()) return null
+        val all = TapBounds(0, 0, displayWidth, display.size / displayWidth)
+        if (rows.any { !window.contains(it) || !all.contains(it) }) return null
+        // The input is disjoint RegionIterator output. Reject overlapping input
+        // rather than allowing duplicate area to authorize an uncovered target.
+        for (i in rows.indices) for (j in 0 until i) {
+            val a = rows[i]; val b = rows[j]
+            if (maxOf(a.left, b.left) < minOf(a.right, b.right) &&
+                maxOf(a.top, b.top) < minOf(a.bottom, b.bottom)) return null
+        }
+        verifiedRuns(display, displayWidth, isolated, window, rows, limit)?.let { return it }
+        var tile = 32L
+        fun count(): Long = rows.sumOf {
+            ((it.right.toLong() - it.left + tile - 1) / tile) *
+                ((it.bottom.toLong() - it.top + tile - 1) / tile)
+        }
+        // At least one tile per input region is required. Invalid/over-budget
+        // geometry remains a refusal rather than dropping an arbitrary window.
+        if (rows.size > limit) return null
+        while (count() > limit) tile *= 2
+        val result = mutableListOf<TapBounds>()
+        for (row in rows) {
+            var top = row.top
+            while (top < row.bottom) {
+                val bottom = minOf(row.bottom.toLong(), top.toLong() + tile).toInt()
+                var left = row.left
+                while (left < row.right) {
+                    val right = minOf(row.right.toLong(), left.toLong() + tile).toInt()
+                    val candidate = TapBounds(left, top, right, bottom)
+                    if (matches(display, displayWidth, isolated, window, listOf(candidate))) result.add(candidate)
+                    left = right
+                }
+                top = bottom
+            }
+        }
+        return result
+    }
+
     /** Native proof regions are disjoint (RegionIterator output). */
     fun contains(regions: List<TapBounds>, target: TapBounds): Boolean {
         if(!target.valid || regions.isEmpty()) return false

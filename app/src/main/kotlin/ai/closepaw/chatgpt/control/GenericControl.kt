@@ -55,6 +55,13 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
     val sourcePackage: String = "", val keyboardKey: String = "", val textEntryKey: Boolean = false, val visualKeyCandidate: Boolean = false, val terminal: TerminalEvidence? = null) {
     fun json() = buildJsonObject {
         put("terminal_input_supported", terminal != null)
+        if (terminal != null) {
+            // Binding availability and safe dispatch are different capabilities.
+            // Termux does not publish its screen-selection state through this binding.
+            put("terminal_selection_state", "unknown")
+            put("terminal_input_allowed", false)
+            put("terminal_input_reason", TerminalInputPolicy.selectionRefusal())
+        }
         put("focused", focused); put("focusable", focusable); put("set_text_supported", setText); put("paste_supported", paste)
         put("selection_start", selectionStart); put("selection_end", selectionEnd)
         put("scroll_directions", JsonArray(scrollDirections.sorted().map { JsonPrimitive(it) }))
@@ -176,6 +183,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             frame.keyboard?.let { put("keyboard", buildJsonObject {
                 put("window_id", it.windowId); put("package_name", it.packageName); put("input_method_id", it.inputMethodId)
                 put("read_allowed", it.readAllowed); put("interaction_allowed", it.interactAllowed)
+                put("interaction_reason", when {
+                    !it.readAllowed -> "keyboard_read_not_authorized"
+                    !it.interactAllowed -> "keyboard_interaction_not_authorized"
+                    frame.inputTargetId == null -> "keyboard_input_target_unverified"
+                    else -> "available"
+                })
                 put("semantic_keys_only", false); put("visual_keys_require_keyboard_image", true); put("input_target_verified", frame.inputTargetId != null)
                 frame.keyboardDiagnostics?.let { diagnostics -> put("scan", diagnostics) }
             }) }

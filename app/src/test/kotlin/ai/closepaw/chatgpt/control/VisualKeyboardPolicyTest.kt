@@ -61,4 +61,12 @@ class VisualKeyboardPolicyTest {
         for (label in listOf("b", "Enter", "Send", "Shift"))
             assertNotNull(VisualKeyboardPolicy.refusal(frame.copy(nodes=frame.nodes+key.copy(id=3,text=label,keyboardKey=label)),key,"keyboard"))
     }
+    @Test fun readOnlyPolicyAndMissingInputTargetAreDistinctAndNeitherAuthorizesKeys() {
+        assertEquals("keyboard_interaction_not_authorized",
+            VisualKeyboardPolicy.refusal(frame.copy(keyboard = keyboard.copy(interactAllowed = false)), key, "keyboard"))
+        assertEquals("keyboard_input_target_unverified",
+            VisualKeyboardPolicy.refusal(frame.copy(inputTarget = null, inputTargetId = null), key, "keyboard"))
+        assertNull(VisualKeyboardPolicy.refusal(frame, key, "keyboard"))
+        assertNotNull(VisualKeyboardPolicy.refusal(frame.copy(inputTarget = field.copy(password = true)), key, "keyboard"))
+    }
 }
