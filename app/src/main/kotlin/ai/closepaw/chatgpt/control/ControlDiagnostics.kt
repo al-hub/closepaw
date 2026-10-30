@@ -25,8 +25,43 @@ internal object ControlDiagnostics {
     @Synchronized fun projectionExportJson(): String = projectionSnapshot().toString()
 
     @Synchronized fun projectionSnapshot(): JsonObject = buildJsonObject {
+        val permittedNumbers = setOf("attempt_id", "null_reads", "stale_reads", "uptime_fresh_elapsed_stale",
+            "timestamp_same", "timestamp_increasing", "timestamp_decreasing", "consent_generation")
+        val permittedCategories = setOf("last_observation", "first_age_bucket", "last_age_bucket",
+            "clock_gap_bucket", "last_uptime_age_bucket", "source_clock_contract")
+        val permittedBooleans = setOf("lease_active_after")
+        val permittedClockNumbers = setOf("image_timestamp_ns", "acquire_started_elapsed_ms",
+            "received_elapsed_ms", "received_uptime_ms", "sample_finished_elapsed_ms")
         val projection = events.filter { it["stage"]?.jsonPrimitive?.content == "projection_frame_acquire" }
-            .takeLast(16)
+            .takeLast(16).map { event ->
+                val rawMetrics = event["metrics"] as? JsonObject ?: JsonObject(emptyMap())
+                val safeMetrics = buildJsonObject {
+                    for ((name, value) in rawMetrics) {
+                        if (name in permittedNumbers && value is JsonPrimitive && !value.isString && value.longOrNull != null)
+                            put(name, value)
+                        if (name in permittedBooleans && value is JsonPrimitive && value.booleanOrNull != null)
+                            put(name, value)
+                        if (name in permittedCategories && value is JsonPrimitive && value.isString &&
+                            value.content.length <= 40 && value.content.matches(Regex("[a-z0-9_]+")))
+                            put(name, value)
+                        if (name in setOf("first_clock_sample", "last_clock_sample") && value is JsonObject)
+                            put(name, buildJsonObject {
+                                for ((clockName, clockValue) in value)
+                                    if (clockName in permittedClockNumbers && clockValue is JsonPrimitive &&
+                                        !clockValue.isString && clockValue.longOrNull != null) put(clockName, clockValue)
+                            })
+                    }
+                }
+                buildJsonObject {
+                    put("stage", "projection_frame_acquire")
+                    event["timestamp_ms"]?.jsonPrimitive?.longOrNull?.let { put("timestamp_ms", it) }
+                    event["reason_code"]?.jsonPrimitive?.content?.takeIf {
+                        it.length <= 48 && it.matches(Regex("[a-z0-9_]+"))
+                    }?.let { put("reason_code", it) }
+                    event["elapsed_ms"]?.jsonPrimitive?.longOrNull?.let { put("elapsed_ms", it) }
+                    put("metrics", safeMetrics)
+                }
+            }
         put("schema_version", 1)
         put("stored_events", projection.size)
         put("events", JsonArray(projection))
