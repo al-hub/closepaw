@@ -27,12 +27,12 @@ internal object ControlDiagnostics {
     @Synchronized fun projectionSnapshot(): JsonObject = buildJsonObject {
         val permittedNumbers = setOf("attempt_id", "null_reads", "stale_reads", "uptime_fresh_elapsed_stale",
             "timestamp_same", "timestamp_increasing", "timestamp_decreasing", "consent_generation")
-        val permittedCategories = setOf("last_observation", "first_age_bucket", "last_age_bucket",
+        val permittedCategories = setOf("request_id", "last_observation", "first_age_bucket", "last_age_bucket",
             "clock_gap_bucket", "last_uptime_age_bucket", "source_clock_contract")
         val permittedBooleans = setOf("lease_active_after")
         val permittedClockNumbers = setOf("image_timestamp_ns", "acquire_started_elapsed_ms",
             "received_elapsed_ms", "received_uptime_ms", "sample_finished_elapsed_ms")
-        val projection = events.filter { it["stage"]?.jsonPrimitive?.content == "projection_frame_acquire" }
+        val projection = events.filter { it["stage"]?.jsonPrimitive?.content in setOf("projection_frame_acquire", "projection_observe_result") }
             .takeLast(16).map { event ->
                 val rawMetrics = event["metrics"] as? JsonObject ?: JsonObject(emptyMap())
                 val safeMetrics = buildJsonObject {
@@ -53,7 +53,7 @@ internal object ControlDiagnostics {
                     }
                 }
                 buildJsonObject {
-                    put("stage", "projection_frame_acquire")
+                    put("stage", event["stage"]?.jsonPrimitive?.content ?: "projection_frame_acquire")
                     event["timestamp_ms"]?.jsonPrimitive?.longOrNull?.let { put("timestamp_ms", it) }
                     event["reason_code"]?.jsonPrimitive?.content?.takeIf {
                         it.length <= 48 && it.matches(Regex("[a-z0-9_]+"))
