@@ -31,7 +31,8 @@ internal data class OperationDescriptor(
         }
     }
 }
-internal data class OperationInvocation(val taskId: String, val input: JsonObject)
+/** admittedEpoch is trusted dispatcher metadata, never a caller-provided input field. */
+internal data class OperationInvocation(val taskId: String, val input: JsonObject, val admittedEpoch: Long? = null)
 internal data class OperationResult(
     val data: JsonObject = JsonObject(emptyMap()),
     val stdout: String = "",
