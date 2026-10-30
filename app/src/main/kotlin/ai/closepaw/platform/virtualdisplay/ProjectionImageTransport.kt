@@ -1,6 +1,5 @@
 package ai.closepaw.platform.virtualdisplay
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.os.SystemClock
 import ai.closepaw.chatgpt.control.ControlDiagnostics
@@ -10,35 +9,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
-
-/** Non-security capture polling controls. The freshness and delivery deadlines are NOT tunable. */
-internal object ProjectionAcquisitionTuning {
-    data class Values(val revision: Int, val timeoutMs: Long, val pollMs: Long)
-    private const val PREF = "projection_acquisition_tuning"
-    @Volatile private var current = Values(0, 1500L, 25L)
-    @Volatile private var prefs: android.content.SharedPreferences? = null
-    @Synchronized fun initialize(context: Context) {
-        val p = context.applicationContext.getSharedPreferences(PREF, Context.MODE_PRIVATE)
-        val timeout = p.getLong("timeout_ms", 1500L)
-        val poll = p.getLong("poll_ms", 25L)
-        current = if (timeout in 1500L..3000L && poll in 25L..100L)
-            Values(p.getInt("revision", 0).coerceAtLeast(0), timeout, poll)
-            else Values(0, 1500L, 25L)
-        prefs = p
-    }
-    fun snapshot(): Values = current
-    @Synchronized fun update(expectedRevision: Int, timeoutMs: Long, pollMs: Long): Boolean {
-        val p = prefs ?: return false
-        val old = current
-        if (expectedRevision != old.revision || timeoutMs !in 1500L..3000L ||
-            pollMs !in 25L..100L || old.revision == Int.MAX_VALUE) return false
-        val next = Values(old.revision + 1, timeoutMs, pollMs)
-        if (!p.edit().putLong("timeout_ms", timeoutMs).putLong("poll_ms", pollMs)
-                .putInt("revision", next.revision).commit()) return false
-        current = next
-        return true
-    }
-}
 
 /** No Context or projection token is retained here. Only the service can publish a lease.
  * Raw frames stay invocation-local and must pass the accessibility ownership/masking path. */
@@ -59,6 +29,7 @@ internal class ProjectionImageLease(
 ) {
     private companion object { val attemptSequence = java.util.concurrent.atomic.AtomicLong() }
     private val generation = consent.generation
+    private val capturing = java.util.concurrent.atomic.AtomicBoolean(false)
     fun isActive(): Boolean = consent.generation == generation && consent.state == ProjectionConsentState.Consumed &&
         policy.acquireAllowed() && scope.isOpen()
 
@@ -66,8 +37,14 @@ internal class ProjectionImageLease(
         policy.isDeliveryFresh(capturedAt, SystemClock.elapsedRealtime())
 
     /** Bounded acquisition, no cached pixels and no fallback. The caller owns the bitmap.
-     * Timestamp timebase depends on the image source; retain the existing fail-closed freshness check. */
+     * capturedAt is a conservative elapsed lower bound BEFORE creating this
+     * request's new BufferQueue, never Image.timestamp or an image receipt time. */
     suspend fun capture(requestId: String? = null): ProjectionBitmap? {
+        if (!capturing.compareAndSet(false, true)) return null
+        try { return captureExclusive(requestId) } finally { capturing.set(false) }
+    }
+
+    private suspend fun captureExclusive(requestId: String?): ProjectionBitmap? {
         val attemptId = attemptSequence.incrementAndGet()
         val tuning = ProjectionAcquisitionTuning.snapshot()
         data class Attempt(val reason: String, val frame: ProjectionBitmap? = null)
@@ -97,6 +74,7 @@ internal class ProjectionImageLease(
             ms <= 60_000 -> "10_to_60s"
             else -> "over_60s"
         }
+        var requestQueue: ProjectionRequestQueue? = null
         var pendingFrame: ProjectionBitmap? = null
         fun releasePendingFrame() {
             val frame = synchronized(lock) { pendingFrame.also { pendingFrame = null } }
@@ -142,8 +120,15 @@ internal class ProjectionImageLease(
                                 finish("lease_not_active")
                                 return
                             }
+                            // Creation, acquisition and cleanup all serialize through lock.
+                            // Cancellation cannot leave a newly attached queue orphaned.
+                            val queue = synchronized(lock) {
+                                if (stopped || !continuation.isActive) return
+                                requestQueue ?: scope.beginRequest()?.also { requestQueue = it }
+                            }
+                            if (queue == null) { finish("request_surface_unavailable"); return }
                             val acquireStartedElapsed = SystemClock.elapsedRealtime()
-                            val image = scope.reader.acquireLatestImage()
+                            val image = queue.reader.acquireLatestImage()
                             if (image == null) {
                                 retry("no_frame_available")
                                 return
@@ -154,7 +139,8 @@ internal class ProjectionImageLease(
                             try {
                                 operation = "image_metadata"
                                 val timestamp = image.timestamp
-                                capturedAt = timestamp / 1_000_000
+                                val sourceMs = timestamp / 1_000_000
+                                capturedAt = queue.lowerBoundElapsedMs
                                 val elapsed = SystemClock.elapsedRealtime()
                                 val uptime = SystemClock.uptimeMillis()
                                 synchronized(lock) {
@@ -175,28 +161,23 @@ internal class ProjectionImageLease(
                                         }
                                     }
                                     previousTimestamp = timestamp
-                                    val age = if (timestamp <= 0) "invalid" else bucket(elapsed - capturedAt)
+                                    val age = if (timestamp <= 0) "invalid" else bucket(elapsed - sourceMs)
                                     if (firstAgeBucket == "none") firstAgeBucket = age
                                     lastAgeBucket = age
                                     clockGapBucket = bucket(elapsed - uptime)
-                                    lastUptimeAgeBucket = if (timestamp <= 0) "invalid" else bucket(uptime - capturedAt)
+                                    lastUptimeAgeBucket = if (timestamp <= 0) "invalid" else bucket(uptime - sourceMs)
                                     // Evidence only: agreement with uptime cannot prove the source clock.
-                                    if (timestamp > 0 && policy.isFrameFresh(capturedAt, uptime) &&
-                                        capturedAt <= elapsed && !policy.isFrameFresh(capturedAt, elapsed)) {
+                                    if (timestamp > 0 && policy.isFrameFresh(sourceMs, uptime) &&
+                                        sourceMs <= elapsed && !policy.isFrameFresh(sourceMs, elapsed)) {
                                         uptimeFreshElapsedStale++
                                     }
                                 }
-                                // Classify this image against one clock sample. Multiple reads
-                                // can cross the freshness boundary between these two checks.
-                                stale = timestamp > 0 && capturedAt <= elapsed &&
-                                    !policy.isFrameFresh(capturedAt, elapsed)
-                                // Keep fail-closed: a greater producer timestamp after
-                                // a prior read does NOT prove post-request production.
-                                // Do not relabel a stale image with elapsed receipt time.
+                                // The new queue is the production-time proof. Unknown,
+                                // duplicated or regressing producer timestamps are metadata
+                                // only and cannot rejuvenate the immutable queue lower bound.
+                                stale = !policy.isFrameFresh(capturedAt, elapsed)
                                 if (!stale) {
                                     reason = when {
-                                        timestamp <= 0 -> "invalid_timestamp"
-                                        !policy.isFrameFresh(capturedAt, elapsed) -> "timestamp_not_fresh"
                                         !policy.acceptsMirrorGeometry(image.width, image.height) -> "geometry_refused"
                                         image.planes.size != 1 -> "plane_count_refused"
                                         else -> null
@@ -253,6 +234,8 @@ internal class ProjectionImageLease(
                     synchronized(lock) {
                         stopped = true
                         scope.handler.removeCallbacks(acquire)
+                        requestQueue?.let(scope::endRequest)
+                        requestQueue = null
                     }
                 }
                 val posted = synchronized(lock) {
@@ -262,6 +245,11 @@ internal class ProjectionImageLease(
             }
         }
         } finally {
+            synchronized(lock) {
+                stopped = true
+                requestQueue?.let(scope::endRequest)
+                requestQueue = null
+            }
             if (attempt?.frame == null) releasePendingFrame()
         }
         val metrics = synchronized(lock) {
@@ -282,6 +270,10 @@ internal class ProjectionImageLease(
                 put("lease_active_after", isActive())
                 put("consent_generation", generation)
                 put("source_clock_contract", "unverified")
+                put("freshness_proof", "new_request_buffer_queue")
+                put("timeout_ms", tuning.timeoutMs)
+                put("poll_ms", tuning.pollMs)
+                put("tuning_revision", tuning.revision)
                 firstClockSample?.let { put("first_clock_sample", it) }
                 lastClockSample?.let { put("last_clock_sample", it) }
             }
@@ -292,5 +284,6 @@ internal class ProjectionImageLease(
     }
 }
 
+/** capturedAt: elapsed lower bound before the request queue existed, NOT receipt/source time. */
 internal data class ProjectionBitmap(val bitmap: Bitmap, val lease: ProjectionImageLease, val capturedAt: Long, val attemptId: Long = 0L)
 

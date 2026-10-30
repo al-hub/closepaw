@@ -137,11 +137,11 @@ internal class AndroidOperationRuntime(
                 val timeout = input["timeout_ms"]?.jsonPrimitive?.longOrNull
                 val poll = input["poll_ms"]?.jsonPrimitive?.longOrNull
                 val session = AgentService.instance?.remoteControlSession
-                val approvedSession = session != null && session.explicit &&
-                    session.state == ai.closepaw.chatgpt.control.ControlSession.State.ACTIVE &&
-                    session.refusal(input["session_id"]?.jsonPrimitive?.content, mutation = true) == null
-                val changed = approvedSession && authorized && revision != null && timeout != null && poll != null &&
-                    ProjectionAcquisitionTuning.update(revision, timeout, poll)
+                val changed = revision != null && timeout != null && poll != null &&
+                    withContext(Dispatchers.IO) {
+                        ProjectionAcquisitionTuning.update(session,
+                            input["session_id"]?.jsonPrimitive?.content, authorized, revision, timeout, poll)
+                    }
                 val v = ProjectionAcquisitionTuning.snapshot()
                 return OperationResult(success = changed, data = buildJsonObject {
                     put("applied", changed); put("revision", v.revision)

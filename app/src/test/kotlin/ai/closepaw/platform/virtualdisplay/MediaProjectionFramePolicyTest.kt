@@ -191,22 +191,4 @@ class MediaProjectionFramePolicyTest {
         // transition can otherwise make an old image appear fresh.
     }
 
-    @Test
-    fun `uptime candidate gate accepts only a post-request frame with stable clock gap`() {
-        val gate = ProjectionUptimeEvidenceGate
-        // Observed v0.1.100 uptime-aligned producer, modelled in a single active request.
-        assertTrue(gate.permitsCandidate(660_391_460L, 660_391_440L, 864_784_882L,
-            660_391_466L, 864_784_908L))
-        // A queued pre-request buffer, even if recently retrieved, must fail.
-        assertFalse(gate.permitsCandidate(660_391_439L, 660_391_440L, 864_784_882L,
-            660_391_466L, 864_784_908L))
-        // A clock offset change indicates sleep or inconsistent measurements.
-        assertFalse(gate.permitsCandidate(660_391_460L, 660_391_440L, 864_784_882L,
-            660_391_466L, 864_845_908L))
-        assertFalse(gate.permitsCandidate(660_391_500L, 660_391_440L, 864_784_882L,
-            660_391_466L, 864_784_908L))
-        assertFalse(gate.permitsCandidate(660_391_450L, 660_391_440L, 864_784_882L,
-            660_392_600L, 864_786_042L))
-    }
-
 }

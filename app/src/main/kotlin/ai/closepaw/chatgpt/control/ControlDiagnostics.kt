@@ -26,9 +26,9 @@ internal object ControlDiagnostics {
 
     @Synchronized fun projectionSnapshot(): JsonObject = buildJsonObject {
         val permittedNumbers = setOf("attempt_id", "null_reads", "stale_reads", "uptime_fresh_elapsed_stale",
-            "timestamp_same", "timestamp_increasing", "timestamp_decreasing", "consent_generation")
+            "timestamp_same", "timestamp_increasing", "timestamp_decreasing", "consent_generation", "timeout_ms", "poll_ms", "tuning_revision")
         val permittedCategories = setOf("request_id", "last_observation", "first_age_bucket", "last_age_bucket",
-            "clock_gap_bucket", "last_uptime_age_bucket", "source_clock_contract")
+            "clock_gap_bucket", "last_uptime_age_bucket", "source_clock_contract", "freshness_proof")
         val permittedBooleans = setOf("lease_active_after")
         val permittedClockNumbers = setOf("image_timestamp_ns", "acquire_started_elapsed_ms",
             "received_elapsed_ms", "received_uptime_ms", "sample_finished_elapsed_ms")
