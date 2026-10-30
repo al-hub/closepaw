@@ -37,8 +37,9 @@ internal object VisualKeyboardPolicy {
     fun refusal(frame: ControlFrame, node: ControlNode?, scope: String): String? {
         if (scope !in setOf("keyboard", "display")) return "keyboard_visual_required"
         val keyboard = frame.keyboard ?: return "keyboard_target_unverified"
+        if (!keyboard.readAllowed || !keyboard.interactAllowed) return "keyboard_interaction_not_authorized"
         val field = frame.inputTarget ?: return "keyboard_input_target_unverified"
-        if (!keyboard.readAllowed || !keyboard.interactAllowed || field.id != frame.inputTargetId ||
+        if (field.id != frame.inputTargetId ||
             field.sourceWindowId != frame.windowId || field.sourcePackage != frame.packageName ||
             !field.enabled || !field.editable || !field.focused || !field.focusable || field.password ||
             field.text.length > 2000 || InputPayloadPolicy.sensitive(field.text)) return "keyboard_input_target_unverified"

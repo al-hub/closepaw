@@ -52,4 +52,43 @@ class OwnedPixelPolicyTest {
         assertTrue(OwnedPixelPolicy.contains(result,regions.first()))
     }
 
+    @Test fun fragmentedAnimatedAreaDoesNotDiscardIndependentlyVerifiedScrollCorridor() {
+        val width = 256; val height = 256
+        val window = TapBounds(0, 0, width, height)
+        val isolated = IntArray(width * height) { 7 }
+        val display = isolated.copyOf()
+        // An animated/ad overlay creates thousands of exact run fragments on
+        // the left; a static web-content corridor on the right stays provable.
+        for (y in 0 until height) for (x in 0 until 128)
+            if ((x + y) % 2 == 0) display[y * width + x] = 99
+        assertNull(OwnedPixelPolicy.verifiedRuns(display, width, isolated, window, listOf(window)))
+        val regions = OwnedPixelPolicy.verifiedRegions(display, width, isolated, window, listOf(window))!!
+        assertTrue(regions.size <= 4096)
+        assertTrue(OwnedPixelPolicy.matches(display, width, isolated, window, regions))
+        assertTrue(OwnedPixelPolicy.contains(regions, TapBounds(160, 16, 224, 240)))
+        assertFalse(OwnedPixelPolicy.contains(regions, TapBounds(0, 0, 32, 32)))
+        assertFalse(OwnedPixelPolicy.contains(regions, window))
+    }
+
+    @Test fun conservativeTilesNeverBridgeGapsOrInferOwnershipFromEndpoints() {
+        val window = TapBounds(0, 0, 64, 64)
+        val isolated = IntArray(4096) { 7 }; val display = isolated.copyOf()
+        display[32 * 64 + 32] = 99
+        val regions = OwnedPixelPolicy.verifiedRegions(display, 64, isolated, window, listOf(window), 1)!!
+        assertTrue(regions.isEmpty()) // even one unverified interior pixel rejects the entire tile
+        assertNull(OwnedPixelPolicy.verifiedRegions(display, 64, isolated, window, listOf(window), 0))
+        assertNull(OwnedPixelPolicy.verifiedRegions(display, 64, isolated, window,
+            listOf(TapBounds(-1, 0, 1, 1))))
+        val separated = listOf(TapBounds(0, 0, 64, 16), TapBounds(0, 48, 64, 64))
+        val safe = OwnedPixelPolicy.verifiedRegions(display, 64, isolated, window, separated, 2)!!
+        assertFalse(OwnedPixelPolicy.contains(safe, TapBounds(0, 16, 64, 48)))
+        assertTrue(OwnedPixelPolicy.matches(display, 64, isolated, window, safe))
+    }
+
+    @Test fun overlappingNativeRegionsAreRejectedEvenWhenAllPixelsMatch() {
+        val window = TapBounds(0, 0, 4, 4)
+        val pixels = IntArray(16) { 7 }
+        assertNull(OwnedPixelPolicy.verifiedRegions(pixels, 4, pixels, window,
+            listOf(TapBounds(0, 0, 3, 3), TapBounds(1, 1, 4, 4))))
+    }
 }
