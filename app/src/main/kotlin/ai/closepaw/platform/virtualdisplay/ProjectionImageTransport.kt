@@ -79,10 +79,6 @@ internal class ProjectionImageLease(
         var uptimeFreshElapsedStale = 0
         // Keep bounded categories/counts and the two clock samples below; never log pixels.
         var previousTimestamp: Long? = null
-        // A fresh enqueue observed after a drained baseline is safer than translating
-        // unknown producer timestamps with a receipt-time suspend offset.
-        var baselineTimestamp: Long? = null
-        var baselineReceivedElapsed: Long? = null
         var sameTimestamps = 0
         var increasingTimestamps = 0
         var decreasingTimestamps = 0
@@ -194,24 +190,9 @@ internal class ProjectionImageLease(
                                 // can cross the freshness boundary between these two checks.
                                 stale = timestamp > 0 && capturedAt <= elapsed &&
                                     !policy.isFrameFresh(capturedAt, elapsed)
-                                if (stale && capturedAt <= uptime &&
-                                    policy.isFrameFresh(capturedAt, uptime)) {
-                                    // ImageReader.acquireLatestImage drains queued older images. After
-                                    // reading and closing a baseline, a later greater timestamp proves
-                                    // a distinct enqueue after that baseline; it does NOT prove the
-                                    // producer's clock domain. Only accept within the 1s elapsed
-                                    // acquisition window, independently of device suspend offset.
-                                    val base = baselineTimestamp
-                                    val baseElapsed = baselineReceivedElapsed
-                                    val interval = if (baseElapsed == null) -1L else elapsed - baseElapsed
-                                    if (base != null && timestamp > base && interval in 0L..1_000L) {
-                                        capturedAt = elapsed // conservative receipt clock, no offset translation
-                                        stale = false
-                                    } else {
-                                        baselineTimestamp = timestamp
-                                        baselineReceivedElapsed = elapsed
-                                    }
-                                }
+                                // Keep fail-closed: a greater producer timestamp after
+                                // a prior read does NOT prove post-request production.
+                                // Do not relabel a stale image with elapsed receipt time.
                                 if (!stale) {
                                     reason = when {
                                         timestamp <= 0 -> "invalid_timestamp"
