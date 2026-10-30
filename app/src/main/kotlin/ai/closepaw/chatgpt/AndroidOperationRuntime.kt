@@ -99,13 +99,14 @@ internal class AndroidOperationRuntime(
             override suspend fun invoke(invocation: OperationInvocation) = OperationResult(
                 data = ControlDiagnostics.projectionSnapshot(), summary = "Projection acquisition metadata returned.")
         })
-        registry.register(OperationDescriptor(
-            id = "closepaw.projection.tuning.get",
-            description = "Read revisioned persisted frame polling timeout and interval; does not modify security freshness.",
-            inputSchema = schema(),
-            permissions = listOf("generic_android_control"),
-            readiness = { OperationReadiness(settings.genericControlEnabled, if (!settings.genericControlEnabled) "generic_control_disabled" else null) },
-        ), object : OperationHandler {
+        val tuningReady = {
+            when {
+                !settings.genericControlEnabled -> OperationReadiness(false, "generic_control_disabled")
+                !ProjectionAcquisitionTuning.initialized() -> OperationReadiness(false, "tuning_initializing")
+                else -> OperationReadiness()
+            }
+        }
+        registry.register(ProjectionTuningProtocol.get(tuningReady), object : OperationHandler {
             override suspend fun invoke(invocation: OperationInvocation): OperationResult {
                 val v = ProjectionAcquisitionTuning.snapshot()
                 return OperationResult(data = buildJsonObject {
@@ -116,21 +117,7 @@ internal class AndroidOperationRuntime(
                 }, summary = "Current bounded projection polling settings.")
             }
         })
-        registry.register(OperationDescriptor(
-            id = "closepaw.projection.tuning.set",
-            description = "Explicitly authorized CAS update of bounded frame polling parameters. Never alters image age, delivery expiry, permission or masking guards.",
-            inputSchema = schema(
-                "expected_revision" to buildJsonObject { put("type", "integer"); put("minimum", 0) },
-                "timeout_ms" to buildJsonObject { put("type", "integer"); put("minimum", 1500); put("maximum", 3000) },
-                "poll_ms" to buildJsonObject { put("type", "integer"); put("minimum", 25); put("maximum", 100) },
-                "authorized" to buildJsonObject { put("type", "boolean"); put("const", true) },
-                "session_id" to stringSchema(128, 1),
-                required = listOf("expected_revision", "timeout_ms", "poll_ms", "authorized", "session_id")
-            ),
-            effects = listOf("persisted_projection_polling_configuration"),
-            permissions = listOf("generic_android_control"),
-            readiness = { OperationReadiness(settings.genericControlEnabled, if (!settings.genericControlEnabled) "generic_control_disabled" else null) },
-        ), object : OperationHandler {
+        registry.register(ProjectionTuningProtocol.set(tuningReady), object : OperationHandler {
             override suspend fun invoke(invocation: OperationInvocation): OperationResult {
                 val input = invocation.input
                 val authorized = input["authorized"]?.jsonPrimitive?.booleanOrNull == true
@@ -138,10 +125,11 @@ internal class AndroidOperationRuntime(
                 val timeout = input["timeout_ms"]?.jsonPrimitive?.longOrNull
                 val poll = input["poll_ms"]?.jsonPrimitive?.longOrNull
                 val session = AgentService.instance?.remoteControlSession
+                val admittedEpoch = invocation.admittedEpoch ?: -1L
                 val outcome = if (revision != null && timeout != null && poll != null)
                     withContext(Dispatchers.IO) {
                         ProjectionAcquisitionTuning.update(AgentService.instance?.remoteControlSession?.takeIf { it === session },
-                            input["session_id"]?.jsonPrimitive?.content, authorized, revision, timeout, poll)
+                            input["session_id"]?.jsonPrimitive?.content, authorized, revision, timeout, poll, admittedEpoch)
                     } else ai.closepaw.platform.virtualdisplay.ProjectionTuningOutcome.REFUSED
                 val changed = outcome == ai.closepaw.platform.virtualdisplay.ProjectionTuningOutcome.APPLIED
                 val unknown = outcome == ai.closepaw.platform.virtualdisplay.ProjectionTuningOutcome.STORAGE_UNKNOWN
@@ -306,7 +294,7 @@ internal class AndroidOperationRuntime(
             }
         })
         dispatcher = OperationDispatcher(registry, store, scope,
-            operationEpoch = { id -> if (id in setOf("android.ui.action", "android.ui.sequence", "android.control.island.drag", "android.control.feedback_test",
+            operationEpoch = { id -> if (ProjectionTuningProtocol.requiresSessionEpoch(id) || id in setOf("android.ui.action", "android.ui.sequence", "android.control.island.drag", "android.control.feedback_test",
                     "app.screen.read", "gemini.draft.insert", "gemini.question.ask"))
                 AgentService.instance?.remoteControlSession?.epoch ?: -1L else 0L },
             executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled || settings.genericControlEnabled },

@@ -17,8 +17,9 @@ internal object ProjectionAcquisitionTuning {
     fun storageState() = state?.storageState() ?: "initializing"
     fun snapshot() = state?.snapshot() ?: ProjectionTuningValues()
     fun update(session: ControlSession?, sessionId: String?, authorized: Boolean,
-               expectedRevision: Int, timeoutMs: Long, pollMs: Long): ProjectionTuningOutcome =
-        state?.update(session, sessionId, authorized, expectedRevision, timeoutMs, pollMs) ?: ProjectionTuningOutcome.REFUSED
+               expectedRevision: Int, timeoutMs: Long, pollMs: Long,
+               expectedEpoch: Long = session?.epoch ?: -1L): ProjectionTuningOutcome =
+        state?.update(session, sessionId, authorized, expectedRevision, timeoutMs, pollMs, expectedEpoch) ?: ProjectionTuningOutcome.REFUSED
 }
 
 internal data class ProjectionTuningValues(val revision: Int = 0, val timeoutMs: Long = 1500L, val pollMs: Long = 25L) {
@@ -82,13 +83,14 @@ internal class ProjectionTuningState(private val persistence: ProjectionTuningPe
     fun snapshot() = current
     fun storageState() = if (uncertain) "unknown_restart_required" else "confirmed"
     fun update(session: ControlSession?, sessionId: String?, authorized: Boolean,
-               expectedRevision: Int, timeoutMs: Long, pollMs: Long): ProjectionTuningOutcome {
+               expectedRevision: Int, timeoutMs: Long, pollMs: Long,
+               expectedEpoch: Long = session?.epoch ?: -1L): ProjectionTuningOutcome {
         if (session == null || !authorized) return ProjectionTuningOutcome.REFUSED
         // ControlSession pause/end/start use this same monitor. The final authority
         // check and durable write form one mutation boundary; caller flags cannot
         // manufacture a matching, explicit, active server-side session.
         return synchronized(session) {
-            if (!session.explicit || session.state != ControlSession.State.ACTIVE ||
+            if (!session.explicit || session.epoch != expectedEpoch || session.state != ControlSession.State.ACTIVE ||
                 session.refusal(sessionId, mutation = true) != null) return@synchronized ProjectionTuningOutcome.REFUSED
             commit(expectedRevision, timeoutMs, pollMs)
         }

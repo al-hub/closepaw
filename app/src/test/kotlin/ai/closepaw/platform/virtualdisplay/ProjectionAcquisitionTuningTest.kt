@@ -86,4 +86,13 @@ class ProjectionAcquisitionTuningTest {
         assertEquals(ProjectionTuningOutcome.APPLIED, changed); assertEquals(ControlSession.State.ENDED, session.state)
         assertEquals(ProjectionTuningOutcome.REFUSED, state.update(session, session.id, true, 1, 3000, 100))
     }
+    @Test fun `IO queued update cannot use approval from before pause resume`() {
+        val disk = Disk(); val state = ProjectionTuningState(disk); val session = active()
+        val admitted = session.epoch
+        session.pause(); check(session.beginResume()); session.finishResume(session.epoch, true)
+        assertEquals(ControlSession.State.ACTIVE, session.state)
+        assertEquals(ProjectionTuningOutcome.REFUSED, state.update(session, session.id, true, 0, 2000, 50, admitted))
+        assertEquals(0, disk.writes)
+    }
+
 }
