@@ -205,7 +205,7 @@ internal class ProjectionImageLease(
                                 bitmap?.recycle(); bitmap = null
                                 finish(reason)
                             } else {
-                                val frame = ProjectionBitmap(bitmap!!, this@ProjectionImageLease, capturedAt)
+                                val frame = ProjectionBitmap(bitmap!!, this@ProjectionImageLease, capturedAt, attemptId)
                                 bitmap = null
                                 finish("captured", frame)
                             }
@@ -256,5 +256,5 @@ internal class ProjectionImageLease(
     }
 }
 
-internal data class ProjectionBitmap(val bitmap: Bitmap, val lease: ProjectionImageLease, val capturedAt: Long)
+internal data class ProjectionBitmap(val bitmap: Bitmap, val lease: ProjectionImageLease, val capturedAt: Long, val attemptId: Long = 0L)
 
