@@ -24,6 +24,7 @@ class ControlDiagnosticsProjectionTest {
         assertEquals(16, events.size)
         assertTrue(events.all { it.jsonObject["stage"]?.jsonPrimitive?.content == "projection_frame_acquire" })
         assertTrue(events.all { it.jsonObject["reason_code"]?.jsonPrimitive?.content == "timeout" })
+        assertEquals(snapshot.toString(), ControlDiagnostics.projectionExportJson())
         assertFalse(snapshot.toString().contains("private_marker"))
         assertFalse(snapshot.toString().contains("must_not_export"))
     }
