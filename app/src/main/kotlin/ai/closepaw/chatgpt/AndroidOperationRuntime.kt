@@ -1,6 +1,7 @@
 package ai.closepaw.chatgpt
 
 import ai.closepaw.chatgpt.control.*
+import ai.closepaw.platform.virtualdisplay.ProjectionAcquisitionTuning
 import ai.closepaw.update.AndroidSelfUpdater
 import ai.closepaw.update.SelfUpdateOperations
 import ai.closepaw.app.AgentService
@@ -67,6 +68,7 @@ internal class AndroidOperationRuntime(
         }
     }
     init {
+        ProjectionAcquisitionTuning.initialize(context)
         val genericPort = AndroidControlPort(context, mutationBlock = { pkg ->
             if (pkg in setOf(AndroidGeminiDraftUi.PACKAGE, AndroidGeminiDraftUi.GOOGLE_HOST) &&
                 store.latestOutcomeUnknown("gemini.question.ask")) "dedicated_submission_unresolved" else null
@@ -96,6 +98,51 @@ internal class AndroidOperationRuntime(
         ), object : OperationHandler {
             override suspend fun invoke(invocation: OperationInvocation) = OperationResult(
                 data = ControlDiagnostics.projectionSnapshot(), summary = "Projection acquisition metadata returned.")
+        })
+        registry.register(OperationDescriptor(
+            id = "closepaw.projection.tuning.get",
+            description = "Read revisioned persisted frame polling timeout and interval; does not modify security freshness.",
+            inputSchema = schema(),
+            permissions = listOf("generic_android_control"),
+            readiness = { OperationReadiness(settings.genericControlEnabled, if (!settings.genericControlEnabled) "generic_control_disabled" else null) },
+        ), object : OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult {
+                val v = ProjectionAcquisitionTuning.snapshot()
+                return OperationResult(data = buildJsonObject {
+                    put("revision", v.revision); put("timeout_ms", v.timeoutMs); put("poll_ms", v.pollMs)
+                    put("timeout_min_ms", 1500); put("timeout_max_ms", 3000)
+                    put("poll_min_ms", 25); put("poll_max_ms", 100)
+                }, summary = "Current bounded projection polling settings.")
+            }
+        })
+        registry.register(OperationDescriptor(
+            id = "closepaw.projection.tuning.set",
+            description = "Explicitly authorized CAS update of bounded frame polling parameters. Never alters image age, delivery expiry, permission or masking guards.",
+            inputSchema = schema(
+                "expected_revision" to buildJsonObject { put("type", "integer"); put("minimum", 0) },
+                "timeout_ms" to buildJsonObject { put("type", "integer"); put("minimum", 1500); put("maximum", 3000) },
+                "poll_ms" to buildJsonObject { put("type", "integer"); put("minimum", 25); put("maximum", 100) },
+                "authorized" to buildJsonObject { put("type", "boolean"); put("const", true) },
+                required = listOf("expected_revision", "timeout_ms", "poll_ms", "authorized")
+            ),
+            effects = listOf("persisted_projection_polling_configuration"),
+            permissions = listOf("generic_android_control"),
+            readiness = { OperationReadiness(settings.genericControlEnabled, if (!settings.genericControlEnabled) "generic_control_disabled" else null) },
+        ), object : OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult {
+                val input = invocation.input
+                val authorized = input["authorized"]?.jsonPrimitive?.booleanOrNull == true
+                val revision = input["expected_revision"]?.jsonPrimitive?.intOrNull
+                val timeout = input["timeout_ms"]?.jsonPrimitive?.longOrNull
+                val poll = input["poll_ms"]?.jsonPrimitive?.longOrNull
+                val changed = authorized && revision != null && timeout != null && poll != null &&
+                    ProjectionAcquisitionTuning.update(revision, timeout, poll)
+                val v = ProjectionAcquisitionTuning.snapshot()
+                return OperationResult(success = changed, data = buildJsonObject {
+                    put("applied", changed); put("revision", v.revision)
+                    put("timeout_ms", v.timeoutMs); put("poll_ms", v.pollMs)
+                }, summary = if (changed) "Bounded polling configuration committed." else "Configuration refused: authorization, revision or range invalid.")
+            }
         })
         SelfUpdateOperations(AndroidSelfUpdater.get(context)).register(registry)
         TailscaleOperations(
@@ -255,7 +302,8 @@ internal class AndroidOperationRuntime(
             operationAllowed = { id -> when(id) {
                 GenericControlOperations.ACTION, GenericControlOperations.SEQUENCE, GenericControlOperations.ISLAND_DRAG, GenericControlOperations.CONFIGURE, GenericControlOperations.FEEDBACK_TEST,
                 "android.control.session.start", "android.control.session.wait", "android.control.session.end" -> settings.genericControlEnabled
-                "android.control.session.status", "closepaw.self.status", "closepaw.projection.diagnostics" -> settings.genericControlEnabled
+                "android.control.session.status", "closepaw.self.status", "closepaw.projection.diagnostics",
+                "closepaw.projection.tuning.get", "closepaw.projection.tuning.set" -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled
