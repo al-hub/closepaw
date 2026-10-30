@@ -27,6 +27,7 @@ internal class ProjectionImageLease(
     private val policy: MediaProjectionFramePolicy,
     private val consent: MediaProjectionConsentGate,
 ) {
+    private companion object { val attemptSequence = java.util.concurrent.atomic.AtomicLong() }
     private val generation = consent.generation
     fun isActive(): Boolean = consent.generation == generation && consent.state == ProjectionConsentState.Consumed &&
         policy.acquireAllowed() && scope.isOpen()
@@ -37,6 +38,7 @@ internal class ProjectionImageLease(
     /** Bounded acquisition, no cached pixels and no fallback. The caller owns the bitmap.
      * Timestamp timebase depends on the image source; retain the existing fail-closed freshness check. */
     suspend fun capture(): ProjectionBitmap? {
+        val attemptId = attemptSequence.incrementAndGet()
         data class Attempt(val reason: String, val frame: ProjectionBitmap? = null)
         val lock = Any()
         var stopped = false
@@ -230,6 +232,7 @@ internal class ProjectionImageLease(
         }
         val metrics = synchronized(lock) {
             buildJsonObject {
+                put("attempt_id", attemptId)
                 put("last_observation", lastObservation)
                 put("null_reads", emptyReads.coerceAtMost(1000))
                 put("stale_reads", staleReads.coerceAtMost(1000))
