@@ -27,6 +27,7 @@ internal class ProjectionImageLease(
     private val policy: MediaProjectionFramePolicy,
     private val consent: MediaProjectionConsentGate,
 ) {
+    private companion object { val attemptSequence = java.util.concurrent.atomic.AtomicLong() }
     private val generation = consent.generation
     fun isActive(): Boolean = consent.generation == generation && consent.state == ProjectionConsentState.Consumed &&
         policy.acquireAllowed() && scope.isOpen()
@@ -36,7 +37,8 @@ internal class ProjectionImageLease(
 
     /** Bounded acquisition, no cached pixels and no fallback. The caller owns the bitmap.
      * Timestamp timebase depends on the image source; retain the existing fail-closed freshness check. */
-    suspend fun capture(): ProjectionBitmap? {
+    suspend fun capture(requestId: String? = null): ProjectionBitmap? {
+        val attemptId = attemptSequence.incrementAndGet()
         data class Attempt(val reason: String, val frame: ProjectionBitmap? = null)
         val lock = Any()
         var stopped = false
@@ -203,7 +205,7 @@ internal class ProjectionImageLease(
                                 bitmap?.recycle(); bitmap = null
                                 finish(reason)
                             } else {
-                                val frame = ProjectionBitmap(bitmap!!, this@ProjectionImageLease, capturedAt)
+                                val frame = ProjectionBitmap(bitmap!!, this@ProjectionImageLease, capturedAt, attemptId)
                                 bitmap = null
                                 finish("captured", frame)
                             }
@@ -230,6 +232,8 @@ internal class ProjectionImageLease(
         }
         val metrics = synchronized(lock) {
             buildJsonObject {
+                put("attempt_id", attemptId)
+                requestId?.takeIf { it.matches(Regex("[a-z0-9_]{1,40}")) }?.let { put("request_id", it) }
                 put("last_observation", lastObservation)
                 put("null_reads", emptyReads.coerceAtMost(1000))
                 put("stale_reads", staleReads.coerceAtMost(1000))
@@ -248,10 +252,11 @@ internal class ProjectionImageLease(
                 lastClockSample?.let { put("last_clock_sample", it) }
             }
         }
-        ControlDiagnostics.record("projection_frame_acquire", attempt?.reason ?: "timeout", metrics = metrics)
+        ControlDiagnostics.record("projection_frame_acquire", attempt?.reason ?: "timeout",
+            taskId = requestId?.takeIf { it.matches(Regex("[a-zA-Z0-9_-]{1,64}")) }, metrics = metrics)
         return attempt?.frame
     }
 }
 
-internal data class ProjectionBitmap(val bitmap: Bitmap, val lease: ProjectionImageLease, val capturedAt: Long)
+internal data class ProjectionBitmap(val bitmap: Bitmap, val lease: ProjectionImageLease, val capturedAt: Long, val attemptId: Long = 0L)
 

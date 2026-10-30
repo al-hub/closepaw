@@ -86,6 +86,17 @@ internal class AndroidOperationRuntime(
                 else -> OperationReadiness()
             }
         }.register(registry)
+        registry.register(OperationDescriptor(
+            id = "closepaw.projection.diagnostics",
+            description = "Read bounded projection acquisition metadata only; no pixels, screen text or projection tokens.",
+            inputSchema = buildJsonObject { put("type", "object"); put("properties", buildJsonObject {}); put("additionalProperties", false) },
+            permissions = listOf("generic_android_control"),
+            readiness = { OperationReadiness(settings.genericControlEnabled && AgentService.instance != null,
+                if (!settings.genericControlEnabled) "generic_control_disabled" else if (AgentService.instance == null) "accessibility_permission_missing" else null) },
+        ), object : OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation) = OperationResult(
+                data = ControlDiagnostics.projectionSnapshot(), summary = "Projection acquisition metadata returned.")
+        })
         SelfUpdateOperations(AndroidSelfUpdater.get(context)).register(registry)
         TailscaleOperations(
             TailscaleRecovery(AndroidTailscalePlatform(context), { settings.tailscaleRecoveryEnabled }, record = tailscaleDiagnostics::record),
@@ -244,6 +255,7 @@ internal class AndroidOperationRuntime(
             operationAllowed = { id -> when(id) {
                 GenericControlOperations.ACTION, GenericControlOperations.SEQUENCE, GenericControlOperations.ISLAND_DRAG, GenericControlOperations.CONFIGURE, GenericControlOperations.FEEDBACK_TEST,
                 "android.control.session.start", "android.control.session.wait", "android.control.session.end" -> settings.genericControlEnabled
+                "android.control.session.status", "closepaw.self.status", "closepaw.projection.diagnostics" -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled
@@ -253,7 +265,7 @@ internal class AndroidOperationRuntime(
             } },
         )
     }
-    fun diagnosticSnapshot(): JsonObject = JsonObject(draftDiagnostics.snapshot() + ("roundtrip" to roundTripDiagnostics.snapshot()))
+    fun diagnosticSnapshot(): JsonObject = JsonObject(draftDiagnostics.snapshot() + ("roundtrip" to roundTripDiagnostics.snapshot()) + ("projection" to ControlDiagnostics.projectionSnapshot()))
     fun tailscaleDiagnosticSnapshot(): JsonObject = tailscaleDiagnostics.snapshot()
 
     override fun call(name: String, arguments: JsonObject): JsonObject = when(name) {
