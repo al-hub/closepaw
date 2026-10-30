@@ -17,6 +17,15 @@ class ControlDiagnosticsProjectionTest {
                     put("source_clock_contract", "unverified")
                 })
         }
+        ControlDiagnostics.record("projection_frame_acquire", "timeout",
+            metrics = buildJsonObject {
+                put("screen_text", "sensitive_marker")
+                put("attempt_id", 123)
+                put("first_clock_sample", buildJsonObject {
+                    put("image_timestamp_ns", 123456L)
+                    put("secret", "hidden_marker")
+                })
+            })
         val snapshot = ControlDiagnostics.projectionSnapshot()
         assertEquals(1, snapshot["schema_version"]?.jsonPrimitive?.int)
         assertEquals(16, snapshot["stored_events"]?.jsonPrimitive?.int)
@@ -27,5 +36,8 @@ class ControlDiagnosticsProjectionTest {
         assertEquals(snapshot.toString(), ControlDiagnostics.projectionExportJson())
         assertFalse(snapshot.toString().contains("private_marker"))
         assertFalse(snapshot.toString().contains("must_not_export"))
+        assertFalse(snapshot.toString().contains("sensitive_marker"))
+        assertFalse(snapshot.toString().contains("hidden_marker"))
+        assertFalse(snapshot.toString().contains("screen_text"))
     }
 }
