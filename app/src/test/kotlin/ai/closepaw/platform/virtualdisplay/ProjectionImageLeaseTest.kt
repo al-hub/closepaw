@@ -175,29 +175,21 @@ class ProjectionImageLeaseTest {
         }
     }
 
-    @Test fun `new enqueue after drained baseline bypasses ambiguous source offset without relaxing geometry`() = runTest {
+    @Test fun `unknown source timestamp never passes stale guard by receipt time`() = runTest {
         val image = mockk<Image>(relaxed = true)
-        var queued: Runnable? = null
         mockkStatic(SystemClock::class)
         try {
             every { SystemClock.elapsedRealtime() } returns 100_000L
             every { SystemClock.uptimeMillis() } returns 90_000L
-            every { image.timestamp } returnsMany listOf(89_500_000_000L, 89_525_000_000L)
-            every { image.width } returns 0 // independent geometry gate still refuses
-            every { image.height } returns 1
+            every { image.timestamp } returns 89_500_000_000L
             every { reader.acquireLatestImage() } returns image
-            every { handler.post(any<Runnable>()) } answers { queued = firstArg(); true }
-            every { handler.postDelayed(any<Runnable>(), 25L) } answers { queued = firstArg(); true }
-            val capture = async { lease().capture() }
-            runCurrent()
-            checkNotNull(queued).run() // baseline rejected as stale
-            checkNotNull(queued).run() // distinct newer frame, geometry still checked
-            runCurrent()
-            assertNull(capture.await())
-            assertEquals("geometry_refused", lastEvent()["reason_code"]!!.jsonPrimitive.content)
+            every { handler.post(any<Runnable>()) } answers { firstArg<Runnable>().run(); true }
+            every { handler.postDelayed(any<Runnable>(), 25L) } returns false
+            assertNull(lease().capture())
+            assertEquals("stale_frame", lastEvent()["metrics"]!!.jsonObject["last_observation"]!!.jsonPrimitive.content)
             assertEquals("1", lastEvent()["metrics"]!!.jsonObject["stale_reads"]!!.jsonPrimitive.content)
-            verify(exactly = 2) { image.close() }
             verify(exactly = 0) { image.planes }
+            verify(exactly = 1) { image.close() }
         } finally {
             unmockkStatic(SystemClock::class)
         }
