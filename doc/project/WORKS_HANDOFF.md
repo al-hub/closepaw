@@ -1,3 +1,13 @@
+## 2026-10-30 #165 v0.1.101/code102 released — device acceptance OPEN
+
+- #208 clock/freshness + #207 bounded polling fully integrated. #208→#207 merge `45de46b24b53ee8aa7457e853c8eef39d345dd9e`; #207→main/source/tag `a2bc3236b0ae9c033955c0f46e2131032d13c711`. Both histories retained. Reviewed source tree `3fe001b3f22469f917479e7ca29739b70311bbf9` identical across both PRs/main; independent AI code/security APPROVE.
+- Request-local new ImageReader/BufferQueue uses pre-creation elapsed lower bound for acquire/post-acquire1s/delivery10s. No source-clock guessing, offset conversion, receipt rejuvenation or old-reader pixel fallback. Reader/copy lifetime and cancellation identity guarded. Full physical geometry at startup; resize tears down/requires a fresh OS consent round, no automatic rotation recovery claim.
+- Polling timeout1500–3000/poll25–100; actual supported schema + write-only set + explicit ACTIVE server session/ID/trusted execute admission epoch/CAS. AtomicFile fsync/readback UNKNOWN/restart/rollback and actual Android storage test. No #203 optimizer/profiles.
+- PR208 Security41042424179/UI41042424055 and PR207 Security41043434984/UI41043434991 PASS. Raw reports JVM3077/UI18 failure/error/skip0, UI8 PNG; actual storage test executed. Main Security41044307355 (unit/lint/debug + optimized R8) and UI41044307376 PASS. Signed41045361812 PASS.
+- [Release v0.1.101](https://github.com/al-hub/closepaw/releases/tag/v0.1.101), 116894715 bytes, public anonymous download SHA256 `041c543c544dd083bb052bc14d66a3bdd7e3da2270bc3ff3f4448da08d8ef507`, package ai.closepaw/version0.1.101/code102, v3 true, existing signer `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba` matched. Tag dereferenced to source a2bc3236; raw public-verification artifact12971743805 independently rechecked.
+- [Canonical final evidence](https://github.com/al-hub/closepaw/issues/165#issuecomment-6521167929). #165 OPEN. This Work performed no installation/device control/tuning mutation. Next Chat installs once, verifies version independently, obtains new OS sharing consent and tests actual MCP image/IME + changed safety/P1/P2 acceptance. Unverified source_clock_contract and uptime comparison counters are diagnostic, not proof of failure/success under the new queue path.
+- This post-release handoff is docs-only [skip ci]; it does not change the immutable APK source/tag or request another APK.
+
 ## 2026-10-26 #165 unlocked-device follow-up — IME proof unavailable
 
 - [Current report](../dev/issue165-ime-compatibility-20261026.md#unlocked-device-follow-up--latest-actual-result), [updated evidence](../dev/evidence/issue165/ime-compatibility-20261026.json). Existing0.1.91/code92 unchanged; no new code/APK/install/CI.
