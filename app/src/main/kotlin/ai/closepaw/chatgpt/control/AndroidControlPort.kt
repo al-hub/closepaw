@@ -372,14 +372,18 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         } ?: return fail("visual_window_unavailable")
         val projection = if (scope == "display") ai.closepaw.platform.virtualdisplay.ProjectionImageTransport.active() else null
         if (scope == "display" && projection == null) return fail("screen_share_not_active")
+        val projectionRequestId = if (projection != null) java.util.UUID.randomUUID().toString().replace("-", "") else null
         probeThrottle.awaitSlot()
-        var captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty(), projection = projection) { probeThrottle.awaitSlot() }
+        var captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty(), projection = projection, requestId = projectionRequestId) { probeThrottle.awaitSlot() }
         // Retry only an explicit OS screenshot rate refusal, before any action.
         // Never retry a denied/masked/changed screen or replay a gesture.
         if (captured.proof == null && captured.reason == "screenshot_throttled") {
             probeThrottle.awaitSlot()
-            captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty(), projection = projection) { probeThrottle.awaitSlot() }
+            captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty(), projection = projection, requestId = projectionRequestId) { probeThrottle.awaitSlot() }
         }
+        if (projectionRequestId != null) ControlDiagnostics.record("projection_observe_result",
+            captured.reason ?: if (captured.proof != null) "acquired" else "visual_observation_unavailable",
+            metrics = kotlinx.serialization.json.buildJsonObject { put("request_id", projectionRequestId) })
         val proof = captured.proof ?: return fail(captured.reason ?: "visual_observation_unavailable")
         val after = capture()
         if(!ai.closepaw.platform.InputTypePrivacyPolicy.sameGeneration(admittedEditorGeneration,editorGeneration(service))) return fail("visual_editor_privacy_changed")
