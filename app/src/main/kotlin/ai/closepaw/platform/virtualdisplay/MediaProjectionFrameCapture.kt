@@ -35,17 +35,67 @@ internal class MediaProjectionFrameScope internal constructor(
     thread: HandlerThread,
 ) {
     private val closed = AtomicBoolean(false)
+    private val surfaceLock = Any()
+    private var request: ProjectionRequestQueue? = null
+
+    /** A fresh BufferQueue, never a drain/relabel of the session diagnostic reader.
+     * SF renders into this new sink after its creation. The elapsed lower bound
+     * predates creation, so even an unknown Image.timestamp cannot extend its age.
+     * One request owns the sink until its identity-checked cleanup completes.
+     */
+    fun beginRequest(): ProjectionRequestQueue? = synchronized(surfaceLock) {
+        if (!isOpen() || request != null) return null
+        val lowerBound = SystemClock.elapsedRealtime()
+        var fresh: ImageReader? = null
+        try {
+            fresh = ImageReader.newInstance(reader.width, reader.height, PixelFormat.RGBA_8888, 2)
+            displayRef.surface = fresh.surface
+            ProjectionRequestQueue(fresh, lowerBound).also { request = it }
+        } catch (_: Exception) {
+            // setSurface may have taken effect before throwing. Never resume an
+            // uncertain sink; permanently close this scope on partial attachment.
+            runCatching { fresh?.close() }
+            close()
+            null
+        }
+    }
+
+    fun endRequest(expected: ProjectionRequestQueue) = synchronized(surfaceLock) {
+        if (request !== expected) return@synchronized
+        request = null
+        // Leave the display detached between pixel requests. The original reader
+        // remains geometry-only; it is never a fallback source of screenshot pixels.
+        try { if (!closed.get()) displayRef.surface = null }
+        catch (_: Exception) { close() }
+        finally { expected.close() }
+    }
     private val displayRef = display
     private val threadRef = thread
     internal val handler = Handler(thread.looper)
 
     fun isOpen(): Boolean = !closed.get() && threadRef.isAlive
 
-    fun close() {
-        if (!closed.compareAndSet(false, true)) return
+    fun close() = synchronized(surfaceLock) {
+        if (!closed.compareAndSet(false, true)) return@synchronized
         runCatching { displayRef.release() }
+        request?.close()
+        request = null
         runCatching { reader.close() }
         runCatching { threadRef.quitSafely() }
+        Unit
+    }
+}
+
+/** Request identity is issued only by a new sink attachment, never by frame receipt. */
+internal class ProjectionRequestQueue(val reader: ImageReader, val lowerBoundElapsedMs: Long) {
+    @Volatile var closed = false
+        private set
+    /** The same monitor protects acquire/pack/image.close from unmapping by teardown. */
+    fun close() = synchronized(this) {
+        if (!closed) {
+            closed = true
+            runCatching { reader.close() }
+        }
     }
 }
 

@@ -90,7 +90,7 @@ internal class OperationDispatcher(
                     return@launch
                 }
                 val result = withContext(interruption) {
-                    operation.handler.invoke(OperationInvocation(taskId, arguments.getValue("input").jsonObject))
+                    operation.handler.invoke(OperationInvocation(taskId, arguments.getValue("input").jsonObject, admittedEpoch))
                 }
                 val bounded = resultJson(result)
                 if (OperationSchemaValidator.validate(operation.descriptor.outputSchema, bounded) != null) {

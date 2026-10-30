@@ -1,6 +1,7 @@
 package ai.closepaw.chatgpt
 
 import ai.closepaw.chatgpt.control.*
+import ai.closepaw.platform.virtualdisplay.ProjectionAcquisitionTuning
 import ai.closepaw.update.AndroidSelfUpdater
 import ai.closepaw.update.SelfUpdateOperations
 import ai.closepaw.app.AgentService
@@ -67,6 +68,7 @@ internal class AndroidOperationRuntime(
         }
     }
     init {
+        scope.launch(Dispatchers.IO) { ProjectionAcquisitionTuning.initialize(context) }
         val genericPort = AndroidControlPort(context, mutationBlock = { pkg ->
             if (pkg in setOf(AndroidGeminiDraftUi.PACKAGE, AndroidGeminiDraftUi.GOOGLE_HOST) &&
                 store.latestOutcomeUnknown("gemini.question.ask")) "dedicated_submission_unresolved" else null
@@ -96,6 +98,50 @@ internal class AndroidOperationRuntime(
         ), object : OperationHandler {
             override suspend fun invoke(invocation: OperationInvocation) = OperationResult(
                 data = ControlDiagnostics.projectionSnapshot(), summary = "Projection acquisition metadata returned.")
+        })
+        val tuningReady = {
+            when {
+                !settings.genericControlEnabled -> OperationReadiness(false, "generic_control_disabled")
+                !ProjectionAcquisitionTuning.initialized() -> OperationReadiness(false, "tuning_initializing")
+                else -> OperationReadiness()
+            }
+        }
+        registry.register(ProjectionTuningProtocol.get(tuningReady), object : OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult {
+                val v = ProjectionAcquisitionTuning.snapshot()
+                return OperationResult(data = buildJsonObject {
+                    put("revision", v.revision); put("timeout_ms", v.timeoutMs); put("poll_ms", v.pollMs)
+                    put("storage_state", ProjectionAcquisitionTuning.storageState())
+                    put("timeout_min_ms", 1500); put("timeout_max_ms", 3000)
+                    put("poll_min_ms", 25); put("poll_max_ms", 100)
+                }, summary = "Current bounded projection polling settings.")
+            }
+        })
+        registry.register(ProjectionTuningProtocol.set(tuningReady), object : OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult {
+                val input = invocation.input
+                val authorized = input["authorized"]?.jsonPrimitive?.booleanOrNull == true
+                val revision = input["expected_revision"]?.jsonPrimitive?.intOrNull
+                val timeout = input["timeout_ms"]?.jsonPrimitive?.longOrNull
+                val poll = input["poll_ms"]?.jsonPrimitive?.longOrNull
+                val session = AgentService.instance?.remoteControlSession
+                val admittedEpoch = invocation.admittedEpoch ?: -1L
+                val outcome = if (revision != null && timeout != null && poll != null)
+                    withContext(Dispatchers.IO) {
+                        ProjectionAcquisitionTuning.update(AgentService.instance?.remoteControlSession?.takeIf { it === session },
+                            input["session_id"]?.jsonPrimitive?.content, authorized, revision, timeout, poll, admittedEpoch)
+                    } else ai.closepaw.platform.virtualdisplay.ProjectionTuningOutcome.REFUSED
+                val changed = outcome == ai.closepaw.platform.virtualdisplay.ProjectionTuningOutcome.APPLIED
+                val unknown = outcome == ai.closepaw.platform.virtualdisplay.ProjectionTuningOutcome.STORAGE_UNKNOWN
+                val v = ProjectionAcquisitionTuning.snapshot()
+                return OperationResult(success = changed, data = buildJsonObject {
+                    put("applied", changed); put("revision", v.revision)
+                    put("outcome_unknown", unknown); put("storage_state", ProjectionAcquisitionTuning.storageState())
+                    put("timeout_ms", v.timeoutMs); put("poll_ms", v.pollMs)
+                }, summary = if (changed) "Bounded polling configuration committed." else if (unknown)
+                    "Storage outcome unknown. Restart app and read durable revision before any retry." else
+                    "Configuration refused: initialization, authorization, revision or range invalid.")
+            }
         })
         SelfUpdateOperations(AndroidSelfUpdater.get(context)).register(registry)
         TailscaleOperations(
@@ -248,14 +294,15 @@ internal class AndroidOperationRuntime(
             }
         })
         dispatcher = OperationDispatcher(registry, store, scope,
-            operationEpoch = { id -> if (id in setOf("android.ui.action", "android.ui.sequence", "android.control.island.drag", "android.control.feedback_test",
+            operationEpoch = { id -> if (ProjectionTuningProtocol.requiresSessionEpoch(id) || id in setOf("android.ui.action", "android.ui.sequence", "android.control.island.drag", "android.control.feedback_test",
                     "app.screen.read", "gemini.draft.insert", "gemini.question.ask"))
                 AgentService.instance?.remoteControlSession?.epoch ?: -1L else 0L },
             executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled || settings.genericControlEnabled },
             operationAllowed = { id -> when(id) {
                 GenericControlOperations.ACTION, GenericControlOperations.SEQUENCE, GenericControlOperations.ISLAND_DRAG, GenericControlOperations.CONFIGURE, GenericControlOperations.FEEDBACK_TEST,
                 "android.control.session.start", "android.control.session.wait", "android.control.session.end" -> settings.genericControlEnabled
-                "android.control.session.status", "closepaw.self.status", "closepaw.projection.diagnostics" -> settings.genericControlEnabled
+                "android.control.session.status", "closepaw.self.status", "closepaw.projection.diagnostics",
+                "closepaw.projection.tuning.get", "closepaw.projection.tuning.set" -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
                 "linux.shell.exec" -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled

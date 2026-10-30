@@ -138,11 +138,11 @@ class MediaProjectionCaptureService : Service() {
 
     /** One-session, bounded, geometry and guarded image scope; null-surface idle mode removed. */
     private fun openMirrorScope(projection: MediaProjection) {
-        val metrics = resources.displayMetrics
+        val geometry = VirtualDisplayConfig.fromPhysicalDisplay(this)
         val policy = MediaProjectionFramePolicy()
         framePolicy = policy
         val scope = MediaProjectionFrameCapture.open(
-            policy, projection, metrics.widthPixels, metrics.heightPixels, metrics.densityDpi
+            policy, projection, geometry.width, geometry.height, geometry.densityDpi
         )
         frameScope = scope
         if (scope == null) {
@@ -155,6 +155,21 @@ class MediaProjectionCaptureService : Service() {
     private fun registerProjectionCallbacks(newProjection: MediaProjection, owner: MediaProjectionSessionOwner) {
         newProjection.registerCallback(
             object : MediaProjection.Callback() {
+                override fun onCapturedContentResize(width: Int, height: Int) {
+                    owner.runIfCurrent(sessionOwner) {
+                        if (projection !== newProjection) return@runIfCurrent
+                        val scope = frameScope ?: return@runIfCurrent
+                        if (scope.reader.width != width || scope.reader.height != height) {
+                            // A resize invalidates coordinates and every in-flight bitmap.
+                            // Require a new OS round instead of silently reusing geometry.
+                            framePolicy?.invalidate()
+                            ProjectionImageTransport.remove(imageLease)
+                            teardownCaptureAndService()
+                            ai.closepaw.chatgpt.control.ControlDiagnostics.record(
+                                "projection_frame_acquire", "geometry_changed_reapproval_required")
+                        }
+                    }
+                }
                 override fun onStop() {
                     owner.runIfCurrent(sessionOwner) {
                         if (projection !== newProjection) return@runIfCurrent
