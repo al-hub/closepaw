@@ -37,7 +37,7 @@ internal class ProjectionImageLease(
 
     /** Bounded acquisition, no cached pixels and no fallback. The caller owns the bitmap.
      * Timestamp timebase depends on the image source; retain the existing fail-closed freshness check. */
-    suspend fun capture(): ProjectionBitmap? {
+    suspend fun capture(requestId: String? = null): ProjectionBitmap? {
         val attemptId = attemptSequence.incrementAndGet()
         data class Attempt(val reason: String, val frame: ProjectionBitmap? = null)
         val lock = Any()
@@ -251,7 +251,8 @@ internal class ProjectionImageLease(
                 lastClockSample?.let { put("last_clock_sample", it) }
             }
         }
-        ControlDiagnostics.record("projection_frame_acquire", attempt?.reason ?: "timeout", metrics = metrics)
+        ControlDiagnostics.record("projection_frame_acquire", attempt?.reason ?: "timeout",
+            taskId = requestId?.takeIf { it.matches(Regex("[a-zA-Z0-9_-]{1,64}")) }, metrics = metrics)
         return attempt?.frame
     }
 }
