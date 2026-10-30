@@ -1,5 +1,6 @@
 package ai.closepaw.platform.virtualdisplay
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.os.SystemClock
 import ai.closepaw.chatgpt.control.ControlDiagnostics
@@ -9,6 +10,35 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
+
+/** Non-security capture polling controls. The freshness and delivery deadlines are NOT tunable. */
+internal object ProjectionAcquisitionTuning {
+    data class Values(val revision: Int, val timeoutMs: Long, val pollMs: Long)
+    private const val PREF = "projection_acquisition_tuning"
+    @Volatile private var current = Values(0, 1500L, 25L)
+    @Volatile private var prefs: android.content.SharedPreferences? = null
+    @Synchronized fun initialize(context: Context) {
+        val p = context.applicationContext.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+        val timeout = p.getLong("timeout_ms", 1500L)
+        val poll = p.getLong("poll_ms", 25L)
+        current = if (timeout in 1500L..3000L && poll in 25L..100L)
+            Values(p.getInt("revision", 0).coerceAtLeast(0), timeout, poll)
+            else Values(0, 1500L, 25L)
+        prefs = p
+    }
+    fun snapshot(): Values = current
+    @Synchronized fun update(expectedRevision: Int, timeoutMs: Long, pollMs: Long): Boolean {
+        val p = prefs ?: return false
+        val old = current
+        if (expectedRevision != old.revision || timeoutMs !in 1500L..3000L ||
+            pollMs !in 25L..100L || old.revision == Int.MAX_VALUE) return false
+        val next = Values(old.revision + 1, timeoutMs, pollMs)
+        if (!p.edit().putLong("timeout_ms", timeoutMs).putLong("poll_ms", pollMs)
+                .putInt("revision", next.revision).commit()) return false
+        current = next
+        return true
+    }
+}
 
 /** No Context or projection token is retained here. Only the service can publish a lease.
  * Raw frames stay invocation-local and must pass the accessibility ownership/masking path. */
@@ -39,6 +69,7 @@ internal class ProjectionImageLease(
      * Timestamp timebase depends on the image source; retain the existing fail-closed freshness check. */
     suspend fun capture(requestId: String? = null): ProjectionBitmap? {
         val attemptId = attemptSequence.incrementAndGet()
+        val tuning = ProjectionAcquisitionTuning.snapshot()
         data class Attempt(val reason: String, val frame: ProjectionBitmap? = null)
         val lock = Any()
         var stopped = false
@@ -77,7 +108,7 @@ internal class ProjectionImageLease(
         }
         var attempt: Attempt? = null
         try {
-        attempt = withTimeoutOrNull(1_500) {
+        attempt = withTimeoutOrNull(tuning.timeoutMs) {
             suspendCancellableCoroutine<Attempt> { continuation ->
                 fun finish(reason: String, frame: ProjectionBitmap? = null) {
                     val accepted = synchronized(lock) {
@@ -102,7 +133,7 @@ internal class ProjectionImageLease(
                             lastObservation = observation
                             if (observation == "no_frame_available") emptyReads++
                             if (observation == "stale_frame") staleReads++
-                            scope.handler.postDelayed(this, 25)
+                            scope.handler.postDelayed(this, tuning.pollMs)
                         }
                         if (!posted) finish("handler_post_rejected")
                     }
