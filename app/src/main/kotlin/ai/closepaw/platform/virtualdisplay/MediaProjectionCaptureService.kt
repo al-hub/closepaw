@@ -164,7 +164,7 @@ class MediaProjectionCaptureService : Service() {
                             // Require a new OS round instead of silently reusing geometry.
                             framePolicy?.invalidate()
                             ProjectionImageTransport.remove(imageLease)
-                            scope.close()
+                            teardownCaptureAndService()
                             ai.closepaw.chatgpt.control.ControlDiagnostics.record(
                                 "projection_frame_acquire", "geometry_changed_reapproval_required")
                         }

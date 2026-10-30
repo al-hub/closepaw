@@ -68,7 +68,7 @@ internal class AndroidOperationRuntime(
         }
     }
     init {
-        ProjectionAcquisitionTuning.initialize(context)
+        scope.launch(Dispatchers.IO) { ProjectionAcquisitionTuning.initialize(context) }
         val genericPort = AndroidControlPort(context, mutationBlock = { pkg ->
             if (pkg in setOf(AndroidGeminiDraftUi.PACKAGE, AndroidGeminiDraftUi.GOOGLE_HOST) &&
                 store.latestOutcomeUnknown("gemini.question.ask")) "dedicated_submission_unresolved" else null
@@ -110,6 +110,7 @@ internal class AndroidOperationRuntime(
                 val v = ProjectionAcquisitionTuning.snapshot()
                 return OperationResult(data = buildJsonObject {
                     put("revision", v.revision); put("timeout_ms", v.timeoutMs); put("poll_ms", v.pollMs)
+                    put("storage_state", ProjectionAcquisitionTuning.storageState())
                     put("timeout_min_ms", 1500); put("timeout_max_ms", 3000)
                     put("poll_min_ms", 25); put("poll_max_ms", 100)
                 }, summary = "Current bounded projection polling settings.")
@@ -137,16 +138,21 @@ internal class AndroidOperationRuntime(
                 val timeout = input["timeout_ms"]?.jsonPrimitive?.longOrNull
                 val poll = input["poll_ms"]?.jsonPrimitive?.longOrNull
                 val session = AgentService.instance?.remoteControlSession
-                val changed = revision != null && timeout != null && poll != null &&
+                val outcome = if (revision != null && timeout != null && poll != null)
                     withContext(Dispatchers.IO) {
-                        ProjectionAcquisitionTuning.update(session,
+                        ProjectionAcquisitionTuning.update(AgentService.instance?.remoteControlSession?.takeIf { it === session },
                             input["session_id"]?.jsonPrimitive?.content, authorized, revision, timeout, poll)
-                    }
+                    } else ai.closepaw.platform.virtualdisplay.ProjectionTuningOutcome.REFUSED
+                val changed = outcome == ai.closepaw.platform.virtualdisplay.ProjectionTuningOutcome.APPLIED
+                val unknown = outcome == ai.closepaw.platform.virtualdisplay.ProjectionTuningOutcome.STORAGE_UNKNOWN
                 val v = ProjectionAcquisitionTuning.snapshot()
                 return OperationResult(success = changed, data = buildJsonObject {
                     put("applied", changed); put("revision", v.revision)
+                    put("outcome_unknown", unknown); put("storage_state", ProjectionAcquisitionTuning.storageState())
                     put("timeout_ms", v.timeoutMs); put("poll_ms", v.pollMs)
-                }, summary = if (changed) "Bounded polling configuration committed." else "Configuration refused: authorization, revision or range invalid.")
+                }, summary = if (changed) "Bounded polling configuration committed." else if (unknown)
+                    "Storage outcome unknown. Restart app and read durable revision before any retry." else
+                    "Configuration refused: initialization, authorization, revision or range invalid.")
             }
         })
         SelfUpdateOperations(AndroidSelfUpdater.get(context)).register(registry)

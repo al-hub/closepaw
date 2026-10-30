@@ -35,7 +35,7 @@ This bounds the age of a **compositor screenshot output**, not the last draw tim
 
 Only timeout 1500–3000 ms and poll interval 25–100 ms are adjustable. Each attempt snapshots one revision. These values do not change freshness, delivery expiry, queue proof, permissions or masking. The CAS update requires the actual explicit ACTIVE server session and matching ID in addition to caller authorization. Session stop/pause and durable commit serialize on the same session monitor.
 
-Persistence now uses one AtomicFile document rather than SharedPreferences: SharedPreferences may alter in-memory values even when commit returns false. Invalid/missing documents load safe defaults. Rollback is an authorized new revision restoring default values, never revision rewind. File IO is dispatched off Main. No AI tuning/profiles or #203 implementation is included.
+Persistence now uses one AtomicFile document rather than SharedPreferences: SharedPreferences may alter in-memory values even when commit returns false. Invalid/missing documents load safe defaults. Rollback is an authorized new revision restoring default values, never revision rewind. Initialization and commit IO are dispatched off Main. Post-finish readback uncertainty is explicitly STORAGE_UNKNOWN (not refusal/rollback); it freezes further writes until process restart canonically reloads the durable revision. Clients must read that revision before a new authorized CAS rollback. The last confirmed in-process polling settings remain within the fixed safe bounds. No AI tuning/profiles or #203 implementation is included.
 
 ## Verification status
 
