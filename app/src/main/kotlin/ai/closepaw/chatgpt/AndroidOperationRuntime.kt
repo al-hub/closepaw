@@ -265,7 +265,7 @@ internal class AndroidOperationRuntime(
             } },
         )
     }
-    fun diagnosticSnapshot(): JsonObject = JsonObject(draftDiagnostics.snapshot() + ("roundtrip" to roundTripDiagnostics.snapshot()))
+    fun diagnosticSnapshot(): JsonObject = JsonObject(draftDiagnostics.snapshot() + ("roundtrip" to roundTripDiagnostics.snapshot()) + ("projection" to ControlDiagnostics.projectionSnapshot()))
     fun tailscaleDiagnosticSnapshot(): JsonObject = tailscaleDiagnostics.snapshot()
 
     override fun call(name: String, arguments: JsonObject): JsonObject = when(name) {
