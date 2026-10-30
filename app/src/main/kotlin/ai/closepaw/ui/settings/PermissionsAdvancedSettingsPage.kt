@@ -509,7 +509,9 @@ private fun exportTracesToDownloads(context: android.content.Context): String {
         java.io.File(context.filesDir, "mcp/gemini-draft-diagnostics.json")
     ).snapshot()
     val hasGeminiDiagnostics = (geminiDiagnostics["events"] as? kotlinx.serialization.json.JsonArray)?.isNotEmpty() == true
-    if (!hasTraces && !hasBrowserDiagnostics && !hasGeminiDiagnostics) {
+    val projectionDiagnostics = ai.closepaw.chatgpt.control.ControlDiagnostics.projectionSnapshot()
+    val hasProjectionDiagnostics = (projectionDiagnostics["events"] as? kotlinx.serialization.json.JsonArray)?.isNotEmpty() == true
+    if (!hasTraces && !hasBrowserDiagnostics && !hasGeminiDiagnostics && !hasProjectionDiagnostics) {
         return "No diagnostic logs yet. Run a screen read or Gemini draft operation, or enable Session Traces first."
     }
     val name = "closepaw-diagnostics-" + System.currentTimeMillis() + ".zip"
@@ -535,6 +537,9 @@ private fun exportTracesToDownloads(context: android.content.Context): String {
                 }
                 zip.putNextEntry(ZipEntry("gemini-draft-diagnostics.json"))
                 zip.write(geminiDiagnostics.toString().toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+                zip.putNextEntry(ZipEntry("projection-frame-diagnostics.json"))
+                zip.write(projectionDiagnostics.toString().toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
                 zip.putNextEntry(ZipEntry("browser-read-diagnostics.json"))
                 zip.write(BrowserReadDiagnostics.snapshot().toString().toByteArray(Charsets.UTF_8))
