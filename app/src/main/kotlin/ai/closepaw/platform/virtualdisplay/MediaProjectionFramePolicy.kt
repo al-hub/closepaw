@@ -60,3 +60,29 @@ class MediaProjectionFramePolicy(
     fun isFrameFresh(capturedAtMs: Long, nowMs: Long): Boolean =
         capturedAtMs >= 0 && nowMs >= capturedAtMs && nowMs - capturedAtMs <= maxFrameAgeMs
 }
+
+/** Conservative, opt-in evidence gate for an *observed* uptime-based producer.
+ * A timestamp is never translated by the receipt-time clock offset. This helper
+ * must not be used for unknown producers without an independently verified contract.
+ * All times are milliseconds; the gap check rejects suspension during acquisition.
+ */
+internal object ProjectionUptimeEvidenceGate {
+    fun permitsCandidate(
+        imageUptimeMs: Long,
+        requestStartedUptimeMs: Long,
+        requestStartedElapsedMs: Long,
+        receivedUptimeMs: Long,
+        receivedElapsedMs: Long,
+        maxAgeMs: Long = 1_000L,
+    ): Boolean {
+        if (imageUptimeMs <= requestStartedUptimeMs || maxAgeMs <= 0L) return false
+        if (requestStartedUptimeMs < 0L || requestStartedElapsedMs < requestStartedUptimeMs) return false
+        if (receivedUptimeMs < requestStartedUptimeMs || receivedElapsedMs < requestStartedElapsedMs) return false
+        val gapAtStart = requestStartedElapsedMs - requestStartedUptimeMs
+        val gapAtReceive = receivedElapsedMs - receivedUptimeMs
+        // Refuse if a suspend/resume event or an inconsistent sample changed the offset.
+        if (gapAtReceive != gapAtStart) return false
+        val ageMs = receivedUptimeMs - imageUptimeMs
+        return ageMs >= 0L && ageMs <= maxAgeMs
+    }
+}
