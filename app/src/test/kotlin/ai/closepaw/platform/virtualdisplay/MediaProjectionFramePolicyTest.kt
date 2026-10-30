@@ -171,4 +171,24 @@ class MediaProjectionFramePolicyTest {
         assertFalse(policy.isFrameFresh(-1, samples.last().second))
     }
 
+    @Test
+    fun `v0100 live frame samples prove direct elapsed comparison rejects uptime aligned frames`() {
+        // Galaxy S24 Android 16, v0.1.100/code101, request 4c17fc84bd0e4b4995ff4ed2b5a9cb95.
+        // These measurements prove the production refusal, NOT a universal Image.timestamp timebase.
+        val samples = listOf(
+            Triple(660391441266674L, 864784888L, 660391446L),
+            Triple(660392943712338L, 864786390L, 660392948L),
+        )
+        val policy = policy()
+        for ((timestampNs, elapsedMs, uptimeMs) in samples) {
+            val imageMs = timestampNs / 1_000_000L
+            assertTrue(policy.isFrameFresh(imageMs, uptimeMs))
+            assertFalse(policy.isFrameFresh(imageMs, elapsedMs))
+            assertFalse(policy.isDeliveryFresh(imageMs, elapsedMs))
+            assertTrue(elapsedMs - uptimeMs > 60_000L)
+        }
+        // Do not replace elapsed with a guessed receipt offset: a suspend-period
+        // transition can otherwise make an old image appear fresh.
+    }
+
 }
