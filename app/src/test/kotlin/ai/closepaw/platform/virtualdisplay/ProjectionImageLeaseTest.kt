@@ -207,4 +207,20 @@ class ProjectionImageLeaseTest {
         } finally { unmockkObject(ProjectionAcquisitionTuning); cleanup() }
     }
 
+    @Test fun `empty retry completion and cleanup run outside request queue monitor`() = runTest {
+        val lease = prepare()
+        try {
+            every { reader.acquireLatestImage() } returns null
+            every { handler.postDelayed(any<Runnable>(), any()) } answers {
+                assertFalse(Thread.holdsLock(queue)); false
+            }
+            every { scope.endRequest(queue) } answers {
+                assertFalse(Thread.holdsLock(queue)); queue.close()
+            }
+            val capture = async { lease.capture() }; runCurrent(); queued!!.run(); runCurrent()
+            assertNull(capture.await()); assertEquals("handler_post_rejected", reason())
+            assertTrue(queue.closed)
+        } finally { cleanup() }
+    }
+
 }

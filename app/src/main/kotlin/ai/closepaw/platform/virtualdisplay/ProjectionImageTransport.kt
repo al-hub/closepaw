@@ -120,88 +120,97 @@ internal class ProjectionImageLease(
                                 finish("lease_not_active")
                                 return
                             }
-                            // Creation, acquisition and cleanup all serialize through lock.
+                            // Creation and ownership publication serialize through the attempt lock.
                             // Cancellation cannot leave a newly attached queue orphaned.
                             val queue = synchronized(lock) {
                                 if (stopped || !continuation.isActive) return
                                 requestQueue ?: scope.beginRequest()?.also { requestQueue = it }
                             }
                             if (queue == null) { finish("request_surface_unavailable"); return }
-                            val acquireStartedElapsed = SystemClock.elapsedRealtime()
-                            val image = queue.reader.acquireLatestImage()
-                            if (image == null) {
-                                retry("no_frame_available")
-                                return
-                            }
                             var capturedAt = 0L
                             var reason: String? = null
                             var stale = false
-                            try {
-                                operation = "image_metadata"
-                                val timestamp = image.timestamp
-                                val sourceMs = timestamp / 1_000_000
-                                capturedAt = queue.lowerBoundElapsedMs
-                                val elapsed = SystemClock.elapsedRealtime()
-                                val uptime = SystemClock.uptimeMillis()
-                                synchronized(lock) {
-                                    val sample = buildJsonObject {
-                                        put("image_timestamp_ns", timestamp)
-                                        put("acquire_started_elapsed_ms", acquireStartedElapsed)
-                                        put("received_elapsed_ms", elapsed)
-                                        put("received_uptime_ms", uptime)
-                                        put("sample_finished_elapsed_ms", SystemClock.elapsedRealtime())
-                                    }
-                                    if (firstClockSample == null) firstClockSample = sample
-                                    lastClockSample = sample
-                                    previousTimestamp?.let { previous ->
-                                        when {
-                                            timestamp == previous -> sameTimestamps++
-                                            timestamp > previous -> increasingTimestamps++
-                                            else -> decreasingTimestamps++
+                            var empty = false
+                            synchronized(queue) {
+                                if (!continuation.isActive) return
+                                if (queue.closed) {
+                                    reason = "lease_not_active"
+                                } else {
+                                    val acquireStartedElapsed = SystemClock.elapsedRealtime()
+                                    val image = queue.reader.acquireLatestImage()
+                                    if (image == null) {
+                                        empty = true
+                                    } else {
+                                        try {
+                                            operation = "image_metadata"
+                                            val timestamp = image.timestamp
+                                            val sourceMs = timestamp / 1_000_000
+                                            capturedAt = queue.lowerBoundElapsedMs
+                                            val elapsed = SystemClock.elapsedRealtime()
+                                            val uptime = SystemClock.uptimeMillis()
+                                            synchronized(lock) {
+                                                val sample = buildJsonObject {
+                                                    put("image_timestamp_ns", timestamp)
+                                                    put("acquire_started_elapsed_ms", acquireStartedElapsed)
+                                                    put("received_elapsed_ms", elapsed)
+                                                    put("received_uptime_ms", uptime)
+                                                    put("sample_finished_elapsed_ms", SystemClock.elapsedRealtime())
+                                                }
+                                                if (firstClockSample == null) firstClockSample = sample
+                                                lastClockSample = sample
+                                                previousTimestamp?.let { previous ->
+                                                    when {
+                                                        timestamp == previous -> sameTimestamps++
+                                                        timestamp > previous -> increasingTimestamps++
+                                                        else -> decreasingTimestamps++
+                                                    }
+                                                }
+                                                previousTimestamp = timestamp
+                                                val age = if (timestamp <= 0) "invalid" else bucket(elapsed - sourceMs)
+                                                if (firstAgeBucket == "none") firstAgeBucket = age
+                                                lastAgeBucket = age
+                                                clockGapBucket = bucket(elapsed - uptime)
+                                                lastUptimeAgeBucket = if (timestamp <= 0) "invalid" else bucket(uptime - sourceMs)
+                                                // Evidence only: agreement with uptime cannot prove the source clock.
+                                                if (timestamp > 0 && policy.isFrameFresh(sourceMs, uptime) &&
+                                                    sourceMs <= elapsed && !policy.isFrameFresh(sourceMs, elapsed)) {
+                                                    uptimeFreshElapsedStale++
+                                                }
+                                            }
+                                            // The new queue is the production-time proof. Unknown,
+                                            // duplicated or regressing producer timestamps are metadata
+                                            // only and cannot rejuvenate the immutable queue lower bound.
+                                            stale = !policy.isFrameFresh(capturedAt, elapsed)
+                                            if (!stale) {
+                                                reason = when {
+                                                    !policy.acceptsMirrorGeometry(image.width, image.height) -> "geometry_refused"
+                                                    image.planes.size != 1 -> "plane_count_refused"
+                                                    else -> null
+                                                }
+                                                if (reason == null) {
+                                                    val plane = image.planes[0]
+                                                    val width = image.width; val height = image.height
+                                                    operation = "packing"
+                                                    val packed = ProjectionFramePacking.pack(plane.buffer, width, height, plane.rowStride, plane.pixelStride)
+                                                    if (packed == null) {
+                                                        reason = "packing_failed"
+                                                    } else {
+                                                        operation = "bitmap"
+                                                        bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                                                        bitmap!!.copyPixelsFromBuffer(packed)
+                                                    }
+                                                }
+                                            }
+                                        } finally {
+                                            try { image.close() } catch (e: Exception) {
+                                                operation = "image_close"
+                                                throw e
+                                            }
                                         }
                                     }
-                                    previousTimestamp = timestamp
-                                    val age = if (timestamp <= 0) "invalid" else bucket(elapsed - sourceMs)
-                                    if (firstAgeBucket == "none") firstAgeBucket = age
-                                    lastAgeBucket = age
-                                    clockGapBucket = bucket(elapsed - uptime)
-                                    lastUptimeAgeBucket = if (timestamp <= 0) "invalid" else bucket(uptime - sourceMs)
-                                    // Evidence only: agreement with uptime cannot prove the source clock.
-                                    if (timestamp > 0 && policy.isFrameFresh(sourceMs, uptime) &&
-                                        sourceMs <= elapsed && !policy.isFrameFresh(sourceMs, elapsed)) {
-                                        uptimeFreshElapsedStale++
-                                    }
-                                }
-                                // The new queue is the production-time proof. Unknown,
-                                // duplicated or regressing producer timestamps are metadata
-                                // only and cannot rejuvenate the immutable queue lower bound.
-                                stale = !policy.isFrameFresh(capturedAt, elapsed)
-                                if (!stale) {
-                                    reason = when {
-                                        !policy.acceptsMirrorGeometry(image.width, image.height) -> "geometry_refused"
-                                        image.planes.size != 1 -> "plane_count_refused"
-                                        else -> null
-                                    }
-                                    if (reason == null) {
-                                        val plane = image.planes[0]
-                                        val width = image.width; val height = image.height
-                                        operation = "packing"
-                                        val packed = ProjectionFramePacking.pack(plane.buffer, width, height, plane.rowStride, plane.pixelStride)
-                                        if (packed == null) {
-                                            reason = "packing_failed"
-                                        } else {
-                                            operation = "bitmap"
-                                            bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                                            bitmap!!.copyPixelsFromBuffer(packed)
-                                        }
-                                    }
-                                }
-                            } finally {
-                                try { image.close() } catch (e: Exception) {
-                                    operation = "image_close"
-                                    throw e
                                 }
                             }
+                            if (empty) { retry("no_frame_available"); return }
                             if (stale) {
                                 retry("stale_frame")
                                 return
@@ -231,12 +240,14 @@ internal class ProjectionImageLease(
                     }
                 }
                 continuation.invokeOnCancellation {
-                    synchronized(lock) {
+                    val abandoned = synchronized(lock) {
                         stopped = true
                         scope.handler.removeCallbacks(acquire)
-                        requestQueue?.let(scope::endRequest)
-                        requestQueue = null
+                        requestQueue.also { requestQueue = null }
                     }
+                    // Never hold the attempt monitor while waiting for pixel-copy
+                    // cleanup: the reader owner may still record metadata/finish.
+                    abandoned?.let(scope::endRequest)
                 }
                 val posted = synchronized(lock) {
                     if (stopped || !continuation.isActive) true else scope.handler.post(acquire)
@@ -245,11 +256,11 @@ internal class ProjectionImageLease(
             }
         }
         } finally {
-            synchronized(lock) {
+            val completedQueue = synchronized(lock) {
                 stopped = true
-                requestQueue?.let(scope::endRequest)
-                requestQueue = null
+                requestQueue.also { requestQueue = null }
             }
+            completedQueue?.let(scope::endRequest)
             if (attempt?.frame == null) releasePendingFrame()
         }
         val metrics = synchronized(lock) {

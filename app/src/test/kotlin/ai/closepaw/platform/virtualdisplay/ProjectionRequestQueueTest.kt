@@ -44,6 +44,28 @@ class ProjectionRequestQueueTest {
             assertEquals(200L, q2.lowerBoundElapsedMs)
         } finally { unmockkStatic(ImageReader::class, SystemClock::class); unmockkConstructor(android.os.Handler::class) }
     }
+    @Test fun `teardown cannot close reader while request pixels are being copied`() {
+        val reader = mockk<ImageReader>(relaxed = true)
+        val queue = ProjectionRequestQueue(reader, 100L)
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val ended = java.util.concurrent.CountDownLatch(1)
+        val copier = kotlin.concurrent.thread {
+            synchronized(queue) {
+                entered.countDown()
+                check(release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                check(!queue.closed)
+            }
+        }
+        assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        val closer = kotlin.concurrent.thread { queue.close(); ended.countDown() }
+        assertFalse(ended.await(50, java.util.concurrent.TimeUnit.MILLISECONDS))
+        verify(exactly = 0) { reader.close() }
+        release.countDown(); copier.join(5000); closer.join(5000)
+        assertTrue(queue.closed)
+        queue.close()
+        verify(exactly = 1) { reader.close() }
+    }
     @Test fun `partial setSurface failure closes fresh reader and permanently closes scope`() {
         mockkStatic(ImageReader::class, SystemClock::class)
         mockkConstructor(android.os.Handler::class)

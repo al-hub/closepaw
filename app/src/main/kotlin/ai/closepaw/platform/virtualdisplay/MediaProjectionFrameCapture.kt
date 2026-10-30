@@ -67,7 +67,7 @@ internal class MediaProjectionFrameScope internal constructor(
         // remains geometry-only; it is never a fallback source of screenshot pixels.
         try { if (!closed.get()) displayRef.surface = null }
         catch (_: Exception) { close() }
-        finally { runCatching { expected.reader.close() } }
+        finally { expected.close() }
     }
     private val displayRef = display
     private val threadRef = thread
@@ -78,7 +78,7 @@ internal class MediaProjectionFrameScope internal constructor(
     fun close() = synchronized(surfaceLock) {
         if (!closed.compareAndSet(false, true)) return@synchronized
         runCatching { displayRef.release() }
-        request?.let { runCatching { it.reader.close() } }
+        request?.close()
         request = null
         runCatching { reader.close() }
         runCatching { threadRef.quitSafely() }
@@ -87,7 +87,17 @@ internal class MediaProjectionFrameScope internal constructor(
 }
 
 /** Request identity is issued only by a new sink attachment, never by frame receipt. */
-internal class ProjectionRequestQueue(val reader: ImageReader, val lowerBoundElapsedMs: Long)
+internal class ProjectionRequestQueue(val reader: ImageReader, val lowerBoundElapsedMs: Long) {
+    @Volatile var closed = false
+        private set
+    /** The same monitor protects acquire/pack/image.close from unmapping by teardown. */
+    fun close() = synchronized(this) {
+        if (!closed) {
+            closed = true
+            runCatching { reader.close() }
+        }
+    }
+}
 
 /**
  * Surface creation and geometry diagnostics for issue #165. ProjectionImageLease is
