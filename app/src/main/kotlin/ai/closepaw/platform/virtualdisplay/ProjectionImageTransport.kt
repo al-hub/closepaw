@@ -233,6 +233,7 @@ internal class ProjectionImageLease(
         val metrics = synchronized(lock) {
             buildJsonObject {
                 put("attempt_id", attemptId)
+                requestId?.takeIf { it.matches(Regex("[a-z0-9_]{1,40}")) }?.let { put("request_id", it) }
                 put("last_observation", lastObservation)
                 put("null_reads", emptyReads.coerceAtMost(1000))
                 put("stale_reads", staleReads.coerceAtMost(1000))
