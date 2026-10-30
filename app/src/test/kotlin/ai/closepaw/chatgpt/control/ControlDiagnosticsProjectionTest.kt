@@ -7,6 +7,20 @@ import org.junit.Assert.assertTrue
 import kotlinx.serialization.json.*
 
 class ControlDiagnosticsProjectionTest {
+    @Test fun projectionRequestCorrelationExcludesUnapprovedMetadata() {
+        val requestId = "abcdef0123456789"
+        ControlDiagnostics.record("projection_frame_acquire", "timeout",
+            metrics = buildJsonObject { put("request_id", requestId); put("attempt_id", 123L); put("screen_text", "leak_marker") })
+        ControlDiagnostics.record("projection_observe_result", "projection_frame_unavailable",
+            metrics = buildJsonObject { put("request_id", requestId); put("extra", "hidden_marker") })
+        val matched = ControlDiagnostics.projectionSnapshot()["events"]!!.jsonArray
+            .map { it.jsonObject }.filter { it["metrics"]?.jsonObject?.get("request_id")?.jsonPrimitive?.content == requestId }
+        assertTrue(matched.any { it["stage"]?.jsonPrimitive?.content == "projection_frame_acquire" })
+        assertTrue(matched.any { it["stage"]?.jsonPrimitive?.content == "projection_observe_result" })
+        assertFalse(matched.toString().contains("leak_marker"))
+        assertFalse(matched.toString().contains("hidden_marker"))
+    }
+
     @Test fun projectionSnapshotOnlyIncludesBoundedAcquireEvents() {
         ControlDiagnostics.record("android.ui.action", "completed",
             metrics = buildJsonObject { put("private_marker", "must_not_export") })
