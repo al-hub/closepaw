@@ -5,6 +5,9 @@ import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.nio.channels.FileChannel
+import java.nio.file.StandardOpenOption
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.json.*
 
@@ -30,6 +33,7 @@ internal class OperationTaskStore(
     fun diagnostics(): JsonObject = diagnostic.snapshot()
     private val file = stage("canonical_path") { file.canonicalFile }
     private val pathLock = pathLocks.computeIfAbsent(this.file.path) { Any() }
+    private val history = OperationTaskRetainedOverlay(this.file, ::stage)
 
     init {
         transaction { tasks ->
@@ -119,13 +123,18 @@ internal class OperationTaskStore(
     private fun insert(tasks: MutableMap<String, JsonObject>, task: JsonObject) {
         val id = task.getValue("task_id").jsonPrimitive.content
         stage("capacity_check") {
-            require(tasks.size < MAX_TASKS || id in tasks) { "Task ledger full; archive explicitly before accepting new requests" }
+            require(tasks.size < MAX_TASKS || history.isActive() || id in tasks) { "Task ledger full; archive explicitly before accepting new requests" }
         }
         val request = (task["request_id"] as? JsonPrimitive)?.content
         require(request == null || tasks.values.none { it["request_id"]?.jsonPrimitive?.content == request && it["task_id"]?.jsonPrimitive?.content != id }) { "Request id already belongs to another task" }
         tasks[id] = task
     }
     private fun load(): LinkedHashMap<String, JsonObject> {
+        val tasks = readLegacyRecords()
+        history.mergeInto(tasks)
+        return tasks
+    }
+    private fun readLegacyRecords(): LinkedHashMap<String, JsonObject> {
         val tasks = linkedMapOf<String, JsonObject>()
         if (!file.exists()) return tasks
         // Corruption fails closed, including for a store opened before the file became corrupt.
@@ -153,6 +162,10 @@ internal class OperationTaskStore(
         }
     }
     private fun persist(tasks: Map<String, JsonObject>) {
+        if (history.isActive() || tasks.size > MAX_TASKS) {
+            history.persistChanges(tasks, ::readLegacyRecords)
+            return
+        }
         // Separate staging paths prevent collision even if future callers bypass process-local coordination.
         val temporary = stage("stage_create") { File.createTempFile("task-ledger-", ".tmp", file.parentFile) }
         try {
