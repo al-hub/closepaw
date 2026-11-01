@@ -67,8 +67,12 @@ class TerminalInputConnectionTest {
             prefs.edit().putBoolean("generic_control_enabled", true)
                 .putString("runtime_control_v1", runtimeConfig).commit()
             instrumentation.runOnMainSync { session.end(); assertTrue(session.start()) }
-            fun launch(password: Boolean) = ApplicationProvider.getApplicationContext<android.content.Context>().startActivity(
-                Intent().setClassName("com.termux", "com.termux.TerminalFixtureActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("password", password))
+            fun launch(password: Boolean) {
+                // Shell launch is foreground-authorized on Android 15; a
+                // background test app startActivity can silently leave Home
+                // foreground with an unrelated InputConnection.
+                shell("am start -W -n com.termux/com.termux.TerminalFixtureActivity --ez password $password")
+            }
             launch(false)
             // A previous instrumentation Activity can leave the launcher or
             // clipboard fixture foreground. Require the actual Termux window
