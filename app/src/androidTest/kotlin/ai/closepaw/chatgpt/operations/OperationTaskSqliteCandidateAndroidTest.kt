@@ -21,6 +21,40 @@ class OperationTaskSqliteCandidateAndroidTest {
         put("future_field", "must-survive")
     }
 
+    @Test fun failedImportRollsBackRowsAndCompletionMarker() {
+        val dir = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val file = File.createTempFile("task-rollback-219-", ".db", dir)
+        file.delete()
+        try {
+            val store = OperationTaskSqliteCandidate(file)
+            try {
+                store.importOnce(listOf(record(0), record(0)))
+                fail("duplicate identity must abort the whole import")
+            } catch (_: android.database.sqlite.SQLiteConstraintException) {}
+            android.database.sqlite.SQLiteDatabase.openDatabase(
+                file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
+            ).use { db ->
+                assertEquals(0, db.version)
+                db.rawQuery("SELECT COUNT(*) FROM tasks", null).use { rows ->
+                    assertTrue(rows.moveToFirst())
+                    assertEquals(0L, rows.getLong(0))
+                }
+            }
+            try {
+                store.claim(record(1))
+                fail("uncommitted database must not accept new requests")
+            } catch (_: IllegalArgumentException) {}
+            store.importOnce(listOf(record(0)))
+            assertEquals(record(0), store.get("id-0"))
+            assertTrue(store.claim(record(1)).created)
+        } finally {
+            file.delete()
+            File(file.path + "-journal").delete()
+            File(file.path + "-wal").delete()
+            File(file.path + "-shm").delete()
+        }
+    }
+
     @Test fun importAndClaimAboveLegacyLimitRetainsAllFieldsAndDedup() {
         val dir = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
         val file = File.createTempFile("task-sqlite-219-", ".db", dir)
