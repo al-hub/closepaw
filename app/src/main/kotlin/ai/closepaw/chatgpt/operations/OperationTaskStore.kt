@@ -33,7 +33,7 @@ internal class OperationTaskStore(
     fun diagnostics(): JsonObject = diagnostic.snapshot()
     private val file = stage("canonical_path") { file.canonicalFile }
     private val pathLock = pathLocks.computeIfAbsent(this.file.path) { Any() }
-    private val history = OperationTaskRetainedOverlay(this.file, ::stage)
+    private val history = OperationTaskRetainedOverlay(this.file)
 
     init {
         transaction { tasks ->
@@ -120,10 +120,10 @@ internal class OperationTaskStore(
     private fun findRequest(tasks: Map<String, JsonObject>, id: String): JsonObject? =
         tasks.values.firstOrNull { it["request_id"]?.jsonPrimitive?.content == id }
 
-    private fun insert(tasks: MutableMap<String, JsonObject>, task: JsonObject) {
+    private fun insert(tasks: MutableMap<String, JsonObject>, task: JsonObject, legacyValidation: Boolean = false) {
         val id = task.getValue("task_id").jsonPrimitive.content
         stage("capacity_check") {
-            require(tasks.size < MAX_TASKS || history.isActive() || id in tasks) { "Task ledger full; archive explicitly before accepting new requests" }
+            require(!legacyValidation || tasks.size < MAX_TASKS || id in tasks) { "Task ledger full; archive explicitly before accepting new requests" }
         }
         val request = (task["request_id"] as? JsonPrimitive)?.content
         require(request == null || tasks.values.none { it["request_id"]?.jsonPrimitive?.content == request && it["task_id"]?.jsonPrimitive?.content != id }) { "Request id already belongs to another task" }
@@ -131,7 +131,7 @@ internal class OperationTaskStore(
     }
     private fun load(): LinkedHashMap<String, JsonObject> {
         val tasks = readLegacyRecords()
-        history.mergeInto(tasks)
+        stage("overlay_read") { history.mergeInto(tasks) }
         return tasks
     }
     private fun readLegacyRecords(): LinkedHashMap<String, JsonObject> {
@@ -144,7 +144,7 @@ internal class OperationTaskStore(
             val task = item.jsonObject
             val id = task.getValue("task_id").jsonPrimitive.content
             require(id !in tasks) { "Duplicate task id in ledger" }
-            insert(tasks, task)
+            insert(tasks, task, legacyValidation = true)
         } }
         return tasks
     }
@@ -163,7 +163,7 @@ internal class OperationTaskStore(
     }
     private fun persist(tasks: Map<String, JsonObject>) {
         if (history.isActive() || tasks.size > MAX_TASKS) {
-            history.persistChanges(tasks, ::readLegacyRecords)
+            stage("overlay_write") { history.persistChanges(tasks, ::readLegacyRecords) }
             return
         }
         // Separate staging paths prevent collision even if future callers bypass process-local coordination.
