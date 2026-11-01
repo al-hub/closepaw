@@ -23,6 +23,21 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ClipboardProvenanceTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    private fun ensureFixtureWindowForeground() {
+        // Instrumentation Activity may remain behind the launcher after
+        // another test. Restore its task, not merely Compose idleness.
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.adoptShellPermissionIdentity("android.permission.REORDER_TASKS")
+        try {
+            compose.runOnIdle {
+                compose.activity.getSystemService(android.app.ActivityManager::class.java)
+                    .moveTaskToFront(compose.activity.taskId, 0)
+            }
+        } finally {
+            automation.dropShellPermissionIdentity()
+        }
+        compose.waitUntil(timeoutMillis = 15_000) { compose.activity.hasWindowFocus() }
+    }
     @Test fun nativeDirectAndPastePrimitivesInsertExactMixedText() {
         lateinit var editor: EditText
         compose.setContent { AndroidView(factory = { context -> EditText(context).also {
@@ -32,7 +47,7 @@ class ClipboardProvenanceTest {
         } }) }
         compose.waitForIdle()
         // Compose idle does not imply Android WM has granted input/clipboard focus.
-        compose.waitUntil(timeoutMillis = 15_000) { compose.activity.hasWindowFocus() }
+        ensureFixtureWindowForeground()
         compose.runOnIdle { assertTrue("Attached editor must own input focus", editor.requestFocusFromTouch()); assertTrue(editor.hasFocus()) }
         val automation = InstrumentationRegistry.getInstrumentation().getUiAutomation(android.app.UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         automation.waitForIdle(500, 5_000)
@@ -65,7 +80,7 @@ class ClipboardProvenanceTest {
         compose.setContent { Text("Clipboard provenance fixture") }
         compose.waitForIdle()
         // Compose idle does not imply Android WM has granted input/clipboard focus.
-        compose.waitUntil(timeoutMillis = 15_000) { compose.activity.hasWindowFocus() }
+        ensureFixtureWindowForeground()
         compose.runOnIdle {
             val clipboard = ApplicationProvider.getApplicationContext<Context>().getSystemService(ClipboardManager::class.java)
             clipboard.setPrimaryClip(ClipData.newPlainText("", "fixture-before"))
