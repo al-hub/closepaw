@@ -48,6 +48,10 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
+          # Hosted runner disk can be <6 GiB after Gradle/SDK setup. The
+          # default userdata image needs ~7.3 GiB; 3 GiB is sufficient for
+          # the isolated UI fixtures without skipping instrumentation.
+          disk-size: 3072M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
