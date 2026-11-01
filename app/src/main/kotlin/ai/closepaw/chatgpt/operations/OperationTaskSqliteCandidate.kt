@@ -3,6 +3,11 @@ package ai.closepaw.chatgpt.operations
 import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.channels.FileChannel
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import kotlinx.serialization.json.*
 
 /**
@@ -18,10 +23,10 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
             db.execSQL(
                 "CREATE TABLE IF NOT EXISTS tasks (" +
                     "task_id TEXT NOT NULL PRIMARY KEY, " +
-                    "request_id TEXT NOT NULL UNIQUE, " +
-                    "state TEXT NOT NULL, " +
-                    "operation_id TEXT NOT NULL, " +
-                    "created_at_ms INTEGER NOT NULL, " +
+                    "request_id TEXT UNIQUE, " +
+                    "state TEXT, " +
+                    "operation_id TEXT, " +
+                    "created_at_ms INTEGER, " +
                     "ordinal INTEGER NOT NULL UNIQUE, " +
                     "payload_json TEXT NOT NULL)"
             )
@@ -43,11 +48,10 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
     private fun insert(db: SQLiteDatabase, record: JsonObject, ordinal: Long) {
         val data = ContentValues().apply {
             put("task_id", field(record, "task_id"))
-            put("request_id", field(record, "request_id"))
-            put("state", field(record, "state"))
-            put("operation_id", field(record, "operation_id"))
-            put("created_at_ms", record["created_at_ms"]?.jsonPrimitive?.longOrNull
-                ?: throw IllegalArgumentException("missing_created_at_ms"))
+            put("request_id", (record["request_id"] as? JsonPrimitive)?.contentOrNull)
+            put("state", (record["state"] as? JsonPrimitive)?.contentOrNull)
+            put("operation_id", (record["operation_id"] as? JsonPrimitive)?.contentOrNull)
+            put("created_at_ms", (record["created_at_ms"] as? JsonPrimitive)?.longOrNull)
             put("ordinal", ordinal)
             put("payload_json", record.toString())
         }
@@ -75,8 +79,122 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
         }
     }
 
+
+    /**
+     * Store activation has a separate durable sentinel. A missing DB after
+     * activation must never silently trigger legacy reimport and lost dedup.
+     * Call with the original ledger file locked by OperationTaskStore.
+     */
+    fun ensureMigrated(records: List<JsonObject>, legacy: File) {
+        val sentinel = File(dbFile.path + ".ready")
+        val marker = "closepaw-sqlite-v1 " + originalDigest(legacy)
+        if (sentinel.exists()) {
+            require(sentinel.isFile && sentinel.readText(Charsets.UTF_8).trim() == marker) {
+                "sqlite_activation_marker_invalid"
+            }
+            require(dbFile.isFile) { "committed_sqlite_missing" }
+            database { db -> requireMigrated(db) }
+            return
+        }
+        val alreadyCommitted = if (dbFile.isFile) database { db -> db.version == 1 } else false
+        if (!alreadyCommitted) importOnce(records)
+        // On a crash after DB commit but before sentinel, verify the exact
+        // migration snapshot. Do NOT accept a divergent DB.
+        require(allRecords() == records) { "sqlite_migration_content_mismatch" }
+        val parent = sentinel.parentFile ?: throw IllegalStateException("sqlite_parent_missing")
+        val tmp = File.createTempFile("sqlite-ready-", ".tmp", parent)
+        try {
+            FileOutputStream(tmp).use { stream ->
+                stream.write((marker + "\n").toByteArray(Charsets.UTF_8))
+                stream.fd.sync()
+            }
+            Files.move(tmp.toPath(), sentinel.toPath(),
+                StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            FileChannel.open(parent.toPath(), StandardOpenOption.READ).use { it.force(true) }
+        } finally {
+            tmp.delete()
+        }
+    }
+
+    private fun originalDigest(file: File): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        if (!file.exists()) md.update("absent".toByteArray(Charsets.UTF_8))
+        else file.inputStream().use { input ->
+            val bytes = ByteArray(8192)
+            while (true) {
+                val length = input.read(bytes)
+                if (length < 0) break
+                md.update(bytes, 0, length)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /** Persist startup uncertainty without replaying any external execution. */
+    fun reconcileInterrupted() = database { db ->
+        requireMigrated(db)
+        db.beginTransaction()
+        try {
+            val interrupted = ArrayList<Pair<String, JsonObject>>()
+            db.query("tasks", arrayOf("task_id", "payload_json"),
+                "state IN ('queued','running','cancel_requested')", null, null, null, null)
+                .use { cursor ->
+                    while (cursor.moveToNext()) interrupted.add(
+                        cursor.getString(0) to Json.parseToJsonElement(cursor.getString(1)).jsonObject)
+                }
+            interrupted.forEach { (id, old) ->
+                val next = JsonObject(old + mapOf(
+                    "state" to JsonPrimitive("outcome_unknown"),
+                    "summary" to JsonPrimitive(
+                        "ClosePaw restarted; underlying execution outcome is not confirmed. Do not automatically retry.")
+                ))
+                val values = ContentValues().apply {
+                    put("state", "outcome_unknown")
+                    put("payload_json", next.toString())
+                }
+                require(db.update("tasks", values, "task_id=?", arrayOf(id)) == 1)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    /** Existing-task replacement and new insertion keep task/request identities unique. */
+    fun put(task: JsonObject) = database { db ->
+        requireMigrated(db)
+        db.beginTransaction()
+        try {
+            val id = field(task, "task_id")
+            val existing = db.query("tasks", arrayOf("request_id"), "task_id=?",
+                arrayOf(id), null, null, null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+            if (existing != null) {
+                require(existing == (task["request_id"] as? JsonPrimitive)?.contentOrNull) {
+                    "task_request_identity_immutable"
+                }
+                val values = ContentValues().apply {
+                    put("state", (task["state"] as? JsonPrimitive)?.contentOrNull)
+                    put("payload_json", task.toString())
+                }
+                require(db.update("tasks", values, "task_id=?", arrayOf(id)) == 1)
+            } else {
+                val ordinal = db.rawQuery("SELECT COALESCE(MAX(ordinal), -1) + 1 FROM tasks", null).use {
+                    require(it.moveToFirst())
+                    it.getLong(0)
+                }
+                insert(db, task, ordinal)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     /** Claim and request dedup are serialized by the SQLite write transaction. */
     fun claim(task: JsonObject): OperationTaskClaim = database { db ->
+        requireMigrated(db)
         db.beginTransaction()
         try {
             val requestId = field(task, "request_id")
