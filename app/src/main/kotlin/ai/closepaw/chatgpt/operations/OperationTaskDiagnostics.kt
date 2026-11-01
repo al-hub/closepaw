@@ -9,6 +9,8 @@ import kotlinx.serialization.json.*
 internal class OperationTaskStorageException(val stage: String, val reason: String, cause: Exception) :
     IllegalArgumentException("Task storage unavailable", cause)
 
+internal class OperationTaskDiagnosticLimitException : IllegalArgumentException("Diagnostic structure bound")
+
 internal class OperationTaskDiagnostics(private val file: File) {
     @Volatile private var lastFailure: Pair<String, String>? = null
     fun record(stage: String, error: Exception) { lastFailure = stage to reason(error) }
@@ -29,7 +31,7 @@ internal class OperationTaskDiagnostics(private val file: File) {
                 '}', ']' -> depth--
                 ',', ':' -> nodes++
             }
-            require(depth in 0..32 && nodes <= 65536) { "Structure exceeds diagnostic bounds" }
+            if (depth !in 0..32 || nodes > 262144) throw OperationTaskDiagnosticLimitException()
         }
     }
     fun snapshot(): JsonObject = buildJsonObject {
@@ -103,8 +105,12 @@ internal class OperationTaskDiagnostics(private val file: File) {
             put("reason_code", if (tasks.size == OperationTaskStore.MAX_TASKS) "capacity_reached" else "snapshot_readable")
             // A readable snapshot is not proof that the next claim/fsync/replace will succeed.
         } catch (error: Exception) {
-            put("read_state", "failed")
-            put("reason_code", if (error is IllegalArgumentException) "invalid_ledger" else reason(error))
+            put("read_state", if (error is OperationTaskDiagnosticLimitException) "bounded_refusal" else "failed")
+            put("reason_code", when (error) {
+                is OperationTaskDiagnosticLimitException -> "diagnostic_structure_limit"
+                is IllegalArgumentException -> "invalid_ledger"
+                else -> reason(error)
+            })
             put("exception_category", category(error))
         }
     }

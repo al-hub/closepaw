@@ -23,6 +23,9 @@ class OperationTaskDiagnosticsTest {
         file.writeText(JsonArray((0 until OperationTaskStore.MAX_TASKS).map { i ->
             buildJsonObject {
                 put("task_id", "private-$i"); put("request_id", "secret-$i")
+                put("fingerprint", "private-hash"); put("operation_id", "test")
+                put("operation_version", 1); put("schema_hash", "private-schema")
+                put("created_at_ms", 1L); put("summary", "private-summary")
                 put("state", if (i == 0) "outcome_unknown" else if (i == 1) "running" else "succeeded")
                 put("result", buildJsonObject { put("stdout", "SENSITIVE_OUTPUT") })
             }
@@ -137,9 +140,9 @@ class OperationTaskDiagnosticsTest {
     @Test fun deepOrExcessiveStructureIsRejectedBeforeDomParsing() {
         val file = ledger()
         file.parentFile!!.mkdirs()
-        for (raw in listOf("[".repeat(10000) + "]".repeat(10000), "[" + "{},".repeat(70000) + "{}]")) {
+        for (raw in listOf("[".repeat(10000) + "]".repeat(10000), "[" + "{},".repeat(200000) + "{}]")) {
             file.writeText(raw)
-            assertEquals("invalid_ledger", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
+            assertEquals("diagnostic_structure_limit", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
             assertEquals(raw, file.readText())
         }
     }
