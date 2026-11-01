@@ -11,7 +11,13 @@ internal class TermuxShellOperation(
     private val links: TermuxJobLinkStore,
 ) : OperationHandler {
     override suspend fun invoke(invocation: OperationInvocation): OperationResult {
-        if (!links.canAccept(invocation.taskId)) return OperationResult(success=false, summary="Job link store full; command was not submitted.")
+        when (links.reserve(invocation.taskId)) {
+            TermuxJobLinkStore.Admission.FULL -> return OperationResult(success=false,
+                summary="bridge_job_link_capacity_exhausted: no safely reclaimable links; command was not submitted.")
+            TermuxJobLinkStore.Admission.UNCERTAIN -> throw IllegalStateException("bridge_submission_outcome_unknown_no_replay")
+            TermuxJobLinkStore.Admission.LINKED -> return observe(invocation.taskId)
+            TermuxJobLinkStore.Admission.RESERVED -> Unit
+        }
         val input = invocation.input
         val request = ExecutionRequest(
             ExecutionCapability.LINUX_SHELL,
@@ -20,11 +26,21 @@ internal class TermuxShellOperation(
             timeoutMs = input["timeout_ms"]?.jsonPrimitive?.longOrNull ?: 120_000L,
         )
         val reply = client.start(invocation.taskId, request)
-        if (reply is TermuxJobReply.Failure) throw IllegalStateException(reply.code)
+        if (reply is TermuxJobReply.Failure) {
+            // The localhost job API rejects these before admission; transport/response ambiguity stays reserved.
+            if (reply.code == "bridge_unpaired" || reply.httpStatus in setOf(400, 401, 429)) {
+                links.releaseUnsubmitted(invocation.taskId)
+                return OperationResult(success=false, summary="${reply.code}: command was not submitted.")
+            }
+            throw IllegalStateException(reply.code)
+        }
         val started = (reply as TermuxJobReply.Success).snapshot
         links.put(invocation.taskId, started.jobId)
+        return observe(invocation.taskId)
+    }
+    private suspend fun observe(taskId: String): OperationResult {
         while (true) {
-            val snapshot = snapshot(invocation.taskId) ?: throw IllegalStateException("bridge_observer_unavailable")
+            val snapshot = snapshot(taskId) ?: throw IllegalStateException("bridge_observer_unavailable")
             if (snapshot.terminal) return result(snapshot)
             delay(1000)
         }

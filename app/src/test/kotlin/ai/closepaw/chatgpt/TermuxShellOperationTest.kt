@@ -56,6 +56,63 @@ class TermuxShellOperationTest {
         coVerify(exactly = 0) { client.poll(any(), any(), any(), any()) }
     }
 
+    @Test fun fullLedgerReclaimsDurableResultAndReturnsNewExitAndOutputWithoutReplay() = runTest {
+        val file = File(directory.root, "full-links")
+        file.writeText((0 until 1000).joinToString("\n", postfix = "\n") {
+            "${UUID(0, it.toLong())}\t${UUID(1, it.toLong())}"
+        })
+        val tasks = OperationTaskStore(File(directory.root, "tasks.json"))
+        val oldTask = UUID(0, 0).toString()
+        val oldJob = UUID(1, 0).toString()
+        val client = mockk<TermuxJobClient>()
+        val completed = TermuxJobSnapshot(jobId, "succeeded", stdout="bridge-ok\n", stderr="", exitCode=0)
+        coEvery { client.start(any(), any()) } returns TermuxJobReply.Success(completed)
+        coEvery { client.poll(any(), any(), any(), any()) } returns TermuxJobReply.Success(completed)
+        tasks.put(buildJsonObject {
+            put("task_id", oldTask); put("request_id", "retained-request"); put("fingerprint", "original")
+            put("operation_id", "linux.shell.exec"); put("state", "succeeded")
+            put("result", buildJsonObject {
+                put("status", "succeeded"); put("stdout", "old-output"); put("stderr", ""); put("exit_code", 0)
+                put("data", buildJsonObject { put("job_id", oldJob); put("state", "succeeded"); put("outcome_unknown", false) })
+            })
+        })
+        val original = tasks.get(oldTask)
+        val links = TermuxJobLinkStore(file, tasks::retainedShellLinks)
+        val operation = TermuxShellOperation(client, links)
+        val invocation = OperationInvocation(taskId, buildJsonObject { put("command", "printf 'bridge-ok\\n'") })
+        val result = operation.invoke(invocation)
+        assertThat(result.success).isTrue()
+        assertThat(result.exitCode).isEqualTo(0)
+        assertThat(result.stdout).isEqualTo("bridge-ok\n")
+        assertThat(links.get(oldTask)).isNull()
+        assertThat(OperationTaskStore(File(directory.root, "tasks.json")).byRequest("retained-request")).isEqualTo(original)
+        assertThat(operation.invoke(invocation).stdout).isEqualTo(result.stdout)
+        coVerify(exactly=1) { client.start(taskId, any()) }
+    }
+
+    @Test fun definiteRefusalReleasesOnlyUnsubmittedReservation() = runTest {
+        val file = File(directory.root, "links")
+        val links = TermuxJobLinkStore(file)
+        val client = mockk<TermuxJobClient>()
+        coEvery { client.start(any(), any()) } returns TermuxJobReply.Failure("bridge_auth_mismatch", "rejected", 401)
+        val result = TermuxShellOperation(client, links).invoke(OperationInvocation(taskId,
+            buildJsonObject { put("command", "printf once") }))
+        assertThat(result.summary).contains("not submitted")
+        assertThat(links.reserve(UUID.randomUUID().toString())).isEqualTo(TermuxJobLinkStore.Admission.RESERVED)
+        assertThat(file.readLines()).hasSize(1)
+        coVerify(exactly=1) { client.start(any(), any()) }
+    }
+
+    @Test fun ambiguousSubmissionNeverAutomaticallyReplays() = runTest {
+        val file = File(directory.root, "links")
+        val client = mockk<TermuxJobClient>()
+        coEvery { client.start(any(), any()) } returns TermuxJobReply.Failure("bridge_transport_error", "lost response")
+        val input = OperationInvocation(taskId, buildJsonObject { put("command", "printf once") })
+        try { TermuxShellOperation(client, TermuxJobLinkStore(file)).invoke(input) } catch (_: IllegalStateException) { }
+        try { TermuxShellOperation(client, TermuxJobLinkStore(file)).invoke(input) } catch (_: IllegalStateException) { }
+        coVerify(exactly=1) { client.start(any(), any()) }
+    }
+
     @Test fun laterOutputPageFailureDoesNotReturnPartialConfirmedSnapshot() = runTest {
         val file = File(directory.root, "links")
         TermuxJobLinkStore(file).put(taskId, jobId)
