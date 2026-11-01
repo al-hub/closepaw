@@ -49,6 +49,23 @@ class OperationTaskHistoryStageTest {
         }
     }
 
+    @Test fun concurrentUntrustedPublicationCannotOverwriteExistingTarget() {
+        val source = File(temp.root, "racy-source")
+        source.writeText("[{\\\"task_id\\\":\\\"safe\\\"}]")
+        val before = hash(source)
+        val dir = File(temp.root, "racy-stage")
+        try {
+            OperationTaskHistoryStage(dir).stageLegacy(source) { boundary ->
+                if (boundary == "stage_publish") {
+                    File(dir, "legacy-$before.json").writeText("unexpected-race-content")
+                }
+            }
+            fail("unsafe preexisting target must block publication")
+        } catch (_: IllegalArgumentException) {}
+        assertEquals(before, hash(source))
+        assertEquals("unexpected-race-content", File(dir, "legacy-$before.json").readText())
+    }
+
     @Test fun existingTamperedDestinationIsNeverAccepted() {
         val source = File(temp.root, "original")
         source.writeText("[{\"task_id\":\"one\"}]")
