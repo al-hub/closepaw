@@ -30,7 +30,7 @@ internal class TermuxShellOperation(
             // The localhost job API rejects these before admission; transport/response ambiguity stays reserved.
             if (reply.code == "bridge_unpaired" || reply.httpStatus in setOf(400, 401, 429)) {
                 links.releaseUnsubmitted(invocation.taskId)
-                return OperationResult(success=false, summary="${reply.code}: command was not submitted.")
+                return OperationResult(success=false, summary="${reply.code} (HTTP ${reply.httpStatus ?: 0}): command was not submitted.")
             }
             throw IllegalStateException(reply.code)
         }

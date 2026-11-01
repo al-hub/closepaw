@@ -156,6 +156,7 @@ def test_bounded_retries_without_token_logging(recovery_module, monkeypatch, tmp
         def is_set(self): return False
         def wait(self, _): return False
     monkeypatch.setattr(recovery_module.threading, 'Event', NoWait)
+    monkeypatch.setattr(recovery_module.MaintenanceController, 'serve', lambda *_: None)
     attempts = []
     class FailedChild:
         pid = 123
@@ -208,9 +209,10 @@ def test_flapping_daemon_cannot_reset_restart_budget_forever(recovery_module, mo
         def is_set(self): return count['waits'] >= 35
         def wait(self, _): count['waits'] += 1; return False
     monkeypatch.setattr(recovery_module.threading, 'Event', FiniteWait)
+    monkeypatch.setattr(recovery_module.MaintenanceController, 'serve', lambda *_: None)
     def probe(*_):
         count['probes'] += 1
-        return 'ready' if count['probes'] % 2 == 0 else 'daemon_absent'
+        return 'ready' if count['probes'] % 3 == 0 else 'daemon_absent'
     monkeypatch.setattr(recovery_module, 'recovery_probe', probe)
     class ExitedChild:
         pid = 123

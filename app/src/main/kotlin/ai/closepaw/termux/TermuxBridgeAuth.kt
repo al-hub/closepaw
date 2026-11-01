@@ -25,6 +25,10 @@ internal object TermuxBridgeAuth {
     private const val PREFS = "termux_bridge_auth"
     private const val KEY_TOKEN = "token"
 
+    fun existingToken(context: Context): String? =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_TOKEN, null)?.takeIf { it.length >= 32 }
+
     fun token(context: Context): String {
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return getOrCreateBridgeToken(

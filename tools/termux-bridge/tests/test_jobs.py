@@ -118,7 +118,9 @@ def test_standalone_bundle_can_run_jobs(tmp_path, free_port):
     root = Path(__file__).resolve().parents[3]
     destination = tmp_path / 'standalone.py'
     subprocess.run([sys.executable, str(root / 'scripts/bundle-termux-bridge.py'), str(destination)], check=True)
-    assert 'from closepaw_jobs import' not in destination.read_text()
+    import ast
+    assert not any(isinstance(n, ast.ImportFrom) and n.module in ('closepaw_jobs', 'closepaw_maintenance')
+                   for n in ast.walk(ast.parse(destination.read_text())))
     environment = dict(os.environ, HOME=str(tmp_path), CLOSEPAW_BRIDGE_TOKEN=AUTH_TOKEN)
     process = subprocess.Popen([sys.executable, str(destination), '--port', str(free_port), '--idle-timeout-sec', '0'],
                                env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)

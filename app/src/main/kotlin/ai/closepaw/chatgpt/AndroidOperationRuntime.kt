@@ -182,6 +182,7 @@ internal class AndroidOperationRuntime(
                 } })
             }, summary="Read app targets and readiness returned.")
         })
+        TermuxMaintenanceOperations(context).register(registry) { settings.enabled }
         registry.register(TermuxBridgeStatusOperation.descriptor { settings.enabled },
             TermuxBridgeStatusOperation(termuxBridge::diagnosticSnapshot))
         registry.register(SelfMonitoringOperation.descriptor { settings.genericControlEnabled }, SelfMonitoringOperation(
@@ -305,7 +306,7 @@ internal class AndroidOperationRuntime(
                 "android.control.session.status", "closepaw.self.status", "closepaw.projection.diagnostics",
                 "closepaw.projection.tuning.get", "closepaw.projection.tuning.set" -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled
-                "linux.shell.exec" -> settings.enabled
+                "linux.shell.exec", TermuxMaintenanceOperations.UPDATE -> settings.enabled
                 "gemini.draft.insert" -> settings.geminiDraftEnabled
                 "gemini.question.ask" -> settings.geminiQuestionEnabled
                 TailscaleOperations.ENSURE -> settings.tailscaleRecoveryEnabled

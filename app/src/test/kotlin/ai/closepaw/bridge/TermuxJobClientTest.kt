@@ -8,6 +8,18 @@ import org.json.JSONObject
 import org.junit.Test
 
 class TermuxJobClientTest {
+    @Test fun `bounded HTTP refusal reason is exposed without response body`() = runTest {
+        withServer { server ->
+            server.enqueue(MockResponse().setResponseCode(429).setBody("""{"error":"job_archive_full","token":"secret"}"""))
+            val reply = client(server).start("capacity", ExecutionRequest(ExecutionCapability.LINUX_SHELL, "printf safe")) as TermuxJobReply.Failure
+            assertThat(reply.code).isEqualTo("bridge_http_429_job_archive_full")
+            assertThat(reply.message).doesNotContain("secret")
+            server.enqueue(MockResponse().setResponseCode(429).setBody("""{"error":"secret_token"}"""))
+            val unknown = client(server).start("unknown", ExecutionRequest(ExecutionCapability.LINUX_SHELL, "printf safe")) as TermuxJobReply.Failure
+            assertThat(unknown.code).isEqualTo("bridge_http_error")
+        }
+    }
+
     @Test fun `start authenticates and submits idempotency and execution arguments`() = runTest {
         withServer { server ->
             server.enqueue(MockResponse().setResponseCode(202).setBody("""{"job_id":"job-1","state":"running"}"""))

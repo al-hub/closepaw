@@ -23,6 +23,7 @@
             <category android:name="android.intent.category.HOME" />
         </intent>
         <package android:name="com.termux" />
+        <package android:name="com.termux.boot" />
         <package android:name="com.tailscale.ipn" />
         <!-- Gemini is an explicit P2 READ-only target, even if not discoverable as a launcher. -->
         <package android:name="com.google.android.apps.bard" />
