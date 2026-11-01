@@ -35,7 +35,8 @@ internal class OperationTaskStore(
     private val pathLock = pathLocks.computeIfAbsent(this.file.path) { Any() }
 
     init {
-        // Preserve a damaged/unwritable ledger and keep independent diagnosis reachable.\n        runCatching { transaction { tasks ->
+        // Preserve a damaged/unwritable ledger and keep independent diagnosis reachable.
+        runCatching { transaction { tasks ->
             var changed = false
             tasks.entries.forEach { entry ->
                 if (entry.value["state"]?.jsonPrimitive?.content in setOf("queued", "running", "cancel_requested")) {
@@ -47,7 +48,7 @@ internal class OperationTaskStore(
                 }
             }
             if (changed) persist(tasks)
-        }
+        } }
     }
 
     fun get(id: String): JsonObject? = transaction { it[id] }
@@ -139,7 +140,7 @@ internal class OperationTaskStore(
             val id = task.getValue("task_id").jsonPrimitive.content
             require(id !in tasks) { "Duplicate task id in ledger" }
             insert(tasks, task)
-        }
+        } }
         return tasks
     }
     private fun <T> transaction(block: (LinkedHashMap<String, JsonObject>) -> T): T = synchronized(pathLock) {
