@@ -159,4 +159,32 @@ class OperationTaskRetainedOverlayIntegrationTest {
         } catch (_: OperationTaskStorageException) {}
     }
 
+    @Test fun previousUnknownToTerminalTransitionAcrossRestartMustRemainReadable() {
+        val file = original()
+        val store = OperationTaskStore(file)
+        val submitted = record(2000, "queued")
+        assertTrue(store.claim(submitted).created)
+        assertTrue(store.updateActive("id-2000", mapOf(
+            "state" to JsonPrimitive("outcome_unknown"),
+            "summary" to JsonPrimitive("not confirmed")
+        )))
+        val restarted = OperationTaskStore(file)
+        assertEquals("outcome_unknown", restarted.get("id-2000")?.get("state")?.jsonPrimitive?.content)
+        assertFalse(restarted.claim(submitted).created)
+    }
+
+    @Test fun committedGenerationDisappearanceMustBlockNewAdmission() {
+        val file = original()
+        val store = OperationTaskStore(file)
+        assertTrue(store.claim(record(2000)).created)
+        assertTrue(store.claim(record(2001)).created)
+        val marker = File(file.path + ".history/enabled").readText().trim().split(' ')
+        val current = File(file.path + ".history/" + marker[1] + ".json")
+        assertTrue(current.delete())
+        try {
+            OperationTaskStore(file).claim(record(2002))
+            fail("missing committed generation must fail closed")
+        } catch (_: OperationTaskStorageException) {}
+    }
+
 }
