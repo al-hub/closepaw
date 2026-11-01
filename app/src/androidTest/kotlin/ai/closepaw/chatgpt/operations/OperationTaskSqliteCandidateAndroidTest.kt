@@ -55,4 +55,32 @@ class OperationTaskSqliteCandidateAndroidTest {
             File(file.path + "-shm").delete()
         }
     }
+
+    @Test fun realAndroidStoreAdmits2001WithoutCreatingJsonGenerations() {
+        val dir = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val legacy = File.createTempFile("task-ledger-219-", ".json", dir)
+        val oldRecords = (0 until 2000).map(::record)
+        legacy.writeText(JsonArray(oldRecords).toString(), Charsets.UTF_8)
+        val original = legacy.readBytes()
+        try {
+            val store = OperationTaskStore(legacy)
+            assertTrue(store.claim(record(2000)).created)
+            assertFalse(File(legacy.path + ".history").exists())
+            assertArrayEquals(original, legacy.readBytes())
+            val restarted = OperationTaskStore(legacy)
+            assertEquals(record(0), restarted.get("id-0"))
+            assertEquals(record(1999), restarted.byRequest("request-1999"))
+            assertEquals(record(2000), restarted.get("id-2000"))
+            assertFalse(restarted.claim(record(2000)).created)
+            assertArrayEquals(original, legacy.readBytes())
+        } finally {
+            legacy.delete()
+            File(legacy.path + ".sqlite").delete()
+            File(legacy.path + ".sqlite-journal").delete()
+            File(legacy.path + ".sqlite-wal").delete()
+            File(legacy.path + ".sqlite-shm").delete()
+            File(legacy.path + ".sqlite.ready").delete()
+            File(legacy.path + ".lock").delete()
+        }
+    }
 }
