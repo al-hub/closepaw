@@ -232,6 +232,7 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
     }
 
     fun get(taskId: String): JsonObject? = database { db ->
+        requireMigrated(db)
         db.query("tasks", arrayOf("payload_json"), "task_id=?", arrayOf(taskId),
             null, null, null).use { rows ->
             if (rows.moveToFirst()) Json.parseToJsonElement(rows.getString(0)).jsonObject else null
@@ -240,6 +241,7 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
     /** Update a retained record without changing immutable identity or ordering. */
     fun update(taskId: String, changes: Map<String, JsonElement>, activeOnly: Boolean = false): Boolean =
         database { db ->
+            requireMigrated(db)
             db.beginTransaction()
             try {
                 val current = db.query("tasks", arrayOf("payload_json"), "task_id=?",
@@ -272,6 +274,7 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
         }
 
     fun byRequest(requestId: String): JsonObject? = database { db ->
+        requireMigrated(db)
         db.query("tasks", arrayOf("payload_json"), "request_id=?", arrayOf(requestId),
             null, null, null).use { rows ->
             if (rows.moveToFirst()) Json.parseToJsonElement(rows.getString(0)).jsonObject else null
@@ -279,6 +282,7 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
     }
 
     fun latestOutcomeUnknown(operationId: String): Boolean = database { db ->
+        requireMigrated(db)
         db.query("tasks", arrayOf("state"), "operation_id=?", arrayOf(operationId),
             null, null, "created_at_ms DESC, ordinal DESC", "1").use { rows ->
             rows.moveToFirst() && rows.getString(0) == "outcome_unknown"
@@ -287,6 +291,7 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
 
     /** Read all retained records in stable insertion order for compatibility checks. */
     fun allRecords(): List<JsonObject> = database { db ->
+        requireMigrated(db)
         val result = ArrayList<JsonObject>()
         db.query("tasks", arrayOf("payload_json"), null, null, null, null, "ordinal ASC")
             .use { rows ->
