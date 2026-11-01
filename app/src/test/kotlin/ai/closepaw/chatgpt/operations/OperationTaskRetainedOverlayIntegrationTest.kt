@@ -83,4 +83,21 @@ class OperationTaskRetainedOverlayIntegrationTest {
         }
     }
 
+    @Test fun deletedCommittedHistoryRecordMustNotBeSilentlyForgotten() {
+        val file = original()
+        val originalStore = OperationTaskStore(file)
+        val admitted = record(2000)
+        assertTrue(originalStore.claim(admitted).created)
+        val history = File(file.path + ".history")
+        val committed = history.listFiles()!!.single { it.extension == "json" }
+        assertTrue(committed.delete())
+        try {
+            val restarted = OperationTaskStore(file)
+            restarted.claim(admitted)
+            fail("history record loss must fail closed, never duplicate a claim")
+        } catch (_: OperationTaskStorageException) {
+            // Only a complete indexed generation can establish safe replay protection.
+        }
+    }
+
 }
