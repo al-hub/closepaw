@@ -1,0 +1,6 @@
+source_commit=feff8309e7e53b0ab2335f822a9e697d5f7b1426
+release_tag=v0.1.104
+version=0.1.104
+version_code=105
+90f39683b51300b9b77ca1f7174c26fc60b5138d232931e7f0d95d0999580302  /home/runner/work/_temp/public-apk-verification/closepaw-aa-bridge.apk
+116915195
