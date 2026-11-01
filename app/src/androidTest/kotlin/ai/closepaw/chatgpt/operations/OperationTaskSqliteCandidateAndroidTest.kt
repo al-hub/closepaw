@@ -257,4 +257,35 @@ class OperationTaskSqliteCandidateAndroidTest {
             File(legacy.path + ".lock").delete()
         }
     }
+
+    @Test fun emptyFreshInstallStoreCanClaimCompleteAndRestartWithoutLegacyData() {
+        // Isolated app-cache fixture. Never delete or reset the installed user's ledger.
+        val dir = File.createTempFile("task-empty-start-219-", ".dir",
+            InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
+        assertTrue(dir.delete())
+        assertTrue(dir.mkdirs())
+        val absentLegacy = File(dir, "fresh-ledger.json")
+        try {
+            assertFalse(absentLegacy.exists())
+            val first = OperationTaskStore(absentLegacy)
+            assertNull(first.byRequest("request-0"))
+            val queued = JsonObject(record(0) + mapOf("state" to JsonPrimitive("queued")))
+            assertTrue(first.claim(queued).created)
+            assertTrue(first.updateActive("id-0", mapOf(
+                "state" to JsonPrimitive("succeeded"),
+                "summary" to JsonPrimitive("completed without external execution")
+            )))
+            val restarted = OperationTaskStore(absentLegacy)
+            val saved = restarted.byRequest("request-0")
+            assertEquals("succeeded", saved?.get("state")?.jsonPrimitive?.content)
+            assertEquals("completed without external execution",
+                saved?.get("summary")?.jsonPrimitive?.content)
+            assertFalse(restarted.claim(queued).created)
+            assertEquals("id-0", restarted.get("id-0")?.get("task_id")?.jsonPrimitive?.content)
+            assertTrue(File(absentLegacy.path + ".sqlite.ready").exists())
+            assertFalse("A clean start must not manufacture legacy JSON", absentLegacy.exists())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
 }
