@@ -145,8 +145,8 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
             interrupted.forEach { (id, old) ->
                 val next = JsonObject(old + mapOf(
                     "state" to JsonPrimitive("outcome_unknown"),
-                    "summary" to JsonPrimitive(
-                        "ClosePaw restarted; underlying execution outcome is not confirmed. Do not automatically retry.")
+                    "summary" to (old["summary"] ?: JsonPrimitive(
+                        "ClosePaw restarted; underlying execution outcome is not confirmed. Do not automatically retry."))
                 ))
                 val values = ContentValues().apply {
                     put("state", "outcome_unknown")
