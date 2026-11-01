@@ -83,4 +83,42 @@ class OperationTaskSqliteCandidateAndroidTest {
             File(legacy.path + ".lock").delete()
         }
     }
+
+    @Test fun restartPreservesProgressAndMissingCommittedDbRefusesReplay() {
+        val dir = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val legacy = File.createTempFile("task-restart-219-", ".json", dir)
+        legacy.writeText(JsonArray((0 until 2000).map(::record)).toString(), Charsets.UTF_8)
+        val original = legacy.readBytes()
+        val queued = JsonObject(record(2000) + mapOf("state" to JsonPrimitive("queued")))
+        try {
+            val store = OperationTaskStore(legacy)
+            assertTrue(store.claim(queued).created)
+            assertTrue(store.updateActive("id-2000",
+                mapOf("summary" to JsonPrimitive("progress received"))))
+            val restarted = OperationTaskStore(legacy)
+            val saved = restarted.get("id-2000")
+            assertEquals("outcome_unknown", saved?.get("state")?.jsonPrimitive?.content)
+            assertEquals("progress received", saved?.get("summary")?.jsonPrimitive?.content)
+            assertFalse(restarted.claim(queued).created)
+            assertArrayEquals(original, legacy.readBytes())
+            val db = File(legacy.path + ".sqlite")
+            assertTrue(db.exists())
+            assertTrue(db.delete())
+            try {
+                OperationTaskStore(legacy).claim(queued)
+                fail("missing activated SQLite must never replay a request")
+            } catch (_: OperationTaskStorageException) {
+                // Explicit fail-closed proof.
+            }
+            assertArrayEquals(original, legacy.readBytes())
+        } finally {
+            legacy.delete()
+            File(legacy.path + ".sqlite").delete()
+            File(legacy.path + ".sqlite-journal").delete()
+            File(legacy.path + ".sqlite-wal").delete()
+            File(legacy.path + ".sqlite-shm").delete()
+            File(legacy.path + ".sqlite.ready").delete()
+            File(legacy.path + ".lock").delete()
+        }
+    }
 }
