@@ -127,4 +127,18 @@ class OperationTaskRetainedOverlayIntegrationTest {
         assertEquals(record(1999), restored.get("id-1999"))
     }
 
+    @Test fun olderCommittedManifestRollbackMustNotForgetNewerClaim() {
+        val file = original()
+        val store = OperationTaskStore(file)
+        assertTrue(store.claim(record(2000)).created)
+        val marker = File(file.path + ".history/enabled")
+        val earlier = marker.readBytes()
+        assertTrue(store.claim(record(2001)).created)
+        marker.writeBytes(earlier)
+        try {
+            OperationTaskStore(file).claim(record(2001))
+            fail("restored old manifest must not replay a newer committed request")
+        } catch (_: OperationTaskStorageException) {}
+    }
+
 }
