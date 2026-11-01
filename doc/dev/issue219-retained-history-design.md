@@ -36,3 +36,18 @@ D. Independent code + security review, full changed-head CI, isolated Debug acce
 E. Keep #219/#217 OPEN until real admission and daemon acceptance respectively.
 
 **Not allowed:** quota bump as repair, truncation, clearing app data, blind archive, deleting old ledger, replaying unknown work, silent partial migration, repeated signed APK attempts.
+
+
+## 2026-11-01 minimal implementation correction — supersedes custom generations
+
+Decision: retain the existing `OperationTaskStore` API and its caller semantics, but replace the PR-only JSON history overlay rather than extending it. Use the platform `SQLiteOpenHelper`, a single `tasks` table, and unique `task_id` / `request_id` indexes. Columns needed for indexed filtering: `task_id`, `request_id`, `state`, `operation_id`, `created_at_ms`; keep the *complete* original JSON record in `payload_json`. No Room/ORM, multiple databases, custom generation manifest, archive scheduler or background replay. SQLite row data and indexes must commit atomically in one transaction; foreign work execution remains outside this transaction and therefore unknown outcomes MUST NOT be replayed.
+
+**Do not translate existing legacy data without a preflight proof:** a bounded read-only validator must establish actual record count, unique IDs/requests, acceptable structure, disk headroom and original file hash. On first migration, populate SQLite under a transaction, verify complete semantic record equality and identity indexes, set a schema/migration marker in the same transaction and commit; never remove or mutate the legacy ledger. With an existing committed DB marker, do not silently reimport the legacy file even if the DB is missing/corrupt. Fail closed when marker/DB provenance or reconciliation is uncertain.
+
+Keep original legacy data queryable until migration success; active/queued/running/cancel_requested become `outcome_unknown` durably on restart *before* any new work admission. Import old fields without dropping unknown keys or results. Preserve tie ordering for latestOutcomeUnknown with a sequence/order column if needed. Use one SQL write transaction per claim or state/result transition and enforce global request ID uniqueness atomically. Document a real device migration rollback/recovery contract; SQLite durability does not make external Termux commands transactional.
+
+**Deliberate limits:** the original 2,000-task aggregate cap must disappear, but disk space, max per-record payload, maximum active-task population and query pagination remain bounded based on explicit measured policies. Do not claim unlimited throughput or fixed high-record count without stress evidence.
+
+**Testing contract:** preserve baseline RED 2000→2001, then GREEN in the new engine; assert legacy SHA unchanged, every JSON identity/output preserved, idempotent migration, duplicate request rejection (including concurrent processes), unknown states, crash at pre-commit and post-commit boundaries, corrupted/missing DB refusal, same-state summary updates and large history performance. JVM-only tests can validate pure data contracts; actual Android SQLite/WAL migration tests require Android instrumentation or a sufficiently realistic SQLite host. Do not mask host Android stub failures with mocked success.
+
+**Release gate:** confirmed live-handset cause/count, final-head Security + UI CI, independent code/security review, isolated Debug handset acceptance and single production-signed Release. PR #224 stays Draft, #219/#217 OPEN until verified. No unreviewed prod data modification.
