@@ -21,7 +21,15 @@ import kotlinx.serialization.json.*
 internal class OperationTaskRetainedOverlay(private val legacy: File) {
     private val root = File(legacy.path + ".history")
     private val marker = File(root, "enabled")
-    fun isActive() = marker.exists()
+    fun isActive(): Boolean {
+        if (marker.exists()) return true
+        if (!root.exists()) return false
+        require(root.isDirectory) { "invalid_history_directory" }
+        val files = root.listFiles() ?: throw IllegalStateException("history_directory_unavailable")
+        // A missing marker cannot silently hide already committed claims.
+        require(files.none { it.extension == "json" }) { "history_marker_missing" }
+        return false
+    }
 
     private fun filename(id: String): String {
         val hash = MessageDigest.getInstance("SHA-256").digest(id.toByteArray(Charsets.UTF_8))
