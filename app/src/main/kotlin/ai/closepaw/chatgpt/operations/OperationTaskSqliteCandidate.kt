@@ -188,6 +188,8 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
                 }
                 val values = ContentValues().apply {
                     put("state", (task["state"] as? JsonPrimitive)?.contentOrNull)
+                    put("operation_id", (task["operation_id"] as? JsonPrimitive)?.contentOrNull)
+                    put("created_at_ms", (task["created_at_ms"] as? JsonPrimitive)?.longOrNull)
                     put("payload_json", task.toString())
                 }
                 require(db.update("tasks", values, "task_id=?", arrayOf(id)) == 1)
@@ -258,7 +260,9 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
                 }
                 val next = JsonObject(current + changes)
                 require(field(next, "task_id") == field(current, "task_id") &&
-                    field(next, "request_id") == field(current, "request_id")) { "task_identity_immutable" }
+                    (next["request_id"] ?: JsonNull) == (current["request_id"] ?: JsonNull)) {
+                    "task_identity_immutable"
+                }
                 val values = ContentValues().apply {
                     put("state", (next["state"] as? JsonPrimitive)?.contentOrNull)
                     put("operation_id", (next["operation_id"] as? JsonPrimitive)?.contentOrNull)
@@ -284,7 +288,7 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
     fun latestOutcomeUnknown(operationId: String): Boolean = database { db ->
         requireMigrated(db)
         db.query("tasks", arrayOf("state"), "operation_id=?", arrayOf(operationId),
-            null, null, "created_at_ms DESC, ordinal DESC", "1").use { rows ->
+            null, null, "COALESCE(created_at_ms, 0) DESC, ordinal ASC", "1").use { rows ->
             rows.moveToFirst() && rows.getString(0) == "outcome_unknown"
         }
     }
