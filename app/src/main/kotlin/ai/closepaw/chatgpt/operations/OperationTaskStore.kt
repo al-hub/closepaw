@@ -11,8 +11,24 @@ import kotlinx.serialization.json.*
 internal data class OperationTaskClaim(val task: JsonObject, val created: Boolean, val conflict: Boolean = false)
 
 /** Durable request ledger. Every instance/process transacts against the same current disk snapshot. */
-internal class OperationTaskStore(file: File) {
-    private val file = file.canonicalFile
+internal class OperationTaskStore(
+    file: File,
+    private val beforeStage: (String) -> Unit = {},
+    private val diagnostic: OperationTaskDiagnostics = OperationTaskDiagnostics(file),
+) {
+    private fun <T> stage(name: String, block: () -> T): T = try {
+        beforeStage(name)
+        block()
+    } catch (error: Exception) {
+        if (error is OperationTaskStorageException) {
+            diagnostic.record(error.stage, error)
+            throw error
+        }
+        diagnostic.record(name, error)
+        throw OperationTaskStorageException(name, OperationTaskDiagnostics.reason(error), error)
+    }
+    fun diagnostics(): JsonObject = diagnostic.snapshot()
+    private val file = stage("canonical_path") { file.canonicalFile }
     private val pathLock = pathLocks.computeIfAbsent(this.file.path) { Any() }
 
     init {
@@ -102,7 +118,9 @@ internal class OperationTaskStore(file: File) {
 
     private fun insert(tasks: MutableMap<String, JsonObject>, task: JsonObject) {
         val id = task.getValue("task_id").jsonPrimitive.content
-        require(tasks.size < MAX_TASKS || id in tasks) { "Task ledger full; archive explicitly before accepting new requests" }
+        stage("capacity_check") {
+            require(tasks.size < MAX_TASKS || id in tasks) { "Task ledger full; archive explicitly before accepting new requests" }
+        }
         val request = (task["request_id"] as? JsonPrimitive)?.content
         require(request == null || tasks.values.none { it["request_id"]?.jsonPrimitive?.content == request && it["task_id"]?.jsonPrimitive?.content != id }) { "Request id already belongs to another task" }
         tasks[id] = task
@@ -111,31 +129,40 @@ internal class OperationTaskStore(file: File) {
         val tasks = linkedMapOf<String, JsonObject>()
         if (!file.exists()) return tasks
         // Corruption fails closed, including for a store opened before the file became corrupt.
-        Json.parseToJsonElement(file.readText()).jsonArray.forEach { item ->
+        val raw = stage("read") { file.readText() }
+        val records = stage("decode") { Json.parseToJsonElement(raw).jsonArray }
+        stage("validate_records") { records.forEach { item ->
             val task = item.jsonObject
             val id = task.getValue("task_id").jsonPrimitive.content
             require(id !in tasks) { "Duplicate task id in ledger" }
             insert(tasks, task)
-        }
+        } }
         return tasks
     }
     private fun <T> transaction(block: (LinkedHashMap<String, JsonObject>) -> T): T = synchronized(pathLock) {
-        file.parentFile?.mkdirs()
+        stage("directory") {
+            file.parentFile?.let { check(it.isDirectory || it.mkdirs()) { "Ledger directory unavailable" } }
+        }
         // JVM locks prevent OverlappingFileLockException; the OS lock also serializes separate app processes.
-        RandomAccessFile(File(file.path + ".lock"), "rw").use { lockFile ->
-            val lock = lockFile.channel.lock()
+        stage("open_lock") { RandomAccessFile(File(file.path + ".lock"), "rw") }.use { lockFile ->
+            val lock = stage("acquire_lock") {
+                lockFile.channel.tryLock() ?: throw OperationTaskStorageException(
+                    "acquire_lock", "lock_busy", IllegalStateException("Ledger is locked"))
+            }
             try { block(load()) } finally { lock.release() }
         }
     }
     private fun persist(tasks: Map<String, JsonObject>) {
         // Separate staging paths prevent collision even if future callers bypass process-local coordination.
-        val temporary = File.createTempFile("task-ledger-", ".tmp", file.parentFile)
+        val temporary = stage("stage_create") { File.createTempFile("task-ledger-", ".tmp", file.parentFile) }
         try {
-            FileOutputStream(temporary).use { stream ->
-                stream.write(JsonArray(tasks.values.toList()).toString().toByteArray(Charsets.UTF_8))
-                stream.fd.sync()
+            stage("stage_open") { FileOutputStream(temporary) }.use { stream ->
+                stage("write") { stream.write(JsonArray(tasks.values.toList()).toString().toByteArray(Charsets.UTF_8)) }
+                stage("fsync") { stream.fd.sync() }
             }
-            Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            stage("atomic_replace") {
+                Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            }
         } finally { temporary.delete() }
     }
     companion object {

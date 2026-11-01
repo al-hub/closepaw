@@ -7,12 +7,21 @@ import kotlinx.serialization.json.*
 /** Routes every operation through the same descriptor, validator, policy, and executor. */
 internal class OperationDispatcher(
     private val registry: OperationRegistry,
-    private val store: OperationTaskStore,
+    private val storeProvider: () -> OperationTaskStore,
     private val scope: CoroutineScope,
     private val operationAllowed: (String) -> Boolean = { true },
     private val operationEpoch: (String) -> Long = { 0L },
     private val executeAllowed: () -> Boolean = { true },
 ) {
+    constructor(
+        registry: OperationRegistry, store: OperationTaskStore, scope: CoroutineScope,
+        operationAllowed: (String) -> Boolean = { true },
+        operationEpoch: (String) -> Long = { 0L },
+        executeAllowed: () -> Boolean = { true },
+    ) : this(registry, { store }, scope, operationAllowed, operationEpoch, executeAllowed)
+
+    private val store: OperationTaskStore get() = storeProvider()
+
     fun discover(arguments: JsonObject = JsonObject(emptyMap())): JsonObject {
         val filter = (arguments["operation_id"] as? JsonPrimitive)?.takeIf { it.isString }?.content
         if (arguments["operation_id"] != null && filter == null) return error("invalid_operation_id", "operation_id must be a string.")
@@ -55,7 +64,10 @@ internal class OperationDispatcher(
             put("operation_id", operation.descriptor.id); put("operation_version", operation.descriptor.version)
             put("schema_hash", operation.descriptor.schemaHash); put("input", arguments.getValue("input"))
         }))
-        store.byRequest(request)?.let {
+        val previous = try { store.byRequest(request) } catch (_: Exception) {
+            return storageError()
+        }
+        previous?.let {
             return if (it["fingerprint"]?.jsonPrimitive?.content == fingerprint) page(it, 0, DEFAULT_PAGE)
                 else error("request_id_conflict", "request_id was already used with different input or operation schema.")
         }
@@ -67,7 +79,7 @@ internal class OperationDispatcher(
             put("schema_hash", operation.descriptor.schemaHash); put("state", "queued")
             put("created_at_ms", System.currentTimeMillis()); put("summary", "Operation accepted; use get_task to confirm its outcome.")
         }
-        val claimed = try { store.claim(task) } catch (_: Exception) { return error("task_storage_failed", "Unable to durably record request; operation was not started.") }
+        val claimed = try { store.claim(task) } catch (_: Exception) { return storageError() }
         if (!claimed.created) return if (claimed.conflict) error("request_id_conflict", "request_id was already used with different input or operation schema.") else page(claimed.task, 0, DEFAULT_PAGE)
         scope.launch {
             val interruption = OperationInterruptionEvidence()
@@ -201,6 +213,12 @@ internal class OperationDispatcher(
         val start = value.offsetByCodePoints(0, offset)
         val end = value.offsetByCodePoints(start, minOf(limit, count - offset))
         return value.substring(start, end)
+    }
+    private fun storageError() = buildJsonObject {
+        put("status", "failed"); put("error_code", "task_storage_failed")
+        put("summary", "Unable to durably record request; operation was not started.")
+        put("operation_started", false)
+        put("diagnostic_operation", "closepaw.task_store.diagnostics")
     }
     private fun error(code: String, summary: String) = buildJsonObject { put("status", "failed"); put("error_code", code); put("summary", summary) }
     companion object { const val DEFAULT_PAGE = 8000; const val MAX_PAGE = 16000; const val MAX_OUTPUT = 128_000; const val MAX_DATA = 32_000 }
