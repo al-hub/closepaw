@@ -40,7 +40,7 @@ class OperationTaskCapacityBoundaryReproTest {
         return md.digest().joinToString("") { "%02x".format(it) }
     }
 
-    @Test fun newAdmissionSucceedsAt1999ButFailsClosedAt2000() {
+    @Test fun newAdmissionSucceedsBeyond2000WithoutRewritingLegacy() {
         val almostFull = createLedger(OperationTaskStore.MAX_TASKS - 1)
         val writable = OperationTaskStore(almostFull)
         val next = task(OperationTaskStore.MAX_TASKS)
@@ -51,18 +51,15 @@ class OperationTaskCapacityBoundaryReproTest {
         val before = hash(full)
         val store = OperationTaskStore(full)
         val candidate = task(2001)
-        try {
-            store.claim(candidate)
-            fail("new admission at MAX_TASKS unexpectedly accepted")
-        } catch (e: OperationTaskStorageException) {
-            assertEquals("capacity_check", e.stage)
-            assertEquals("invalid_data_or_limit", e.reason)
-        }
+        val admitted = store.claim(candidate)
+        assertTrue(admitted.created)
+        assertEquals(candidate, store.get("synthetic-2001"))
         assertEquals(before, hash(full))
-        assertNull(store.get("synthetic-2001"))
+        val restarted = OperationTaskStore(full)
+        assertEquals(candidate, restarted.get("synthetic-2001"))
+        assertFalse(restarted.claim(candidate).created)
         assertEquals(task(0), store.get("synthetic-0"))
         assertEquals(task(1999), store.get("synthetic-1999"))
-        assertEquals("capacity_check", store.diagnostics()["last_failure_stage"]?.jsonPrimitive?.content)
         assertFalse(File(full.path + ".tmp").exists())
     }
 
