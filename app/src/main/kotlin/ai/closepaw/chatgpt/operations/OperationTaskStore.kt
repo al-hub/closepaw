@@ -40,9 +40,16 @@ internal class OperationTaskStore(
 
     init {
         if (sqlite != null) {
-            // Migrate while holding the existing OS ledger lock.
-            transaction { tasks ->
-                stage("sqlite_migration") { sqlite.ensureMigrated(tasks.values.toList(), file) }
+            // Hold the legacy OS lock only during migration/provenance checks.
+            // Once the replacement is activated, do NOT parse the entire old
+            // JSON on every new store instance.
+            withLedgerLock {
+                stage("sqlite_migration") {
+                    val migrationRecords =
+                        if (File(file.path + ".sqlite.ready").exists()) emptyList()
+                        else loadForMigration().values.toList()
+                    sqlite.ensureMigrated(migrationRecords, file)
+                }
             }
             stage("sqlite_reconcile") { sqlite.reconcileInterrupted() }
         } else {
@@ -170,7 +177,17 @@ internal class OperationTaskStore(
         stage("overlay_read") { history.mergeInto(tasks) }
         return tasks
     }
-    private fun readLegacyRecords(): LinkedHashMap<String, JsonObject> {
+    private fun loadForMigration(): LinkedHashMap<String, JsonObject> {
+        // Historical count is not an admission quota: importing 2001+ existing
+        // records must not fail merely because the old aggregate cap is hit.
+        val tasks = readLegacyRecords(enforceLegacyLimit = false)
+        stage("overlay_read") { history.mergeInto(tasks) }
+        stage("migration_preflight") { OperationTaskHistoryPreflight.inspect(tasks.values) }
+        return tasks
+    }
+    private fun readLegacyRecords(): LinkedHashMap<String, JsonObject> =
+        readLegacyRecords(enforceLegacyLimit = true)
+    private fun readLegacyRecords(enforceLegacyLimit: Boolean): LinkedHashMap<String, JsonObject> {
         val tasks = linkedMapOf<String, JsonObject>()
         if (!file.exists()) return tasks
         // Corruption fails closed, including for a store opened before the file became corrupt.
@@ -180,11 +197,14 @@ internal class OperationTaskStore(
             val task = item.jsonObject
             val id = task.getValue("task_id").jsonPrimitive.content
             require(id !in tasks) { "Duplicate task id in ledger" }
-            insert(tasks, task, legacyValidation = true)
+            insert(tasks, task, legacyValidation = enforceLegacyLimit)
         } }
         return tasks
     }
-    private fun <T> transaction(block: (LinkedHashMap<String, JsonObject>) -> T): T = synchronized(pathLock) {
+    private fun <T> transaction(block: (LinkedHashMap<String, JsonObject>) -> T): T =
+        withLedgerLock { block(load()) }
+
+    private fun <T> withLedgerLock(block: () -> T): T = synchronized(pathLock) {
         stage("directory") {
             file.parentFile?.let { check(it.isDirectory || it.mkdirs()) { "Ledger directory unavailable" } }
         }
@@ -194,7 +214,7 @@ internal class OperationTaskStore(
                 lockFile.channel.tryLock() ?: throw OperationTaskStorageException(
                     "acquire_lock", "lock_busy", IllegalStateException("Ledger is locked"))
             }
-            try { block(load()) } finally { lock.release() }
+            try { block() } finally { lock.release() }
         }
     }
     private fun persist(tasks: Map<String, JsonObject>) {
