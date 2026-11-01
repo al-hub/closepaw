@@ -187,4 +187,17 @@ class OperationTaskRetainedOverlayIntegrationTest {
         } catch (_: OperationTaskStorageException) {}
     }
 
+    @Test fun sameStateProgressUpdateMustRemainDurableAcrossGenerations() {
+        val file = original()
+        val store = OperationTaskStore(file)
+        assertTrue(store.claim(record(2000, "queued")).created)
+        assertTrue(store.updateActive("id-2000", mapOf(
+            "summary" to JsonPrimitive("progress received")
+        )))
+        val restarted = OperationTaskStore(file)
+        assertEquals("outcome_unknown", restarted.get("id-2000")?.get("state")?.jsonPrimitive?.content)
+        assertEquals("progress received", restarted.get("id-2000")?.get("summary")?.jsonPrimitive?.content)
+        assertFalse(restarted.claim(record(2000, "queued")).created)
+    }
+
 }
