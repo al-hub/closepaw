@@ -3,7 +3,8 @@ package ai.closepaw.chatgpt.operations
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Files
-import java.nio.file.StandardCopyOption
+import java.nio.channels.FileChannel
+import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
 
 /**
@@ -58,13 +59,19 @@ internal class OperationTaskHistoryStage(private val root: File) {
             require(source.length() == initialBytes && digest(source) == initialDigest) { "legacy_source_changed" }
             require(staging.length() == initialBytes && digest(staging) == initialDigest) { "staged_copy_mismatch" }
             onBoundary("stage_publish")
+            // Atomic no-overwrite publication: a hard link refuses an existing name.
+            // If the filesystem does not support links, fail closed rather than overwrite.
             try {
-                Files.move(staging.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE)
+                Files.createLink(target.toPath(), staging.toPath())
             } catch (alreadyExists: java.nio.file.FileAlreadyExistsException) {
                 require(target.isFile && target.length() == initialBytes && digest(target) == initialDigest) {
                     "existing_staged_copy_mismatch"
                 }
             }
+            onBoundary("directory_fsync")
+            FileChannel.open(root.toPath(), StandardOpenOption.READ).use { it.force(true) }
+            require(source.length() == initialBytes && digest(source) == initialDigest) { "legacy_source_changed" }
+            require(target.length() == initialBytes && digest(target) == initialDigest) { "published_copy_mismatch" }
             // No manifest or live-store switch occurs here.
             return target
         } finally {
