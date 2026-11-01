@@ -42,6 +42,34 @@ class OperationTaskDiagnosticsTest {
         assertArrayEquals(before, file.readBytes())
         assertFalse(File(file.path + ".lock").exists())
     }
+    @Test fun measuredLargeLedgerTierRemainsReadOnlyAndRedacted() {
+        val file = ledger()
+        file.parentFile!!.mkdirs()
+        // Approximately the measured 12.9MB phone snapshot, with a bounded
+        // count and structure. No real task IDs or result contents may escape.
+        val secret = "SENSITIVE_OUTPUT_" + "x".repeat(65000)
+        val records = JsonArray((0 until 200).map { i ->
+            buildJsonObject {
+                put("task_id", "private-$i")
+                put("request_id", "secret-$i")
+                put("state", if (i == 0) "outcome_unknown" else "succeeded")
+                put("result", buildJsonObject { put("stdout", secret) })
+            }
+        })
+        file.writeText(records.toString())
+        assertTrue(file.length() > 8L * 1024 * 1024)
+        assertTrue(file.length() < OperationTaskDiagnostics.MAX_BYTES)
+        val beforeLength = file.length()
+        val result = OperationTaskDiagnostics(file).snapshot()
+        assertEquals("readable", result["read_state"]?.jsonPrimitive?.content)
+        assertEquals(200, result["task_count"]?.jsonPrimitive?.int)
+        assertEquals(1, result["unknown_count"]?.jsonPrimitive?.int)
+        assertEquals(199, result["terminal_count"]?.jsonPrimitive?.int)
+        assertFalse(result.toString().contains("SENSITIVE_OUTPUT"))
+        assertFalse(result.toString().contains("private-"))
+        assertEquals(beforeLength, file.length())
+        assertFalse(File(file.path + ".lock").exists())
+    }
     @Test fun malformedDuplicateAndOversizeLedgersFailClosedWithoutReplacement() {
         val file = ledger()
         file.parentFile!!.mkdirs()
