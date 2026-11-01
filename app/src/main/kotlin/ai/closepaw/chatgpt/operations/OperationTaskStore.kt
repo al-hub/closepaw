@@ -52,7 +52,7 @@ internal class OperationTaskStore(
                     if (entry.value["state"]?.jsonPrimitive?.content in setOf("queued", "running", "cancel_requested")) {
                         entry.setValue(JsonObject(entry.value + mapOf(
                             "state" to JsonPrimitive("outcome_unknown"),
-                            "summary" to JsonPrimitive("ClosePaw restarted; underlying execution outcome is not confirmed. Do not automatically retry."),
+                            "summary" to (entry.value["summary"] ?: JsonPrimitive("ClosePaw restarted; underlying execution outcome is not confirmed. Do not automatically retry.")),
                         )))
                         changed = true
                     }
