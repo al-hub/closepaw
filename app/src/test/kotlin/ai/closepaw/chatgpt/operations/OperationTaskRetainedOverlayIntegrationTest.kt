@@ -141,4 +141,22 @@ class OperationTaskRetainedOverlayIntegrationTest {
         } catch (_: OperationTaskStorageException) {}
     }
 
+    @Test fun oldManifestRollbackMustNotRevertTerminalResultForSameTaskId() {
+        val file = original()
+        val store = OperationTaskStore(file)
+        assertTrue(store.claim(record(2000, "queued")).created)
+        val manifest = File(file.path + ".history/enabled")
+        val old = manifest.readBytes()
+        assertTrue(store.updateActive("id-2000", mapOf(
+            "state" to JsonPrimitive("succeeded"),
+            "result" to buildJsonObject { put("stdout", "FINAL_PRESERVED") }
+        )))
+        manifest.writeBytes(old)
+        try {
+            val restored = OperationTaskStore(file)
+            val task = restored.get("id-2000")
+            fail("manifest rollback accepted old state: " + task?.get("state"))
+        } catch (_: OperationTaskStorageException) {}
+    }
+
 }
