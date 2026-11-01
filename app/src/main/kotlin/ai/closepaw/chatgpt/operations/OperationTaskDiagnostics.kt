@@ -116,7 +116,10 @@ internal class OperationTaskDiagnostics(private val file: File) {
     }
 
     companion object {
-        const val MAX_BYTES = 8 * 1024 * 1024
+        // Conservative next diagnostic tier: measured 12,901,900-byte ledger fits, while
+        // structure depth (32), node count (262,144) and MAX_TASKS (2,000)
+        // remain independently enforced before interpreting any records.
+        const val MAX_BYTES = 16 * 1024 * 1024
         fun category(error: Exception): String = when (error) {
             is AtomicMoveNotSupportedException -> "atomic_move_unsupported"
             is AccessDeniedException, is SecurityException -> "access_denied"
