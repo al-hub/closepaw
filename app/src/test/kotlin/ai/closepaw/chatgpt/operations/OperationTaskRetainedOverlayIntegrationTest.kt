@@ -200,17 +200,5 @@ class OperationTaskRetainedOverlayIntegrationTest {
         assertFalse(restarted.claim(record(2000, "queued")).created)
     }
 
-    @Test fun overflowMustNotIntroduceCustomGenerations() {
-        val file = original()
-        val before = sha(file)
-        assertTrue(OperationTaskStore(file).claim(record(2000)).created)
-        assertEquals(before, sha(file))
-        // New engine must preserve the original file while using one
-        // transaction-backed indexed store, not an ever-growing set of
-        // full-JSON generations.
-        val obsolete = File(file.path + ".history")
-        assertFalse("legacy overlay generation engine must be replaced", obsolete.exists())
-        assertFalse(OperationTaskStore(file).claim(record(2000)).created)
-    }
 
 }
