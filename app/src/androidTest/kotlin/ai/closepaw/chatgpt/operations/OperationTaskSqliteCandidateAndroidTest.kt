@@ -27,6 +27,10 @@ class OperationTaskSqliteCandidateAndroidTest {
         file.delete()
         try {
             val store = OperationTaskSqliteCandidate(file)
+            try {
+                store.claim(record(2000))
+                fail("claim before committed migration must be refused")
+            } catch (_: IllegalArgumentException) {}
             store.importOnce((0 until 2000).map(::record))
             assertEquals(record(0), store.get("id-0"))
             assertEquals(record(1999), store.get("id-1999"))
