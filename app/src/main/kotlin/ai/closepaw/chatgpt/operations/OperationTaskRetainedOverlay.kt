@@ -48,7 +48,7 @@ internal class OperationTaskRetainedOverlay(private val legacy: File) {
     private fun manifest(): String {
         require(marker.isFile) { "invalid_history_marker" }
         val value = marker.readText(Charsets.UTF_8).trim()
-        require(value == empty || Regex("closepaw-history-v2 [a-f0-9-]{36} [a-f0-9]{64}").matches(value)) {
+        require(value == empty || Regex("closepaw-history-v2 [0-9]{12}-[a-f0-9-]{36} [a-f0-9]{64}").matches(value)) {
             "invalid_history_marker"
         }
         return value
@@ -75,24 +75,19 @@ internal class OperationTaskRetainedOverlay(private val legacy: File) {
                 ?: throw IllegalArgumentException("missing_history_task_id")
             require(result.putIfAbsent(id, task) == null) { "duplicate_history_identity" }
         }
-        // Prior immutable snapshots may not contain identities absent from
-        // the manifest-selected generation. This detects a stale manifest
-        // hiding a newer committed claim and fails closed, never replaying it.
-        root.listFiles()?.filter { it.extension == "json" && it != file }?.forEach { earlier ->
-            val prior = Json.parseToJsonElement(earlier.readText()).jsonArray
-            prior.forEach { item ->
-                val identity = item.jsonObject["task_id"]?.jsonPrimitive?.content
-                require(identity != null && identity in result) { "history_manifest_identity_rollback" }
-                val previous = item.jsonObject
-                val selected = result.getValue(identity)
-                // Terminal outcomes/results cannot be replaced by an older
-                // manifest. Unknown newer state also demands manual recovery.
-                require(previous == selected || previous["state"] != selected["state"] &&
-                    previous["state"]?.jsonPrimitive?.content in setOf("queued", "running", "cancel_requested")) {
-                    "history_manifest_state_rollback"
-                }
+        // A newer published or staged generation makes an older pointer
+        // unsafe to trust. Compare monotonic generation IDs, never record
+        // contents: a normal same-state progress update is NOT a rollback.
+        val selectedSequence = generation.substringBefore('-').toLong()
+        val candidates = root.listFiles()
+            ?: throw IllegalStateException("history_directory_unavailable")
+        candidates.filter { it.extension == "json" }.forEach { candidate ->
+            require(Regex("[0-9]{12}-[a-f0-9-]{36}\\.json").matches(candidate.name)) {
+                "invalid_history_generation"
             }
-        } ?: throw IllegalStateException("history_directory_unavailable")
+            val sequence = candidate.name.substringBefore('-').toLong()
+            require(sequence <= selectedSequence) { "history_manifest_rollback" }
+        }
         OperationTaskHistoryPreflight.inspect(result.values)
         return result
     }
@@ -116,7 +111,11 @@ internal class OperationTaskRetainedOverlay(private val legacy: File) {
             if (id !in legacyIds || existing[id] != record) overlay[id] = record
         }
         val data = JsonArray(overlay.values.toList()).toString().toByteArray(Charsets.UTF_8)
-        val generation = UUID.randomUUID().toString()
+        val committed = if (marker.exists()) manifest().split(' ')[1] else "empty"
+        val nextSequence = if (committed == "empty") 1L
+            else committed.substringBefore('-').toLong() + 1L
+        val generation = String.format(java.util.Locale.ROOT,
+            "%012d-%s", nextSequence, UUID.randomUUID().toString())
         val candidate = File(root, "$generation.json")
         // Stage generation BEFORE pointer publication. No existing generations
         // are deleted, and the original ledger remains authoritative for old IDs.
