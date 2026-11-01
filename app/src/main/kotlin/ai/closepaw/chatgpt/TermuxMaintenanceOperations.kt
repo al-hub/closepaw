@@ -40,7 +40,7 @@ internal class TermuxMaintenanceOperations(
                 inputSchema = buildJsonObject {
                     put("type", "object"); put("additionalProperties", false)
                     put("properties", buildJsonObject { if (update) put("revision", buildJsonObject {
-                        put("type", "string"); put("pattern", "^[a-f0-9]{40}$")
+                        put("type", "string"); put("minLength", 40); put("maxLength", 40)
                     }) })
                     put("required", buildJsonArray { if (update) add("revision") })
                 },
@@ -49,6 +49,10 @@ internal class TermuxMaintenanceOperations(
                 readiness = { OperationReadiness(enabled(), if (enabled()) null else "remote_execution_disabled") },
             ), object : OperationHandler {
                 override suspend fun invoke(invocation: OperationInvocation): OperationResult = withContext(Dispatchers.IO) {
+                    if (update && (invocation.input["revision"] as? JsonPrimitive)?.takeIf { it.isString }
+                            ?.content?.matches(Regex("[a-f0-9]{40}")) != true) {
+                        return@withContext OperationResult(success=false, summary="invalid_immutable_revision")
+                    }
                     val token = tokenProvider()
                         ?: return@withContext OperationResult(success=false, summary="bridge_unpaired")
                     val builder = Request.Builder().url("$baseUrl/v1/maintenance/" + if (update) "update" else "status")

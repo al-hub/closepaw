@@ -9,6 +9,17 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.Test
 
 class TermuxMaintenanceOperationsTest {
+    @Test fun `mutable or malformed revision refuses before network or credentials`() = runBlocking {
+        val registry = OperationRegistry()
+        TermuxMaintenanceOperations({ error("must not read credentials") }).register(registry) { true }
+        val operation = registry.get(TermuxMaintenanceOperations.UPDATE)!!
+        for (value in listOf("main", "g".repeat(40))) {
+            val result = operation.handler.invoke(OperationInvocation("invalid", buildJsonObject { put("revision", value) }))
+            assertThat(result.success).isFalse()
+            assertThat(result.summary).isEqualTo("invalid_immutable_revision")
+        }
+    }
+
     @Test fun `diagnostics discard arbitrary body values and secrets`() {
         val secret = "private_token_like_value"
         val result = maintenanceSafeData(buildJsonObject {

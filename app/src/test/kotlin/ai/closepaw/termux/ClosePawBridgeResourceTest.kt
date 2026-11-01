@@ -21,7 +21,9 @@ class ClosePawBridgeResourceTest {
 
         val sourceBytes = (
             File(workspaceRoot(), "tools/termux-bridge/closepaw_jobs.py").readText() + "\n" +
+                File(workspaceRoot(), "tools/termux-bridge/closepaw_maintenance.py").readText() + "\n" +
                 sourceFile.readText().replace("from closepaw_jobs import JobManager, JobError\n", "")
+                    .replace("from closepaw_maintenance import MaintenanceController, MaintenanceError, approve_pin\n", "")
             ).toByteArray(Charsets.UTF_8)
         val packagedBytes = readPackagedRawResource()
         assertWithMessage("packaged bridge resource must match standalone canonical bundle bytes")
