@@ -34,27 +34,42 @@ internal class OperationTaskStore(
     private val file = stage("canonical_path") { file.canonicalFile }
     private val pathLock = pathLocks.computeIfAbsent(this.file.path) { Any() }
     private val history = OperationTaskRetainedOverlay(this.file)
+    // Android production uses SQLite; JVM unit tests exercise legacy contracts.
+    private val sqlite = if (android.os.Build.VERSION.SDK_INT > 0)
+        OperationTaskSqliteCandidate(File(this.file.path + ".sqlite")) else null
 
     init {
-        transaction { tasks ->
-            var changed = false
-            tasks.entries.forEach { entry ->
-                if (entry.value["state"]?.jsonPrimitive?.content in setOf("queued", "running", "cancel_requested")) {
-                    entry.setValue(JsonObject(entry.value + mapOf(
-                        "state" to JsonPrimitive("outcome_unknown"),
-                        "summary" to JsonPrimitive("ClosePaw restarted; underlying execution outcome is not confirmed. Do not automatically retry."),
-                    )))
-                    changed = true
-                }
+        if (sqlite != null) {
+            // Migrate while holding the existing OS ledger lock.
+            transaction { tasks ->
+                stage("sqlite_migration") { sqlite.ensureMigrated(tasks.values.toList(), file) }
             }
-            if (changed) persist(tasks)
+            stage("sqlite_reconcile") { sqlite.reconcileInterrupted() }
+        } else {
+            transaction { tasks ->
+                var changed = false
+                tasks.entries.forEach { entry ->
+                    if (entry.value["state"]?.jsonPrimitive?.content in setOf("queued", "running", "cancel_requested")) {
+                        entry.setValue(JsonObject(entry.value + mapOf(
+                            "state" to JsonPrimitive("outcome_unknown"),
+                            "summary" to JsonPrimitive("ClosePaw restarted; underlying execution outcome is not confirmed. Do not automatically retry."),
+                        )))
+                        changed = true
+                    }
+                }
+                if (changed) persist(tasks)
+            }
         }
     }
 
-    fun get(id: String): JsonObject? = transaction { it[id] }
+    fun get(id: String): JsonObject? =
+        if (sqlite != null) stage("sqlite_get") { sqlite.get(id) }
+        else transaction { it[id] }
     /** Reclaim an identity only after all queryable terminal output and dedup are durable here. */
-    fun retainedShellLinks(): Map<String, String> = transaction { tasks ->
-        tasks.values.filter(::hasRetainedShellResult).associate {
+    fun retainedShellLinks(): Map<String, String> {
+        val records = if (sqlite != null) stage("sqlite_shell_links") { sqlite.allRecords() }
+            else transaction { it.values.toList() }
+        return records.filter(::hasRetainedShellResult).associate {
             it.getValue("task_id").jsonPrimitive.content to
                 it.getValue("result").jsonObject.getValue("data").jsonObject.getValue("job_id").jsonPrimitive.content
         }
@@ -75,15 +90,21 @@ internal class OperationTaskStore(
                 data["cancel_confirmed"]?.jsonPrimitive?.booleanOrNull == true)
     }
     /** A later confirmed question supersedes older ambiguous submissions; never replay the latest unknown send through another adapter. */
-    fun latestOutcomeUnknown(operationId: String): Boolean = transaction { tasks ->
-        tasks.values.filter { it["operation_id"]?.jsonPrimitive?.content == operationId }
-            .maxByOrNull { it["created_at_ms"]?.jsonPrimitive?.longOrNull ?: 0L }
-            ?.get("state")?.jsonPrimitive?.content == "outcome_unknown"
-    }
-    fun byRequest(id: String): JsonObject? = transaction { tasks -> findRequest(tasks, id) }
+    fun latestOutcomeUnknown(operationId: String): Boolean =
+        if (sqlite != null) stage("sqlite_latest_unknown") { sqlite.latestOutcomeUnknown(operationId) }
+        else transaction { tasks ->
+            tasks.values.filter { it["operation_id"]?.jsonPrimitive?.content == operationId }
+                .maxByOrNull { it["created_at_ms"]?.jsonPrimitive?.longOrNull ?: 0L }
+                ?.get("state")?.jsonPrimitive?.content == "outcome_unknown"
+        }
+    fun byRequest(id: String): JsonObject? =
+        if (sqlite != null) stage("sqlite_by_request") { sqlite.byRequest(id) }
+        else transaction { tasks -> findRequest(tasks, id) }
 
     /** Atomic dedup and insertion, including competing dispatchers using different store instances. */
-    fun claim(task: JsonObject): OperationTaskClaim = transaction { tasks ->
+    fun claim(task: JsonObject): OperationTaskClaim {
+        if (sqlite != null) return stage("sqlite_claim") { sqlite.claim(task) }
+        return transaction { tasks ->
         val request = task.getValue("request_id").jsonPrimitive.content
         val fingerprint = task.getValue("fingerprint")
         val existing = findRequest(tasks, request)
@@ -93,28 +114,43 @@ internal class OperationTaskStore(
             persist(tasks)
             OperationTaskClaim(task, created = true)
         }
+        }
     }
 
-    fun put(task: JsonObject) = transaction { tasks ->
-        insert(tasks, task)
-        persist(tasks)
+    fun put(task: JsonObject) {
+        if (sqlite != null) {
+            stage("sqlite_put") { sqlite.put(task) }
+            return
+        }
+        transaction { tasks -> insert(tasks, task); persist(tasks) }
     }
-    fun update(id: String, values: Map<String, JsonElement>) = transaction { tasks ->
-        val previous = tasks[id]
-        if (previous != null) {
-            insert(tasks, JsonObject(previous + values))
-            persist(tasks)
+    fun update(id: String, values: Map<String, JsonElement>) {
+        if (sqlite != null) {
+            stage("sqlite_update") { sqlite.update(id, values) }
+            return
+        }
+        transaction { tasks ->
+            val previous = tasks[id]
+            if (previous != null) {
+                insert(tasks, JsonObject(previous + values))
+                persist(tasks)
+            }
         }
     }
     /** Atomic terminal guard shared by execution completion and cancellation. */
-    fun updateActive(id: String, values: Map<String, JsonElement>): Boolean = transaction { tasks ->
-        val previous = tasks[id]
-        if (previous == null || previous["state"]?.jsonPrimitive?.content in TERMINAL_STATES ||
-            (previous["output_validation_failed"] as? JsonPrimitive)?.booleanOrNull == true) false
-        else {
-            insert(tasks, JsonObject(previous + values))
-            persist(tasks)
-            true
+    fun updateActive(id: String, values: Map<String, JsonElement>): Boolean {
+        if (sqlite != null) return stage("sqlite_update_active") {
+            sqlite.update(id, values, activeOnly = true)
+        }
+        return transaction { tasks ->
+            val previous = tasks[id]
+            if (previous == null || previous["state"]?.jsonPrimitive?.content in TERMINAL_STATES ||
+                (previous["output_validation_failed"] as? JsonPrimitive)?.booleanOrNull == true) false
+            else {
+                insert(tasks, JsonObject(previous + values))
+                persist(tasks)
+                true
+            }
         }
     }
     private fun findRequest(tasks: Map<String, JsonObject>, id: String): JsonObject? =
