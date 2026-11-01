@@ -90,6 +90,15 @@ internal class AndroidOperationRuntime(
             }
         }.register(registry)
         registry.register(OperationDescriptor(
+            id = "closepaw.task_store.diagnostics",
+            description = "Read bounded task-store metadata independently of admission, write locks and task creation. Never repairs, replays or deletes. Readability does not prove write health.",
+            inputSchema = buildJsonObject { put("type", "object"); put("properties", buildJsonObject {}); put("additionalProperties", false) },
+        ), object : OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation) = withContext(Dispatchers.IO) {
+                OperationResult(data = store.diagnostics(), summary = "Passive task ledger diagnostics; no recovery attempted.")
+            }
+        })
+        registry.register(OperationDescriptor(
             id = "closepaw.projection.diagnostics",
             description = "Read bounded projection acquisition metadata only; no pixels, screen text or projection tokens.",
             inputSchema = buildJsonObject { put("type", "object"); put("properties", buildJsonObject {}); put("additionalProperties", false) },
@@ -317,7 +326,7 @@ internal class AndroidOperationRuntime(
     fun diagnosticSnapshot(): JsonObject = JsonObject(draftDiagnostics.snapshot() + ("roundtrip" to roundTripDiagnostics.snapshot()) + ("projection" to ControlDiagnostics.projectionSnapshot()))
     fun tailscaleDiagnosticSnapshot(): JsonObject = tailscaleDiagnostics.snapshot()
 
-    override fun call(name: String, arguments: JsonObject): JsonObject = when(name) {
+    override fun call(name: String, arguments: JsonObject): JsonObject = try { when(name) {
         "discover_operations" -> dispatcher.discover(arguments)
         "query" -> dispatcher.query(arguments)
         "execute" -> dispatcher.execute(arguments)
@@ -343,6 +352,13 @@ internal class AndroidOperationRuntime(
             runBlocking { GeminiTaskAwaiter(dispatcher::getTask).get(arguments) }
         }
         else -> buildJsonObject { put("status", "failed"); put("error_code", "unknown_tool") }
+    }
+    } catch (_: Exception) {
+        buildJsonObject {
+            put("status", "failed"); put("error_code", "task_storage_failed")
+            put("summary", "Task storage unavailable. Do not replay; inspect closepaw.task_store.diagnostics.")
+            put("diagnostic_operation", "closepaw.task_store.diagnostics")
+        }
     }
     private fun stringSchema(max: Int, min: Int=0) = buildJsonObject { put("type", "string"); put("minLength", min); put("maxLength", max) }
     private fun schema(vararg fields: Pair<String, JsonObject>, required: List<String> = emptyList()) = buildJsonObject {
