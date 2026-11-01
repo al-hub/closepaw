@@ -83,6 +83,14 @@ internal class OperationTaskRetainedOverlay(private val legacy: File) {
             prior.forEach { item ->
                 val identity = item.jsonObject["task_id"]?.jsonPrimitive?.content
                 require(identity != null && identity in result) { "history_manifest_identity_rollback" }
+                val previous = item.jsonObject
+                val selected = result.getValue(identity)
+                // Terminal outcomes/results cannot be replaced by an older
+                // manifest. Unknown newer state also demands manual recovery.
+                require(previous == selected || previous["state"] != selected["state"] &&
+                    previous["state"]?.jsonPrimitive?.content in setOf("queued", "running", "cancel_requested")) {
+                    "history_manifest_state_rollback"
+                }
             }
         } ?: throw IllegalStateException("history_directory_unavailable")
         OperationTaskHistoryPreflight.inspect(result.values)
