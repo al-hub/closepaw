@@ -66,13 +66,25 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
     fun importOnce(records: List<JsonObject>) = database { db ->
         db.beginTransaction()
         try {
+            require(db.version == 0) { "migration_already_committed" }
             db.rawQuery("SELECT COUNT(*) FROM tasks", null).use {
                 require(it.moveToFirst() && it.getLong(0) == 0L) { "migration_database_not_empty" }
             }
             records.forEachIndexed { i, record -> insert(db, record, i.toLong()) }
-            db.rawQuery("SELECT COUNT(*) FROM tasks", null).use {
-                require(it.moveToFirst() && it.getLong(0) == records.size.toLong()) { "migration_count_mismatch" }
+            db.query("tasks", arrayOf("payload_json"), null, null, null, null, "ordinal ASC").use { rows ->
+                var index = 0
+                while (rows.moveToNext()) {
+                    require(index < records.size &&
+                        Json.parseToJsonElement(rows.getString(0)).jsonObject == records[index]) {
+                        "migration_content_mismatch"
+                    }
+                    index++
+                }
+                require(index == records.size) { "migration_record_loss" }
             }
+            // The completion marker must commit atomically with the imported rows.
+            // A failed import leaves user_version=0 and no accepted claims.
+            db.version = 1
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
