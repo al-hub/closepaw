@@ -1,0 +1,24 @@
+{
+  "anonymous_download": true,
+  "certificate_match": true,
+  "checksum_match": true,
+  "cryptographic_signature_verification": "see independent apksigner public-download CI evidence",
+  "package": "ai.closepaw",
+  "sha256": "7d2c0b84b858be4f1f26218682bb9ee01048fb84d1d147bbf17cfee3c56863a4",
+  "signing_block_certificate_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+  "size_bytes": 116919291,
+  "version": "0.1.105",
+  "version_code": 106,
+  "zip_crc_pass": true,
+  "source_commit": "b04421adc787b19e223e1248c3380e66809a1677",
+  "release_tag": "v0.1.105",
+  "test_audit": {
+    "artifact_id": 13072539505,
+    "sha256": "e17b3e1f876cee5759c89cbb09fdbb47fc8ef0fc7858d9a1362ab9463a338b57",
+    "tests": 3106,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "new_diagnostic_tests": 10
+  }
+}

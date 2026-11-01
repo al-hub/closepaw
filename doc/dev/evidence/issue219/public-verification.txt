@@ -1,0 +1,31 @@
+#219 v0.1.105/code106 — public APK verification
+Source: b04421adc787b19e223e1248c3380e66809a1677
+Reviewed tree: 891fdb8fefed862800e723cf5aa1ea704355806e (same candidate/merge)
+PR: https://github.com/al-hub/closepaw/pull/220
+Main Security: https://github.com/al-hub/closepaw/actions/runs/41281263892 success
+Main UI: https://github.com/al-hub/closepaw/actions/runs/41281263907 attempt2 success
+Signed: https://github.com/al-hub/closepaw/actions/runs/41281963836 success
+Release: https://github.com/al-hub/closepaw/releases/tag/v0.1.105
+APK: https://github.com/al-hub/closepaw/releases/download/v0.1.105/closepaw-aa-bridge.apk
+Asset SHA256: 7d2c0b84b858be4f1f26218682bb9ee01048fb84d1d147bbf17cfee3c56863a4
+Asset bytes: 116919291
+Annotated tag be476c4ffaa03c26e0023be83427817c4749da08 dereferences exact source.
+
+Raw completed signing-job124775521113 public anonymous download verification:
+2026-11-01T06:43:41.7149423Z package: name='ai.closepaw' versionCode='106' versionName='0.1.105' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+2026-11-01T06:44:06.5506918Z Verifies
+2026-11-01T06:44:06.5509362Z Verified using v3 scheme (APK Signature Scheme v3): true
+2026-11-01T06:44:06.5557851Z V3.0 Signer: certificate SHA-256 digest: d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba
+2026-11-01T06:44:06.5762778Z package: name='ai.closepaw' versionCode='106' versionName='0.1.105' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+2026-11-01T06:44:06.5902022Z source_commit=b04421adc787b19e223e1248c3380e66809a1677
+2026-11-01T06:44:06.5902617Z release_tag=v0.1.105
+2026-11-01T06:44:06.5903046Z version=0.1.105
+2026-11-01T06:44:06.5903419Z version_code=106
+2026-11-01T06:44:06.6778858Z 7d2c0b84b858be4f1f26218682bb9ee01048fb84d1d147bbf17cfee3c56863a4  /home/runner/work/_temp/public-apk-verification/***.apk
+2026-11-01T06:44:06.6810377Z 116919291
+
+Separate connected host anonymous download/AXML/signing-block certificate/CRC/checksum audit in host-verification.json. Host certificate extraction is corroboration, not standalone cryptographic signature validation; apksigner above verifies the same SHA-matched public bytes.
+
+Independent PR JUnit artifact13072539505 SHA256 e17b3e1f876cee5759c89cbb09fdbb47fc8ef0fc7858d9a1362ab9463a338b57: 3106 tests, failures/errors/skips0; new diagnostic9+dispatcher1 PASS. Python77/Bridge8/release scripts46 PASS; UI18+8PNG. Main attempt1 UI failed native input binding/Compose timeout; one targeted rerun passed18 without source changes. Preserve original failure; no gate bypass. Earlier Signed41281827915 refused pending UI before signing.
+
+Device: installation request closepaw-219-install-0.1.105-20261101-01 once, raw task_storage_failed before operation start/no task ID. Durable status current0.1.104/code105 (installed0.1.103 is historical task5490ed9c); independent get_status same. No retry/replay/deletion/reinstallation/session mutation. Manual existing-data-preserving APK update required before passive diagnosis. Actual phone cause UNCONFIRMED; automatic repair NOT_IMPLEMENTED. New command/session/automatic recovery BLOCKED, #219/#217 OPEN.
