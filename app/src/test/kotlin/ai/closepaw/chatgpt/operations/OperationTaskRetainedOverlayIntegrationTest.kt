@@ -100,4 +100,31 @@ class OperationTaskRetainedOverlayIntegrationTest {
         }
     }
 
+    @Test fun committedGenerationTamperMustFailClosed() {
+        val file = original()
+        assertTrue(OperationTaskStore(file).claim(record(2000)).created)
+        val history = File(file.path + ".history")
+        val marker = File(history, "enabled").readText().trim().split(' ')
+        val committed = File(history, marker[1] + ".json")
+        assertTrue(committed.exists())
+        committed.appendText("tampered")
+        try {
+            OperationTaskStore(file).claim(record(2000))
+            fail("tampered history must never be trusted for dedup")
+        } catch (_: OperationTaskStorageException) {}
+    }
+
+    @Test fun updatedClaimAndEarlierHistorySurviveMultipleGenerations() {
+        val file = original()
+        val store = OperationTaskStore(file)
+        assertTrue(store.claim(record(2000, "queued")).created)
+        assertTrue(store.claim(record(2001, "queued")).created)
+        assertTrue(store.updateActive("id-2000", mapOf("state" to JsonPrimitive("succeeded"))))
+        val restored = OperationTaskStore(file)
+        assertEquals("succeeded", restored.get("id-2000")?.get("state")?.jsonPrimitive?.content)
+        assertEquals("outcome_unknown", restored.get("id-2001")?.get("state")?.jsonPrimitive?.content)
+        assertFalse(restored.claim(record(2001, "queued")).created)
+        assertEquals(record(1999), restored.get("id-1999"))
+    }
+
 }
