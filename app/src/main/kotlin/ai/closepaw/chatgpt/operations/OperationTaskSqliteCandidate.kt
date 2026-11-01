@@ -103,4 +103,60 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
             if (rows.moveToFirst()) Json.parseToJsonElement(rows.getString(0)).jsonObject else null
         }
     }
+    /** Update a retained record without changing immutable identity or ordering. */
+    fun update(taskId: String, changes: Map<String, JsonElement>, activeOnly: Boolean = false): Boolean =
+        database { db ->
+            db.beginTransaction()
+            try {
+                val current = db.query("tasks", arrayOf("payload_json"), "task_id=?",
+                    arrayOf(taskId), null, null, null).use { rows ->
+                    if (rows.moveToFirst()) Json.parseToJsonElement(rows.getString(0)).jsonObject else null
+                }
+                if (current == null || (activeOnly && current["state"]?.jsonPrimitive?.content in
+                        setOf("succeeded", "failed", "cancelled", "timed_out", "interrupted"))) {
+                    db.setTransactionSuccessful()
+                    return@database false
+                }
+                val next = JsonObject(current + changes)
+                require(field(next, "task_id") == field(current, "task_id") &&
+                    field(next, "request_id") == field(current, "request_id")) { "task_identity_immutable" }
+                val values = ContentValues().apply {
+                    put("state", field(next, "state"))
+                    put("operation_id", field(next, "operation_id"))
+                    put("created_at_ms", next["created_at_ms"]?.jsonPrimitive?.longOrNull
+                        ?: throw IllegalArgumentException("invalid_created_at_ms"))
+                    put("payload_json", next.toString())
+                }
+                require(db.update("tasks", values, "task_id=?", arrayOf(taskId)) == 1)
+                db.setTransactionSuccessful()
+                true
+            } finally {
+                db.endTransaction()
+            }
+        }
+
+    fun byRequest(requestId: String): JsonObject? = database { db ->
+        db.query("tasks", arrayOf("payload_json"), "request_id=?", arrayOf(requestId),
+            null, null, null).use { rows ->
+            if (rows.moveToFirst()) Json.parseToJsonElement(rows.getString(0)).jsonObject else null
+        }
+    }
+
+    fun latestOutcomeUnknown(operationId: String): Boolean = database { db ->
+        db.query("tasks", arrayOf("state"), "operation_id=?", arrayOf(operationId),
+            null, null, "created_at_ms DESC, ordinal DESC", "1").use { rows ->
+            rows.moveToFirst() && rows.getString(0) == "outcome_unknown"
+        }
+    }
+
+    /** Read all retained records in stable insertion order for compatibility checks. */
+    fun allRecords(): List<JsonObject> = database { db ->
+        val result = ArrayList<JsonObject>()
+        db.query("tasks", arrayOf("payload_json"), null, null, null, null, "ordinal ASC")
+            .use { rows ->
+                while (rows.moveToNext()) result.add(Json.parseToJsonElement(rows.getString(0)).jsonObject)
+            }
+        result
+    }
+
 }
