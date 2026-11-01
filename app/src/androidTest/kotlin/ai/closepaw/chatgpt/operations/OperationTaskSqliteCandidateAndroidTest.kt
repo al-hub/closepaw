@@ -21,6 +21,60 @@ class OperationTaskSqliteCandidateAndroidTest {
         put("future_field", "must-survive")
     }
 
+    @Test fun preexistingHistoryAbove2000MigratesWithoutLegacyQuotaAndRemainsQueryable() {
+        val dir = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val legacy = File.createTempFile("task-overcap-219-", ".json", dir)
+        legacy.writeText(JsonArray((0 until 2001).map(::record)).toString(), Charsets.UTF_8)
+        val immutableOriginal = legacy.readBytes()
+        try {
+            val store = OperationTaskStore(legacy)
+            assertEquals(record(2000), store.byRequest("request-2000"))
+            assertTrue(store.claim(record(2001)).created)
+            assertEquals(record(0), store.get("id-0"))
+            assertArrayEquals(immutableOriginal, legacy.readBytes())
+            val reloaded = OperationTaskStore(legacy, beforeStage = { stage ->
+                if (stage == "read" || stage == "decode" || stage == "overlay_read") {
+                    throw IllegalStateException("committed SQLite must not reparse legacy JSON")
+                }
+            })
+            assertEquals(record(2001), reloaded.get("id-2001"))
+            assertFalse(reloaded.claim(record(2001)).created)
+            assertArrayEquals(immutableOriginal, legacy.readBytes())
+        } finally {
+            legacy.delete()
+            File(legacy.path + ".sqlite").delete()
+            File(legacy.path + ".sqlite-journal").delete()
+            File(legacy.path + ".sqlite-wal").delete()
+            File(legacy.path + ".sqlite-shm").delete()
+            File(legacy.path + ".sqlite.ready").delete()
+            File(legacy.path + ".lock").delete()
+        }
+    }
+
+    @Test fun postCommitPreActivationCrashRecoversOnlyMatchingOriginal() {
+        val dir = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val legacy = File.createTempFile("task-midcommit-219-", ".json", dir)
+        val records = (0 until 4).map(::record)
+        legacy.writeText(JsonArray(records).toString(), Charsets.UTF_8)
+        try {
+            // Simulate a crash between SQLite's durable commit and .ready publication.
+            OperationTaskSqliteCandidate(File(legacy.path + ".sqlite")).importOnce(records)
+            assertFalse(File(legacy.path + ".sqlite.ready").exists())
+            val store = OperationTaskStore(legacy)
+            assertTrue(File(legacy.path + ".sqlite.ready").isFile)
+            assertEquals(record(3), store.get("id-3"))
+            assertFalse(store.claim(record(3)).created)
+        } finally {
+            legacy.delete()
+            File(legacy.path + ".sqlite").delete()
+            File(legacy.path + ".sqlite-journal").delete()
+            File(legacy.path + ".sqlite-wal").delete()
+            File(legacy.path + ".sqlite-shm").delete()
+            File(legacy.path + ".sqlite.ready").delete()
+            File(legacy.path + ".lock").delete()
+        }
+    }
+
     @Test fun failedImportRollsBackRowsAndCompletionMarker() {
         val dir = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
         val file = File.createTempFile("task-rollback-219-", ".db", dir)
