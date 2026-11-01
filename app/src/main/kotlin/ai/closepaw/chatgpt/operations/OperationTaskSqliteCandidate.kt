@@ -32,7 +32,11 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
         }
     }
 
-    private fun requireMigrated(db: SQLiteDatabase) {\n        require(db.version == 1) { "migration_not_committed" }\n    }\n\n    private fun field(record: JsonObject, name: String): String =
+    private fun requireMigrated(db: SQLiteDatabase) {
+        require(db.version == 1) { "migration_not_committed" }
+    }
+
+    private fun field(record: JsonObject, name: String): String =
         (record[name] as? JsonPrimitive)?.takeIf { it.isString }?.content
             ?: throw IllegalArgumentException("missing_or_invalid_$name")
 
