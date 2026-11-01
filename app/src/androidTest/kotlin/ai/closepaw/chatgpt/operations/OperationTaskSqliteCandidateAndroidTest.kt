@@ -75,6 +75,54 @@ class OperationTaskSqliteCandidateAndroidTest {
         }
     }
 
+    @Test fun migratedLegacyNullRequestAndEqualTimestampsRemainReadableAndIndexed() {
+        val dir = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val file = File.createTempFile("task-compat-219-", ".db", dir)
+        file.delete()
+        try {
+            val unknown = JsonObject(record(0) + mapOf(
+                "state" to JsonPrimitive("outcome_unknown"),
+                "created_at_ms" to JsonPrimitive(100L)
+            ))
+            val sameTime = JsonObject(record(1) + mapOf("created_at_ms" to JsonPrimitive(100L)))
+            val noRequest = JsonObject(record(2) - "request_id")
+            val store = OperationTaskSqliteCandidate(file)
+            store.importOnce(listOf(unknown, sameTime, noRequest))
+            // Legacy maxByOrNull picks the first inserted task for tied timestamps.
+            assertTrue(store.latestOutcomeUnknown("linux.shell.exec"))
+            assertTrue(store.update("id-2", mapOf("summary" to JsonPrimitive("retained"))))
+            assertEquals("retained", store.get("id-2")?.get("summary")?.jsonPrimitive?.content)
+            assertNull(store.byRequest("request-2"))
+            store.put(JsonObject(unknown + mapOf(
+                "operation_id" to JsonPrimitive("gemini.question.ask"),
+                "created_at_ms" to JsonPrimitive(200L),
+                "state" to JsonPrimitive("succeeded")
+            )))
+            assertFalse(store.latestOutcomeUnknown("linux.shell.exec"))
+            android.database.sqlite.SQLiteDatabase.openDatabase(
+                file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
+            ).use { db ->
+                db.query("tasks", arrayOf("operation_id", "created_at_ms"),
+                    "task_id=?", arrayOf("id-0"), null, null, null).use { row ->
+                    assertTrue(row.moveToFirst())
+                    assertEquals("gemini.question.ask", row.getString(0))
+                    assertEquals(200L, row.getLong(1))
+                }
+            }
+            val conflict = store.claim(JsonObject(record(1) + mapOf(
+                "fingerprint" to JsonPrimitive("DIFFERENT")
+            )))
+            assertFalse(conflict.created)
+            assertTrue(conflict.conflict)
+            assertEquals(sameTime, store.get("id-1"))
+        } finally {
+            file.delete()
+            File(file.path + "-journal").delete()
+            File(file.path + "-wal").delete()
+            File(file.path + "-shm").delete()
+        }
+    }
+
     @Test fun failedImportRollsBackRowsAndCompletionMarker() {
         val dir = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
         val file = File.createTempFile("task-rollback-219-", ".db", dir)
