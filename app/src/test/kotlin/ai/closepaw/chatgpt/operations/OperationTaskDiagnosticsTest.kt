@@ -42,6 +42,39 @@ class OperationTaskDiagnosticsTest {
         assertArrayEquals(before, file.readBytes())
         assertFalse(File(file.path + ".lock").exists())
     }
+    @Test fun measuredLargeLedgerTierRemainsReadOnlyAndRedacted() {
+        val file = ledger()
+        file.parentFile!!.mkdirs()
+        // Approximately the measured 12.9MB phone snapshot, with a bounded
+        // count and structure. No real task IDs or result contents may escape.
+        val secret = "SENSITIVE_OUTPUT_" + "x".repeat(65000)
+        file.bufferedWriter().use { out ->
+            out.write("[")
+            repeat(200) { i ->
+                if (i > 0) out.write(",")
+                out.write(buildJsonObject {
+                    put("task_id", "private-$i"); put("request_id", "secret-$i")
+                    put("state", if (i == 0) "outcome_unknown" else "succeeded")
+                    put("result", buildJsonObject { put("stdout", secret) })
+                }.toString())
+            }
+            out.write("]")
+        }
+        val beforeHash = digest(file)
+        assertTrue(file.length() > 8L * 1024 * 1024)
+        assertTrue(file.length() < OperationTaskDiagnostics.MAX_BYTES)
+        val beforeLength = file.length()
+        val result = OperationTaskDiagnostics(file).snapshot()
+        assertEquals("readable", result["read_state"]?.jsonPrimitive?.content)
+        assertEquals(200, result["task_count"]?.jsonPrimitive?.int)
+        assertEquals(1, result["unknown_count"]?.jsonPrimitive?.int)
+        assertEquals(199, result["terminal_count"]?.jsonPrimitive?.int)
+        assertFalse(result.toString().contains("SENSITIVE_OUTPUT"))
+        assertFalse(result.toString().contains("private-"))
+        assertEquals(beforeLength, file.length())
+        assertEquals(beforeHash, digest(file))
+        assertFalse(File(file.path + ".lock").exists())
+    }
     @Test fun malformedDuplicateAndOversizeLedgersFailClosedWithoutReplacement() {
         val file = ledger()
         file.parentFile!!.mkdirs()
@@ -137,13 +170,125 @@ class OperationTaskDiagnosticsTest {
             }
         }
     }
-    @Test fun deepOrExcessiveStructureIsRejectedBeforeDomParsing() {
+    @Test fun deepOrExcessivePayloadStructureIsRejectedWithoutDomParsing() {
         val file = ledger()
         file.parentFile!!.mkdirs()
-        for (raw in listOf("[".repeat(10000) + "]".repeat(10000), "[" + "{},".repeat(200000) + "{}]")) {
+        for (raw in listOf("[{\"task_id\":\"a\",\"x\":" + "[".repeat(10000) + "]".repeat(10000) + "}]", "[{\"task_id\":\"a\",\"x\":[" + "0,".repeat(300000) + "0]}]")) {
             file.writeText(raw)
             assertEquals("diagnostic_structure_limit", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
             assertEquals(raw, file.readText())
         }
     }
+    private fun digest(file: File): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { stream ->
+            val buffer = ByteArray(8192)
+            while (true) { val count = stream.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+    @Test fun strictJsonSyntaxUtf8DuplicateFieldsAndIdentityBoundsFailClosed() {
+        val file = ledger(); file.parentFile!!.mkdirs()
+        val invalid = listOf(
+            "[{\"task_id\":\"a\",\"task_id\":\"b\"}]",
+            "[{\"task_id\":\"a\",\"request_id\":\"r\"},{\"task_id\":\"b\",\"request_id\":\"r\"}]",
+            "[{\"task_id\":1}]", "[{\"task_id\":\"a\",\"state\":true}]",
+            "[{\"task_id\":\"a\",\"x\":01}]", "[{\"task_id\":\"a\",\"x\":1e}]",
+            "[{\"task_id\":\"a\",\"x\":+1}]", "[{\"task_id\":\"a\",\"x\":NaN}]",
+            "[{\"task_id\":\"a\",\"x\":\"bad\\q\"}]", "[] trailing", "[{},]",
+            "[{\"task_id\":\"a\",\"x\":\"bad\\u１２３４\"}]",
+            "[{\"task_id\":\"a\",\"x\":\"line\nfeed\"}]"
+        )
+        invalid.forEach { raw ->
+            file.writeText(raw)
+            assertEquals(raw, "invalid_ledger", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
+            assertEquals(raw, file.readText())
+        }
+        file.writeBytes("[{\"task_id\":\"".toByteArray() + byteArrayOf(0xc3.toByte(), 0x28) + "\"}]".toByteArray())
+        val hash = digest(file)
+        assertEquals("invalid_ledger", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(hash, digest(file))
+        file.writeText("[{\"task_id\":\"" + "x".repeat(4097) + "\"}]")
+        assertEquals("diagnostic_structure_limit", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
+    }
+    @Test fun streamedPayloadGrammarAndStateClassification() {
+        val file = ledger(); file.parentFile!!.mkdirs()
+        val states = listOf("queued", "running", "cancel_requested", "succeeded", "failed", "cancelled", "timed_out", "interrupted", "outcome_unknown", "future")
+        file.writeText(JsonArray(states.mapIndexed { i, state -> buildJsonObject {
+            put("task_id", "id-$i"); put("state", state)
+            put("payload", Json.parseToJsonElement("""{"escaped":"\u0041\n\\\"","values":[null,true,false,-0,1.5,2e+3,{}]}"""))
+        } }).toString())
+        val result = OperationTaskDiagnostics(file).snapshot()
+        assertEquals("readable", result["read_state"]?.jsonPrimitive?.content)
+        assertEquals(3, result["active_count"]?.jsonPrimitive?.int)
+        assertEquals(5, result["terminal_count"]?.jsonPrimitive?.int)
+        assertEquals(2, result["unknown_count"]?.jsonPrimitive?.int)
+        assertTrue(result.toString().length < 1024)
+    }
+    @Test fun exactByteBoundaryAndGrowingOrReplacedSnapshotAreBounded() {
+        val file = ledger(); file.parentFile!!.mkdirs()
+        file.outputStream().buffered().use { out ->
+            out.write("[]".toByteArray())
+            val padding = ByteArray(8192) { 32 }
+            var remaining = OperationTaskDiagnostics.MAX_BYTES - 2
+            while (remaining > 0) { val n = minOf(remaining, padding.size); out.write(padding, 0, n); remaining -= n }
+        }
+        assertEquals("readable", OperationTaskDiagnostics(file).snapshot()["read_state"]?.jsonPrimitive?.content)
+        file.appendText(" ")
+        assertEquals("ledger_too_large", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
+        file.writeText("[]")
+        val changed = OperationTaskDiagnostics(file, openInput = {
+            object : java.io.FilterInputStream(file.inputStream()) {
+                override fun close() { super.close(); file.appendText(" ") }
+            }
+        }).snapshot()
+        assertEquals("ledger_changed", changed["reason_code"]?.jsonPrimitive?.content)
+        assertFalse(changed.containsKey("task_count"))
+        file.writeText("[]")
+        val replaced = OperationTaskDiagnostics(file, openInput = {
+            val stream = file.inputStream()
+            val replacement = File(file.parentFile, "replacement")
+            replacement.writeText("[ ]")
+            java.nio.file.Files.move(replacement.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            stream
+        }).snapshot()
+        assertEquals("ledger_changed", replaced["reason_code"]?.jsonPrimitive?.content)
+        // Initial stat fits, but the descriptor grows before scanning: enforce the streaming byte bound too.
+        file.writeText("[]")
+        val growing = OperationTaskDiagnostics(file, openInput = {
+            java.io.RandomAccessFile(file, "rw").use { it.setLength(OperationTaskDiagnostics.MAX_BYTES + 1L) }
+            // All bytes are JSON whitespace, so refusal must come from the byte counter.
+            java.io.SequenceInputStream("[]".byteInputStream(), object : java.io.InputStream() {
+                var left = OperationTaskDiagnostics.MAX_BYTES
+                override fun read(): Int = if (left-- > 0) 32 else -1
+            })
+        }).snapshot()
+        assertEquals("ledger_too_large", growing["reason_code"]?.jsonPrimitive?.content)
+    }
+    @Test fun recordDepthNodeAndRetainedIdentityBudgetsAreIndependent() {
+        val file = ledger(); file.parentFile!!.mkdirs()
+        file.bufferedWriter().use { out ->
+            out.write("[")
+            repeat(2001) { i -> if (i > 0) out.write(","); out.write("{\"task_id\":\"$i\"}") }
+            out.write("]")
+        }
+        assertEquals("record_count_exceeded", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
+        file.writeText("[{\"task_id\":\"a\",\"x\":" + "[".repeat(30) + "0" + "]".repeat(30) + "}]")
+        assertEquals("diagnostic_structure_limit", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
+        file.writeText("[{\"task_id\":\"a\",\"x\":" + "[".repeat(29) + "0" + "]".repeat(29) + "}]")
+        assertEquals("readable", OperationTaskDiagnostics(file).snapshot()["read_state"]?.jsonPrimitive?.content)
+        file.bufferedWriter().use { out ->
+            out.write("[{\"task_id\":\"a\",\"x\":[")
+            repeat(OperationTaskDiagnosticScanner.MAX_NODES) { i -> if (i > 0) out.write(","); out.write("0") }
+            out.write("]}]")
+        }
+        assertEquals("diagnostic_structure_limit", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
+        file.bufferedWriter().use { out ->
+            out.write("[")
+            repeat(100) { i -> if (i > 0) out.write(","); out.write("{\"task_id\":\"$i" + "x".repeat(3000) + "\"}") }
+            out.write("]")
+        }
+        assertEquals("diagnostic_structure_limit", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
+    }
+
 }
