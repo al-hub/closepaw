@@ -63,4 +63,24 @@ class OperationTaskRetainedOverlayIntegrationTest {
         assertTrue(OperationTaskStore(file).claim(record(2000)).created)
         assertEquals(initial, sha(file))
     }
+    @Test fun missingHistoryMarkerMustFailClosedRatherThanForgetClaims() {
+        val file = original()
+        val store = OperationTaskStore(file)
+        val claim = record(2000)
+        assertTrue(store.claim(claim).created)
+        val marker = File(file.path + ".history/enabled")
+        assertTrue(marker.exists())
+        assertTrue(marker.delete())
+        // No new work is allowed when the already-activated history
+        // cannot be proven complete. Current implementation mistakenly
+        // treats this as an inactive history and may admit a replay.
+        try {
+            val restarted = OperationTaskStore(file)
+            restarted.claim(claim)
+            fail("lost history marker silently forgot prior admission")
+        } catch (_: OperationTaskStorageException) {
+            // Correct behavior is fail-closed until safe repair.
+        }
+    }
+
 }
