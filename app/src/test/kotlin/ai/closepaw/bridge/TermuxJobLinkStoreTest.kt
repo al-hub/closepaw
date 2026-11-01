@@ -38,6 +38,21 @@ class TermuxJobLinkStoreTest {
         assertThat(store.get(UUID(0, 0).toString())).isEqualTo(UUID(1, 0).toString())
     }
 
+    @Test fun `full ledger reclaims only links backed by durable results`() = withLedger { file ->
+        file.writeText((0 until 1000).joinToString("\n", postfix = "\n") {
+            "${UUID(0, it.toLong())}\t${UUID(1, it.toLong())}"
+        })
+        val retired = UUID(0, 0).toString()
+        val store = TermuxJobLinkStore(file) { task, job ->
+            task == retired && job == UUID(1, 0).toString()
+        }
+        assertThat(store.canAccept(TASK)).isTrue()
+        store.put(TASK, JOB)
+        assertThat(store.get(retired)).isNull()
+        assertThat(store.get(UUID(0, 1).toString())).isEqualTo(UUID(1, 1).toString())
+        assertThat(TermuxJobLinkStore(file).get(TASK)).isEqualTo(JOB)
+    }
+
     @Test fun `corrupt ledger fails closed`() = withLedger { file ->
         file.writeText("bad\tlink\n")
         assertThrows(IllegalArgumentException::class.java) { TermuxJobLinkStore(file) }

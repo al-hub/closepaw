@@ -4,7 +4,10 @@ import java.io.File
 import java.io.FileOutputStream
 
 /** Persistent task-to-daemon-job identity only. A missing link never authorizes resubmission. */
-class TermuxJobLinkStore(private val file: File) {
+class TermuxJobLinkStore(
+    private val file: File,
+    private val resultRetained: (String, String) -> Boolean = { _, _ -> false },
+) {
     private val links = linkedMapOf<String, String>()
 
     init {
