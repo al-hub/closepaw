@@ -124,16 +124,17 @@ val copyClosePawBridge by tasks.registering {
     val bridgeSource = rootProject.layout.projectDirectory.file("tools/termux-bridge/closepaw_bridge.py")
     val jobsSource = rootProject.layout.projectDirectory.file("tools/termux-bridge/closepaw_jobs.py")
     val rawResource = layout.projectDirectory.file("src/main/res/raw/closepaw_bridge_py")
-    inputs.files(bridgeSource, jobsSource)
+    val maintenanceSource = rootProject.layout.projectDirectory.file("tools/termux-bridge/closepaw_maintenance.py")
+    inputs.files(bridgeSource, jobsSource, maintenanceSource)
     outputs.file(rawResource)
     doLast {
         // Keep the installed daemon standalone; bootstrap copies one resource.
         val bridge = bridgeSource.asFile.readText().replace(
             "from closepaw_jobs import JobManager, JobError\n", "",
-        )
+        ).replace("from closepaw_maintenance import MaintenanceController, MaintenanceError, approve_pin\n", "")
         val target = rawResource.asFile
         target.parentFile.mkdirs()
-        target.writeText(jobsSource.asFile.readText() + "\n" + bridge)
+        target.writeText(jobsSource.asFile.readText() + "\n" + maintenanceSource.asFile.readText() + "\n" + bridge)
     }
 }
 

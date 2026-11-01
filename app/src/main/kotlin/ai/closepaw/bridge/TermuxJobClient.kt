@@ -96,8 +96,12 @@ class TermuxJobClient(
             try {
                 http.newCall(builder.build()).execute().use { response ->
                     if (!response.isSuccessful) {
+                        val reason = runCatching { JSONObject(readBounded(response.body)).optString("error") }
+                            .getOrNull()?.takeIf { it in setOf("job_store_full_no_confirmed_results", "job_archive_full",
+                                "job_store_unhealthy", "job_archive_conflict", "job_archive_unavailable", "job_queue_full",
+                                "maintenance_draining", "invalid_request", "unauthorized") }
                         return@withContext TermuxJobReply.Failure(
-                            if (response.code == 401) "bridge_auth_mismatch" else "bridge_http_error",
+                            if (response.code == 401) "bridge_auth_mismatch" else if (reason != null) "bridge_http_${response.code}_$reason" else "bridge_http_error",
                             if (response.code == 401) "Local bridge pairing token does not match" else "Local bridge HTTP ${response.code}", response.code,
                         )
                     }

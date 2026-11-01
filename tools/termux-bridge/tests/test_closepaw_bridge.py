@@ -269,28 +269,15 @@ def test_stale_daemon_pidfile_is_overwritten_by_new_daemon(tmp_path, free_port, 
     assert pidfile_data["identity"] == "closepaw-bridge"
 
 
-def test_live_old_bridge_is_health_probed_then_replaced(tmp_path, free_port, bridge_factory):
+def test_live_old_bridge_is_not_killed_by_a_second_launch(tmp_path, free_port, bridge_factory):
     first = bridge_factory(free_port, tmp_path)
     second_proc = start_process(free_port, tmp_path)
-    second = BridgeProcess(port=free_port, home=tmp_path, process=second_proc)
-    pidfile = tmp_path / ".closepaw" / "bridge.pid"
     try:
-        wait_for_exit(first.process)
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline:
-            assert second.process.poll() is None
-            try:
-                owner_pid = json.loads(pidfile.read_text())["pid"]
-            except (FileNotFoundError, KeyError, json.JSONDecodeError):
-                owner_pid = None
-            if owner_pid == second_proc.pid:
-                wait_for_health(second)
-                break
-            time.sleep(0.05)
-        else:
-            raise AssertionError("replacement bridge did not take over pidfile")
-
-        assert second.get_json("/v1/health").body["identity"] == "closepaw-bridge"
+        stdout, stderr = second_proc.communicate(timeout=5)
+        assert second_proc.returncode == 1
+        assert "port_in_use" in stderr
+        assert first.process.poll() is None
+        assert first.post_json('/v1/exec', {'command': 'printf protected'}).body['stdout'] == 'protected'
     finally:
         stop_process(second_proc)
 

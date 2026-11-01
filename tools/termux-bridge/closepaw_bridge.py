@@ -19,15 +19,18 @@ import urllib.request
 import uuid
 from urllib.parse import urlsplit, parse_qs
 from closepaw_jobs import JobManager, JobError
+from closepaw_maintenance import MaintenanceController, MaintenanceError, approve_pin
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 IDENTITY = "closepaw-bridge"
-RUNTIME_REVISION = "88.2"
+RUNTIME_REVISION = "217.1"
+SOURCE_SHA256 = __import__("hashlib").sha256(Path(__file__).read_bytes()).hexdigest()
 DEFAULT_HOST, DEFAULT_PORT = "127.0.0.1", 18422
 DEFAULT_TIMEOUT_MS = MAX_TIMEOUT_MS = 120_000
 DEFAULT_OUTPUT_BYTES = 65536
 POLL_SEC = 0.25
 exec_lock = threading.Lock()
+recovery_event_lock = threading.RLock()
 AUTH_HEADER = "X-ClosePaw-Token"
 class InvalidRequest(Exception): pass
 class WorkspaceEscape(Exception): pass
@@ -303,6 +306,8 @@ class BridgeServer(ThreadingHTTPServer):
     daemon_threads = True
     def __init__(self, address, handler, idle_timeout_sec, watchdog_tick_sec, auth_token):
         super().__init__(address, handler)
+        self.admission = threading.RLock()
+        self.drained = os.environ.get("CLOSEPAW_START_DRAINED") == "1"
         self.jobs = JobManager(closepaw_dir() / "jobs", auth_token, exec_lock, parse_exec, InvalidRequest, kill_process_group)
         self.auth_token = auth_token
         self.started_at = time.monotonic()
@@ -363,7 +368,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, self.server.jobs.readiness())
                 return
             if method == "POST" and path == "/v1/jobs":
-                self.send_json(202, self.server.jobs.submit(self.read_json()))
+                payload = self.read_json()
+                with self.server.admission:
+                    if self.server.drained:
+                        raise JobError(409, "maintenance_draining")
+                    self.send_json(202, self.server.jobs.submit(payload))
                 return
             parts = path.split("/")
             if len(parts) < 4 or not parts[3]:
@@ -389,6 +398,58 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(400, {"error": "invalid_request"})
         except JobError as exc:
             self.send_json(exc.status, {"error": exc.error})
+    def maintenance_request(self):
+        if not self.authorized():
+            return
+        try:
+            if self.read_json():
+                raise InvalidRequest
+            action = self.path.removeprefix("/v1/maintenance/")
+            with self.server.admission:
+                if action == "status":
+                    self.send_json(200, {"source_sha256": SOURCE_SHA256,
+                        "runtime_revision": RUNTIME_REVISION,
+            "source_sha256": SOURCE_SHA256, "drained": self.server.drained})
+                    return
+                if action == "prepare":
+                    self.server.jobs.readiness()
+                    if self.server.jobs.has_active_jobs() or exec_lock.locked():
+                        raise JobError(409, "active_jobs")
+                    if any(j.get("outcome_unknown") for j in self.server.jobs.jobs.values()):
+                        raise JobError(409, "outcome_unknown")
+                    self.server.drained = True
+                elif action == "activate":
+                    self.server.drained = False
+                elif action in ("verify", "verify_runtime"):
+                    if not self.server.drained:
+                        raise JobError(409, "not_drained")
+                    if action == "verify":
+                        result = self.server.jobs.submit({"request_id": "maintenance-" + uuid.uuid4().hex,
+                            "command": "printf CLOSEPAW_MAINTENANCE_OK", "timeout_ms": 2000})
+                        deadline = time.monotonic() + 3
+                        while result['state'] in ('queued', 'running') and time.monotonic() < deadline:
+                            time.sleep(.02)
+                            result = self.server.jobs.snapshot(result['job_id'])
+                        self.send_json(200, {"exit_code": result['exit_code'], "stdout": result['stdout']})
+                    else:
+                        result = subprocess.run(["bash", "-c", "printf CLOSEPAW_MAINTENANCE_OK"],
+                            capture_output=True, timeout=2, check=False)
+                        self.send_json(200, {"exit_code": result.returncode, "stdout": result.stdout.decode()})
+                    return
+                elif action == "stop":
+                    if not self.server.drained:
+                        raise JobError(409, "not_drained")
+                    threading.Thread(target=self.server.shutdown, daemon=True).start()
+                else:
+                    raise JobError(404, "not_found")
+                self.send_json(200, {"status": "ok"})
+        except JobError as exc:
+            self.send_json(exc.status, {"error": exc.error})
+        except (InvalidRequest, ValueError):
+            self.send_json(400, {"error": "invalid_request"})
+        except (OSError, subprocess.TimeoutExpired):
+            self.send_json(503, {"error": "execution_verification_failed"})
+
     def do_GET(self):
         self.server.touch_request()
         if self.path.split("?", 1)[0].startswith("/v1/jobs"):
@@ -409,6 +470,9 @@ class Handler(BaseHTTPRequestHandler):
         })
     def do_POST(self):
         self.server.touch_request()
+        if self.path.startswith("/v1/maintenance/"):
+            self.maintenance_request()
+            return
         if self.path.split("?", 1)[0].startswith("/v1/jobs"):
             self.job_request("POST")
             return
@@ -427,9 +491,13 @@ class Handler(BaseHTTPRequestHandler):
         except InvalidRequest:
             self.send_json(400, {"error": "invalid_request"})
             return
-        if not exec_lock.acquire(blocking=False):
-            self.send_json(409, {"error": "busy"})
-            return
+        with self.server.admission:
+            if self.server.drained:
+                self.send_json(409, {"error": "maintenance_draining"})
+                return
+            if not exec_lock.acquire(blocking=False):
+                self.send_json(409, {"error": "busy"})
+                return
         try:
             status, body, disconnected = run_command(self, spec)
             if not disconnected:
@@ -449,18 +517,19 @@ def watchdog(server):  # watchdog|idle
             return
 def recovery_event(event, **fields):
     """Bounded, private diagnostics. Never include commands, environment or tokens."""
-    root = closepaw_dir()
-    payload = {"event": event, "at": time.time(), "revision": RUNTIME_REVISION, **fields}
-    log = root / "recovery.jsonl"
-    if log.exists() and log.stat().st_size > 65536:
-        log.replace(root / "recovery.previous.jsonl")
-    with log.open("a") as stream:
-        stream.write(json.dumps(payload, separators=(",", ":")) + "\n")
-    os.chmod(log, 0o600)
-    temp = root / f"recovery.json.tmp.{os.getpid()}"
-    temp.write_text(json.dumps(payload, separators=(",", ":")))
-    os.chmod(temp, 0o600)
-    temp.replace(root / "recovery.json")
+    with recovery_event_lock:
+        root = closepaw_dir()
+        payload = {"event": event, "at": time.time(), "revision": RUNTIME_REVISION, **fields}
+        log = root / "recovery.jsonl"
+        if log.exists() and log.stat().st_size > 65536:
+            log.replace(root / "recovery.previous.jsonl")
+        with log.open("a") as stream:
+            stream.write(json.dumps(payload, separators=(",", ":")) + "\n")
+        os.chmod(log, 0o600)
+        temp = root / f"recovery.json.tmp.{os.getpid()}"
+        temp.write_text(json.dumps(payload, separators=(",", ":")))
+        os.chmod(temp, 0o600)
+        temp.replace(root / "recovery.json")
 
 def recovery_probe(port, token):
     """Distinguish absence, incompatible listener and auth failure without executing a shell."""
@@ -511,6 +580,17 @@ def supervise(args):
     old_handlers = {}
     for sig in (signal.SIGTERM, signal.SIGINT):
         old_handlers[sig] = signal.signal(sig, lambda *_: stop.set())
+    controller = MaintenanceController(closepaw_dir(), Path(__file__).resolve(), args.port,
+                                       args.auth_token, recovery_event)
+    if not controller.resume():
+        lock.close()
+        return 5
+    try:
+        controller.serve(getattr(args, 'maintenance_port', None) or args.port + 2)
+    except OSError:
+        recovery_event("maintenance_port_conflict")
+        lock.close()
+        return 3
     child = None
     failures = 0
     previous = None
@@ -519,11 +599,20 @@ def supervise(args):
     recovery_event("supervisor_started", pid=os.getpid())
     try:
         while not stop.is_set():
-            state = recovery_probe(args.port, args.auth_token)
+            if not controller.lock.acquire(blocking=False):
+                stop.wait(.1)
+                continue
+            try:
+                state = recovery_probe(args.port, args.auth_token)
+            finally:
+                controller.lock.release()
             if state != previous:
                 recovery_event(state, attempts=failures)
                 previous = state
             if state == "ready":
+                requested = controller.requested_revision()
+                if requested:
+                    controller.apply(requested)
                 failures = 0
                 stop.wait(args.supervisor_interval_sec)
                 continue
@@ -549,13 +638,10 @@ def supervise(args):
                 return 4
             if stop.wait(0 if failures == 0 else min(2 ** failures, 30)):
                 break
-            env = os.environ.copy()
-            env["CLOSEPAW_BRIDGE_TOKEN"] = args.auth_token
-            child = subprocess.Popen(
-                [sys.executable, str(Path(__file__).resolve()), "--host", args.host,
-                 "--port", str(args.port), "--idle-timeout-sec", "0"],
-                env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            )
+            with controller.lock:
+                if recovery_probe(args.port, args.auth_token) != "daemon_absent":
+                    continue
+                child = controller.launch()
             failures += 1
             launch_at = time.monotonic()
             launches.append(launch_at)
@@ -564,13 +650,21 @@ def supervise(args):
             stop.wait(1)
         return 0
     finally:
+        if controller.server is not None:
+            controller.server.shutdown()
+            controller.server.server_close()
+        # Stopping the monitor must not kill user jobs. Daemon remains available.
+        if child is not None and child.poll() is None and not exec_lock.locked():
+            try:
+                controller.call('prepare')
+                controller.call('stop')
+            except MaintenanceError:
+                child = None
         if child is not None and child.poll() is None:
-            child.terminate()
             try:
                 child.wait(timeout=3)
             except subprocess.TimeoutExpired:
-                child.kill()
-                child.wait()
+                pass
         recovery_event("supervisor_stopped")
         for sig, handler in old_handlers.items():
             signal.signal(sig, handler)
@@ -584,11 +678,21 @@ def parse_args():
     parser.add_argument("--watchdog-tick-sec", type=float, default=60, help=argparse.SUPPRESS)
     parser.add_argument("--auth-token", default=os.environ.get("CLOSEPAW_BRIDGE_TOKEN"))
     parser.add_argument("--persistent", action="store_true", help="Alias for --idle-timeout-sec 0")
+    parser.add_argument("--maintenance-port", type=int)
+    parser.add_argument("--approve-update", nargs=4, metavar=("COMMIT", "JOBS_SHA", "BRIDGE_SHA", "MAINTENANCE_SHA"))
     parser.add_argument("--supervise", action="store_true", help="Monitor and recover the paired daemon")
     parser.add_argument("--supervisor-interval-sec", type=float, default=10, help=argparse.SUPPRESS)
     return parser.parse_args()
 def main():
     args = parse_args()
+    if args.approve_update:
+        try:
+            approve_pin(closepaw_dir(), args.approve_update[0], args.approve_update[1:])
+            print("approved_update_pin")
+            return 0
+        except MaintenanceError:
+            print("invalid_pin", file=sys.stderr)
+            return 2
     # Security boundary: never expose the command bridge beyond this device.
     # Android apps share the network namespace, so loopback is necessary but not
     # sufficient; app-side approval remains mandatory for command execution.
@@ -605,7 +709,16 @@ def main():
     if args.persistent:
         args.idle_timeout_sec = 0
     pidfile = closepaw_dir() / "bridge.pid"
-    kill_old_bridge(pidfile)
+    daemon_lock = (closepaw_dir() / 'daemon.lock').open('a')
+    os.chmod(daemon_lock.name, 0o600)
+    try:
+        fcntl.flock(daemon_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        daemon_lock.close()
+        port_in_use()
+    existing = read_pidfile(pidfile)
+    if existing.get('identity') not in (None, IDENTITY) and isinstance(existing.get('pid'), int) and pid_alive(existing['pid']):
+        port_in_use()
     try:
         server = BridgeServer((args.host, args.port), Handler,
                               args.idle_timeout_sec, args.watchdog_tick_sec, args.auth_token)
@@ -624,6 +737,7 @@ def main():
     finally:
         server.server_close()
         remove_own_pidfile(pidfile)
+        daemon_lock.close()
     return 0
 if __name__ == "__main__":
     sys.exit(main())

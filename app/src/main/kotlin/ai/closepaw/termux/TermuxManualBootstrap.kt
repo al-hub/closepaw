@@ -71,16 +71,22 @@ exec env CLOSEPAW_BRIDGE_TOKEN="${'$'}(cat "${'$'}TOKEN_FILE")" python3 "${'$'}B
     /** Runs only inside an authenticated, already paired daemon; credentials stay in env. */
     fun recoveryInstallCommand(bridgePayload: String, bootPayload: String): String {
         require(listOf(bridgePayload, bootPayload).all { it.matches(Regex("[A-Za-z0-9+/=]+")) })
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(JavaBase64.getDecoder().decode(bridgePayload)).joinToString("") { "%02x".format(it) }
         return "set -e; umask 077; mkdir -p ~/.closepaw ~/.termux/boot ~/closepaw/logs; " +
-            "if ! grep -qx '88.2' ~/.closepaw/recovery-installed 2>/dev/null; then " +
+            "command -v flock >/dev/null 2>&1 || { echo CLOSEPAW_RECOVERY=missing_flock; exit 1; }; " +
+            "exec 9>~/.closepaw/supervisor.lock; flock -n 9 || { echo CLOSEPAW_RECOVERY=supervisor_active; exit 1; }; " +
+            "exec 8>~/.closepaw/daemon.lock; flock -n 8 || { echo CLOSEPAW_RECOVERY=daemon_active; exit 1; }; " +
+            "if test -f ~/.closepaw/bridge.pid && python3 -c 'import json,os; p=json.load(open(os.path.expanduser(\"~/.closepaw/bridge.pid\"))); os.kill(p[\"pid\"],0)' 2>/dev/null; then echo CLOSEPAW_RECOVERY=stop_idle_legacy_once; exit 1; fi; " +
+            "if ! printf '%s  %s\\n'  '$digest' \"\$HOME/.closepaw/bridge.py\" | sha256sum -c --status; then " +
             "tmpf=\"\$(mktemp ~/.closepaw/bridge.py.XXXXXX)\"; " +
             "trap 'rm -f \"\$tmpf\"' EXIT; " +
             "printf '%s' '$bridgePayload' | base64 -d > \"\$tmpf\"; " +
-            "python3 -m py_compile \"\$tmpf\"; mv \"\$tmpf\" ~/.closepaw/bridge.py; " +
+            "python3 -m py_compile \"\$tmpf\"; test ! -f ~/.closepaw/bridge.py || cp -p ~/.closepaw/bridge.py ~/.closepaw/bridge.bootstrap.previous.py; mv \"\$tmpf\" ~/.closepaw/bridge.py; " +
             "printf '%s' '$bootPayload' | base64 -d > $BOOT_SCRIPT_PATH; chmod 700 $BOOT_SCRIPT_PATH; " +
-            "printf '88.2\\n' > ~/.closepaw/recovery-installed; fi; " +
-            "nohup python3 ~/.closepaw/bridge.py --supervise ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} " +
-            ">/dev/null 2>>~/closepaw/logs/bridge.err </dev/null & " +
+            "printf '$digest\\n' > ~/.closepaw/recovery-installed; fi; " +
+            "flock -u 8; flock -u 9; nohup python3 ~/.closepaw/bridge.py --supervise ${TermuxBridgeLaunchPolicy.PERSISTENT_DAEMON_ARGS} " +
+            ">/dev/null 2>>~/closepaw/logs/bridge.err </dev/null 8>&- 9>&- & " +
             "echo CLOSEPAW_RECOVERY=installed"
     }
 
