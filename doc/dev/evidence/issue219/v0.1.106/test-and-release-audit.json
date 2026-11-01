@@ -1,0 +1,128 @@
+{
+  "sha256": "fc6f21b7b00f0a32e7ddd48f99447ecbb935e107d4a41d6ffbeeadc2b71195dc",
+  "totals": {
+    "tests": 3111,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "selected": [
+    {
+      "file": "test-results/testDebugUnitTest/TEST-ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest.xml",
+      "name": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+      "tests": "14",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-01T07:53:34",
+      "time": "0.968",
+      "cases": [
+        {
+          "name": "exactByteBoundaryAndGrowingOrReplacedSnapshotAreBounded",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.445",
+          "failed": false
+        },
+        {
+          "name": "malformedDuplicateAndOversizeLedgersFailClosedWithoutReplacement",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.004",
+          "failed": false
+        },
+        {
+          "name": "deepOrExcessivePayloadStructureIsRejectedWithoutDomParsing",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.054",
+          "failed": false
+        },
+        {
+          "name": "corruptStartupRemainsQueryableAndNeverErasesTheLedger",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.001",
+          "failed": false
+        },
+        {
+          "name": "missingLedgerDiagnosisDoesNotCreateDirectoriesOrLocks",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.001",
+          "failed": false
+        },
+        {
+          "name": "countsAndCapacityAreIndependentOfClaimAndNeverExposePayloads",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.043",
+          "failed": false
+        },
+        {
+          "name": "measuredLargeLedgerTierRemainsReadOnlyAndRedacted",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.294",
+          "failed": false
+        },
+        {
+          "name": "recordDepthNodeAndRetainedIdentityBudgetsAreIndependent",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.084",
+          "failed": false
+        },
+        {
+          "name": "streamedPayloadGrammarAndStateClassification",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.001",
+          "failed": false
+        },
+        {
+          "name": "everyPersistenceBoundaryPreservesExistingResultAndDedupOnFailure",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.018",
+          "failed": false
+        },
+        {
+          "name": "lockContentionCannotBlockIndependentDiagnosis",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.001",
+          "failed": false
+        },
+        {
+          "name": "strictJsonSyntaxUtf8DuplicateFieldsAndIdentityBoundsFailClosed",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.01",
+          "failed": false
+        },
+        {
+          "name": "startupReconciliationFailurePreservesUnknownWorkAndDiagnosticEntry",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.009",
+          "failed": false
+        },
+        {
+          "name": "failedAtomicReplacementReportsStageWithoutLeakingPathOrExceptionMessage",
+          "classname": "ai.closepaw.chatgpt.operations.OperationTaskDiagnosticsTest",
+          "time": "0.003",
+          "failed": false
+        }
+      ]
+    }
+  ],
+  "head": "7b506b0298eda37c8e20357d396aeb6e796e023d",
+  "source": "7ac9789d89fa43b9d76f1281d09ade16b04dc11c",
+  "tree": "5a212603e25b7137879a1c0efdc8e9aba09224e9",
+  "pr_security": 41286315898,
+  "pr_ui": 41286315924,
+  "main_security": 41286767086,
+  "main_ui": 41286767124,
+  "signed": 41287310486,
+  "ui": {
+    "tests": 18,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "pngs": 8,
+    "artifact_sha256": "7e4833238dba2830223edf75687a6aad65bbc10123333dfe4c9916981927c0b2"
+  },
+  "scripts": 46,
+  "python": 77,
+  "bridge": 8,
+  "public_artifact_sha256": "61561463e7113d686a228b8f6e538589ff0992e4934e6266bb2e9a8bdd4dbedb",
+  "local_gradle": "Bootstrap exited1, network unavailable; tests not executed locally. Actual tests executed by CI."
+}

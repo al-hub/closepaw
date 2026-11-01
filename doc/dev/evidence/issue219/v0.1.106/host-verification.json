@@ -1,0 +1,13 @@
+{
+  "bytes": 116923387,
+  "sha256": "3eb0ece8d6b5689398bb59fe4ad7690c23fc87da9e4ae383b5434749031679b0",
+  "manifest": {
+    "versionCode": 107,
+    "versionName": "0.1.106",
+    "package": "ai.closepaw"
+  },
+  "v3_certificate_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+  "zip_crc": "PASS",
+  "native_runtimes": "PASS",
+  "note": "Host structural/certificate check; full cryptographic APK signature verified separately by release apksigner"
+}
