@@ -6,8 +6,36 @@ import java.nio.file.*
 import kotlinx.serialization.json.*
 
 /** Passive atomic-snapshot inspection. Never opens the write lock, constructs a store, or repairs data. */
+internal class OperationTaskStorageException(val stage: String, val reason: String, cause: Exception) :
+    IllegalArgumentException("Task storage unavailable", cause)
+
 internal class OperationTaskDiagnostics(private val file: File) {
+    @Volatile private var lastFailure: Pair<String, String>? = null
+    fun record(stage: String, error: Exception) { lastFailure = stage to reason(error) }
+    private fun checkStructure(raw: ByteArray) {
+        var depth = 0
+        var nodes = 0
+        var inString = false
+        var escaped = false
+        raw.forEach { byte ->
+            val ch = byte.toInt().toChar()
+            if (inString) {
+                if (escaped) escaped = false
+                else if (ch == '\\') escaped = true
+                else if (ch == '"') inString = false
+            } else when (ch) {
+                '"' -> { inString = true; nodes++ }
+                '{', '[' -> { depth++; nodes++ }
+                '}', ']' -> depth--
+                ',', ':' -> nodes++
+            }
+            require(depth in 0..32 && nodes <= 65536) { "Structure exceeds diagnostic bounds" }
+        }
+    }
     fun snapshot(): JsonObject = buildJsonObject {
+        lastFailure?.let { failure ->
+            put("last_failure_stage", failure.first); put("last_failure_reason", failure.second)
+        }
         put("diagnostic_version", 1)
         put("max_tasks", OperationTaskStore.MAX_TASKS)
         put("max_read_bytes", MAX_BYTES)
@@ -42,7 +70,9 @@ internal class OperationTaskDiagnostics(private val file: File) {
                     bytes.write(buffer, 0, count)
                 }
             }
-            val tasks = Json.parseToJsonElement(bytes.toString("UTF-8")) as? JsonArray
+            val raw = bytes.toByteArray()
+            checkStructure(raw)
+            val tasks = Json.parseToJsonElement(raw.toString(Charsets.UTF_8)) as? JsonArray
                 ?: throw IllegalArgumentException("array required")
             // The store cannot admit more than MAX_TASKS. Refuse unexpected larger snapshots.
             if (tasks.size > OperationTaskStore.MAX_TASKS) {
@@ -80,7 +110,7 @@ internal class OperationTaskDiagnostics(private val file: File) {
     }
 
     companion object {
-        const val MAX_BYTES = 32 * 1024 * 1024
+        const val MAX_BYTES = 8 * 1024 * 1024
         fun category(error: Exception): String = when (error) {
             is AtomicMoveNotSupportedException -> "atomic_move_unsupported"
             is AccessDeniedException, is SecurityException -> "access_denied"
@@ -92,6 +122,15 @@ internal class OperationTaskDiagnostics(private val file: File) {
             is IllegalArgumentException -> "invalid_data_or_limit"
             else -> "other_exception"
         }
-        fun reason(error: Exception): String = category(error)
+        fun reason(error: Exception): String {
+            if (error is OperationTaskStorageException) return error.reason
+            // Inspect OS text only to select constants; never return messages, paths or payloads.
+            val message = error.message.orEmpty().take(4096).lowercase(java.util.Locale.ROOT)
+            return when {
+                "enospc" in message || "no space left" in message -> "no_space"
+                "eacces" in message || "permission denied" in message -> "access_denied"
+                else -> category(error)
+            }
+        }
     }
 }

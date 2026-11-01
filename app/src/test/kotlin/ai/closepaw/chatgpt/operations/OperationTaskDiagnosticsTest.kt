@@ -74,9 +74,73 @@ class OperationTaskDiagnosticsTest {
         val file = ledger()
         file.parentFile!!.mkdirs()
         file.writeText("corrupt")
-        val store = OperationTaskStore(file)
-        assertEquals("invalid_ledger", store.diagnostics()["reason_code"]?.jsonPrimitive?.content)
-        try { store.byRequest("new"); fail("corruption must block admission") } catch (_: Exception) {}
+        val diagnostic = OperationTaskDiagnostics(file)
+        try { OperationTaskStore(file, diagnostic = diagnostic); fail("corruption must block startup") }
+        catch (_: OperationTaskStorageException) {}
+        assertEquals("invalid_ledger", diagnostic.snapshot()["reason_code"]?.jsonPrimitive?.content)
         assertEquals("corrupt", file.readText())
+    }
+    @Test fun everyPersistenceBoundaryPreservesExistingResultAndDedupOnFailure() {
+        for (failureStage in listOf("stage_create", "stage_open", "write", "fsync", "atomic_replace")) {
+            val file = File(directory.root, failureStage)
+            val original = buildJsonObject {
+                put("task_id", "old"); put("request_id", "old-request")
+                put("fingerprint", "same"); put("state", "succeeded")
+                put("result", buildJsonObject { put("stdout", "preserved") })
+            }
+            OperationTaskStore(file).put(original)
+            val before = file.readBytes()
+            val store = OperationTaskStore(file, beforeStage = { stage ->
+                if (stage == failureStage) throw java.io.IOException("ENOSPC PRIVATE_PATH")
+            })
+            try {
+                store.claim(buildJsonObject {
+                    put("task_id", "new"); put("request_id", "new-request"); put("fingerprint", "same")
+                })
+                fail("write unexpectedly succeeded")
+            } catch (_: OperationTaskStorageException) {}
+            assertArrayEquals(before, file.readBytes())
+            assertEquals(original, store.get("old"))
+            assertFalse(store.claim(original).created)
+            assertEquals("no_space", store.diagnostics()["last_failure_reason"]?.jsonPrimitive?.content)
+            assertEquals(failureStage, store.diagnostics()["last_failure_stage"]?.jsonPrimitive?.content)
+        }
+    }
+    @Test fun startupReconciliationFailurePreservesUnknownWorkAndDiagnosticEntry() {
+        val file = ledger()
+        file.parentFile!!.mkdirs()
+        file.writeText("""[{"task_id":"uncertain","request_id":"unknown","state":"running","operation_id":"gemini.question.ask"}]""")
+        val before = file.readBytes()
+        val diagnostic = OperationTaskDiagnostics(file)
+        try {
+            OperationTaskStore(file, diagnostic = diagnostic, beforeStage = { stage ->
+                if (stage == "atomic_replace") throw java.io.IOException("no space left")
+            })
+            fail("unreconciled store must not be usable")
+        } catch (_: OperationTaskStorageException) {}
+        assertArrayEquals(before, file.readBytes())
+        assertEquals(1, diagnostic.snapshot()["active_count"]?.jsonPrimitive?.int)
+        assertTrue(OperationTaskStore(file).latestOutcomeUnknown("gemini.question.ask"))
+    }
+    @Test fun lockContentionCannotBlockIndependentDiagnosis() {
+        val file = ledger()
+        file.parentFile!!.mkdirs()
+        file.writeText("[]")
+        java.io.RandomAccessFile(File(file.path + ".lock"), "rw").use { lockFile ->
+            lockFile.channel.lock().use {
+                try { OperationTaskStore(file); fail("lock overlap accepted") }
+                catch (_: OperationTaskStorageException) {}
+                assertEquals("readable", OperationTaskDiagnostics(file).snapshot()["read_state"]?.jsonPrimitive?.content)
+            }
+        }
+    }
+    @Test fun deepOrExcessiveStructureIsRejectedBeforeDomParsing() {
+        val file = ledger()
+        file.parentFile!!.mkdirs()
+        for (raw in listOf("[".repeat(10000) + "]".repeat(10000), "[" + "{},".repeat(70000) + "{}]")) {
+            file.writeText(raw)
+            assertEquals("invalid_ledger", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
+            assertEquals(raw, file.readText())
+        }
     }
 }

@@ -14,29 +14,25 @@ internal data class OperationTaskClaim(val task: JsonObject, val created: Boolea
 internal class OperationTaskStore(
     file: File,
     private val beforeStage: (String) -> Unit = {},
+    private val diagnostic: OperationTaskDiagnostics = OperationTaskDiagnostics(file),
 ) {
-    @Volatile private var lastFailure: Pair<String, String>? = null
     private fun <T> stage(name: String, block: () -> T): T = try {
         beforeStage(name)
         block()
     } catch (error: Exception) {
-        lastFailure = name to OperationTaskDiagnostics.reason(error)
-        throw error
+        if (error is OperationTaskStorageException) {
+            diagnostic.record(error.stage, error)
+            throw error
+        }
+        diagnostic.record(name, error)
+        throw OperationTaskStorageException(name, OperationTaskDiagnostics.reason(error), error)
     }
-    fun diagnostics(): JsonObject {
-        val snapshot = OperationTaskDiagnostics(file).snapshot()
-        val failure = lastFailure
-        return if (failure == null) snapshot else JsonObject(snapshot + mapOf(
-            "last_failure_stage" to JsonPrimitive(failure.first),
-            "last_failure_reason" to JsonPrimitive(failure.second),
-        ))
-    }
-    private val file = file.canonicalFile
+    fun diagnostics(): JsonObject = diagnostic.snapshot()
+    private val file = stage("canonical_path") { file.canonicalFile }
     private val pathLock = pathLocks.computeIfAbsent(this.file.path) { Any() }
 
     init {
-        // Preserve a damaged/unwritable ledger and keep independent diagnosis reachable.
-        runCatching { transaction { tasks ->
+        transaction { tasks ->
             var changed = false
             tasks.entries.forEach { entry ->
                 if (entry.value["state"]?.jsonPrimitive?.content in setOf("queued", "running", "cancel_requested")) {
@@ -48,7 +44,7 @@ internal class OperationTaskStore(
                 }
             }
             if (changed) persist(tasks)
-        } }
+        }
     }
 
     fun get(id: String): JsonObject? = transaction { it[id] }
@@ -149,7 +145,10 @@ internal class OperationTaskStore(
         }
         // JVM locks prevent OverlappingFileLockException; the OS lock also serializes separate app processes.
         stage("open_lock") { RandomAccessFile(File(file.path + ".lock"), "rw") }.use { lockFile ->
-            val lock = stage("acquire_lock") { lockFile.channel.lock() }
+            val lock = stage("acquire_lock") {
+                lockFile.channel.tryLock() ?: throw OperationTaskStorageException(
+                    "acquire_lock", "lock_busy", IllegalStateException("Ledger is locked"))
+            }
             try { block(load()) } finally { lock.release() }
         }
     }

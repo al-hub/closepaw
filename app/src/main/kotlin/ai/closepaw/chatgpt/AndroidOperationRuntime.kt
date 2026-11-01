@@ -35,9 +35,11 @@ internal class AndroidOperationRuntime(
             else -> "termux_recovery_unavailable"
         }
     }, android.os.SystemClock::elapsedRealtime)
-    private val store = OperationTaskStore(File(context.filesDir, "mcp/tasks.json"))
-    private val shell = TermuxShellOperation(client, TermuxJobLinkStore(
-        File(context.filesDir, "mcp/job-links.tsv"), store::retainedShellLinks))
+    private val taskFile = File(context.filesDir, "mcp/tasks.json")
+    private val taskDiagnostics = OperationTaskDiagnostics(taskFile)
+    private val store by lazy { OperationTaskStore(taskFile, diagnostic = taskDiagnostics) }
+    private val shell by lazy { TermuxShellOperation(client, TermuxJobLinkStore(
+        File(context.filesDir, "mcp/job-links.tsv"), store::retainedShellLinks)) }
     private val registry = OperationRegistry()
     private val screenMutex = ControlScreenLease.mutex
     private val draftDiagnostics = GeminiDraftDiagnostics(File(context.filesDir, "mcp/gemini-draft-diagnostics.json"))
@@ -95,7 +97,7 @@ internal class AndroidOperationRuntime(
             inputSchema = buildJsonObject { put("type", "object"); put("properties", buildJsonObject {}); put("additionalProperties", false) },
         ), object : OperationHandler {
             override suspend fun invoke(invocation: OperationInvocation) = withContext(Dispatchers.IO) {
-                OperationResult(data = store.diagnostics(), summary = "Passive task ledger diagnostics; no recovery attempted.")
+                OperationResult(data = taskDiagnostics.snapshot(), summary = "Passive task ledger diagnostics; no recovery attempted.")
             }
         })
         registry.register(OperationDescriptor(
@@ -220,7 +222,10 @@ internal class AndroidOperationRuntime(
                     OperationReadiness(readiness.ready, readiness.reason)
                 }
             },
-        ), shell)
+        ), object : OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation) = shell.invoke(invocation)
+            override suspend fun cancel(taskId: String) = shell.cancel(taskId)
+        })
         registry.register(GeminiDraftOperation.descriptor(
             readiness = {
                 when {
@@ -304,7 +309,7 @@ internal class AndroidOperationRuntime(
                 }
             }
         })
-        dispatcher = OperationDispatcher(registry, store, scope,
+        dispatcher = OperationDispatcher(registry, { store }, scope,
             operationEpoch = { id -> if (ProjectionTuningProtocol.requiresSessionEpoch(id) || id in setOf("android.ui.action", "android.ui.sequence", "android.control.island.drag", "android.control.feedback_test",
                     "app.screen.read", "gemini.draft.insert", "gemini.question.ask"))
                 AgentService.instance?.remoteControlSession?.epoch ?: -1L else 0L },
@@ -353,7 +358,7 @@ internal class AndroidOperationRuntime(
         }
         else -> buildJsonObject { put("status", "failed"); put("error_code", "unknown_tool") }
     }
-    } catch (_: Exception) {
+    } catch (_: OperationTaskStorageException) {
         buildJsonObject {
             put("status", "failed"); put("error_code", "task_storage_failed")
             put("summary", "Task storage unavailable. Do not replay; inspect closepaw.task_store.diagnostics.")

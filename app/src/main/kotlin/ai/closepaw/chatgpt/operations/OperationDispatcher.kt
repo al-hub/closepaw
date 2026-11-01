@@ -7,12 +7,21 @@ import kotlinx.serialization.json.*
 /** Routes every operation through the same descriptor, validator, policy, and executor. */
 internal class OperationDispatcher(
     private val registry: OperationRegistry,
-    private val store: OperationTaskStore,
+    private val storeProvider: () -> OperationTaskStore,
     private val scope: CoroutineScope,
     private val operationAllowed: (String) -> Boolean = { true },
     private val operationEpoch: (String) -> Long = { 0L },
     private val executeAllowed: () -> Boolean = { true },
 ) {
+    constructor(
+        registry: OperationRegistry, store: OperationTaskStore, scope: CoroutineScope,
+        operationAllowed: (String) -> Boolean = { true },
+        operationEpoch: (String) -> Long = { 0L },
+        executeAllowed: () -> Boolean = { true },
+    ) : this(registry, { store }, scope, operationAllowed, operationEpoch, executeAllowed)
+
+    private val store: OperationTaskStore get() = storeProvider()
+
     fun discover(arguments: JsonObject = JsonObject(emptyMap())): JsonObject {
         val filter = (arguments["operation_id"] as? JsonPrimitive)?.takeIf { it.isString }?.content
         if (arguments["operation_id"] != null && filter == null) return error("invalid_operation_id", "operation_id must be a string.")
