@@ -35,8 +35,9 @@ internal class AndroidOperationRuntime(
             else -> "termux_recovery_unavailable"
         }
     }, android.os.SystemClock::elapsedRealtime)
-    private val shell = TermuxShellOperation(client, TermuxJobLinkStore(File(context.filesDir, "mcp/job-links.tsv")))
     private val store = OperationTaskStore(File(context.filesDir, "mcp/tasks.json"))
+    private val shell = TermuxShellOperation(client, TermuxJobLinkStore(
+        File(context.filesDir, "mcp/job-links.tsv"), store::retainedShellLinks))
     private val registry = OperationRegistry()
     private val screenMutex = ControlScreenLease.mutex
     private val draftDiagnostics = GeminiDraftDiagnostics(File(context.filesDir, "mcp/gemini-draft-diagnostics.json"))

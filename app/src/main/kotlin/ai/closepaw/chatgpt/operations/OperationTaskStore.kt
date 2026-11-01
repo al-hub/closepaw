@@ -32,6 +32,28 @@ internal class OperationTaskStore(file: File) {
     }
 
     fun get(id: String): JsonObject? = transaction { it[id] }
+    /** Reclaim an identity only after all queryable terminal output and dedup are durable here. */
+    fun retainedShellLinks(): Map<String, String> = transaction { tasks ->
+        tasks.values.filter(::hasRetainedShellResult).associate {
+            it.getValue("task_id").jsonPrimitive.content to
+                it.getValue("result").jsonObject.getValue("data").jsonObject.getValue("job_id").jsonPrimitive.content
+        }
+    }
+    private fun hasRetainedShellResult(task: JsonObject): Boolean {
+        val result = task["result"] as? JsonObject ?: return false
+        val data = result["data"] as? JsonObject ?: return false
+        return task["operation_id"]?.jsonPrimitive?.content == "linux.shell.exec" &&
+            task["state"]?.jsonPrimitive?.content in TERMINAL_STATES &&
+            task["output_validation_failed"]?.jsonPrimitive?.booleanOrNull != true &&
+            result["status"]?.jsonPrimitive?.content in setOf("succeeded", "failed") &&
+            (result["stdout"] as? JsonPrimitive)?.isString == true &&
+            (result["stderr"] as? JsonPrimitive)?.isString == true &&
+            (data["job_id"] as? JsonPrimitive)?.isString == true &&
+            data["state"] == task["state"] &&
+            data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == false &&
+            (data["state"]?.jsonPrimitive?.content != "cancelled" ||
+                data["cancel_confirmed"]?.jsonPrimitive?.booleanOrNull == true)
+    }
     /** A later confirmed question supersedes older ambiguous submissions; never replay the latest unknown send through another adapter. */
     fun latestOutcomeUnknown(operationId: String): Boolean = transaction { tasks ->
         tasks.values.filter { it["operation_id"]?.jsonPrimitive?.content == operationId }

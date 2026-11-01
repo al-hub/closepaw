@@ -12,6 +12,7 @@ from pathlib import Path
 
 TERMINAL = {'succeeded', 'failed', 'timed_out', 'cancelled', 'interrupted'}
 MAX_JOBS = 1000
+MAX_ARCHIVED_JOBS = 1000
 MAX_ACTIVE = 8
 JOB_MAX_TIMEOUT_MS = 3600000
 MAX_OUTPUT_BYTES = 1048576
@@ -26,13 +27,16 @@ class JobManager:
     def __init__(self, directory, token, exec_lock, parse_exec, invalid_request, kill_group):
         self.directory = Path(directory)
         self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.archive = self.directory / 'archive'
+        self.archive.mkdir(mode=0o700, exist_ok=True)
+        self.archived = set()
         self.owner = hashlib.sha256(token.encode()).hexdigest()
         self.exec_lock, self.parse_exec = exec_lock, parse_exec
         self.invalid_request, self.kill_group = invalid_request, kill_group
         self.lock = threading.RLock()
         self.jobs, self.processes, self.cancel_requests = {}, {}, set()
         self.store_healthy = True
-        for path in self.directory.glob('*.json'):
+        for path in sorted(self.directory.glob('*.json')) + sorted(self.archive.glob('*.json')):
             try:
                 job = json.loads(path.read_text())
                 if not isinstance(job, dict) or not isinstance(job.get('owner'), str):
@@ -57,6 +61,12 @@ class JobManager:
                         if not isinstance(job[stream + '_b64'], str):
                             raise ValueError('invalid output')
                         base64.b64decode(job[stream + '_b64'], validate=True)
+                if job['job_id'] in self.jobs:
+                    raise ValueError('duplicate history')
+                if path.parent == self.archive:
+                    if job['state'] not in TERMINAL or job['outcome_unknown']:
+                        raise ValueError('unconfirmed archived job')
+                    self.archived.add(job['job_id'])
                 if job['state'] not in TERMINAL:
                     job.update(state='interrupted', outcome_unknown=True, exit_code=None)
                     self._persist(job)
@@ -67,7 +77,8 @@ class JobManager:
                 self.store_healthy = False
 
     def _persist(self, job):
-        destination = self.directory / (job['job_id'] + '.json')
+        parent = self.archive if job['job_id'] in self.archived else self.directory
+        destination = parent / (job['job_id'] + '.json')
         temporary = destination.with_suffix('.tmp')
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(descriptor, 'w') as handle:
@@ -75,6 +86,35 @@ class JobManager:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, destination)
+
+    def _reclaim_capacity(self):
+        """Move confirmed immutable results to bounded cold storage; keep lookup/dedup and bytes intact."""
+        if len(list(self.directory.glob('*.json'))) < MAX_JOBS:
+            return
+        if len(list(self.archive.glob('*.json'))) >= MAX_ARCHIVED_JOBS:
+            raise JobError(429, 'job_archive_full')
+        for job_id, job in self.jobs.items():
+            if (job_id not in self.archived and job_id not in self.processes and
+                    job['state'] in TERMINAL and not job['outcome_unknown']):
+                source = self.directory / (job_id + '.json')
+                destination = self.archive / source.name
+                if destination.exists():
+                    raise JobError(503, 'job_archive_conflict')
+                try:
+                    os.replace(source, destination)
+                    self.archived.add(job_id)
+                    for parent in (self.archive, self.directory):
+                        descriptor = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
+                        try:
+                            os.fsync(descriptor)
+                        finally:
+                            os.close(descriptor)
+                except OSError:
+                    self.store_healthy = False
+                    raise JobError(503, 'job_archive_unavailable')
+                self.archived.add(job_id)
+                return
+        raise JobError(429, 'job_store_full_no_confirmed_results')
 
     def readiness(self):
         with self.lock:
@@ -111,8 +151,7 @@ class JobManager:
                     if job['fingerprint'] != fingerprint:
                         raise JobError(409, 'request_id_conflict')
                     return self.snapshot(job['job_id'])
-            if len(list(self.directory.glob('*.json'))) >= MAX_JOBS:
-                raise JobError(429, 'job_store_full')
+            self._reclaim_capacity()
             if sum(j['state'] not in TERMINAL for j in self.jobs.values()) >= MAX_ACTIVE:
                 raise JobError(429, 'job_queue_full')
             job_id = uuid.uuid4().hex
