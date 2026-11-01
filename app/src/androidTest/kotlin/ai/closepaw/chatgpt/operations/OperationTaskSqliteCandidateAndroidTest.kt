@@ -33,6 +33,13 @@ class OperationTaskSqliteCandidateAndroidTest {
             assertTrue(store.claim(record(2000)).created)
             assertEquals(record(2000), OperationTaskSqliteCandidate(file).get("id-2000"))
             assertFalse(OperationTaskSqliteCandidate(file).claim(record(2000)).created)
+            assertEquals(record(2000), store.byRequest("request-2000"))
+            assertTrue(store.update("id-2000", mapOf("summary" to JsonPrimitive("progress"))))
+            assertEquals("progress", OperationTaskSqliteCandidate(file).get("id-2000")
+                ?.get("summary")?.jsonPrimitive?.content)
+            assertFalse(store.update("id-2000", mapOf("state" to JsonPrimitive("queued")), activeOnly = true))
+            assertEquals(2001, store.allRecords().size)
+            assertEquals(record(0), store.allRecords().first())
             try {
                 store.importOnce(listOf(record(2001)))
                 fail("committed migration cannot be silently overwritten")
