@@ -7,91 +7,102 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
+import java.util.UUID
 import kotlinx.serialization.json.*
 
 /**
- * Lossless overflow storage. Legacy tasks.json remains untouched once active.
- * One atomic file per changed task; the original store's OS lock serializes
- * all reads and writes across processes. No task is executed before its claim
- * has been durably committed.
+ * Crash-consistent immutable overlay generations.
+ * Legacy JSON is never rewritten after overflow starts. An atomic manifest
+ * selects a complete, hash-verified snapshot of every overlay record.
+ * Uncommitted generation files are ignored; missing/corrupt committed files
+ * fail closed, retaining all older generations for forensic rollback.
  *
- * The marker deliberately activates the overlay BEFORE the first task commit:
- * interruption at that point leaves an empty, recoverable overlay.
+ * The caller holds the original per-process + OS ledger lock throughout.
  */
 internal class OperationTaskRetainedOverlay(private val legacy: File) {
     private val root = File(legacy.path + ".history")
     private val marker = File(root, "enabled")
-    fun isActive(): Boolean {
-        if (marker.exists()) return true
-        if (!root.exists()) return false
-        require(root.isDirectory) { "invalid_history_directory" }
-        val files = root.listFiles() ?: throw IllegalStateException("history_directory_unavailable")
-        // A missing marker cannot silently hide already committed claims.
-        require(files.none { it.extension == "json" }) { "history_marker_missing" }
-        return false
-    }
-
-    private fun filename(id: String): String {
-        val hash = MessageDigest.getInstance("SHA-256").digest(id.toByteArray(Charsets.UTF_8))
-        return hash.joinToString("") { "%02x".format(it) } + ".json"
-    }
+    private val empty = "closepaw-history-v2 empty"
+    private fun sha(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun syncDirectory() {
         FileChannel.open(root.toPath(), StandardOpenOption.READ).use { it.force(true) }
     }
     private fun atomicWrite(target: File, data: ByteArray) {
         val temp = File.createTempFile("task-stage-", ".tmp", root)
         try {
-            FileOutputStream(temp).use { output ->
-                output.write(data)
-                output.fd.sync()
-            }
+            FileOutputStream(temp).use { output -> output.write(data); output.fd.sync() }
             Files.move(temp.toPath(), target.toPath(),
                 StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
             syncDirectory()
-        } finally {
-            temp.delete()
-        }
+        } finally { temp.delete() }
     }
-    private fun activate() {
-        if (isActive()) return
-        require(root.isDirectory || root.mkdirs()) { "history_directory_unavailable" }
-        // The lock in OperationTaskStore already excludes concurrent activation.
-        atomicWrite(marker, "closepaw-history-v1\n".toByteArray(Charsets.UTF_8))
+    fun isActive(): Boolean {
+        if (marker.exists()) return true
+        if (!root.exists()) return false
+        require(root.isDirectory) { "invalid_history_directory" }
+        val files = root.listFiles() ?: throw IllegalStateException("history_directory_unavailable")
+        require(files.none { it.extension == "json" }) { "history_marker_missing" }
+        return false
     }
-    fun mergeInto(records: LinkedHashMap<String, JsonObject>) {
-        if (!isActive()) {
-            // A staged but uncommitted directory is not authoritative.
-            return
+    private fun manifest(): String {
+        require(marker.isFile) { "invalid_history_marker" }
+        val value = marker.readText(Charsets.UTF_8).trim()
+        require(value == empty || Regex("closepaw-history-v2 [a-f0-9-]{36} [a-f0-9]{64}").matches(value)) {
+            "invalid_history_marker"
         }
-        require(marker.readText() == "closepaw-history-v1\n") { "invalid_history_marker" }
-        require(root.isDirectory) { "history_directory_unavailable" }
-        val seen = HashSet<String>()
-        root.listFiles()?.filter { it.extension == "json" }?.sortedBy { it.name }?.forEach { item ->
-            require(item.isFile) { "invalid_history_entry" }
-            val task = Json.parseToJsonElement(item.readText()).jsonObject
+        return value
+    }
+    private fun readOverlay(): LinkedHashMap<String, JsonObject> {
+        val result = linkedMapOf<String, JsonObject>()
+        if (!isActive()) return result
+        val manifest = manifest()
+        if (manifest == empty) {
+            // An initial empty generation is valid only before any snapshot
+            // exists; otherwise an accidental manifest rollback would forget IDs.
+            require(root.listFiles()?.none { it.extension == "json" } == true) { "history_manifest_rollback" }
+            return result
+        }
+        val (_, generation, digest) = manifest.split(' ')
+        val file = File(root, "$generation.json")
+        require(file.isFile) { "committed_history_missing" }
+        val bytes = file.readBytes()
+        require(sha(bytes) == digest) { "committed_history_corrupt" }
+        val records = Json.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonArray
+        records.forEach { element ->
+            val task = element.jsonObject
             val id = (task["task_id"] as? JsonPrimitive)?.takeIf { it.isString }?.content
                 ?: throw IllegalArgumentException("missing_history_task_id")
-            require(item.name == filename(id) && seen.add(id)) { "history_identity_mismatch" }
-            records[id] = task
-        } ?: throw IllegalStateException("history_directory_unavailable")
-        OperationTaskHistoryPreflight.inspect(records.values)
+            require(result.putIfAbsent(id, task) == null) { "duplicate_history_identity" }
+        }
+        OperationTaskHistoryPreflight.inspect(result.values)
+        return result
+    }
+    fun mergeInto(records: LinkedHashMap<String, JsonObject>) {
+        val overlay = readOverlay()
+        overlay.forEach { (id, task) -> records[id] = task }
+        if (isActive()) OperationTaskHistoryPreflight.inspect(records.values)
     }
     fun persistChanges(
         desired: Map<String, JsonObject>,
         readLegacy: () -> LinkedHashMap<String, JsonObject>,
     ) {
-        // No old record is deleted/archived, and no partial replacement of the
-        // legacy ledger is ever attempted.
-        if (!isActive()) activate()
+        require(root.isDirectory || root.mkdirs()) { "history_directory_unavailable" }
         val existing = readLegacy()
         mergeInto(existing)
         require(desired.keys.containsAll(existing.keys)) { "history_loss_detected" }
         OperationTaskHistoryPreflight.inspect(desired.values)
+        val legacyIds = readLegacy().keys
+        val overlay = readOverlay()
         desired.forEach { (id, record) ->
-            if (existing[id] != record) {
-                val target = File(root, filename(id))
-                atomicWrite(target, record.toString().toByteArray(Charsets.UTF_8))
-            }
+            if (id !in legacyIds || existing[id] != record) overlay[id] = record
         }
+        val data = JsonArray(overlay.values.toList()).toString().toByteArray(Charsets.UTF_8)
+        val generation = UUID.randomUUID().toString()
+        val candidate = File(root, "$generation.json")
+        // Stage generation BEFORE pointer publication. No existing generations
+        // are deleted, and the original ledger remains authoritative for old IDs.
+        atomicWrite(candidate, data)
+        atomicWrite(marker, "closepaw-history-v2 $generation ${sha(data)}\n".toByteArray(Charsets.UTF_8))
     }
 }
