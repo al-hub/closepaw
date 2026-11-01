@@ -1,6 +1,10 @@
 package ai.closepaw.chatgpt.operations
 
-import java.io.ByteArrayOutputStream
+import java.io.FilterInputStream
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.nio.charset.CodingErrorAction
+import java.nio.file.attribute.BasicFileAttributes
 import java.io.File
 import java.nio.file.*
 import kotlinx.serialization.json.*
@@ -11,29 +15,12 @@ internal class OperationTaskStorageException(val stage: String, val reason: Stri
 
 internal class OperationTaskDiagnosticLimitException : IllegalArgumentException("Diagnostic structure bound")
 
-internal class OperationTaskDiagnostics(private val file: File) {
+internal class OperationTaskDiagnostics(
+    private val file: File,
+    private val openInput: () -> InputStream = { file.inputStream() },
+) {
     @Volatile private var lastFailure: Pair<String, String>? = null
     fun record(stage: String, error: Exception) { lastFailure = stage to reason(error) }
-    private fun checkStructure(raw: ByteArray) {
-        var depth = 0
-        var nodes = 0
-        var inString = false
-        var escaped = false
-        raw.forEach { byte ->
-            val ch = byte.toInt().toChar()
-            if (inString) {
-                if (escaped) escaped = false
-                else if (ch == '\\') escaped = true
-                else if (ch == '"') inString = false
-            } else when (ch) {
-                '"' -> { inString = true; nodes++ }
-                '{', '[' -> { depth++; nodes++ }
-                '}', ']' -> depth--
-                ',', ':' -> nodes++
-            }
-            if (depth !in 0..32 || nodes > 262144) throw OperationTaskDiagnosticLimitException()
-        }
-    }
     fun snapshot(): JsonObject = buildJsonObject {
         lastFailure?.let { failure ->
             put("last_failure_stage", failure.first); put("last_failure_reason", failure.second)
@@ -59,55 +46,34 @@ internal class OperationTaskDiagnostics(private val file: File) {
                 put("read_state", "bounded_refusal"); put("reason_code", "ledger_too_large")
                 return@buildJsonObject
             }
-            val bytes = ByteArrayOutputStream()
-            file.inputStream().use { stream ->
-                val buffer = ByteArray(8192)
-                while (true) {
-                    val count = stream.read(buffer)
-                    if (count < 0) break
-                    if (bytes.size().toLong() + count > MAX_BYTES) {
-                        put("read_state", "bounded_refusal"); put("reason_code", "ledger_too_large")
-                        return@buildJsonObject
-                    }
-                    bytes.write(buffer, 0, count)
+            val before = Files.readAttributes(file.toPath(), BasicFileAttributes::class.java)
+            require(before.isRegularFile)
+            put("file_bytes", before.size())
+            val counts = openInput().use { stream ->
+                val decoder = Charsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
+                InputStreamReader(BoundedInput(stream), decoder).buffered(8192).use {
+                    OperationTaskDiagnosticScanner(it).scan()
                 }
             }
-            val raw = bytes.toByteArray()
-            checkStructure(raw)
-            val tasks = Json.parseToJsonElement(raw.toString(Charsets.UTF_8)) as? JsonArray
-                ?: throw IllegalArgumentException("array required")
-            // The store cannot admit more than MAX_TASKS. Refuse unexpected larger snapshots.
-            if (tasks.size > OperationTaskStore.MAX_TASKS) {
-                put("read_state", "bounded_refusal"); put("reason_code", "record_count_exceeded")
+            val after = Files.readAttributes(file.toPath(), BasicFileAttributes::class.java)
+            if (before.fileKey() != after.fileKey() || before.size() != after.size() ||
+                before.lastModifiedTime() != after.lastModifiedTime()) {
+                put("read_state", "bounded_refusal"); put("reason_code", "ledger_changed")
                 return@buildJsonObject
             }
-            val ids = HashSet<String>()
-            val requests = HashSet<String>()
-            var active = 0
-            var terminal = 0
-            var unknown = 0
-            tasks.forEach { item ->
-                val task = item as? JsonObject ?: throw IllegalArgumentException("object required")
-                val id = (task["task_id"] as? JsonPrimitive)?.takeIf { it.isString }?.content
-                    ?: throw IllegalArgumentException("id required")
-                require(ids.add(id))
-                val request = (task["request_id"] as? JsonPrimitive)?.takeIf { it.isString }?.content
-                if (request != null) require(requests.add(request))
-                when ((task["state"] as? JsonPrimitive)?.content) {
-                    "queued", "running", "cancel_requested" -> active++
-                    "succeeded", "failed", "cancelled", "timed_out", "interrupted" -> terminal++
-                    else -> unknown++
-                }
-            }
             put("read_state", "readable")
-            put("task_count", tasks.size)
-            put("active_count", active); put("terminal_count", terminal); put("unknown_count", unknown)
-            put("reason_code", if (tasks.size == OperationTaskStore.MAX_TASKS) "capacity_reached" else "snapshot_readable")
+            put("task_count", counts.tasks)
+            put("active_count", counts.active); put("terminal_count", counts.terminal); put("unknown_count", counts.unknown)
+            put("reason_code", if (counts.tasks == OperationTaskStore.MAX_TASKS) "capacity_reached" else "snapshot_readable")
             // A readable snapshot is not proof that the next claim/fsync/replace will succeed.
         } catch (error: Exception) {
-            put("read_state", if (error is OperationTaskDiagnosticLimitException) "bounded_refusal" else "failed")
+            put("read_state", if (error is OperationTaskDiagnosticLimitException || error is OperationTaskDiagnosticCountException || error is OperationTaskDiagnosticByteException) "bounded_refusal" else "failed")
             put("reason_code", when (error) {
                 is OperationTaskDiagnosticLimitException -> "diagnostic_structure_limit"
+                is OperationTaskDiagnosticCountException -> "record_count_exceeded"
+                is OperationTaskDiagnosticByteException -> "ledger_too_large"
+                is java.nio.charset.CharacterCodingException -> "invalid_ledger"
                 is IllegalArgumentException -> "invalid_ledger"
                 else -> reason(error)
             })
@@ -115,10 +81,25 @@ internal class OperationTaskDiagnostics(private val file: File) {
         }
     }
 
+    /** Reads at most MAX_BYTES plus one sentinel byte, including decoder read-ahead. */
+    private class BoundedInput(input: InputStream) : FilterInputStream(input) {
+        private var count = 0
+        override fun read(): Int {
+            val value = `in`.read()
+            if (value >= 0 && ++count > MAX_BYTES) throw OperationTaskDiagnosticByteException()
+            return value
+        }
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+            if (length == 0) return 0
+            val read = `in`.read(buffer, offset, minOf(length, MAX_BYTES - count + 1))
+            if (read > 0) { count += read; if (count > MAX_BYTES) throw OperationTaskDiagnosticByteException() }
+            return read
+        }
+    }
+
     companion object {
-        // Conservative next diagnostic tier: measured 12,901,900-byte ledger fits, while
-        // structure depth (32), node count (262,144) and MAX_TASKS (2,000)
-        // remain independently enforced before interpreting any records.
+        // Measured 12.9MB snapshot fits; streaming discards payloads with independent
+        // depth/node/task/identity bounds. This is not an admission quota or repair.
         const val MAX_BYTES = 16 * 1024 * 1024
         fun category(error: Exception): String = when (error) {
             is AtomicMoveNotSupportedException -> "atomic_move_unsupported"
