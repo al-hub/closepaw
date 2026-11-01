@@ -64,19 +64,21 @@ the tested structural dimension changes independently:
 
 | Synthetic fixture | Diagnostic expectation | New claim expectation |
 | --- | --- | --- |
-| One task, large result string | readable | succeeds |
+| One task, large ignored padding string | readable | succeeds |
 | Payload exceeds scanner node budget | diagnostic_structure_limit | succeeds |
 | Payload exceeds scanner depth budget | diagnostic_structure_limit | succeeds |
-| Captured payload key exceeds scanner token budget | diagnostic_structure_limit | succeeds |
+| Captured task key exceeds scanner token budget | diagnostic_structure_limit | succeeds |
 | 1516 records with production-valid long identities | diagnostic_structure_limit | succeeds |
 | 2000 compact terminal records | capacity_reached | capacity_check refusal |
 
-The harness checks byte size, diagnostic nonmutation/redaction, production
+The harness checks byte size, diagnostic nonmutation, production
 admission and state transitions, original record/result preservation, existing
 request dedup, and unchanged bytes on capacity refusal. Existing diagnostic,
 dispatcher and concurrency tests cover malformed/duplicate JSON, lock contention,
 restart reconciliation, dedup races, and pre-boundary storage failure injection.
-Reuse them; do not label them real handset or power-loss acceptance.
+Redaction is checked by the reused OperationTaskDiagnosticsTest. These direct-store
+fixtures need not be producible through current dispatcher output bounds.
+Do not label them real handset or power-loss acceptance.
 
 ## Gates and next evidence
 
