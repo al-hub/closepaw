@@ -75,6 +75,16 @@ internal class OperationTaskRetainedOverlay(private val legacy: File) {
                 ?: throw IllegalArgumentException("missing_history_task_id")
             require(result.putIfAbsent(id, task) == null) { "duplicate_history_identity" }
         }
+        // Prior immutable snapshots may not contain identities absent from
+        // the manifest-selected generation. This detects a stale manifest
+        // hiding a newer committed claim and fails closed, never replaying it.
+        root.listFiles()?.filter { it.extension == "json" && it != file }?.forEach { earlier ->
+            val prior = Json.parseToJsonElement(earlier.readText()).jsonArray
+            prior.forEach { item ->
+                val identity = item.jsonObject["task_id"]?.jsonPrimitive?.content
+                require(identity != null && identity in result) { "history_manifest_identity_rollback" }
+            }
+        } ?: throw IllegalStateException("history_directory_unavailable")
         OperationTaskHistoryPreflight.inspect(result.values)
         return result
     }
