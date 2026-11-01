@@ -168,10 +168,10 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
             val id = field(task, "task_id")
             val existing = db.query("tasks", arrayOf("request_id"), "task_id=?",
                 arrayOf(id), null, null, null).use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
+                if (cursor.moveToFirst()) true to cursor.getString(0) else false to null
             }
-            if (existing != null) {
-                require(existing == (task["request_id"] as? JsonPrimitive)?.contentOrNull) {
+            if (existing.first) {
+                require(existing.second == (task["request_id"] as? JsonPrimitive)?.contentOrNull) {
                     "task_request_identity_immutable"
                 }
                 val values = ContentValues().apply {
@@ -234,8 +234,11 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
                     arrayOf(taskId), null, null, null).use { rows ->
                     if (rows.moveToFirst()) Json.parseToJsonElement(rows.getString(0)).jsonObject else null
                 }
-                if (current == null || (activeOnly && current["state"]?.jsonPrimitive?.content in
-                        setOf("succeeded", "failed", "cancelled", "timed_out", "interrupted"))) {
+                if (current == null || (activeOnly && (
+                        current["state"]?.jsonPrimitive?.content in
+                            setOf("succeeded", "failed", "cancelled", "timed_out", "interrupted") ||
+                        (current["output_validation_failed"] as? JsonPrimitive)?.booleanOrNull == true
+                    ))) {
                     db.setTransactionSuccessful()
                     return@database false
                 }
@@ -243,10 +246,9 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
                 require(field(next, "task_id") == field(current, "task_id") &&
                     field(next, "request_id") == field(current, "request_id")) { "task_identity_immutable" }
                 val values = ContentValues().apply {
-                    put("state", field(next, "state"))
-                    put("operation_id", field(next, "operation_id"))
-                    put("created_at_ms", next["created_at_ms"]?.jsonPrimitive?.longOrNull
-                        ?: throw IllegalArgumentException("invalid_created_at_ms"))
+                    put("state", (next["state"] as? JsonPrimitive)?.contentOrNull)
+                    put("operation_id", (next["operation_id"] as? JsonPrimitive)?.contentOrNull)
+                    put("created_at_ms", (next["created_at_ms"] as? JsonPrimitive)?.longOrNull)
                     put("payload_json", next.toString())
                 }
                 require(db.update("tasks", values, "task_id=?", arrayOf(taskId)) == 1)
