@@ -144,7 +144,7 @@ class JobCapacityTest(unittest.TestCase):
         seed(self.directory, count=1)
         old_id = '0' * 32
         path = self.directory / (old_id + '.json')
-        payload = b'\\xff' * MAX_OUTPUT_BYTES
+        payload = bytes([0xff]) * MAX_OUTPUT_BYTES
         record = json.loads(path.read_text())
         record.update(stdout=payload.decode(errors='replace'),
                       stderr=payload.decode(errors='replace'),
