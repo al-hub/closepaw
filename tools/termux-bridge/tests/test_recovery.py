@@ -38,6 +38,25 @@ def pid(home):
     return json.loads((home / '.closepaw/bridge.pid').read_text())['pid']
 
 
+def test_supervisor_maintenance_does_not_bind_mcp_port(tmp_path, free_port):
+    import socket
+    from contextlib import ExitStack
+    # Keep MCP, tunnel health and control proxy ports occupied.
+    with ExitStack() as stack:
+        for offset in (2, 3, 4):
+            listener = stack.enter_context(socket.socket())
+            listener.bind(('127.0.0.1', free_port + offset))
+            listener.listen()
+        supervisor = launch_supervisor(tmp_path, free_port)
+        try:
+            wait_for_health(BridgeProcess(free_port, tmp_path, supervisor))
+            result = request_json(free_port + 5, 'GET', '/v1/maintenance/status')
+            assert result.status == 200
+            assert result.body['supervisor'] == 'running'
+        finally:
+            stop_process(supervisor)
+
+
 def test_killed_daemon_recovers_and_retains_pairing(tmp_path, free_port):
     supervisor = launch_supervisor(tmp_path, free_port)
     bridge = BridgeProcess(free_port, tmp_path, supervisor)

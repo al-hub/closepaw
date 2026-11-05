@@ -4,11 +4,256 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
+import stat
+import tempfile
 import subprocess
 import threading
 import time
 import uuid
 from pathlib import Path
+
+MAX_COLD_PAGES = 131072  # <=512 MiB @ 4096-byte pages; fail closed at bound
+# Two 1MiB raw output streams can each expand to 6MiB of JSON-escaped
+# replacement characters plus 4/3MiB of base64. Never reject a valid
+# confirmed terminal result merely because the index has a 4MiB row cap.
+# Bound retained row bytes without widening execution/output limits.
+MAX_COLD_RECORD_BYTES = 16 * 1024 * 1024
+ID_RE = re.compile(r'[a-f0-9]{32}')
+SHA_RE = re.compile(r'[a-f0-9]{64}')
+REQUIRED = {'job_id','request_id','owner','fingerprint','state','stdout','stderr',
+            'stdout_truncated','stderr_truncated','exit_code','outcome_unknown','duration_ms'}
+
+
+class ColdArchiveError(Exception):
+    pass
+
+
+def _read_bounded_regular(path):
+    """Never follow a hot job symlink or allocate from a corrupt huge JSON."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            info = os.fstat(fd)
+            if (not stat.S_ISREG(info.st_mode) or
+                    not 1 <= info.st_size <= MAX_COLD_RECORD_BYTES):
+                raise ColdArchiveError('unsafe cold source type or size')
+            chunks = []
+            remaining = info.st_size
+            while remaining:
+                chunk = os.read(fd, min(65536, remaining))
+                if not chunk:
+                    raise ColdArchiveError('incomplete cold source read')
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            if os.read(fd, 1):
+                raise ColdArchiveError('cold source grew while reading')
+            return b''.join(chunks)
+        finally:
+            os.close(fd)
+    except OSError as error:
+        raise ColdArchiveError('cold source unavailable') from error
+
+
+def _validate(raw):
+    if not isinstance(raw, bytes) or not 1 <= len(raw) <= MAX_COLD_RECORD_BYTES:
+        raise ColdArchiveError('invalid cold record bytes')
+    try:
+        record = json.loads(raw.decode('utf-8'))
+    except (ValueError, UnicodeError):
+        raise ColdArchiveError('invalid cold JSON') from None
+    if (not isinstance(record, dict) or not REQUIRED.issubset(record) or
+            not isinstance(record['job_id'], str) or not ID_RE.fullmatch(record['job_id']) or
+            not isinstance(record['owner'], str) or not SHA_RE.fullmatch(record['owner']) or
+            not isinstance(record['request_id'], str) or not record['request_id'] or
+            not isinstance(record['fingerprint'], str) or not SHA_RE.fullmatch(record['fingerprint']) or
+            not isinstance(record['state'], str) or record['state'] not in TERMINAL or
+            record['outcome_unknown'] is not False or
+            any(not isinstance(record[k], str) for k in ('stdout','stderr')) or
+            any(type(record[k]) is not bool for k in ('stdout_truncated','stderr_truncated')) or
+            (record['exit_code'] is not None and type(record['exit_code']) is not int) or
+            type(record['duration_ms']) is not int or record['duration_ms'] < 0):
+        raise ColdArchiveError('invalid or unconfirmed cold record')
+    return record
+
+
+class ColdArchive:
+    def __init__(self, directory, owner, existing):
+        self.path = Path(directory) / 'cold-records.sqlite3'
+        self.witness = Path(directory) / 'cold-records.witness'
+        # Outside jobs/: losing/restoring just the archive family must not
+        # reset dedup. This is still not a backup of the complete HOME.
+        self.anchor = self.path.parent.parent / (self.path.parent.name + '-cold-history.anchor')
+        self.owner = owner
+        fresh = not any(p.exists() or p.is_symlink() for p in (self.path, self.witness, self.anchor))
+        if not fresh and not all(p.exists() for p in (self.path, self.witness, self.anchor)):
+            raise ColdArchiveError('missing cold history or witness')
+        if self.path.is_symlink() or (self.path.exists() and not self.path.is_file()):
+            raise ColdArchiveError('invalid cold archive path')
+        if not self.path.exists():
+            descriptor = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            os.close(descriptor)
+            dfd = os.open(self.path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+        if stat.S_IMODE(self.path.stat().st_mode) & 0o077:
+            raise ColdArchiveError('cold archive too permissive')
+        try:
+            self.db = sqlite3.connect(str(self.path), timeout=5, check_same_thread=False)
+            self.db.execute('PRAGMA journal_mode=DELETE')
+            self.db.execute('PRAGMA synchronous=FULL')
+            self.db.execute('PRAGMA page_size=4096')
+            self.db.execute('PRAGMA max_page_count='+str(MAX_COLD_PAGES))
+            # Existing SQLite files cannot silently override the physical
+            # 4096-byte page / 512MiB bound with a larger page size.
+            if (self.db.execute('PRAGMA page_size').fetchone()[0] != 4096 or
+                self.db.execute('PRAGMA max_page_count').fetchone()[0] > MAX_COLD_PAGES or
+                self.db.execute('PRAGMA page_count').fetchone()[0] > MAX_COLD_PAGES):
+                raise ColdArchiveError('cold archive size policy mismatch')
+            self.db.execute(
+                'CREATE TABLE IF NOT EXISTS records ('
+                'job_id TEXT PRIMARY KEY, owner TEXT NOT NULL, request_id TEXT NOT NULL,'
+                'fingerprint TEXT NOT NULL, sha256 TEXT NOT NULL, payload BLOB NOT NULL,'
+                'UNIQUE(owner, request_id))'
+            )
+            self.db.commit()
+            self.identity = (self.path.stat().st_dev, self.path.stat().st_ino)
+            if fresh:
+                self.minimum_rows = 0
+                self._checkpoint()
+            else:
+                self.minimum_rows = 0
+                for path in (self.witness, self.anchor):
+                    witness = json.loads(_read_bounded_regular(path))
+                    if (not isinstance(witness, dict) or set(witness) != {'minimum_rows'} or
+                            type(witness['minimum_rows']) is not int or witness['minimum_rows'] < 0):
+                        raise ColdArchiveError('invalid cold witness')
+                    self.minimum_rows = max(self.minimum_rows, witness['minimum_rows'])
+            self._check_history()
+            result = self.db.execute('PRAGMA quick_check').fetchone()
+            if result != ('ok',):
+                raise ColdArchiveError('cold SQLite integrity failure')
+            # Streaming check: never materialize all old records in memory.
+            for job_id, row_owner, request_id, fingerprint, digest, raw in self.db.execute(
+                'SELECT job_id,owner,request_id,fingerprint,sha256,payload FROM records'
+            ):
+                rec = _validate(raw)
+                if (rec['job_id'] != job_id or rec['owner'] != row_owner or
+                        rec['request_id'] != request_id or rec['fingerprint'] != fingerprint or
+                        hashlib.sha256(raw).hexdigest() != digest):
+                    raise ColdArchiveError('cold archive record mismatch')
+            # After a power loss, JSON and SQLite may both contain the same
+            # record. Accept only byte-identical copies, never discard either.
+            for job_id, value in existing.items():
+                raw = self._raw_by_id(job_id)
+                path = Path(directory) / ('archive/' if value.get('_legacy_archive') else '') / (job_id + '.json')
+                if raw is not None and _read_bounded_regular(path) != raw:
+                    raise ColdArchiveError('conflicting hot/cold history')
+                # A different task ID with the same request ID would defeat
+                # dedup after a daemon restart: refuse before any admission.
+                if value.get('owner') == self.owner:
+                    duplicate = self.by_request(value['request_id'])
+                    if duplicate is not None and duplicate['job_id'] != job_id:
+                        raise ColdArchiveError('conflicting request history')
+        except (sqlite3.Error, OSError, ValueError, TypeError) as error:
+            raise ColdArchiveError('cold archive unavailable or corrupt') from error
+
+    def _check_history(self):
+        info = self.path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or (info.st_dev, info.st_ino) != self.identity or
+                self.db.execute('SELECT COUNT(*) FROM records').fetchone()[0] < self.minimum_rows):
+            raise ColdArchiveError('cold history lost or replaced')
+
+    def _checkpoint(self):
+        # Independent durable lower bound: a missing/replaced/older SQLite
+        # file must never silently recreate an empty request-ID namespace.
+        count = self.db.execute('SELECT COUNT(*) FROM records').fetchone()[0]
+        for destination in (self.witness, self.anchor):
+            fd, name = tempfile.mkstemp(prefix='.cold-witness-', dir=destination.parent)
+            try:
+                with os.fdopen(fd, 'w') as stream:
+                    json.dump({'minimum_rows': count}, stream)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(name, destination)
+                dfd = os.open(destination.parent, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(dfd)
+                finally:
+                    os.close(dfd)
+            finally:
+                if os.path.exists(name):
+                    os.unlink(name)
+        self.minimum_rows = count
+
+    @staticmethod
+    def _checked_row(row):
+        if row is None:
+            return None
+        job_id, owner, request_id, fingerprint, digest, raw = row
+        record = _validate(raw)
+        if (record['job_id'] != job_id or record['owner'] != owner or
+            record['request_id'] != request_id or
+            record['fingerprint'] != fingerprint or
+            hashlib.sha256(raw).hexdigest() != digest):
+            raise ColdArchiveError('cold record changed after verification')
+        return record, raw
+
+    def _raw_by_id(self, job_id):
+        row = self.db.execute(
+            'SELECT job_id,owner,request_id,fingerprint,sha256,payload '
+            'FROM records WHERE job_id=?', (job_id,)).fetchone()
+        verified = self._checked_row(row)
+        return None if verified is None else verified[1]
+
+    def by_id(self, job_id):
+        self._check_history()
+        row = self.db.execute(
+            'SELECT job_id,owner,request_id,fingerprint,sha256,payload '
+            'FROM records WHERE job_id=?', (job_id,)).fetchone()
+        verified = self._checked_row(row)
+        if verified is None or verified[0]['owner'] != self.owner:
+            return None
+        return verified[0]
+
+    def by_request(self, request_id):
+        self._check_history()
+        row = self.db.execute(
+            'SELECT job_id,owner,request_id,fingerprint,sha256,payload '
+            'FROM records WHERE owner=? AND request_id=?',
+            (self.owner, request_id)).fetchone()
+        verified = self._checked_row(row)
+        return None if verified is None else verified[0]
+
+    def put(self, raw):
+        self._check_history()
+        record = _validate(raw)
+        if record['owner'] != self.owner:
+            raise ColdArchiveError('cold owner mismatch')
+        old = self._raw_by_id(record['job_id'])
+        if old is not None:
+            if old != raw:
+                raise ColdArchiveError('cold job ID conflict')
+            self._checkpoint()
+            return
+        digest = hashlib.sha256(raw).hexdigest()
+        try:
+            self.db.execute(
+                'INSERT INTO records(job_id,owner,request_id,fingerprint,sha256,payload) '
+                'VALUES(?,?,?,?,?,?)',
+                (record['job_id'], record['owner'], record['request_id'],
+                 record['fingerprint'], digest, raw)
+            )
+            self.db.commit()  # synchronous=FULL
+            if self._raw_by_id(record['job_id']) != raw:
+                raise ColdArchiveError('cold readback mismatch')
+            self._checkpoint()  # durable before caller retires the hot copy
+        except sqlite3.Error as error:
+            self.db.rollback()
+            raise ColdArchiveError('cold archive capacity or write failure') from error
+
 
 TERMINAL = {'succeeded', 'failed', 'timed_out', 'cancelled', 'interrupted'}
 MAX_JOBS = 1000
@@ -36,6 +281,10 @@ class JobManager:
         self.lock = threading.RLock()
         self.jobs, self.processes, self.cancel_requests = {}, {}, set()
         self.store_healthy = True
+        # A request ID must never resolve to two distinct historical commands.
+        # Preserve all files, but refuse admission if hot/legacy archive
+        # histories collide: first-match dedup could conceal a prior effect.
+        seen_requests = {}
         for path in sorted(self.directory.glob('*.json')) + sorted(self.archive.glob('*.json')):
             try:
                 job = json.loads(path.read_text())
@@ -63,6 +312,8 @@ class JobManager:
                         base64.b64decode(job[stream + '_b64'], validate=True)
                 if job['job_id'] in self.jobs:
                     raise ValueError('duplicate history')
+                if job['request_id'] in seen_requests:
+                    raise ValueError('duplicate historical request_id')
                 if path.parent == self.archive:
                     if job['state'] not in TERMINAL or job['outcome_unknown']:
                         raise ValueError('unconfirmed archived job')
@@ -71,10 +322,33 @@ class JobManager:
                     job.update(state='interrupted', outcome_unknown=True, exit_code=None)
                     self._persist(job)
                 self.jobs[job['job_id']] = job
+                seen_requests[job['request_id']] = job['job_id']
             except (OSError, ValueError, KeyError, TypeError):
                 # Lost history can hide a prior side effect; never accept new
                 # commands until the persisted store has been repaired.
                 self.store_healthy = False
+        try:
+            # Legacy archive JSON and active/unknown task records are NEVER
+            # cleaned or migrated on opening this cold index.
+            existing = {k: dict(v, _legacy_archive=k in self.archived)
+                        for k, v in self.jobs.items()}
+            self.cold = ColdArchive(self.directory, self.owner, existing)
+        except (ColdArchiveError, OSError):
+            self.cold = None
+            self.store_healthy = False
+
+    def _cold_lookup(self, key, *, by_request=False):
+        if self.cold is None:
+            return None
+        try:
+            if by_request:
+                return self.cold.by_request(key)
+            return self.cold.by_id(key)
+        except (ColdArchiveError, sqlite3.Error, OSError):
+            # Never allow tampered cold identity/hash data to authorize a
+            # duplicate command or present an unverified result.
+            self.store_healthy = False
+            raise JobError(503, 'job_store_unhealthy')
 
     def _persist(self, job):
         parent = self.archive if job['job_id'] in self.archived else self.directory
@@ -87,15 +361,40 @@ class JobManager:
             os.fsync(handle.fileno())
         os.replace(temporary, destination)
 
+    def _spill_to_cold(self, job_id, job):
+        """Commit exact bytes before retiring the redundant hot JSON copy."""
+        path = self.directory / (job_id + '.json')
+        try:
+            raw = _read_bounded_regular(path)
+            if json.loads(raw) != job or self.cold is None:
+                raise ColdArchiveError('hot record changed or index unavailable')
+            self.cold.put(raw)
+            if self.cold._raw_by_id(job_id) != raw:
+                raise ColdArchiveError('cold record verification failed')
+            path.unlink()
+            dfd = os.open(self.directory, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+            self.jobs.pop(job_id)
+        except (ColdArchiveError, OSError, ValueError, sqlite3.Error):
+            # The hot JSON survives until cold readback; a crash after the
+            # SQLite commit is detected as an equal duplicate on restart.
+            self.store_healthy = False
+            raise JobError(503, 'job_cold_archive_unavailable')
+
     def _reclaim_capacity(self):
-        """Move confirmed immutable results to bounded cold storage; keep lookup/dedup and bytes intact."""
+        """Retain confirmed history beyond the old 1000+1000 limit, no eviction."""
         if len(list(self.directory.glob('*.json'))) < MAX_JOBS:
             return
-        if len(list(self.archive.glob('*.json'))) >= MAX_ARCHIVED_JOBS:
-            raise JobError(429, 'job_archive_full')
-        for job_id, job in self.jobs.items():
+        legacy_full = len(list(self.archive.glob('*.json'))) >= MAX_ARCHIVED_JOBS
+        for job_id, job in list(self.jobs.items()):
             if (job_id not in self.archived and job_id not in self.processes and
                     job['state'] in TERMINAL and not job['outcome_unknown']):
+                if legacy_full:
+                    self._spill_to_cold(job_id, job)
+                    return
                 source = self.directory / (job_id + '.json')
                 destination = self.archive / source.name
                 if destination.exists():
@@ -146,11 +445,17 @@ class JobManager:
         fingerprint = hashlib.sha256(json.dumps(dict(payload, cwd=spec['cwd'], timeout_ms=timeout,
                         max_output_bytes=output_limit), sort_keys=True).encode()).hexdigest()
         with self.lock:
+            self.readiness()  # health may have changed while parsing the request
             for job in self.jobs.values():
                 if job['request_id'] == request_id:
                     if job['fingerprint'] != fingerprint:
                         raise JobError(409, 'request_id_conflict')
                     return self.snapshot(job['job_id'])
+            archived = self._cold_lookup(request_id, by_request=True)
+            if archived:
+                if archived['fingerprint'] != fingerprint:
+                    raise JobError(409, 'request_id_conflict')
+                return self.snapshot(archived['job_id'])
             self._reclaim_capacity()
             if sum(j['state'] not in TERMINAL for j in self.jobs.values()) >= MAX_ACTIVE:
                 raise JobError(429, 'job_queue_full')
@@ -168,6 +473,8 @@ class JobManager:
             raise self.invalid_request
         with self.lock:
             job = self.jobs.get(job_id)
+            if job is None:
+                job = self._cold_lookup(job_id)
             if job is None:
                 raise JobError(404, 'job_not_found')
             result = {k: v for k, v in job.items() if k not in ('owner', 'fingerprint', 'stdout_b64', 'stderr_b64')}
@@ -202,9 +509,16 @@ class JobManager:
 
     def cancel(self, job_id):
         with self.lock:
-            if job_id not in self.jobs:
-                raise JobError(404, 'job_not_found')
-            if self.jobs[job_id]['state'] not in TERMINAL:
+            job = self.jobs.get(job_id)
+            if job is None:
+                # Preserve legacy terminal-result semantics after spill:
+                # a cancel query must not replay work or report a stored
+                # terminal job as missing.
+                archived = self._cold_lookup(job_id)
+                if archived is None:
+                    raise JobError(404, 'job_not_found')
+                return self.snapshot(job_id)
+            if job['state'] not in TERMINAL:
                 self.cancel_requests.add(job_id)
             return self.snapshot(job_id)
 

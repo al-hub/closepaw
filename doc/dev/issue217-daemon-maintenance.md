@@ -44,7 +44,7 @@ compilation or execution. HTTPS redirects and proxy environment are disabled.
   admission uses the same drain gate as prepare. Queued/running work, unknown
   results and corrupt history refuse replacement. Busy work is retried only on
   later regular checks; failures have a durable three-attempt target budget.
-- Supervisor listens only on authenticated `127.0.0.1:18424`, independently of
+- Supervisor listens only on authenticated `127.0.0.1:18427`, independently of
   jobs on18422. Status and update use bounded schemas and response fields; tokens,
   arbitrary response bodies, user commands and outputs never become diagnostics.
 - Temporary download validation, byte hashes, syntax compilation, private atomic

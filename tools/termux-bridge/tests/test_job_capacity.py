@@ -1,4 +1,5 @@
 """Capacity regression against the production daemon, runnable without pytest."""
+import base64
 import hashlib
 import json
 import os
@@ -96,11 +97,289 @@ class JobCapacityTest(unittest.TestCase):
         seed(manager.archive, start=2000)
         seed(self.directory)
         manager = self.manager()
+        payload = dict(request_id='post-capacity', command="printf 'cold-ok'")
+        result = self.finish(manager, manager.submit(payload)['job_id'])
+        self.assertEqual((result['exit_code'], result['stdout']), (0, 'cold-ok'))
+        self.assertEqual(len(manager.jobs), 2000)
+        self.assertEqual(manager.snapshot('0' * 32)['stdout'], 'retained-0')
+        self.assertTrue((self.directory / 'cold-records.sqlite3').exists())
+        restarted = self.manager()
+        self.assertEqual(restarted.submit(payload)['job_id'], result['job_id'])
+        self.assertEqual(restarted.snapshot('0' * 32)['stdout'], 'retained-0')
+
+    def test_post_start_cold_tampering_fails_closed_for_reads_and_replays(self):
+        seed(self.directory)
+        seed(self.directory / 'archive', start=2000)
+        manager = self.manager()
+        self.finish(manager, manager.submit(dict(request_id='spilling', command='printf safe'))['job_id'])
+        with __import__('sqlite3').connect(self.directory / 'cold-records.sqlite3') as db:
+            db.execute("UPDATE records SET sha256=? WHERE job_id=?", ('f' * 64,'0' * 32))
+        with self.assertRaises(JobError) as rejected:
+            manager.snapshot('0' * 32)
+        self.assertEqual(rejected.exception.error, 'job_store_unhealthy')
+        with self.assertRaises(JobError):
+            manager.submit(dict(request_id='never-run', command='touch should-not-exist'))
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_missing_or_truncated_cold_history_never_reexecutes(self):
+        from unittest.mock import patch
+        import sqlite3
+        seed(self.directory, count=1)
+        manager = self.manager()
+        with patch('closepaw_jobs.MAX_JOBS', 1), patch('closepaw_jobs.MAX_ARCHIVED_JOBS', 0):
+            self.finish(manager, manager.submit(dict(request_id='spill', command='printf ok'))['job_id'])
+        self.assertFalse((self.directory / ('0' * 32 + '.json')).exists())
+        db_path = self.directory / 'cold-records.sqlite3'
+        original_db = db_path.read_bytes()
+        manager.cold.db.close()
+        db_path.unlink()
+        missing = self.manager()
+        self.assertFalse(missing.store_healthy)
+        self.assertFalse(db_path.exists())
+        with self.assertRaises(JobError):
+            missing.submit(dict(request_id='seed-0', command='touch should-not-exist'))
+        witness = self.directory / 'cold-records.witness'
+        witness_bytes = witness.read_bytes()
+        witness.unlink()
+        pair_loss = self.manager()
+        self.assertFalse(pair_loss.store_healthy)
+        self.assertFalse(db_path.exists())
+        with self.assertRaises(JobError):
+            pair_loss.submit(dict(request_id='seed-0', command='touch should-not-exist'))
+        witness.write_bytes(witness_bytes)
+        witness.chmod(0o600)
+        db_path.write_bytes(original_db)
+        db_path.chmod(0o600)
+        with sqlite3.connect(db_path) as db:
+            db.execute('DELETE FROM records')
+        truncated = self.manager()
+        self.assertFalse(truncated.store_healthy)
+        with self.assertRaises(JobError):
+            truncated.submit(dict(request_id='seed-0', command='touch should-not-exist'))
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_live_cold_row_loss_refuses_dedup_miss(self):
+        from unittest.mock import patch
+        seed(self.directory, count=1)
+        manager = self.manager()
+        with patch('closepaw_jobs.MAX_JOBS', 1), patch('closepaw_jobs.MAX_ARCHIVED_JOBS', 0):
+            self.finish(manager, manager.submit(dict(request_id='spill', command='printf ok'))['job_id'])
+        manager.cold.db.execute('DELETE FROM records')
+        manager.cold.db.commit()
+        with self.assertRaises(JobError):
+            manager.submit(dict(request_id='seed-0', command='touch should-not-exist'))
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_health_failure_during_parse_refuses_admission(self):
+        manager = self.manager()
+        parse = manager.parse_exec
+        def invalidated(payload):
+            result = parse(payload)
+            with manager.lock:
+                manager.store_healthy = False
+            return result
+        manager.parse_exec = invalidated
+        with self.assertRaises(JobError) as refused:
+            manager.submit(dict(request_id='late-admission', command='touch should-not-exist'))
+        self.assertEqual(refused.exception.error, 'job_store_unhealthy')
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_witness_failure_preserves_hot_copy_and_restart_dedup(self):
+        from unittest.mock import patch
+        seed(self.directory, count=1)
+        source = self.directory / ('0' * 32 + '.json')
+        original = source.read_bytes()
+        manager = self.manager()
+        with patch('closepaw_jobs.MAX_JOBS', 1), patch('closepaw_jobs.MAX_ARCHIVED_JOBS', 0), \
+                patch.object(manager.cold, '_checkpoint', side_effect=OSError('disk failure')):
+            with self.assertRaises(JobError):
+                manager.submit(dict(request_id='not-run', command='touch should-not-exist'))
+        self.assertEqual(source.read_bytes(), original)
+        restarted = self.manager()
+        self.assertTrue(restarted.store_healthy)
+        self.assertEqual(restarted.snapshot('0' * 32)['stdout'], 'retained-0')
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_noncanonical_existing_sqlite_page_size_is_rejected(self):
+        self.directory.mkdir(parents=True)
+        import sqlite3
+        db_path = self.directory / 'cold-records.sqlite3'
+        with sqlite3.connect(db_path) as db:
+            db.execute('PRAGMA page_size=8192')
+            db.execute('CREATE TABLE dummy(x)')
+        manager = self.manager()
+        self.assertFalse(manager.store_healthy)
         with self.assertRaises(JobError) as raised:
             manager.submit(dict(request_id='blocked', command='touch should-not-exist'))
-        self.assertEqual(raised.exception.error, 'job_archive_full')
+        self.assertEqual(raised.exception.error, 'job_store_unhealthy')
         self.assertFalse((self.root / 'should-not-exist').exists())
-        self.assertEqual(len(manager.jobs), 2000)
+
+    def test_lossless_cold_storage_accepts_maximum_legal_binary_output(self):
+        # Each output stream can be exactly MAX_OUTPUT_BYTES raw bytes.
+        # Invalid UTF-8 is retained in _b64 and JSON-escaped as U+FFFD,
+        # so a legitimate finished record can exceed the old 4MiB cap.
+        from unittest.mock import patch
+        from closepaw_jobs import MAX_OUTPUT_BYTES
+        seed(self.directory, count=1)
+        old_id = '0' * 32
+        path = self.directory / (old_id + '.json')
+        payload = bytes([0xff]) * MAX_OUTPUT_BYTES
+        record = json.loads(path.read_text())
+        record.update(stdout=payload.decode(errors='replace'),
+                      stderr=payload.decode(errors='replace'),
+                      stdout_b64=base64.b64encode(payload).decode('ascii'),
+                      stderr_b64=base64.b64encode(payload).decode('ascii'))
+        path.write_text(json.dumps(record, separators=(',', ':')))
+        original = path.read_bytes()
+        self.assertGreater(len(original), 4 * 1024 * 1024)
+        self.assertLess(len(original), 16 * 1024 * 1024)
+        manager = self.manager()
+        with patch('closepaw_jobs.MAX_JOBS', 1), patch('closepaw_jobs.MAX_ARCHIVED_JOBS', 0):
+            job_id = manager.submit(dict(request_id='after-binary', command='printf ok'))['job_id']
+            result = self.finish(manager, job_id)
+        self.assertEqual((result['exit_code'], result['stdout']), (0, 'ok'))
+        self.assertFalse(path.exists())
+        import sqlite3
+        with sqlite3.connect(self.directory / 'cold-records.sqlite3') as db:
+            row = db.execute('SELECT payload FROM records WHERE job_id=?', (old_id,)).fetchone()
+        self.assertEqual(row[0], original)
+        recovered = self.manager()
+        self.assertEqual(recovered.snapshot(old_id, stdout_offset=0, limit=16)['stdout'], '�' * 16)
+        self.assertEqual(recovered.submit(dict(request_id='after-binary', command='printf ok'))['job_id'], job_id)
+
+    def test_spill_rejects_hot_symlink_without_reading_target(self):
+        from unittest.mock import patch
+        seed(self.directory, count=1)
+        manager = self.manager()
+        source = self.directory / ('0' * 32 + '.json')
+        secret = self.root / 'external-unchanged'
+        secret.write_text('do-not-read-or-remove')
+        source.unlink()
+        source.symlink_to(secret)
+        with patch('closepaw_jobs.MAX_JOBS', 1), patch('closepaw_jobs.MAX_ARCHIVED_JOBS', 0):
+            with self.assertRaises(JobError) as raised:
+                manager.submit(dict(request_id='blocked-symlink', command='touch should-not-exist'))
+        self.assertEqual(raised.exception.error, 'job_cold_archive_unavailable')
+        self.assertEqual(secret.read_text(), 'do-not-read-or-remove')
+        self.assertTrue(source.is_symlink())
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_spill_rejects_oversized_source_before_loading_bytes(self):
+        from unittest.mock import patch
+        from closepaw_jobs import MAX_COLD_RECORD_BYTES
+        seed(self.directory, count=1)
+        manager = self.manager()
+        source = self.directory / ('0' * 32 + '.json')
+        with source.open('wb') as stream:
+            stream.truncate(MAX_COLD_RECORD_BYTES + 1)
+        with patch('closepaw_jobs.MAX_JOBS', 1), patch('closepaw_jobs.MAX_ARCHIVED_JOBS', 0):
+            with self.assertRaises(JobError) as raised:
+                manager.submit(dict(request_id='blocked-large', command='touch should-not-exist'))
+        self.assertEqual(raised.exception.error, 'job_cold_archive_unavailable')
+        self.assertEqual(source.stat().st_size, MAX_COLD_RECORD_BYTES + 1)
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_terminal_cold_result_cancel_query_is_idempotent(self):
+        seed(self.directory)
+        seed(self.directory / 'archive', start=2000)
+        manager = self.manager()
+        self.finish(manager, manager.submit(
+            dict(request_id='trigger-spill', command='printf ok')
+        )['job_id'])
+        old_id = '0' * 32
+        self.assertEqual(manager.snapshot(old_id)['state'], 'succeeded')
+        self.assertEqual(manager.cancel(old_id)['state'], 'succeeded')
+        self.assertEqual(self.manager().cancel(old_id)['stdout'], 'retained-0')
+
+    def test_crash_after_cold_commit_before_hot_unlink_preserves_identity(self):
+        seed(self.directory)
+        seed(self.directory / 'archive', start=2000)
+        manager = self.manager()
+        old_id = '0' * 32
+        original = (self.directory / (old_id + '.json')).read_bytes()
+        # Simulate a crash at exactly the commit/unlink boundary.
+        manager.cold.put(original)
+        rebooted = self.manager()
+        self.assertTrue(rebooted.store_healthy)
+        self.assertEqual(rebooted.snapshot(old_id)['stdout'], 'retained-0')
+        self.finish(rebooted, rebooted.submit(
+            dict(request_id='recovered', command='printf recovery-ok')
+        )['job_id'])
+        self.assertFalse((self.directory / (old_id + '.json')).exists())
+        self.assertEqual(self.manager().snapshot(old_id)['stdout'], 'retained-0')
+
+    def test_divergent_hot_and_cold_duplicate_blocks_admission(self):
+        seed(self.directory)
+        seed(self.directory / 'archive', start=2000)
+        manager = self.manager()
+        path = self.directory / ('0' * 32 + '.json')
+        raw = path.read_bytes()
+        manager.cold.put(raw)
+        path.write_text(json.dumps(json.loads(raw), indent=2))
+        rebooted = self.manager()
+        self.assertFalse(rebooted.store_healthy)
+        with self.assertRaises(JobError) as raised:
+            rebooted.submit(dict(request_id='never-execute', command='touch should-not-exist'))
+        self.assertEqual(raised.exception.error, 'job_store_unhealthy')
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_cold_archive_preserves_original_bytes_and_dedup_after_restart(self):
+        seed(self.directory)
+        archive = self.directory / 'archive'
+        seed(archive, start=2000)
+        source = self.directory / ('0' * 32 + '.json')
+        original = source.read_bytes()
+        manager = self.manager()
+        first = self.finish(manager, manager.submit(dict(
+            request_id='new-after-full', command="printf 'new-ok'"))['job_id'])
+        self.assertFalse(source.exists())
+        with __import__('sqlite3').connect(self.directory / 'cold-records.sqlite3') as db:
+            stored = db.execute('SELECT payload FROM records WHERE job_id=?', ('0' * 32,)).fetchone()
+        self.assertEqual(stored[0], original)
+        self.assertEqual(manager.snapshot('0' * 32)['stdout'], 'retained-0')
+        restarted = self.manager()
+        self.assertEqual(restarted.snapshot('0' * 32)['stdout'], 'retained-0')
+        self.assertEqual(restarted.submit(dict(
+            request_id='new-after-full', command="printf 'new-ok'"))['job_id'], first['job_id'])
+
+    def test_malicious_same_request_with_distinct_job_id_blocks_admission(self):
+        seed(self.directory)
+        seed(self.directory / 'archive', start=2000)
+        manager = self.manager()
+        self.finish(manager, manager.submit(dict(request_id='cold-first', command='printf ok'))['job_id'])
+        import sqlite3
+        with sqlite3.connect(self.directory / 'cold-records.sqlite3') as db:
+            raw = db.execute('SELECT payload FROM records LIMIT 1').fetchone()[0]
+        self.assertTrue(raw)
+        # The DB keeps its own request ID namespace; corrupt conflicts are
+        # reported on restart rather than executing a second command.
+        duplicated = json.loads(raw)
+        for path in self.directory.glob('*.json'):
+            sample = json.loads(path.read_text())
+            if sample['job_id'] != duplicated['job_id']:
+                sample['request_id'] = duplicated['request_id']
+                path.write_text(json.dumps(sample))
+                break
+        restarted = self.manager()
+        with self.assertRaises(JobError) as raised:
+            restarted.submit(dict(request_id='should-not-run',command='touch should-not-exist'))
+        self.assertEqual(raised.exception.error, 'job_store_unhealthy')
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_corrupt_cold_archive_refuses_admission_without_erasure(self):
+        seed(self.directory)
+        seed(self.directory / 'archive', start=2000)
+        manager = self.manager()
+        self.finish(manager, manager.submit(dict(request_id='fill', command='printf done'))['job_id'])
+        db_path = self.directory / 'cold-records.sqlite3'
+        import sqlite3
+        with sqlite3.connect(db_path) as db:
+            db.execute("UPDATE records SET sha256=? WHERE job_id=?", ('f' * 64,'0' * 32))
+        restarted = self.manager()
+        with self.assertRaises(JobError) as raised:
+            restarted.submit(dict(request_id='blocked', command='touch should-not-exist'))
+        self.assertEqual(raised.exception.error, 'job_store_unhealthy')
+        self.assertFalse((self.root / 'should-not-exist').exists())
 
     def test_concurrent_capacity_reclaim_and_duplicate_submit_runs_once(self):
         from concurrent.futures import ThreadPoolExecutor
@@ -140,6 +419,26 @@ class JobCapacityTest(unittest.TestCase):
         with self.assertRaises(JobError):
             manager.readiness()
 
+    def test_duplicate_request_identity_across_hot_and_legacy_archive_fails_closed(self):
+        # Different job IDs with the *same* request ID used to be accepted:
+        # first-match lookup could conceal an already executed side effect.
+        seed(self.directory, count=1, start=0)
+        seed(self.directory / 'archive', count=1, start=2000)
+        hot_path = self.directory / ('0' * 32 + '.json')
+        archive_path = self.directory / 'archive' / (f'{2000:032x}.json')
+        archived = json.loads(archive_path.read_text())
+        archived['request_id'] = 'seed-0'
+        archive_path.write_text(json.dumps(archived))
+        original_hot, original_archive = hot_path.read_bytes(), archive_path.read_bytes()
+        manager = self.manager()
+        self.assertFalse(manager.store_healthy)
+        with self.assertRaises(JobError) as failed:
+            manager.submit(dict(request_id='seed-0', command='touch should-not-exist'))
+        self.assertEqual(failed.exception.error, 'job_store_unhealthy')
+        self.assertFalse((self.root / 'should-not-exist').exists())
+        self.assertEqual(hot_path.read_bytes(), original_hot)
+        self.assertEqual(archive_path.read_bytes(), original_archive)
+
     def test_corrupt_or_duplicate_archived_history_fails_closed(self):
         seed(self.directory, count=1)
         archive = self.directory / 'archive'
@@ -150,7 +449,11 @@ class JobCapacityTest(unittest.TestCase):
         self.assertFalse((self.root / 'should-not-exist').exists())
 
     def test_full_production_http_server_executes_and_returns_output(self):
+        # Full 1000 hot + 1000 legacy archive capacity, as seen by the real
+        # authenticated HTTP server, not just a mocked JobManager.
         seed(self.root / '.closepaw/jobs')
+        seed(self.root / '.closepaw/jobs/archive', start=2000)
+        original = (self.root / '.closepaw/jobs' / ('0' * 32 + '.json')).read_bytes()
         with socket.socket() as listener:
             listener.bind(('127.0.0.1', 0))
             port = listener.getsockname()[1]
@@ -183,6 +486,15 @@ class JobCapacityTest(unittest.TestCase):
             self.assertEqual(request('/v1/jobs', payload)['job_id'], job_id)
             self.assertEqual((self.root / 'closepaw/workspace/marker').read_text(), 'run')
             self.assertEqual(request('/v1/jobs/' + '0' * 32)['stdout'], 'retained-0')
+            self.assertEqual(request('/v1/jobs/' + f'{2000:032x}')['stdout'], 'retained-2000')
+            cold = self.root / '.closepaw/jobs/cold-records.sqlite3'
+            self.assertTrue(cold.is_file())
+            import sqlite3
+            with sqlite3.connect(cold) as db:
+                row = db.execute('SELECT payload FROM records WHERE job_id=?', ('0' * 32,)).fetchone()
+            self.assertIsNotNone(row)
+            self.assertEqual(row[0], original)
+            self.assertEqual(len(list((self.root / '.closepaw/jobs/archive').glob('*.json'))), 1000)
         finally:
             process.terminate()
             process.wait(timeout=5)

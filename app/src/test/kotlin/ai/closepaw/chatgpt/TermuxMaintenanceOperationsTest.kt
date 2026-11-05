@@ -9,6 +9,12 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.Test
 
 class TermuxMaintenanceOperationsTest {
+    @Test fun `maintenance default is separate from the MCP listener`() {
+        val port = java.net.URI(TermuxMaintenanceOperations.DEFAULT_BASE_URL).port
+        assertThat(port).isEqualTo(18427)
+        assertThat(port).isNotEqualTo(McpHttpServer.DEFAULT_PORT)
+        assertThat(port).isNotEqualTo(java.net.URI(OpenAiSecureTunnelProvider.READY_URL).port)
+    }
     @Test fun `mutable or malformed revision refuses before network or credentials`() = runBlocking {
         val registry = OperationRegistry()
         TermuxMaintenanceOperations({ error("must not read credentials") }).register(registry) { true }

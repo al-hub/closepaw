@@ -19,7 +19,7 @@ internal class TermuxMaintenanceOperations(
     private val client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
         .connectTimeout(2, TimeUnit.SECONDS).readTimeout(45, TimeUnit.SECONDS)
         .callTimeout(50, TimeUnit.SECONDS).build(),
-    private val baseUrl: String = "http://127.0.0.1:18424",
+    private val baseUrl: String = DEFAULT_BASE_URL,
     private val bootPackage: () -> String = { "not_observed" },
 ) {
     constructor(context: Context) : this({ TermuxBridgeAuth.existingToken(context.applicationContext) },
@@ -99,6 +99,7 @@ internal class TermuxMaintenanceOperations(
     }
 
     companion object {
+        const val DEFAULT_BASE_URL = "http://127.0.0.1:18427"
         const val STATUS = "linux.bridge.maintenance.status"
         const val UPDATE = "linux.bridge.maintenance.update"
     }
