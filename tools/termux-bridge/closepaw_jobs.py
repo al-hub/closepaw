@@ -28,6 +28,32 @@ class ColdArchiveError(Exception):
     pass
 
 
+def _read_bounded_regular(path):
+    """Never follow a hot job symlink or allocate from a corrupt huge JSON."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            info = os.fstat(fd)
+            if (not stat.S_ISREG(info.st_mode) or
+                    not 1 <= info.st_size <= MAX_COLD_RECORD_BYTES):
+                raise ColdArchiveError('unsafe cold source type or size')
+            chunks = []
+            remaining = info.st_size
+            while remaining:
+                chunk = os.read(fd, min(65536, remaining))
+                if not chunk:
+                    raise ColdArchiveError('incomplete cold source read')
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            if os.read(fd, 1):
+                raise ColdArchiveError('cold source grew while reading')
+            return b''.join(chunks)
+        finally:
+            os.close(fd)
+    except OSError as error:
+        raise ColdArchiveError('cold source unavailable') from error
+
+
 def _validate(raw):
     if not isinstance(raw, bytes) or not 1 <= len(raw) <= MAX_COLD_RECORD_BYTES:
         raise ColdArchiveError('invalid cold record bytes')
@@ -101,7 +127,7 @@ class ColdArchive:
             for job_id, value in existing.items():
                 raw = self._raw_by_id(job_id)
                 path = Path(directory) / ('archive/' if value.get('_legacy_archive') else '') / (job_id + '.json')
-                if raw is not None and (not path.is_file() or path.read_bytes() != raw):
+                if raw is not None and _read_bounded_regular(path) != raw:
                     raise ColdArchiveError('conflicting hot/cold history')
                 # A different task ID with the same request ID would defeat
                 # dedup after a daemon restart: refuse before any admission.
@@ -277,7 +303,7 @@ class JobManager:
         """Commit exact bytes before retiring the redundant hot JSON copy."""
         path = self.directory / (job_id + '.json')
         try:
-            raw = path.read_bytes()
+            raw = _read_bounded_regular(path)
             if json.loads(raw) != job or self.cold is None:
                 raise ColdArchiveError('hot record changed or index unavailable')
             self.cold.put(raw)

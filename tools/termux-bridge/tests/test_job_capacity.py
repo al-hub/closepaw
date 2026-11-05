@@ -168,6 +168,38 @@ class JobCapacityTest(unittest.TestCase):
         self.assertEqual(recovered.snapshot(old_id, stdout_offset=0, limit=16)['stdout'], '�' * 16)
         self.assertEqual(recovered.submit(dict(request_id='after-binary', command='printf ok'))['job_id'], job_id)
 
+    def test_spill_rejects_hot_symlink_without_reading_target(self):
+        from unittest.mock import patch
+        seed(self.directory, count=1)
+        manager = self.manager()
+        source = self.directory / ('0' * 32 + '.json')
+        secret = self.root / 'external-unchanged'
+        secret.write_text('do-not-read-or-remove')
+        source.unlink()
+        source.symlink_to(secret)
+        with patch('closepaw_jobs.MAX_JOBS', 1), patch('closepaw_jobs.MAX_ARCHIVED_JOBS', 0):
+            with self.assertRaises(JobError) as raised:
+                manager.submit(dict(request_id='blocked-symlink', command='touch should-not-exist'))
+        self.assertEqual(raised.exception.error, 'job_cold_archive_unavailable')
+        self.assertEqual(secret.read_text(), 'do-not-read-or-remove')
+        self.assertTrue(source.is_symlink())
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_spill_rejects_oversized_source_before_loading_bytes(self):
+        from unittest.mock import patch
+        from closepaw_jobs import MAX_COLD_RECORD_BYTES
+        seed(self.directory, count=1)
+        manager = self.manager()
+        source = self.directory / ('0' * 32 + '.json')
+        with source.open('wb') as stream:
+            stream.truncate(MAX_COLD_RECORD_BYTES + 1)
+        with patch('closepaw_jobs.MAX_JOBS', 1), patch('closepaw_jobs.MAX_ARCHIVED_JOBS', 0):
+            with self.assertRaises(JobError) as raised:
+                manager.submit(dict(request_id='blocked-large', command='touch should-not-exist'))
+        self.assertEqual(raised.exception.error, 'job_cold_archive_unavailable')
+        self.assertEqual(source.stat().st_size, MAX_COLD_RECORD_BYTES + 1)
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
     def test_terminal_cold_result_cancel_query_is_idempotent(self):
         seed(self.directory)
         seed(self.directory / 'archive', start=2000)
