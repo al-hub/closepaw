@@ -96,11 +96,49 @@ class JobCapacityTest(unittest.TestCase):
         seed(manager.archive, start=2000)
         seed(self.directory)
         manager = self.manager()
-        with self.assertRaises(JobError) as raised:
-            manager.submit(dict(request_id='blocked', command='touch should-not-exist'))
-        self.assertEqual(raised.exception.error, 'job_archive_full')
-        self.assertFalse((self.root / 'should-not-exist').exists())
+        payload = dict(request_id='post-capacity', command="printf 'cold-ok'")
+        result = self.finish(manager, manager.submit(payload)['job_id'])
+        self.assertEqual((result['exit_code'], result['stdout']), (0, 'cold-ok'))
         self.assertEqual(len(manager.jobs), 2000)
+        self.assertEqual(manager.snapshot('0' * 32)['stdout'], 'retained-0')
+        self.assertTrue((self.directory / 'cold-records.sqlite3').exists())
+        restarted = self.manager()
+        self.assertEqual(restarted.submit(payload)['job_id'], result['job_id'])
+        self.assertEqual(restarted.snapshot('0' * 32)['stdout'], 'retained-0')
+
+    def test_cold_archive_preserves_original_bytes_and_dedup_after_restart(self):
+        seed(self.directory)
+        archive = self.directory / 'archive'
+        seed(archive, start=2000)
+        source = self.directory / ('0' * 32 + '.json')
+        original = source.read_bytes()
+        manager = self.manager()
+        first = self.finish(manager, manager.submit(dict(
+            request_id='new-after-full', command="printf 'new-ok'"))['job_id'])
+        self.assertFalse(source.exists())
+        with __import__('sqlite3').connect(self.directory / 'cold-records.sqlite3') as db:
+            stored = db.execute('SELECT payload FROM records WHERE job_id=?', ('0' * 32,)).fetchone()
+        self.assertEqual(stored[0], original)
+        self.assertEqual(manager.snapshot('0' * 32)['stdout'], 'retained-0')
+        restarted = self.manager()
+        self.assertEqual(restarted.snapshot('0' * 32)['stdout'], 'retained-0')
+        self.assertEqual(restarted.submit(dict(
+            request_id='new-after-full', command="printf 'new-ok'"))['job_id'], first['job_id'])
+
+    def test_corrupt_cold_archive_refuses_admission_without_erasure(self):
+        seed(self.directory)
+        seed(self.directory / 'archive', start=2000)
+        manager = self.manager()
+        self.finish(manager, manager.submit(dict(request_id='fill', command='printf done'))['job_id'])
+        db_path = self.directory / 'cold-records.sqlite3'
+        import sqlite3
+        with sqlite3.connect(db_path) as db:
+            db.execute("UPDATE records SET sha256=? WHERE job_id=?", ('f' * 64,'0' * 32))
+        restarted = self.manager()
+        with self.assertRaises(JobError) as raised:
+            restarted.submit(dict(request_id='blocked', command='touch should-not-exist'))
+        self.assertEqual(raised.exception.error, 'job_store_unhealthy')
+        self.assertFalse((self.root / 'should-not-exist').exists())
 
     def test_concurrent_capacity_reclaim_and_duplicate_submit_runs_once(self):
         from concurrent.futures import ThreadPoolExecutor

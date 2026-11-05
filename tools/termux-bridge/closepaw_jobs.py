@@ -4,11 +4,13 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import threading
 import time
 import uuid
 from pathlib import Path
+from closepaw_cold_archive import ColdArchive, ColdArchiveError
 
 TERMINAL = {'succeeded', 'failed', 'timed_out', 'cancelled', 'interrupted'}
 MAX_JOBS = 1000
@@ -75,6 +77,15 @@ class JobManager:
                 # Lost history can hide a prior side effect; never accept new
                 # commands until the persisted store has been repaired.
                 self.store_healthy = False
+        try:
+            # Legacy archive JSON and active/unknown task records are NEVER
+            # cleaned or migrated on opening this cold index.
+            existing = {k: dict(v, _legacy_archive=k in self.archived)
+                        for k, v in self.jobs.items()}
+            self.cold = ColdArchive(self.directory, self.owner, existing)
+        except (ColdArchiveError, OSError):
+            self.cold = None
+            self.store_healthy = False
 
     def _persist(self, job):
         parent = self.archive if job['job_id'] in self.archived else self.directory
@@ -87,15 +98,40 @@ class JobManager:
             os.fsync(handle.fileno())
         os.replace(temporary, destination)
 
+    def _spill_to_cold(self, job_id, job):
+        """Commit exact bytes before retiring the redundant hot JSON copy."""
+        path = self.directory / (job_id + '.json')
+        try:
+            raw = path.read_bytes()
+            if json.loads(raw) != job or self.cold is None:
+                raise ColdArchiveError('hot record changed or index unavailable')
+            self.cold.put(raw)
+            if self.cold._raw_by_id(job_id) != raw:
+                raise ColdArchiveError('cold record verification failed')
+            path.unlink()
+            dfd = os.open(self.directory, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+            self.jobs.pop(job_id)
+        except (ColdArchiveError, OSError, ValueError, sqlite3.Error):
+            # The hot JSON survives until cold readback; a crash after the
+            # SQLite commit is detected as an equal duplicate on restart.
+            self.store_healthy = False
+            raise JobError(503, 'job_cold_archive_unavailable')
+
     def _reclaim_capacity(self):
-        """Move confirmed immutable results to bounded cold storage; keep lookup/dedup and bytes intact."""
+        """Retain confirmed history beyond the old 1000+1000 limit, no eviction."""
         if len(list(self.directory.glob('*.json'))) < MAX_JOBS:
             return
-        if len(list(self.archive.glob('*.json'))) >= MAX_ARCHIVED_JOBS:
-            raise JobError(429, 'job_archive_full')
-        for job_id, job in self.jobs.items():
+        legacy_full = len(list(self.archive.glob('*.json'))) >= MAX_ARCHIVED_JOBS
+        for job_id, job in list(self.jobs.items()):
             if (job_id not in self.archived and job_id not in self.processes and
                     job['state'] in TERMINAL and not job['outcome_unknown']):
+                if legacy_full:
+                    self._spill_to_cold(job_id, job)
+                    return
                 source = self.directory / (job_id + '.json')
                 destination = self.archive / source.name
                 if destination.exists():
@@ -151,6 +187,11 @@ class JobManager:
                     if job['fingerprint'] != fingerprint:
                         raise JobError(409, 'request_id_conflict')
                     return self.snapshot(job['job_id'])
+            archived = self.cold.by_request(request_id) if self.cold else None
+            if archived:
+                if archived['fingerprint'] != fingerprint:
+                    raise JobError(409, 'request_id_conflict')
+                return self.snapshot(archived['job_id'])
             self._reclaim_capacity()
             if sum(j['state'] not in TERMINAL for j in self.jobs.values()) >= MAX_ACTIVE:
                 raise JobError(429, 'job_queue_full')
@@ -168,6 +209,8 @@ class JobManager:
             raise self.invalid_request
         with self.lock:
             job = self.jobs.get(job_id)
+            if job is None and self.cold:
+                job = self.cold.by_id(job_id)
             if job is None:
                 raise JobError(404, 'job_not_found')
             result = {k: v for k, v in job.items() if k not in ('owner', 'fingerprint', 'stdout_b64', 'stderr_b64')}
