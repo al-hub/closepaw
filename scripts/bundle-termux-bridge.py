@@ -6,10 +6,7 @@ from pathlib import Path
 
 def bundle(root):
     sources = root / 'tools' / 'termux-bridge'
-    cold = (sources / 'closepaw_cold_archive.py').read_text()
-    jobs = (sources / 'closepaw_jobs.py').read_text().replace(
-        'from closepaw_cold_archive import ColdArchive, ColdArchiveError\n', '')
-    return cold + '\n' + jobs + '\n' + (sources / 'closepaw_maintenance.py').read_text() + '\n' + (sources / 'closepaw_bridge.py').read_text().replace(
+    return (sources / 'closepaw_jobs.py').read_text() + '\n' + (sources / 'closepaw_maintenance.py').read_text() + '\n' + (sources / 'closepaw_bridge.py').read_text().replace(
         'from closepaw_jobs import JobManager, JobError\n', '').replace(
         'from closepaw_maintenance import MaintenanceController, MaintenanceError, approve_pin\n', '')
 

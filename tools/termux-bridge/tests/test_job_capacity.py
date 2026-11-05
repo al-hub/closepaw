@@ -175,7 +175,6 @@ class JobCapacityTest(unittest.TestCase):
         manager = self.manager()
         self.finish(manager, manager.submit(dict(request_id='cold-first', command='printf ok'))['job_id'])
         import sqlite3
-        from closepaw_cold_archive import ColdArchiveError
         with sqlite3.connect(self.directory / 'cold-records.sqlite3') as db:
             raw = db.execute('SELECT payload FROM records LIMIT 1').fetchone()[0]
         self.assertTrue(raw)

@@ -19,14 +19,8 @@ class ClosePawBridgeResourceTest {
             .that(sourceFile.isFile)
             .isTrue()
 
-        // Keep the strict byte-for-byte resource comparison after #225's
-        // SQLite cold archive was added to the ONE-file Termux bundle.
-        // Do not change the test to an approximate substring check.
-        val cold = File(workspaceRoot(), "tools/termux-bridge/closepaw_cold_archive.py").readText()
-        val jobs = File(workspaceRoot(), "tools/termux-bridge/closepaw_jobs.py")
-            .readText().replace("from closepaw_cold_archive import ColdArchive, ColdArchiveError\n", "")
         val sourceBytes = (
-            cold + "\n" + jobs + "\n" +
+            File(workspaceRoot(), "tools/termux-bridge/closepaw_jobs.py").readText() + "\n" +
                 File(workspaceRoot(), "tools/termux-bridge/closepaw_maintenance.py").readText() + "\n" +
                 sourceFile.readText().replace("from closepaw_jobs import JobManager, JobError\n", "")
                     .replace("from closepaw_maintenance import MaintenanceController, MaintenanceError, approve_pin\n", "")

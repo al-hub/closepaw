@@ -23,3 +23,14 @@ and real 2,000+ history physical acceptance. GitHub CI only checks host
 fixtures. No Release/APK/daemon installation or real task submission has
 been performed. Existing issue #215's accepted historical evidence remains
 unchanged.
+
+## Existing 3-file maintenance trust contract preserved
+
+The APK/standalone bundle and local maintenance verifier intentionally retain
+exactly `closepaw_jobs.py`, `closepaw_maintenance.py` and
+`closepaw_bridge.py`. The cold index implementation is **inlined inside
+`closepaw_jobs.py`** rather than adding a fourth pinned source. Existing
+signed 3-file update policy and root/user trust boundary are not widened.
+A locally authorized revision pin is still required; no remote request
+self-authorizes it. In particular, app updating alone does not prove that
+an already-running Termux daemon has switched revisions.
