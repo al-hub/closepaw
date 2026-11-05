@@ -340,6 +340,26 @@ class JobCapacityTest(unittest.TestCase):
         with self.assertRaises(JobError):
             manager.readiness()
 
+    def test_duplicate_request_identity_across_hot_and_legacy_archive_fails_closed(self):
+        # Different job IDs with the *same* request ID used to be accepted:
+        # first-match lookup could conceal an already executed side effect.
+        seed(self.directory, count=1, start=0)
+        seed(self.directory / 'archive', count=1, start=2000)
+        hot_path = self.directory / ('0' * 32 + '.json')
+        archive_path = self.directory / 'archive' / (f'{2000:032x}.json')
+        archived = json.loads(archive_path.read_text())
+        archived['request_id'] = 'seed-0'
+        archive_path.write_text(json.dumps(archived))
+        original_hot, original_archive = hot_path.read_bytes(), archive_path.read_bytes()
+        manager = self.manager()
+        self.assertFalse(manager.store_healthy)
+        with self.assertRaises(JobError) as failed:
+            manager.submit(dict(request_id='seed-0', command='touch should-not-exist'))
+        self.assertEqual(failed.exception.error, 'job_store_unhealthy')
+        self.assertFalse((self.root / 'should-not-exist').exists())
+        self.assertEqual(hot_path.read_bytes(), original_hot)
+        self.assertEqual(archive_path.read_bytes(), original_archive)
+
     def test_corrupt_or_duplicate_archived_history_fails_closed(self):
         seed(self.directory, count=1)
         archive = self.directory / 'archive'

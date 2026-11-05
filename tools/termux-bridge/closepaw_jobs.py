@@ -226,6 +226,10 @@ class JobManager:
         self.lock = threading.RLock()
         self.jobs, self.processes, self.cancel_requests = {}, {}, set()
         self.store_healthy = True
+        # A request ID must never resolve to two distinct historical commands.
+        # Preserve all files, but refuse admission if hot/legacy archive
+        # histories collide: first-match dedup could conceal a prior effect.
+        seen_requests = {}
         for path in sorted(self.directory.glob('*.json')) + sorted(self.archive.glob('*.json')):
             try:
                 job = json.loads(path.read_text())
@@ -253,6 +257,8 @@ class JobManager:
                         base64.b64decode(job[stream + '_b64'], validate=True)
                 if job['job_id'] in self.jobs:
                     raise ValueError('duplicate history')
+                if job['request_id'] in seen_requests:
+                    raise ValueError('duplicate historical request_id')
                 if path.parent == self.archive:
                     if job['state'] not in TERMINAL or job['outcome_unknown']:
                         raise ValueError('unconfirmed archived job')
@@ -261,6 +267,7 @@ class JobManager:
                     job.update(state='interrupted', outcome_unknown=True, exit_code=None)
                     self._persist(job)
                 self.jobs[job['job_id']] = job
+                seen_requests[job['request_id']] = job['job_id']
             except (OSError, ValueError, KeyError, TypeError):
                 # Lost history can hide a prior side effect; never accept new
                 # commands until the persisted store has been repaired.
