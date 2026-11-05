@@ -245,9 +245,16 @@ class JobManager:
 
     def cancel(self, job_id):
         with self.lock:
-            if job_id not in self.jobs:
-                raise JobError(404, 'job_not_found')
-            if self.jobs[job_id]['state'] not in TERMINAL:
+            job = self.jobs.get(job_id)
+            if job is None:
+                # Preserve legacy terminal-result semantics after spill:
+                # a cancel query must not replay work or report a stored
+                # terminal job as missing.
+                archived = self.cold.by_id(job_id) if self.cold else None
+                if archived is None:
+                    raise JobError(404, 'job_not_found')
+                return self.snapshot(job_id)
+            if job['state'] not in TERMINAL:
                 self.cancel_requests.add(job_id)
             return self.snapshot(job_id)
 

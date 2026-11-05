@@ -106,6 +106,50 @@ class JobCapacityTest(unittest.TestCase):
         self.assertEqual(restarted.submit(payload)['job_id'], result['job_id'])
         self.assertEqual(restarted.snapshot('0' * 32)['stdout'], 'retained-0')
 
+    def test_terminal_cold_result_cancel_query_is_idempotent(self):
+        seed(self.directory)
+        seed(self.directory / 'archive', start=2000)
+        manager = self.manager()
+        self.finish(manager, manager.submit(
+            dict(request_id='trigger-spill', command='printf ok')
+        )['job_id'])
+        old_id = '0' * 32
+        self.assertEqual(manager.snapshot(old_id)['state'], 'succeeded')
+        self.assertEqual(manager.cancel(old_id)['state'], 'succeeded')
+        self.assertEqual(self.manager().cancel(old_id)['stdout'], 'retained-0')
+
+    def test_crash_after_cold_commit_before_hot_unlink_preserves_identity(self):
+        seed(self.directory)
+        seed(self.directory / 'archive', start=2000)
+        manager = self.manager()
+        old_id = '0' * 32
+        original = (self.directory / (old_id + '.json')).read_bytes()
+        # Simulate a crash at exactly the commit/unlink boundary.
+        manager.cold.put(original)
+        rebooted = self.manager()
+        self.assertTrue(rebooted.store_healthy)
+        self.assertEqual(rebooted.snapshot(old_id)['stdout'], 'retained-0')
+        self.finish(rebooted, rebooted.submit(
+            dict(request_id='recovered', command='printf recovery-ok')
+        )['job_id'])
+        self.assertFalse((self.directory / (old_id + '.json')).exists())
+        self.assertEqual(self.manager().snapshot(old_id)['stdout'], 'retained-0')
+
+    def test_divergent_hot_and_cold_duplicate_blocks_admission(self):
+        seed(self.directory)
+        seed(self.directory / 'archive', start=2000)
+        manager = self.manager()
+        path = self.directory / ('0' * 32 + '.json')
+        raw = path.read_bytes()
+        manager.cold.put(raw)
+        path.write_text(json.dumps(json.loads(raw), indent=2))
+        rebooted = self.manager()
+        self.assertFalse(rebooted.store_healthy)
+        with self.assertRaises(JobError) as raised:
+            rebooted.submit(dict(request_id='never-execute', command='touch should-not-exist'))
+        self.assertEqual(raised.exception.error, 'job_store_unhealthy')
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
     def test_cold_archive_preserves_original_bytes_and_dedup_after_restart(self):
         seed(self.directory)
         archive = self.directory / 'archive'
