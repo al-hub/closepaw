@@ -6,6 +6,7 @@ import os
 import re
 import sqlite3
 import stat
+import tempfile
 import subprocess
 import threading
 import time
@@ -79,7 +80,14 @@ def _validate(raw):
 class ColdArchive:
     def __init__(self, directory, owner, existing):
         self.path = Path(directory) / 'cold-records.sqlite3'
+        self.witness = Path(directory) / 'cold-records.witness'
+        # Outside jobs/: losing/restoring just the archive family must not
+        # reset dedup. This is still not a backup of the complete HOME.
+        self.anchor = self.path.parent.parent / (self.path.parent.name + '-cold-history.anchor')
         self.owner = owner
+        fresh = not any(p.exists() or p.is_symlink() for p in (self.path, self.witness, self.anchor))
+        if not fresh and not all(p.exists() for p in (self.path, self.witness, self.anchor)):
+            raise ColdArchiveError('missing cold history or witness')
         if self.path.is_symlink() or (self.path.exists() and not self.path.is_file()):
             raise ColdArchiveError('invalid cold archive path')
         if not self.path.exists():
@@ -110,6 +118,20 @@ class ColdArchive:
                 'fingerprint TEXT NOT NULL, sha256 TEXT NOT NULL, payload BLOB NOT NULL,'
                 'UNIQUE(owner, request_id))'
             )
+            self.db.commit()
+            self.identity = (self.path.stat().st_dev, self.path.stat().st_ino)
+            if fresh:
+                self.minimum_rows = 0
+                self._checkpoint()
+            else:
+                self.minimum_rows = 0
+                for path in (self.witness, self.anchor):
+                    witness = json.loads(_read_bounded_regular(path))
+                    if (not isinstance(witness, dict) or set(witness) != {'minimum_rows'} or
+                            type(witness['minimum_rows']) is not int or witness['minimum_rows'] < 0):
+                        raise ColdArchiveError('invalid cold witness')
+                    self.minimum_rows = max(self.minimum_rows, witness['minimum_rows'])
+            self._check_history()
             result = self.db.execute('PRAGMA quick_check').fetchone()
             if result != ('ok',):
                 raise ColdArchiveError('cold SQLite integrity failure')
@@ -138,6 +160,34 @@ class ColdArchive:
         except (sqlite3.Error, OSError, ValueError, TypeError) as error:
             raise ColdArchiveError('cold archive unavailable or corrupt') from error
 
+    def _check_history(self):
+        info = self.path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or (info.st_dev, info.st_ino) != self.identity or
+                self.db.execute('SELECT COUNT(*) FROM records').fetchone()[0] < self.minimum_rows):
+            raise ColdArchiveError('cold history lost or replaced')
+
+    def _checkpoint(self):
+        # Independent durable lower bound: a missing/replaced/older SQLite
+        # file must never silently recreate an empty request-ID namespace.
+        count = self.db.execute('SELECT COUNT(*) FROM records').fetchone()[0]
+        for destination in (self.witness, self.anchor):
+            fd, name = tempfile.mkstemp(prefix='.cold-witness-', dir=destination.parent)
+            try:
+                with os.fdopen(fd, 'w') as stream:
+                    json.dump({'minimum_rows': count}, stream)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(name, destination)
+                dfd = os.open(destination.parent, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(dfd)
+                finally:
+                    os.close(dfd)
+            finally:
+                if os.path.exists(name):
+                    os.unlink(name)
+        self.minimum_rows = count
+
     @staticmethod
     def _checked_row(row):
         if row is None:
@@ -159,6 +209,7 @@ class ColdArchive:
         return None if verified is None else verified[1]
 
     def by_id(self, job_id):
+        self._check_history()
         row = self.db.execute(
             'SELECT job_id,owner,request_id,fingerprint,sha256,payload '
             'FROM records WHERE job_id=?', (job_id,)).fetchone()
@@ -168,6 +219,7 @@ class ColdArchive:
         return verified[0]
 
     def by_request(self, request_id):
+        self._check_history()
         row = self.db.execute(
             'SELECT job_id,owner,request_id,fingerprint,sha256,payload '
             'FROM records WHERE owner=? AND request_id=?',
@@ -176,6 +228,7 @@ class ColdArchive:
         return None if verified is None else verified[0]
 
     def put(self, raw):
+        self._check_history()
         record = _validate(raw)
         if record['owner'] != self.owner:
             raise ColdArchiveError('cold owner mismatch')
@@ -183,6 +236,7 @@ class ColdArchive:
         if old is not None:
             if old != raw:
                 raise ColdArchiveError('cold job ID conflict')
+            self._checkpoint()
             return
         digest = hashlib.sha256(raw).hexdigest()
         try:
@@ -195,6 +249,7 @@ class ColdArchive:
             self.db.commit()  # synchronous=FULL
             if self._raw_by_id(record['job_id']) != raw:
                 raise ColdArchiveError('cold readback mismatch')
+            self._checkpoint()  # durable before caller retires the hot copy
         except sqlite3.Error as error:
             self.db.rollback()
             raise ColdArchiveError('cold archive capacity or write failure') from error
@@ -289,7 +344,7 @@ class JobManager:
             if by_request:
                 return self.cold.by_request(key)
             return self.cold.by_id(key)
-        except (ColdArchiveError, sqlite3.Error):
+        except (ColdArchiveError, sqlite3.Error, OSError):
             # Never allow tampered cold identity/hash data to authorize a
             # duplicate command or present an unverified result.
             self.store_healthy = False
@@ -390,6 +445,7 @@ class JobManager:
         fingerprint = hashlib.sha256(json.dumps(dict(payload, cwd=spec['cwd'], timeout_ms=timeout,
                         max_output_bytes=output_limit), sort_keys=True).encode()).hexdigest()
         with self.lock:
+            self.readiness()  # health may have changed while parsing the request
             for job in self.jobs.values():
                 if job['request_id'] == request_id:
                     if job['fingerprint'] != fingerprint:

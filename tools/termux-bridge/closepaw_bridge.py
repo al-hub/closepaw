@@ -586,7 +586,8 @@ def supervise(args):
         lock.close()
         return 5
     try:
-        controller.serve(getattr(args, 'maintenance_port', None) or args.port + 2)
+        # +2 MCP, +3 tunnel health and +4 control proxy are already reserved.
+        controller.serve(getattr(args, 'maintenance_port', None) or args.port + 5)
     except OSError:
         recovery_event("maintenance_port_conflict")
         lock.close()

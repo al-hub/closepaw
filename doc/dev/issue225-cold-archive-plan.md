@@ -46,3 +46,30 @@ The bounded row cap is now 16MiB, still within the 512MiB SQLite file bound,
 without changing the command output size limits. A test spills exactly two
 maximum-size invalid-UTF8 outputs and verifies original bytes, result lookup
 and dedup after restart.
+
+## Independent review corrections (2026-11-06 KST)
+
+Independent Codex review of b6ca848 found two reproducible P1 defects: recreating
+an absent cold database lost historical dedup, and admission could race a health
+failure after its initial readiness check. Both new regressions fail against that
+SHA. Admission now rechecks readiness under its transaction lock.
+
+A separate owner-private `cold-records.witness` durably records a lower bound on
+cold rows after SQLite commit/readback and before hot JSON retirement. An additional
+`jobs-cold-history.anchor` in the parent directory preserves the bound even when
+the DB and in-directory witness are lost together. Both private checkpoints are
+fsynced before retirement; restart uses their maximum bound. Missing
+DB/witness, fewer rows, or live DB replacement refuses admission; history is not
+silently reinitialized. Checkpoint failure retains the hot copy. Crash after DB
+commit but before checkpoint is safe because no hot copy was retired; startup
+accepts extra valid rows and verifies equal hot/cold duplicates. Interrupted first
+initialization may require local inspection; never remove the witness to recover.
+This detects accidental loss, not coordinated malicious modification of every
+owner-writable history file or a rollback of the complete parent directory.
+
+The old default maintenance listener 18424 collided with Android's MCP listener.
+Both Python supervisor and Android operation now use 18427 (jobs port +5), with
+an occupied-old-port real-process regression and Android default-port test. A
+production-signed APK update is therefore required for the Android client and
+embedded bootstrap; an APK alone still does not prove the Termux daemon changed.
+The existing three source pins and local approval boundary remain unchanged.

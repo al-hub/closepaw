@@ -111,7 +111,7 @@ class JobCapacityTest(unittest.TestCase):
         seed(self.directory)
         seed(self.directory / 'archive', start=2000)
         manager = self.manager()
-        manager.submit(dict(request_id='spilling', command='printf safe'))
+        self.finish(manager, manager.submit(dict(request_id='spilling', command='printf safe'))['job_id'])
         with __import__('sqlite3').connect(self.directory / 'cold-records.sqlite3') as db:
             db.execute("UPDATE records SET sha256=? WHERE job_id=?", ('f' * 64,'0' * 32))
         with self.assertRaises(JobError) as rejected:
@@ -119,6 +119,85 @@ class JobCapacityTest(unittest.TestCase):
         self.assertEqual(rejected.exception.error, 'job_store_unhealthy')
         with self.assertRaises(JobError):
             manager.submit(dict(request_id='never-run', command='touch should-not-exist'))
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_missing_or_truncated_cold_history_never_reexecutes(self):
+        from unittest.mock import patch
+        import sqlite3
+        seed(self.directory, count=1)
+        manager = self.manager()
+        with patch('closepaw_jobs.MAX_JOBS', 1), patch('closepaw_jobs.MAX_ARCHIVED_JOBS', 0):
+            self.finish(manager, manager.submit(dict(request_id='spill', command='printf ok'))['job_id'])
+        self.assertFalse((self.directory / ('0' * 32 + '.json')).exists())
+        db_path = self.directory / 'cold-records.sqlite3'
+        original_db = db_path.read_bytes()
+        manager.cold.db.close()
+        db_path.unlink()
+        missing = self.manager()
+        self.assertFalse(missing.store_healthy)
+        self.assertFalse(db_path.exists())
+        with self.assertRaises(JobError):
+            missing.submit(dict(request_id='seed-0', command='touch should-not-exist'))
+        witness = self.directory / 'cold-records.witness'
+        witness_bytes = witness.read_bytes()
+        witness.unlink()
+        pair_loss = self.manager()
+        self.assertFalse(pair_loss.store_healthy)
+        self.assertFalse(db_path.exists())
+        with self.assertRaises(JobError):
+            pair_loss.submit(dict(request_id='seed-0', command='touch should-not-exist'))
+        witness.write_bytes(witness_bytes)
+        witness.chmod(0o600)
+        db_path.write_bytes(original_db)
+        db_path.chmod(0o600)
+        with sqlite3.connect(db_path) as db:
+            db.execute('DELETE FROM records')
+        truncated = self.manager()
+        self.assertFalse(truncated.store_healthy)
+        with self.assertRaises(JobError):
+            truncated.submit(dict(request_id='seed-0', command='touch should-not-exist'))
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_live_cold_row_loss_refuses_dedup_miss(self):
+        from unittest.mock import patch
+        seed(self.directory, count=1)
+        manager = self.manager()
+        with patch('closepaw_jobs.MAX_JOBS', 1), patch('closepaw_jobs.MAX_ARCHIVED_JOBS', 0):
+            self.finish(manager, manager.submit(dict(request_id='spill', command='printf ok'))['job_id'])
+        manager.cold.db.execute('DELETE FROM records')
+        manager.cold.db.commit()
+        with self.assertRaises(JobError):
+            manager.submit(dict(request_id='seed-0', command='touch should-not-exist'))
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_health_failure_during_parse_refuses_admission(self):
+        manager = self.manager()
+        parse = manager.parse_exec
+        def invalidated(payload):
+            result = parse(payload)
+            with manager.lock:
+                manager.store_healthy = False
+            return result
+        manager.parse_exec = invalidated
+        with self.assertRaises(JobError) as refused:
+            manager.submit(dict(request_id='late-admission', command='touch should-not-exist'))
+        self.assertEqual(refused.exception.error, 'job_store_unhealthy')
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_witness_failure_preserves_hot_copy_and_restart_dedup(self):
+        from unittest.mock import patch
+        seed(self.directory, count=1)
+        source = self.directory / ('0' * 32 + '.json')
+        original = source.read_bytes()
+        manager = self.manager()
+        with patch('closepaw_jobs.MAX_JOBS', 1), patch('closepaw_jobs.MAX_ARCHIVED_JOBS', 0), \
+                patch.object(manager.cold, '_checkpoint', side_effect=OSError('disk failure')):
+            with self.assertRaises(JobError):
+                manager.submit(dict(request_id='not-run', command='touch should-not-exist'))
+        self.assertEqual(source.read_bytes(), original)
+        restarted = self.manager()
+        self.assertTrue(restarted.store_healthy)
+        self.assertEqual(restarted.snapshot('0' * 32)['stdout'], 'retained-0')
         self.assertFalse((self.root / 'should-not-exist').exists())
 
     def test_noncanonical_existing_sqlite_page_size_is_rejected(self):
