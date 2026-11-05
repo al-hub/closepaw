@@ -123,9 +123,10 @@ android {
 val copyClosePawBridge by tasks.registering {
     val bridgeSource = rootProject.layout.projectDirectory.file("tools/termux-bridge/closepaw_bridge.py")
     val jobsSource = rootProject.layout.projectDirectory.file("tools/termux-bridge/closepaw_jobs.py")
+    val coldSource = rootProject.layout.projectDirectory.file("tools/termux-bridge/closepaw_cold_archive.py")
     val rawResource = layout.projectDirectory.file("src/main/res/raw/closepaw_bridge_py")
     val maintenanceSource = rootProject.layout.projectDirectory.file("tools/termux-bridge/closepaw_maintenance.py")
-    inputs.files(bridgeSource, jobsSource, maintenanceSource)
+    inputs.files(bridgeSource, jobsSource, coldSource, maintenanceSource)
     outputs.file(rawResource)
     doLast {
         // Keep the installed daemon standalone; bootstrap copies one resource.
@@ -134,7 +135,12 @@ val copyClosePawBridge by tasks.registering {
         ).replace("from closepaw_maintenance import MaintenanceController, MaintenanceError, approve_pin\n", "")
         val target = rawResource.asFile
         target.parentFile.mkdirs()
-        target.writeText(jobsSource.asFile.readText() + "\n" + maintenanceSource.asFile.readText() + "\n" + bridge)
+        // Cold archive and JobManager must be merged into ONE standalone
+        // Python file, preserving legacy one-file Termux bootstrap behavior.
+        val jobs = jobsSource.asFile.readText().replace(
+            "from closepaw_cold_archive import ColdArchive, ColdArchiveError\n", ""
+        )
+        target.writeText(coldSource.asFile.readText() + "\n" + jobs + "\n" + maintenanceSource.asFile.readText() + "\n" + bridge)
     }
 }
 

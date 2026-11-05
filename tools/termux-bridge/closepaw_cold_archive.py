@@ -39,7 +39,8 @@ def _validate(raw):
             not isinstance(record['owner'], str) or not SHA_RE.fullmatch(record['owner']) or
             not isinstance(record['request_id'], str) or not record['request_id'] or
             not isinstance(record['fingerprint'], str) or not SHA_RE.fullmatch(record['fingerprint']) or
-            record['state'] not in TERMINAL or record['outcome_unknown'] is not False or
+            not isinstance(record['state'], str) or record['state'] not in TERMINAL or
+            record['outcome_unknown'] is not False or
             any(not isinstance(record[k], str) for k in ('stdout','stderr')) or
             any(type(record[k]) is not bool for k in ('stdout_truncated','stderr_truncated')) or
             (record['exit_code'] is not None and type(record['exit_code']) is not int) or
@@ -92,10 +93,15 @@ class ColdArchive:
             # record. Accept only byte-identical copies, never discard either.
             for job_id, value in existing.items():
                 raw = self._raw_by_id(job_id)
-                if raw is not None:
-                    path = Path(directory) / ('archive/' if value.get('_legacy_archive') else '') / (job_id + '.json')
-                    if not path.is_file() or path.read_bytes() != raw:
-                        raise ColdArchiveError('conflicting hot/cold history')
+                path = Path(directory) / ('archive/' if value.get('_legacy_archive') else '') / (job_id + '.json')
+                if raw is not None and (not path.is_file() or path.read_bytes() != raw):
+                    raise ColdArchiveError('conflicting hot/cold history')
+                # A different task ID with the same request ID would defeat
+                # dedup after a daemon restart: refuse before any admission.
+                if value.get('owner') == self.owner:
+                    duplicate = self.by_request(value['request_id'])
+                    if duplicate is not None and duplicate['job_id'] != job_id:
+                        raise ColdArchiveError('conflicting request history')
         except (sqlite3.Error, OSError, ValueError, TypeError) as error:
             raise ColdArchiveError('cold archive unavailable or corrupt') from error
 

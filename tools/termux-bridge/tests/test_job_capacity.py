@@ -125,6 +125,31 @@ class JobCapacityTest(unittest.TestCase):
         self.assertEqual(restarted.submit(dict(
             request_id='new-after-full', command="printf 'new-ok'"))['job_id'], first['job_id'])
 
+    def test_malicious_same_request_with_distinct_job_id_blocks_admission(self):
+        seed(self.directory)
+        seed(self.directory / 'archive', start=2000)
+        manager = self.manager()
+        self.finish(manager, manager.submit(dict(request_id='cold-first', command='printf ok'))['job_id'])
+        import sqlite3
+        from closepaw_cold_archive import ColdArchiveError
+        with sqlite3.connect(self.directory / 'cold-records.sqlite3') as db:
+            raw = db.execute('SELECT payload FROM records LIMIT 1').fetchone()[0]
+        self.assertTrue(raw)
+        # The DB keeps its own request ID namespace; corrupt conflicts are
+        # reported on restart rather than executing a second command.
+        duplicated = json.loads(raw)
+        for path in self.directory.glob('*.json'):
+            sample = json.loads(path.read_text())
+            if sample['job_id'] != duplicated['job_id']:
+                sample['request_id'] = duplicated['request_id']
+                path.write_text(json.dumps(sample))
+                break
+        restarted = self.manager()
+        with self.assertRaises(JobError) as raised:
+            restarted.submit(dict(request_id='should-not-run',command='touch should-not-exist'))
+        self.assertEqual(raised.exception.error, 'job_store_unhealthy')
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
     def test_corrupt_cold_archive_refuses_admission_without_erasure(self):
         seed(self.directory)
         seed(self.directory / 'archive', start=2000)
