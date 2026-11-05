@@ -284,7 +284,11 @@ class JobCapacityTest(unittest.TestCase):
         self.assertFalse((self.root / 'should-not-exist').exists())
 
     def test_full_production_http_server_executes_and_returns_output(self):
+        # Full 1000 hot + 1000 legacy archive capacity, as seen by the real
+        # authenticated HTTP server, not just a mocked JobManager.
         seed(self.root / '.closepaw/jobs')
+        seed(self.root / '.closepaw/jobs/archive', start=2000)
+        original = (self.root / '.closepaw/jobs' / ('0' * 32 + '.json')).read_bytes()
         with socket.socket() as listener:
             listener.bind(('127.0.0.1', 0))
             port = listener.getsockname()[1]
@@ -317,6 +321,15 @@ class JobCapacityTest(unittest.TestCase):
             self.assertEqual(request('/v1/jobs', payload)['job_id'], job_id)
             self.assertEqual((self.root / 'closepaw/workspace/marker').read_text(), 'run')
             self.assertEqual(request('/v1/jobs/' + '0' * 32)['stdout'], 'retained-0')
+            self.assertEqual(request('/v1/jobs/' + f'{2000:032x}')['stdout'], 'retained-2000')
+            cold = self.root / '.closepaw/jobs/cold-records.sqlite3'
+            self.assertTrue(cold.is_file())
+            import sqlite3
+            with sqlite3.connect(cold) as db:
+                row = db.execute('SELECT payload FROM records WHERE job_id=?', ('0' * 32,)).fetchone()
+            self.assertIsNotNone(row)
+            self.assertEqual(row[0], original)
+            self.assertEqual(len(list((self.root / '.closepaw/jobs/archive').glob('*.json'))), 1000)
         finally:
             process.terminate()
             process.wait(timeout=5)
