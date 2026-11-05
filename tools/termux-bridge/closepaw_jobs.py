@@ -68,6 +68,12 @@ class ColdArchive:
             self.db.execute('PRAGMA synchronous=FULL')
             self.db.execute('PRAGMA page_size=4096')
             self.db.execute('PRAGMA max_page_count='+str(MAX_COLD_PAGES))
+            # Existing SQLite files cannot silently override the physical
+            # 4096-byte page / 512MiB bound with a larger page size.
+            if (self.db.execute('PRAGMA page_size').fetchone()[0] != 4096 or
+                self.db.execute('PRAGMA max_page_count').fetchone()[0] > MAX_COLD_PAGES or
+                self.db.execute('PRAGMA page_count').fetchone()[0] > MAX_COLD_PAGES):
+                raise ColdArchiveError('cold archive size policy mismatch')
             self.db.execute(
                 'CREATE TABLE IF NOT EXISTS records ('
                 'job_id TEXT PRIMARY KEY, owner TEXT NOT NULL, request_id TEXT NOT NULL,'
@@ -102,23 +108,42 @@ class ColdArchive:
         except (sqlite3.Error, OSError, ValueError, TypeError) as error:
             raise ColdArchiveError('cold archive unavailable or corrupt') from error
 
+    @staticmethod
+    def _checked_row(row):
+        if row is None:
+            return None
+        job_id, owner, request_id, fingerprint, digest, raw = row
+        record = _validate(raw)
+        if (record['job_id'] != job_id or record['owner'] != owner or
+            record['request_id'] != request_id or
+            record['fingerprint'] != fingerprint or
+            hashlib.sha256(raw).hexdigest() != digest):
+            raise ColdArchiveError('cold record changed after verification')
+        return record, raw
+
     def _raw_by_id(self, job_id):
-        result = self.db.execute('SELECT payload FROM records WHERE job_id=?', (job_id,)).fetchone()
-        return None if result is None else result[0]
+        row = self.db.execute(
+            'SELECT job_id,owner,request_id,fingerprint,sha256,payload '
+            'FROM records WHERE job_id=?', (job_id,)).fetchone()
+        verified = self._checked_row(row)
+        return None if verified is None else verified[1]
 
     def by_id(self, job_id):
-        raw = self._raw_by_id(job_id)
-        if raw is None:
+        row = self.db.execute(
+            'SELECT job_id,owner,request_id,fingerprint,sha256,payload '
+            'FROM records WHERE job_id=?', (job_id,)).fetchone()
+        verified = self._checked_row(row)
+        if verified is None or verified[0]['owner'] != self.owner:
             return None
-        record = _validate(raw)
-        if record['owner'] != self.owner:
-            return None
-        return record
+        return verified[0]
 
     def by_request(self, request_id):
-        item = self.db.execute('SELECT payload FROM records WHERE owner=? AND request_id=?',
-                               (self.owner, request_id)).fetchone()
-        return None if item is None else _validate(item[0])
+        row = self.db.execute(
+            'SELECT job_id,owner,request_id,fingerprint,sha256,payload '
+            'FROM records WHERE owner=? AND request_id=?',
+            (self.owner, request_id)).fetchone()
+        verified = self._checked_row(row)
+        return None if verified is None else verified[0]
 
     def put(self, raw):
         record = _validate(raw)
@@ -220,6 +245,19 @@ class JobManager:
             self.cold = None
             self.store_healthy = False
 
+    def _cold_lookup(self, key, *, by_request=False):
+        if self.cold is None:
+            return None
+        try:
+            if by_request:
+                return self.cold.by_request(key)
+            return self.cold.by_id(key)
+        except (ColdArchiveError, sqlite3.Error):
+            # Never allow tampered cold identity/hash data to authorize a
+            # duplicate command or present an unverified result.
+            self.store_healthy = False
+            raise JobError(503, 'job_store_unhealthy')
+
     def _persist(self, job):
         parent = self.archive if job['job_id'] in self.archived else self.directory
         destination = parent / (job['job_id'] + '.json')
@@ -320,7 +358,7 @@ class JobManager:
                     if job['fingerprint'] != fingerprint:
                         raise JobError(409, 'request_id_conflict')
                     return self.snapshot(job['job_id'])
-            archived = self.cold.by_request(request_id) if self.cold else None
+            archived = self._cold_lookup(request_id, by_request=True)
             if archived:
                 if archived['fingerprint'] != fingerprint:
                     raise JobError(409, 'request_id_conflict')
@@ -342,8 +380,8 @@ class JobManager:
             raise self.invalid_request
         with self.lock:
             job = self.jobs.get(job_id)
-            if job is None and self.cold:
-                job = self.cold.by_id(job_id)
+            if job is None:
+                job = self._cold_lookup(job_id)
             if job is None:
                 raise JobError(404, 'job_not_found')
             result = {k: v for k, v in job.items() if k not in ('owner', 'fingerprint', 'stdout_b64', 'stderr_b64')}
@@ -383,7 +421,7 @@ class JobManager:
                 # Preserve legacy terminal-result semantics after spill:
                 # a cancel query must not replay work or report a stored
                 # terminal job as missing.
-                archived = self.cold.by_id(job_id) if self.cold else None
+                archived = self._cold_lookup(job_id)
                 if archived is None:
                     raise JobError(404, 'job_not_found')
                 return self.snapshot(job_id)

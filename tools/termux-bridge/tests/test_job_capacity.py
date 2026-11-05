@@ -106,6 +106,34 @@ class JobCapacityTest(unittest.TestCase):
         self.assertEqual(restarted.submit(payload)['job_id'], result['job_id'])
         self.assertEqual(restarted.snapshot('0' * 32)['stdout'], 'retained-0')
 
+    def test_post_start_cold_tampering_fails_closed_for_reads_and_replays(self):
+        seed(self.directory)
+        seed(self.directory / 'archive', start=2000)
+        manager = self.manager()
+        manager.submit(dict(request_id='spilling', command='printf safe'))
+        with __import__('sqlite3').connect(self.directory / 'cold-records.sqlite3') as db:
+            db.execute("UPDATE records SET sha256=? WHERE job_id=?", ('f' * 64,'0' * 32))
+        with self.assertRaises(JobError) as rejected:
+            manager.snapshot('0' * 32)
+        self.assertEqual(rejected.exception.error, 'job_store_unhealthy')
+        with self.assertRaises(JobError):
+            manager.submit(dict(request_id='never-run', command='touch should-not-exist'))
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_noncanonical_existing_sqlite_page_size_is_rejected(self):
+        self.directory.mkdir(parents=True)
+        import sqlite3
+        db_path = self.directory / 'cold-records.sqlite3'
+        with sqlite3.connect(db_path) as db:
+            db.execute('PRAGMA page_size=8192')
+            db.execute('CREATE TABLE dummy(x)')
+        manager = self.manager()
+        self.assertFalse(manager.store_healthy)
+        with self.assertRaises(JobError) as raised:
+            manager.submit(dict(request_id='blocked', command='touch should-not-exist'))
+        self.assertEqual(raised.exception.error, 'job_store_unhealthy')
+        self.assertFalse((self.root / 'should-not-exist').exists())
+
     def test_terminal_cold_result_cancel_query_is_idempotent(self):
         seed(self.directory)
         seed(self.directory / 'archive', start=2000)
