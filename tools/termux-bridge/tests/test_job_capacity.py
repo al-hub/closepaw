@@ -1,4 +1,5 @@
 """Capacity regression against the production daemon, runnable without pytest."""
+import base64
 import hashlib
 import json
 import os
@@ -133,6 +134,39 @@ class JobCapacityTest(unittest.TestCase):
             manager.submit(dict(request_id='blocked', command='touch should-not-exist'))
         self.assertEqual(raised.exception.error, 'job_store_unhealthy')
         self.assertFalse((self.root / 'should-not-exist').exists())
+
+    def test_lossless_cold_storage_accepts_maximum_legal_binary_output(self):
+        # Each output stream can be exactly MAX_OUTPUT_BYTES raw bytes.
+        # Invalid UTF-8 is retained in _b64 and JSON-escaped as U+FFFD,
+        # so a legitimate finished record can exceed the old 4MiB cap.
+        from unittest.mock import patch
+        from closepaw_jobs import MAX_OUTPUT_BYTES
+        seed(self.directory, count=1)
+        old_id = '0' * 32
+        path = self.directory / (old_id + '.json')
+        payload = b'\\xff' * MAX_OUTPUT_BYTES
+        record = json.loads(path.read_text())
+        record.update(stdout=payload.decode(errors='replace'),
+                      stderr=payload.decode(errors='replace'),
+                      stdout_b64=base64.b64encode(payload).decode('ascii'),
+                      stderr_b64=base64.b64encode(payload).decode('ascii'))
+        path.write_text(json.dumps(record, separators=(',', ':')))
+        original = path.read_bytes()
+        self.assertGreater(len(original), 4 * 1024 * 1024)
+        self.assertLess(len(original), 16 * 1024 * 1024)
+        manager = self.manager()
+        with patch('closepaw_jobs.MAX_JOBS', 1), patch('closepaw_jobs.MAX_ARCHIVED_JOBS', 0):
+            job_id = manager.submit(dict(request_id='after-binary', command='printf ok'))['job_id']
+            result = self.finish(manager, job_id)
+        self.assertEqual((result['exit_code'], result['stdout']), (0, 'ok'))
+        self.assertFalse(path.exists())
+        import sqlite3
+        with sqlite3.connect(self.directory / 'cold-records.sqlite3') as db:
+            row = db.execute('SELECT payload FROM records WHERE job_id=?', (old_id,)).fetchone()
+        self.assertEqual(row[0], original)
+        recovered = self.manager()
+        self.assertEqual(recovered.snapshot(old_id, stdout_offset=0, limit=16)['stdout'], '�' * 16)
+        self.assertEqual(recovered.submit(dict(request_id='after-binary', command='printf ok'))['job_id'], job_id)
 
     def test_terminal_cold_result_cancel_query_is_idempotent(self):
         seed(self.directory)

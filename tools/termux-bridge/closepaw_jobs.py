@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 
 MAX_COLD_PAGES = 131072  # <=512 MiB @ 4096-byte pages; fail closed at bound
-MAX_COLD_RECORD_BYTES = 4 * 1024 * 1024
+# Two 1MiB raw output streams can each expand to 6MiB of JSON-escaped\n# replacement characters plus 4/3MiB of base64. Never reject a valid\n# confirmed terminal result merely because the index has a 4MiB row cap.\n# Bound retained row bytes without widening execution/output limits.\nMAX_COLD_RECORD_BYTES = 16 * 1024 * 1024
 ID_RE = re.compile(r'[a-f0-9]{32}')
 SHA_RE = re.compile(r'[a-f0-9]{64}')
 REQUIRED = {'job_id','request_id','owner','fingerprint','state','stdout','stderr',

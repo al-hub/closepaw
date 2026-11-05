@@ -34,3 +34,15 @@ signed 3-file update policy and root/user trust boundary are not widened.
 A locally authorized revision pin is still required; no remote request
 self-authorizes it. In particular, app updating alone does not prove that
 an already-running Termux daemon has switched revisions.
+
+## Full-size output bound regression
+
+A confirmed job may carry 1MiB each of non-UTF8 stdout and stderr. The daemon
+preserves raw bytes in base64 and decodes invalid UTF-8 to replacement
+characters for its JSON output; the JSON-escaped replacement characters
+can expand each 1MiB to 6MiB *plus* 1.33MiB of base64. The earlier 4MiB
+cold-row limit therefore refused legitimate terminal results at capacity.
+The bounded row cap is now 16MiB, still within the 512MiB SQLite file bound,
+without changing the command output size limits. A test spills exactly two
+maximum-size invalid-UTF8 outputs and verifies original bytes, result lookup
+and dedup after restart.
