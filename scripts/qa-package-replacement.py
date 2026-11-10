@@ -68,7 +68,10 @@ def cold_replace():
     start = time.monotonic()
     if "Success" not in adb("install", "-r", "-t", APP):
         raise RuntimeError("package replacement failed")
-    return start
+    installed_at = time.monotonic()
+    evidence["events"].append({"case": "fixture_package_install",
+                               "duration_ms": round((installed_at - start) * 1000)})
+    return installed_at
 
 
 try:
