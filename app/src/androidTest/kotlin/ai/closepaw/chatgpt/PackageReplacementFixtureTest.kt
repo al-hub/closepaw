@@ -27,6 +27,13 @@ class PackageReplacementFixtureTest {
             .putBoolean("connection_enabled", true).commit())
         marker.writeText("retained-across-package-replacement")
     }
+    @Test fun seedEnabledForCold() {
+        requireFixture()
+        assertNotNull(SecureMcpTunnelConfigStore(context).load())
+        assertEquals("retained-across-package-replacement", marker.readText())
+        assertTrue(context.getSharedPreferences("chatgpt_connection", Context.MODE_PRIVATE).edit()
+            .putBoolean("connection_enabled", true).commit())
+    }
     @Test fun seedStopped() {
         requireFixture()
         assertEquals("retained-across-package-replacement", marker.readText())

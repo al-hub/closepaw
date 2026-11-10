@@ -43,8 +43,7 @@ launch times. Manual launch causation remains unconfirmed.
 Premium UX UI compiles the unchanged production app for an x86 emulator. The test
 script installs only debug test artifacts, seeds synthetic encrypted configuration
 and a preservation marker, terminates the background process without force-stop,
-then performs a real adb install -r. It never opens an Activity or enables
-Accessibility/AI control. It observes local /health after enabled replacement and
+then performs a real adb install -r. It enables no Accessibility/AI control. Activity launch is now pre-update setup only; diagnostic post-FAIL rescue is recorded separately and never counts as unattended PASS. It observes local /health after enabled replacement and
 absence of that listener after Stop, each for up to45 seconds. Instrumentation
 checks the synthetic config/marker preservation and cleans up before existing UI
 regressions. Failures retain bounded isolated OS exception evidence.
@@ -75,3 +74,27 @@ same unchanged Receiver/local MCP test. Neither has native arm64 tunnel credenti
 and an AOSP emulator still does not establish Samsung OEM or client-session behavior.
 Current Android FGS documentation still lists MY_PACKAGE_REPLACED as an exemption;
 there is no measured OS refusal supporting an OS-policy BLOCKED conclusion yet.
+
+## First executed lifecycle result and fixture precondition separation
+
+HEAD51adb1dc UI42909197801 reached real APK replacement on API35. Gradle install,
+Android pm path and APK staging succeeded (127361292 bytes, SHA256
+2b46575907deee352a93545738995226aa3f1438758eb3ebfe8440a51f89cee1).
+Replacement CLI succeeded in7494ms, but local MCP was not ready within45295ms.
+This is retained as an executed negative observation on unchanged production code,
+not yet the physical v108-to-v109 cause. The fresh seeded package had never been
+opened and had no verified pre-update connection, unlike the physical update.
+
+The refined fixture establishes a pre-update Activity/healthy-MCP baseline, returns
+to Home, then verifies active-process replacement (including PID change), cold
+replacement and Stop. No Activity launch occurs after replacement for PASS. On FAIL,
+package/service/broadcast metadata is captured before any diagnostic app-launch
+rescue; a rescue result never changes FAIL to PASS. Loopback health bypasses host
+HTTP proxies. This separates fixture state, Receiver/service recovery and host probe.
+
+API37 job42909197801 failed before emulator startup: SDK manager could not find
+platforms;android-37. This remains BLOCKED, not an OS policy refusal or product FAIL.
+The unsupported job is explicitly suspended to prevent identical automatic retries;
+its skipped future status is never counted as matching-OS PASS. Existing API35 UI
+and Security gates are unchanged. Actual Android17 Samsung/tunnel/client remain
+separate unaccepted boundaries.

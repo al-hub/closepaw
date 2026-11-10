@@ -89,6 +89,8 @@ jobs:
           retention-days: 14
 
   package-replacement-api37:
+    # BLOCKED: run42909197801 cannot find platforms;android-37. No unsupported retries.
+    if: false
     # The physical handset now reports Android17/API37; keep the existing API35
     # UI gate and test the unchanged update-receiver boundary separately here.
     runs-on: ubuntu-latest
