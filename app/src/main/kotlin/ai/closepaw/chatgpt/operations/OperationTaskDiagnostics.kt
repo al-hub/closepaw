@@ -21,7 +21,18 @@ internal class OperationTaskDiagnostics(
 ) {
     @Volatile private var lastFailure: Pair<String, String>? = null
     fun record(stage: String, error: Exception) { lastFailure = stage to reason(error) }
-    fun snapshot(): JsonObject = buildJsonObject {
+    fun snapshot(): JsonObject {
+        if (android.os.Build.VERSION.SDK_INT > 0 &&
+            (File(file.path + ".sqlite").exists() || File(file.path + ".sqlite.ready").exists())) {
+            val snapshot = OperationTaskSqliteDiagnostics(file).snapshot()
+            return JsonObject(snapshot + buildJsonObject {
+                lastFailure?.let { put("last_failure_stage", it.first); put("last_failure_reason", it.second) }
+            })
+        }
+        return legacySnapshot()
+    }
+
+    private fun legacySnapshot(): JsonObject = buildJsonObject {
         lastFailure?.let { failure ->
             put("last_failure_stage", failure.first); put("last_failure_reason", failure.second)
         }
@@ -53,7 +64,7 @@ internal class OperationTaskDiagnostics(
                 val decoder = Charsets.UTF_8.newDecoder()
                     .onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
                 InputStreamReader(BoundedInput(stream), decoder).buffered(8192).use {
-                    OperationTaskDiagnosticScanner(it).scan()
+                    OperationTaskDiagnosticScanner(it, historical = true).scan()
                 }
             }
             val after = Files.readAttributes(file.toPath(), BasicFileAttributes::class.java)
@@ -65,7 +76,7 @@ internal class OperationTaskDiagnostics(
             put("read_state", "readable")
             put("task_count", counts.tasks)
             put("active_count", counts.active); put("terminal_count", counts.terminal); put("unknown_count", counts.unknown)
-            put("reason_code", if (counts.tasks == OperationTaskStore.MAX_TASKS) "capacity_reached" else "snapshot_readable")
+            put("reason_code", if (counts.tasks >= OperationTaskStore.MAX_TASKS) "legacy_capacity_reached" else "snapshot_readable")
             // A readable snapshot is not proof that the next claim/fsync/replace will succeed.
         } catch (error: Exception) {
             put("read_state", if (error is OperationTaskDiagnosticLimitException || error is OperationTaskDiagnosticCountException || error is OperationTaskDiagnosticByteException) "bounded_refusal" else "failed")
