@@ -26,6 +26,18 @@ FGS rejection recorded in memory only, asynchronous connection preference writes
 They are not established as the actual v108-to-v109 cause. No speculative watchdog,
 timeout increase or transport/credential change is made.
 
+## Additional timing evidence
+
+Current in-memory ControlDiagnostics (not loaded from disk) records the current
+AgentService service_connected at1794316044664 (22:07:24.664KST), about30.928s
+after the original install task creation. The original task completed at
+1794316025890 (22:07:05.890KST) with result installing/current108; that task
+completion was not target installation completion. The Android accessibility
+process lifecycle had therefore entered early. Neither this event nor Session
+terminated proves the local MCP listener or external tunnel state. The user
+reported manual app execution in a22:18KST message; message times are not raw OS
+launch times. Manual launch causation remains unconfirmed.
+
 ## Isolated package replacement test
 
 Premium UX UI compiles the unchanged production app for an x86 emulator. The test

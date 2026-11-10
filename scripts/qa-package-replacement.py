@@ -22,7 +22,7 @@ evidence = {"scope": "isolated_emulator_receiver_fgs_local_mcp_only", "events": 
 def adb(*args, timeout=60):
     result = subprocess.run(["adb", *args], capture_output=True, text=True, timeout=timeout)
     if result.returncode:
-        raise RuntimeError("adb command failed: " + args[0])
+        raise RuntimeError("adb command failed: " + args[0] + "\n" + (result.stdout + result.stderr)[-3000:])
     return result.stdout.strip()
 
 
@@ -47,7 +47,7 @@ def cold_replace():
     if healthy(url):
         raise RuntimeError("service still running before cold replacement")
     start = time.monotonic()
-    if "Success" not in adb("install", "-r", APP):
+    if "Success" not in adb("install", "-r", "-t", APP):
         raise RuntimeError("package replacement failed")
     return start
 
@@ -55,8 +55,9 @@ def cold_replace():
 try:
     if adb("shell", "getprop", "ro.kernel.qemu") != "1":
         raise RuntimeError("isolated emulator required")
+    evidence["debug_apks"] = {p: Path(p).stat().st_size for p in (APP, TEST)}
     for apk in (APP, TEST):
-        if "Success" not in adb("install", "-r", apk):
+        if "Success" not in adb("install", "-r", "-t", apk):
             raise RuntimeError("fixture install failed")
     port = adb("forward", "tcp:0", "tcp:18424")
     url = "http://127.0.0.1:" + port + "/health"
