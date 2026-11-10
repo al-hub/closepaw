@@ -1,3 +1,31 @@
+## Current candidate — verified Stop regression, original reconnect cause still unconfirmed
+
+The sections below are chronological investigation evidence. The initial tests-only
+scope is superseded only for the confirmed Stop durability defect described here.
+
+HEADd522ee5b/API35 UI42912531567 established a healthy pre-update connection. Actual
+package replacement changed the process and restored local MCP in5807ms; a second
+cold replacement restored it in4481ms. No post-update Activity launch was used for
+those observations. The Stop case then FAILED: a new foreground MCP service was
+started by MY_PACKAGE_REPLACED despite the prior confirmed in-memory Stop. The
+source used SharedPreferences.apply(), returning before disk durability. This is a
+confirmed required safety regression, not proof of the original handset outage.
+
+The minimal production candidate commits connection intent synchronously before
+acknowledging Connect/Stop, runs that disk work on IO, always stops the service even
+if saving fails, and refuses restore in the current process after a failed write.
+A successful explicit intent write clears that conservative guard. Failed writes
+return/report failure; they are not claimed durable across a later process death.
+Stop persistence transactions survive UI/service cancellation, without restarting
+AI control or replaying any operation. Unit tests cover commit vs apply, failed
+Stop/Connect and guard recovery. The same actual Android replacement test must now
+show Stop preserved before this candidate can be reported GREEN.
+
+The original v108-to-v109 external reconnect cause, Samsung Android17 behavior,
+native tunnel/control-plane and ChatGPT client remain UNCONFIRMED/NOT_ACCEPTED.
+No version increment/merge/Release/phone install is justified as the complete #228
+solution from this partial Stop fix alone. SDK37 CI remains explicitly BLOCKED.
+
 # Issue #228 — update reconnection investigation
 
 ## Current evidence (2026-11-10 KST)

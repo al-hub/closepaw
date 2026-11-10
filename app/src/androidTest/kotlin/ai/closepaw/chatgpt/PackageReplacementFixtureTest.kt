@@ -58,7 +58,7 @@ class PackageReplacementFixtureTest {
         requireFixture()
         assertEquals("retained-across-package-replacement", marker.readText())
         assertNotNull(SecureMcpTunnelConfigStore(context).load())
-        ChatGptMcpService.stop(context)
+        assertTrue(ChatGptMcpService.stop(context))
         assertFalse(ChatGptConnectionSettings(context).enabled)
     }
     @Test fun verifyPreservedAndCleanup() {

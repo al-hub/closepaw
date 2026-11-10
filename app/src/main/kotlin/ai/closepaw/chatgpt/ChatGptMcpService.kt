@@ -14,6 +14,8 @@ import android.os.IBinder
 import androidx.core.content.ContextCompat
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -126,7 +128,12 @@ class ChatGptMcpService : Service() {
             ai.closepaw.app.AgentService.instance?.stopRemoteAndLocalControl()
             return START_STICKY
         }
-        if (intent?.action == ACTION_STOP) ChatGptConnectionSettings(this).enabled = false
+        if (intent?.action == ACTION_STOP) {
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                withContext(NonCancellable + Dispatchers.IO) { stop(applicationContext) }
+            }
+            return START_NOT_STICKY
+        }
         if (!ChatGptConnectionSettings(this).enabled) {
             stopSelf()
             return START_NOT_STICKY
@@ -139,7 +146,8 @@ class ChatGptMcpService : Service() {
         reconnect.stop()
         server.stop()
         started.set(false)
-        updateState(ChatGptConnectionState())
+        updateState(if (ChatGptConnectionSettings.persistenceBlocked) intentPersistenceFailure()
+            else ChatGptConnectionState())
         scope.cancel()
         super.onDestroy()
     }
@@ -219,8 +227,12 @@ class ChatGptMcpService : Service() {
         private val _connectionState = MutableStateFlow(ChatGptConnectionState())
         internal val connectionState: StateFlow<ChatGptConnectionState> = _connectionState.asStateFlow()
 
+        /** Invoked on IO by the device UI; never authorize startup after a failed write. */
         @Synchronized fun start(context: Context) {
-            ChatGptConnectionSettings(context).enabled = true
+            if (!ChatGptConnectionSettings(context).persistEnabled(true)) {
+                updateState(intentPersistenceFailure())
+                return
+            }
             requestStart(context)
         }
 
@@ -231,11 +243,18 @@ class ChatGptMcpService : Service() {
             )
         }
 
-        @Synchronized fun stop(context: Context) {
-            // Persist intent before stopping: sticky restart/boot/resume must respect Stop.
-            ChatGptConnectionSettings(context).enabled = false
+        /** Invoked on IO. Stop the service even when storage cannot acknowledge durability. */
+        @Synchronized fun stop(context: Context): Boolean {
+            val saved = ChatGptConnectionSettings(context).persistEnabled(false)
             context.stopService(Intent(context, ChatGptMcpService::class.java))
+            updateState(if (saved) ChatGptConnectionState() else intentPersistenceFailure())
+            return saved
         }
+
+        private fun intentPersistenceFailure() = ChatGptConnectionState(
+            phase = "Stopped; connection preference could not be saved",
+            error = "connection_intent_persistence_failed",
+        )
 
         suspend fun restore(context: Context) = withContext(Dispatchers.IO) {
             if (!ChatGptConnectionSettings(context).enabled) return@withContext
