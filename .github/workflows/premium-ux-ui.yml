@@ -55,6 +55,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
+            bash scripts/ci-gradle.sh replacement-install :app:installDebug :app:installDebugAndroidTest -PclosepawInputFixtures=true -Pandroid.injected.build.abi=x86_64
             python3 scripts/qa-package-replacement.py
             bash scripts/ci-gradle.sh terminal-fixture-install :terminal-fixture:installDebug -PclosepawInputFixtures=true -Pandroid.injected.build.abi=x86_64
             bash scripts/ci-gradle.sh ui-test :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.BrowserReadResolverTest,ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest,ai.closepaw.qa.ControlOverlayWindowTest,ai.closepaw.qa.IslandOperationTest,ai.closepaw.qa.IslandScreenCoordinatesTest,ai.closepaw.qa.ClipboardProvenanceTest,ai.closepaw.qa.TerminalInputConnectionTest,ai.closepaw.qa.ProjectionTuningPersistenceTest,ai.closepaw.chatgpt.operations.OperationTaskSqliteCandidateAndroidTest -PclosepawInputFixtures=true --stacktrace
@@ -84,5 +85,54 @@ jobs:
             build/package-replacement
             build/ci-metrics
             build/reports/profile
+          if-no-files-found: warn
+          retention-days: 14
+
+  package-replacement-api37:
+    # The physical handset now reports Android17/API37; keep the existing API35
+    # UI gate and test the unchanged update-receiver boundary separately here.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: never
+      - name: Compile isolated debug replacement fixture
+        run: bash scripts/ci-gradle.sh replacement37-compile :app:assembleDebug :app:assembleDebugAndroidTest -Pandroid.injected.build.abi=x86_64
+      - name: Enable hardware acceleration
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Actual package replacement on API37
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 37
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disk-size: 3072M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            bash scripts/ci-gradle.sh replacement37-install :app:installDebug :app:installDebugAndroidTest -Pandroid.injected.build.abi=x86_64
+            python3 scripts/qa-package-replacement.py
+      - name: Upload API37 replacement evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-replacement-api37-${{ github.run_id }}
+          path: |
+            build/package-replacement
+            build/ci-metrics
           if-no-files-found: warn
           retention-days: 14

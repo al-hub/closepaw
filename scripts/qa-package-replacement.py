@@ -6,6 +6,7 @@ tunnel runtime. External reachability/client sessions are deliberately untested.
 No production release is published or installed by this script.
 """
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -14,7 +15,7 @@ import urllib.request
 
 os.chdir(Path(__file__).resolve().parents[1])
 PACKAGE = "ai.closepaw"
-APP = TEST = None
+APP = None
 FIXTURE = "ai.closepaw.chatgpt.PackageReplacementFixtureTest"
 OUT = Path("build/package-replacement/evidence.json")
 evidence = {"scope": "isolated_emulator_receiver_fgs_local_mcp_only", "events": []}
@@ -42,22 +43,21 @@ def healthy(url):
         return False
 
 
-def built_apk(application_id):
-    # AGP may add the injected ABI to filenames. Read its output metadata rather
-    # than guessing a production/Security-CI filename for a UI ABI-filtered build.
-    matches = []
-    for metadata in Path("app/build/outputs/apk").rglob("output-metadata.json"):
-        document = json.loads(metadata.read_text())
-        if document.get("applicationId") == application_id:
-            for element in document.get("elements", []):
-                candidate = (metadata.parent / element["outputFile"]).resolve()
-                if candidate.parent != metadata.parent.resolve() or candidate.suffix != ".apk":
-                    raise RuntimeError("invalid APK output metadata")
-                if candidate.is_file():
-                    matches.append(str(candidate))
-    if len(matches) != 1:
-        raise RuntimeError("expected one built APK for " + application_id + "; observed " + str(matches))
-    return matches[0]
+def installed_apk():
+    # AGP installs its exact selected variant first. Ask Android for the installed
+    # base APK instead of assuming a Gradle output path on the runner.
+    paths = adb("shell", "pm", "path", PACKAGE).splitlines()
+    if len(paths) != 1 or not paths[0].startswith("package:/data/app/"):
+        raise RuntimeError("expected one installed fixture base APK")
+    remote = paths[0].removeprefix("package:")
+    if not remote.endswith(".apk"):
+        raise RuntimeError("invalid installed APK path")
+    staged = Path("build/package-replacement-input/base.apk").resolve()
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    adb("pull", remote, str(staged))
+    evidence["fixture_apk_bytes"] = staged.stat().st_size
+    evidence["fixture_apk_sha256"] = hashlib.sha256(staged.read_bytes()).hexdigest()
+    return str(staged)
 
 
 def cold_replace():
@@ -74,12 +74,8 @@ def cold_replace():
 try:
     if adb("shell", "getprop", "ro.kernel.qemu") != "1":
         raise RuntimeError("isolated emulator required")
-    evidence["built_apk_paths"] = [str(p) for p in Path("app/build/outputs").rglob("*.apk")]
-    APP, TEST = built_apk(PACKAGE), built_apk(PACKAGE + ".test")
-    evidence["debug_apks"] = {p: Path(p).stat().st_size for p in (APP, TEST)}
-    for apk in (APP, TEST):
-        if "Success" not in adb("install", "-r", "-t", apk):
-            raise RuntimeError("fixture install failed")
+    evidence["android_api"] = adb("shell", "getprop", "ro.build.version.sdk")
+    APP = installed_apk()
     port = adb("forward", "tcp:0", "tcp:18424")
     url = "http://127.0.0.1:" + port + "/health"
     fixture("seedEnabled")

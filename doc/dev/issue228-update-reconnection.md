@@ -58,3 +58,20 @@ An emulator failure must be diagnosed before claiming a production cause.
 No version increment, main merge, signed Release, device installation, data reset,
 replay or change to #219/#229 is justified by this test alone. #228 stays OPEN until
 its actual cause and new-version acceptance gates are satisfied.
+
+## Preparation failures and matched-OS test
+
+The first three UI attempts failed before Android lifecycle assertions, with no
+production RED evidence: generic adb installation error, missing fixed APK path,
+and no APKs under the assumed host output directory. Merely changing the filename
+or using -t did not solve that preparation issue. The fixture now uses Gradle's
+installDebug/installDebugAndroidTest tasks, then stages the exact installed base
+APK reported by Android pm path for the real replacement. No production APK is used.
+
+A confirmed Termux task3c835598-64f2-4da8-b908-c6a0d9d059f6 returned SDK37/release17,
+exit0. Current physical device is Android17, superseding older Android16 notes.
+The existing API35 UI gate is retained; a separate API37 replacement job runs the
+same unchanged Receiver/local MCP test. Neither has native arm64 tunnel credentials,
+and an AOSP emulator still does not establish Samsung OEM or client-session behavior.
+Current Android FGS documentation still lists MY_PACKAGE_REPLACED as an exemption;
+there is no measured OS refusal supporting an OS-policy BLOCKED conclusion yet.
