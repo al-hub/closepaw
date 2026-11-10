@@ -1,3 +1,14 @@
+## #228 partial Stop fix validated; original reconnect BLOCKED — 2026-11-11 KST
+
+- Current baseline: published/installed0.1.109/code110; physical Android17/API37 measured. No new APK/installation, phone UI control or AI-session restart in this Work.
+- [Draft PR #230](https://github.com/al-hub/closepaw/pull/230) HEAD `887eb6709dfc7d6640342b1e4a871c4fedf13d51` / tree `5743d4b2ff23bcd5b827c85d6c8b79b93ff02602`: confirmed Stop apply/durability race fixed with IO commit, failure reporting and bounded start-refusal handling. Original physical timeout/session-termination cause is still UNCONFIRMED. Candidate production code remains UNMERGED and version/code unchanged; not a ready final Release.
+- Exact candidate Security42915878283/UI42915878299 SUCCESS. Raw ZIP SHA/CRC independently verified: JVM3145 and Android34, failures/errors/skips0,8PNGs. Same real API35 replacement fixture changed Stop RED→GREEN; final active health3972ms and cold4476ms after installer return, Stop no restart45s, synthetic config/marker retained. Independent AI code/security APPROVE, unresolved C/H/M0; not native GitHub approval or CLI review.
+- API37 CI cannot find platforms;android-37; unsupported retries suspended, skipped is BLOCKED not PASS. AOSP local-health evidence cannot establish Samsung/native tunnel/client recovery, and historical lifecycle data cannot establish the previous phone failure. No speculative fix or extra diagnostic production Release was issued.
+- [Current runbook/evidence](../dev/issue228-update-reconnection.md) records exact runs/digests, limits and remaining gates. This main commit is docs-only [skip ci]; main app code stays the published109 baseline. Do not claim it is PR230 deployment.
+- **#219 is CLOSED**: [actual109 storage acceptance](https://github.com/al-hub/closepaw/issues/219#issuecomment-6768431699). Current original12,901,900B SHA3fd15e71…, all2000records exact/mismatch0 and unknown76 preserved; new Termux/strict-SSH/WSL exit0 and confirmed same-ID dedup baseline also retained. No pre-v107 retrospective hash claim. #229 excluded.
+- #228 stays OPEN for original root-cause evidence and actual new-version unattended acceptance. Before any future release recheck main/latest release, complete cause/gates and choose a new increasing version; never overwrite109 or treat manual app launch as unattended PASS.
+
+Older pending #219/device statements below are historical and superseded by this disposition.
 ## v0.1.109/code110 signed Release completed — 2026-11-10 KST
 
 User explicitly authorized merge/publication after disclosure that native GitHub approvals were 0. This replaces the earlier conversational external-approval wait; it is not a GitHub APPROVE or a new independent review. Existing separate independent content/security review and final-HEAD CI reused; protections unchanged.

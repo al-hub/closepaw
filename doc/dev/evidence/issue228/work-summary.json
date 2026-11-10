@@ -1,0 +1,236 @@
+{
+  "original_physical_cause": "unconfirmed",
+  "scope": "API35 x86 isolated local MCP health; no native tunnel or client acceptance",
+  "before": {
+    "head": "d522ee5b80be882b6848c8ca4d326b92fd674c46",
+    "run": 42912531567,
+    "events": [
+      {
+        "case": "fixture_package_install",
+        "duration_ms": 8719
+      },
+      {
+        "case": "active_package_replacement",
+        "local_mcp_ready": true,
+        "process_changed": true,
+        "elapsed_ms": 5807
+      },
+      {
+        "case": "fixture_package_install",
+        "duration_ms": 2209
+      },
+      {
+        "case": "enabled_cold_package_replacement",
+        "local_mcp_ready": true,
+        "elapsed_ms": 4481
+      },
+      {
+        "case": "fixture_package_install",
+        "duration_ms": 2949
+      },
+      {
+        "case": "stopped_package_replacement",
+        "unexpected_local_mcp": true
+      }
+    ],
+    "status": "FAIL",
+    "reason": "Stop intent was not preserved",
+    "artifact_id": 13807429106,
+    "github_reported_digest": "sha256:41757edde6129b86dfada0c6fb253ac49ce7f8f34461fac6b675aa2409f7f5e6"
+  },
+  "intermediate_after": {
+    "head": "4fcf6058f15a5b3d864ccb364a9fd47e061ad401",
+    "run": 42914682855,
+    "fixture_status": "PASS",
+    "workflow_status": "cancelled; superseded after review fix",
+    "events": [
+      {
+        "case": "fixture_package_install",
+        "duration_ms": 8184
+      },
+      {
+        "case": "active_package_replacement",
+        "local_mcp_ready": true,
+        "process_changed": true,
+        "elapsed_ms": 5117
+      },
+      {
+        "case": "fixture_package_install",
+        "duration_ms": 2803
+      },
+      {
+        "case": "enabled_cold_package_replacement",
+        "local_mcp_ready": true,
+        "elapsed_ms": 7812
+      },
+      {
+        "case": "fixture_package_install",
+        "duration_ms": 2172
+      },
+      {
+        "case": "stopped_package_replacement",
+        "unexpected_local_mcp": false
+      }
+    ],
+    "synthetic_config_and_marker_preserved": true,
+    "artifact_id": 13808787703,
+    "github_reported_digest": "sha256:accbda216f24f055f4d4c6636666e11b9195a6ad4a65397a7f701bb2a73e110d"
+  },
+  "final_candidate": {
+    "head": "887eb6709dfc7d6640342b1e4a871c4fedf13d51",
+    "tree": "5743d4b2ff23bcd5b827c85d6c8b79b93ff02602",
+    "security_run": 42915878283,
+    "security_status": "success",
+    "ui_run": 42915878299,
+    "ui_status": "success",
+    "fixture": {
+      "events": [
+        {
+          "case": "fixture_package_install",
+          "duration_ms": 13533
+        },
+        {
+          "case": "active_package_replacement",
+          "local_mcp_ready": true,
+          "process_changed": true,
+          "elapsed_ms": 3972
+        },
+        {
+          "case": "fixture_package_install",
+          "duration_ms": 2504
+        },
+        {
+          "case": "enabled_cold_package_replacement",
+          "local_mcp_ready": true,
+          "elapsed_ms": 4476
+        },
+        {
+          "case": "fixture_package_install",
+          "duration_ms": 5001
+        },
+        {
+          "case": "stopped_package_replacement",
+          "unexpected_local_mcp": false
+        }
+      ],
+      "status": "PASS",
+      "synthetic_config_and_marker_preserved": true,
+      "android_api": "35"
+    },
+    "existing_ui_test_log_count": 34,
+    "bridge_pytest_passed": 95,
+    "core_pytest_passed": 8,
+    "scripts_unittest_passed": 46,
+    "raw_junit_artifact_id": 13809567560,
+    "raw_junit_github_digest": "sha256:b93f77b4497e8e125b0e428b1700b6ac84fca25ceb164e7673f65588d6038ca6",
+    "ui_artifact_id": 13810601083,
+    "ui_github_digest": "sha256:178cfde89b684c434bae91efb87713c0c700664753f0ec4affdba23821cebcf4",
+    "independent_ai_review": "APPROVE for confirmed Stop fix/investigation; prior Medium resolved, unresolved C/H/M0",
+    "native_github_review_submitted": false,
+    "status": "Security/UI success; confirmed Stop fix only",
+    "jvm": {
+      "tests": 3145,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "changed_class_tests": 9
+    },
+    "android": {
+      "tests": 34,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "pngs": 8
+    }
+  },
+  "sdk37": {
+    "run": 42909197801,
+    "job": 130155217367,
+    "status": "BLOCKED",
+    "reason": "SDK manager could not find platforms;android-37",
+    "identical_retries_suspended": true,
+    "skipped_is_pass": false
+  },
+  "artifact_download_hash_comparison_performed": true,
+  "physical_device": {
+    "version": "0.1.109",
+    "code": 110,
+    "android_release": 17,
+    "api": 37,
+    "new_install_requests": 0
+  },
+  "issue228_closed": false,
+  "verified_artifacts": [
+    {
+      "artifact_id": 13809567560,
+      "kind": "jvm",
+      "bytes": 991175,
+      "sha256": "b93f77b4497e8e125b0e428b1700b6ac84fca25ceb164e7673f65588d6038ca6",
+      "hash_match": true,
+      "junit": {
+        "files": 372,
+        "tests": 3145,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "changed_classes": {
+        "ai.closepaw.chatgpt.ChatGptConnectionSettingsTest": 6,
+        "ai.closepaw.chatgpt.ChatGptServiceStartTest": 3
+      }
+    },
+    {
+      "artifact_id": 13810601083,
+      "kind": "ui",
+      "bytes": 646062,
+      "sha256": "178cfde89b684c434bae91efb87713c0c700664753f0ec4affdba23821cebcf4",
+      "hash_match": true,
+      "junit": {
+        "files": 1,
+        "tests": 34,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "changed_classes": {
+        "ai.closepaw.chatgpt.ChatGptConnectionSettingsTest": 0,
+        "ai.closepaw.chatgpt.ChatGptServiceStartTest": 0
+      },
+      "pngs": 8,
+      "fixture": {
+        "events": [
+          {
+            "case": "fixture_package_install",
+            "duration_ms": 13533
+          },
+          {
+            "case": "active_package_replacement",
+            "local_mcp_ready": true,
+            "process_changed": true,
+            "elapsed_ms": 3972
+          },
+          {
+            "case": "fixture_package_install",
+            "duration_ms": 2504
+          },
+          {
+            "case": "enabled_cold_package_replacement",
+            "local_mcp_ready": true,
+            "elapsed_ms": 4476
+          },
+          {
+            "case": "fixture_package_install",
+            "duration_ms": 5001
+          },
+          {
+            "case": "stopped_package_replacement",
+            "unexpected_local_mcp": false
+          }
+        ],
+        "status": "PASS",
+        "synthetic_config_and_marker_preserved": true,
+        "android_api": "35"
+      }
+    }
+  ]
+}
