@@ -3,6 +3,8 @@ package ai.closepaw.chatgpt
 import ai.closepaw.BuildConfig
 import android.content.Context
 import android.content.Intent
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
@@ -22,10 +24,28 @@ class PackageReplacementFixtureTest {
     @Test fun seedEnabled() {
         requireFixture()
         assertNull(SecureMcpTunnelConfigStore(context).load())
-        SecureMcpTunnelConfigStore(context).save("tunnel_" + "0".repeat(32), "ci-synthetic-not-a-credential")
+        assertEquals("ai.closepaw", context.packageName)
+        val encrypted = EncryptedSharedPreferences.create(context, "secure_mcp_tunnel",
+            MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
+        SecureMcpTunnelConfigStore(context, prefsProvider = { encrypted })
+            .save("tunnel_" + "0".repeat(32), "ci-synthetic-not-a-credential")
+        // Instrumentation may terminate the process at test completion. Flush the
+        // real encrypted preference instance rather than racing production apply().
+        assertTrue(encrypted.edit().commit())
+        assertNotNull(SecureMcpTunnelConfigStore(context).load())
         assertTrue(context.getSharedPreferences("chatgpt_connection", Context.MODE_PRIVATE).edit()
             .putBoolean("connection_enabled", true).commit())
         marker.writeText("retained-across-package-replacement")
+    }
+    @Test fun inspectConfiguration() {
+        requireFixture()
+        val configured = try { SecureMcpTunnelConfigStore(context).load() != null }
+            catch (error: Exception) { println("CP228_CONFIG_ERROR=" + error.javaClass.simpleName); false }
+        println("CP228_CONFIG package=" + context.packageName +
+            " enabled=" + ChatGptConnectionSettings(context).enabled +
+            " configured=" + configured + " marker=" + marker.exists())
     }
     @Test fun seedEnabledForCold() {
         requireFixture()

@@ -98,3 +98,19 @@ The unsupported job is explicitly suspended to prevent identical automatic retri
 its skipped future status is never counted as matching-OS PASS. Existing API35 UI
 and Security gates are unchanged. Actual Android17 Samsung/tunnel/client remain
 separate unaccepted boundaries.
+
+## Existing-app baseline refusal (retained, not physical reproduction)
+
+HEAD89498ab UI42910924904 reached installed fixture setup but could not establish
+local MCP even BEFORE replacement or after diagnostic Activity launch. No package
+replacement was attempted in that run. Package metadata showed stopped=false and
+notLaunched=false, with no MCP service record. This means the earlier seeded-fresh
+negative cannot yet be assigned to update-receiver behavior.
+
+Fixture configuration save uses the production asynchronous encrypted-preference
+apply(). Instrumentation can terminate the process at test completion, so the
+fixture now explicitly flushes the same real encrypted preference instance with
+commit() before returning. Production save semantics are unchanged. Pre-update
+launch output, bounded activity state and secret-free configuration booleans are
+recorded on failure to distinguish persistence, Activity launch and service setup.
+This is a test preparation correction/hypothesis, not an asserted handset cause.

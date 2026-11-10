@@ -36,6 +36,7 @@ def fixture(method):
                  PACKAGE + ".test/androidx.test.runner.AndroidJUnitRunner")
     if "OK (1 test)" not in result:
         raise RuntimeError("fixture failed: " + method + "\n" + result[-3000:])
+    return result
 
 
 def healthy(url):
@@ -69,12 +70,13 @@ def diagnostics(stage):
         "package": ("dumpsys", "package", PACKAGE),
         "services": ("dumpsys", "activity", "services", PACKAGE),
         "broadcasts": ("dumpsys", "activity", "broadcasts"),
+        "activities": ("dumpsys", "activity", "activities"),
     }.items():
         try:
             value = adb("shell", *args)
             observations[name] = [line.strip() for line in value.splitlines() if any(
                 key in line for key in (PACKAGE, "stopped=", "notLaunched=", "isForeground=", "startRequested=",
-                                       "MY_PACKAGE_REPLACED", "app=null", "app=ProcessRecord"))][-60:]
+                                       "MY_PACKAGE_REPLACED", "app=null", "app=ProcessRecord", "topResumedActivity", "mResumedActivity"))][-60:]
         except Exception:
             observations[name] = ["unavailable"]
     evidence[stage] = observations
@@ -118,7 +120,7 @@ try:
     fixture("seedEnabled")
     # A real updated app has already been launched and connected before update.
     # This launch is BEFORE replacement, never part of unattended recovery proof.
-    adb("shell", "am", "start", "-W", "-n", PACKAGE + "/.app.MainActivity")
+    evidence["pre_update_launch"] = adb("shell", "am", "start", "-W", "-n", PACKAGE + "/.app.MainActivity")
     if not wait_healthy(25):
         raise RuntimeError("pre-update baseline MCP was not ready")
     adb("shell", "input", "keyevent", "KEYCODE_HOME")
@@ -160,7 +162,7 @@ except Exception as error:
     diagnostics("failure_before_any_rescue")
     if "url" in globals() and not healthy(url):
         try:
-            adb("shell", "am", "start", "-W", "-n", PACKAGE + "/.app.MainActivity")
+            evidence["diagnostic_manual_launch_result"] = adb("shell", "am", "start", "-W", "-n", PACKAGE + "/.app.MainActivity")
             evidence["diagnostic_manual_launch_recovered"] = wait_healthy(20)
         except Exception:
             evidence["diagnostic_manual_launch_recovered"] = False
@@ -170,6 +172,10 @@ except Exception as error:
             if any(word in line for word in ("Exception", "Caused by", "ai.closepaw", "FATAL", "foreground"))][-80:]
     except Exception:
         evidence["isolated_os_errors"] = ["unavailable"]
+    try:
+        evidence["configuration_diagnostic"] = fixture("inspectConfiguration")[-1500:]
+    except Exception as inspection_error:
+        evidence["configuration_diagnostic"] = str(inspection_error)[-1500:]
     evidence["reason"] = str(error)
     raise
 finally:
