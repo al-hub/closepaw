@@ -233,8 +233,16 @@ class ChatGptMcpService : Service() {
                 updateState(intentPersistenceFailure())
                 return
             }
-            requestStart(context)
+            requestConnectionStart("connect_start_blocked") { requestStart(context) }
         }
+
+        internal fun requestConnectionStart(failurePrefix: String, request: () -> Unit): Boolean =
+            runCatching { request() }.onFailure { error ->
+                updateState(ChatGptConnectionState(
+                    phase = "Open ClosePaw to reconnect",
+                    error = "$failurePrefix:${error.javaClass.simpleName}",
+                ))
+            }.isSuccess
 
         private fun requestStart(context: Context) {
             ContextCompat.startForegroundService(
@@ -261,12 +269,7 @@ class ChatGptMcpService : Service() {
             val configured = runCatching { SecureMcpTunnelConfigStore(context).load() != null }.getOrDefault(false)
             synchronized(Companion) {
                 if (ChatGptAutoConnectPolicy.shouldRestore(configured, ChatGptConnectionSettings(context).enabled)) {
-                    runCatching { requestStart(context) }.onFailure { error ->
-                        updateState(ChatGptConnectionState(
-                            phase = "Open ClosePaw to reconnect",
-                            error = "auto_connect_blocked:${error.javaClass.simpleName}",
-                        ))
-                    }
+                    requestConnectionStart("auto_connect_blocked") { requestStart(context) }
                 }
             }
         }

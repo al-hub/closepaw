@@ -21,14 +21,16 @@ class PackageReplacementFixtureTest {
         check(BuildConfig.DEBUG)
         check(android.os.Build.FINGERPRINT.contains("generic") || android.os.Build.MODEL.contains("sdk"))
     }
+    private fun encryptedPreferences() = EncryptedSharedPreferences.create(context, "secure_mcp_tunnel",
+        MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
+
     @Test fun seedEnabled() {
         requireFixture()
         assertNull(SecureMcpTunnelConfigStore(context).load())
         assertEquals("ai.closepaw", context.packageName)
-        val encrypted = EncryptedSharedPreferences.create(context, "secure_mcp_tunnel",
-            MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
+        val encrypted = encryptedPreferences()
         SecureMcpTunnelConfigStore(context, prefsProvider = { encrypted })
             .save("tunnel_" + "0".repeat(32), "ci-synthetic-not-a-credential")
         // Instrumentation may terminate the process at test completion. Flush the
@@ -68,7 +70,10 @@ class PackageReplacementFixtureTest {
         assertEquals("tunnel_" + "0".repeat(32), SecureMcpTunnelConfigStore(context).load()?.tunnelId)
         assertEquals("ci-synthetic-not-a-credential", SecureMcpTunnelConfigStore(context).load()?.runtimeApiKey)
         context.stopService(Intent(context, ChatGptMcpService::class.java))
-        SecureMcpTunnelConfigStore(context).clear()
+        val encrypted = encryptedPreferences()
+        SecureMcpTunnelConfigStore(context, prefsProvider = { encrypted }).clear()
+        assertTrue(encrypted.edit().commit())
+        assertNull(SecureMcpTunnelConfigStore(context).load())
         assertTrue(context.getSharedPreferences("chatgpt_connection", Context.MODE_PRIVATE).edit().clear().commit())
         assertTrue(marker.delete())
     }

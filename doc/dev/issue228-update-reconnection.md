@@ -142,3 +142,18 @@ commit() before returning. Production save semantics are unchanged. Pre-update
 launch output, bounded activity state and secret-free configuration booleans are
 recorded on failure to distinguish persistence, Activity launch and service setup.
 This is a test preparation correction/hypothesis, not an asserted handset cause.
+
+## Independent production-review follow-up
+
+The production review found one Medium issue in the async Connect path: a service
+start refusal could escape its IO coroutine and terminate the app. Connect and
+restore now share the same bounded start-attempt reporting boundary. A failed
+request records only a fixed reason prefix and exception class, makes no automatic
+retry and does not claim connection readiness. JVM tests inject permission and
+background-start refusal and assert exactly one attempt, reported state and no
+private exception message. Fixture cleanup also flushes encrypted settings before
+its process exits so synthetic configuration cannot pollute existing UI regressions.
+
+The Activity baseline tests a recently-used app; it does not isolate the package
+broadcast exemption from every recent-foreground grace condition. AOSP API35 local
+MCP evidence still is not Samsung API37/native tunnel/client acceptance.
