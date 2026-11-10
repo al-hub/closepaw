@@ -45,10 +45,7 @@ internal class OperationTaskStore(
             // JSON on every new store instance.
             withLedgerLock {
                 stage("sqlite_migration") {
-                    val migrationRecords =
-                        if (File(file.path + ".sqlite.ready").exists()) emptyList()
-                        else loadForMigration().values.toList()
-                    sqlite.ensureMigrated(migrationRecords, file)
+                    sqlite.ensureMigrated(file)
                 }
             }
             stage("sqlite_reconcile") { sqlite.reconcileInterrupted() }
@@ -74,12 +71,14 @@ internal class OperationTaskStore(
         else transaction { it[id] }
     /** Reclaim an identity only after all queryable terminal output and dedup are durable here. */
     fun retainedShellLinks(): Map<String, String> {
-        val records = if (sqlite != null) stage("sqlite_shell_links") { sqlite.allRecords() }
-            else transaction { it.values.toList() }
-        return records.filter(::hasRetainedShellResult).associate {
-            it.getValue("task_id").jsonPrimitive.content to
-                it.getValue("result").jsonObject.getValue("data").jsonObject.getValue("job_id").jsonPrimitive.content
+        val links = linkedMapOf<String, String>()
+        val accept: (JsonObject) -> Unit = { task ->
+            if (hasRetainedShellResult(task)) links[task.getValue("task_id").jsonPrimitive.content] =
+                task.getValue("result").jsonObject.getValue("data").jsonObject.getValue("job_id").jsonPrimitive.content
         }
+        if (sqlite != null) stage("sqlite_shell_links") { sqlite.forEachRecord(accept) }
+        else transaction { it.values.forEach(accept) }
+        return links
     }
     private fun hasRetainedShellResult(task: JsonObject): Boolean {
         val result = task["result"] as? JsonObject ?: return false
@@ -175,14 +174,6 @@ internal class OperationTaskStore(
     private fun load(): LinkedHashMap<String, JsonObject> {
         val tasks = readLegacyRecords()
         stage("overlay_read") { history.mergeInto(tasks) }
-        return tasks
-    }
-    private fun loadForMigration(): LinkedHashMap<String, JsonObject> {
-        // Historical count is not an admission quota: importing 2001+ existing
-        // records must not fail merely because the old aggregate cap is hit.
-        val tasks = readLegacyRecords(enforceLegacyLimit = false)
-        stage("overlay_read") { history.mergeInto(tasks) }
-        stage("migration_preflight") { OperationTaskHistoryPreflight.inspect(tasks.values) }
         return tasks
     }
     private fun readLegacyRecords(): LinkedHashMap<String, JsonObject> =

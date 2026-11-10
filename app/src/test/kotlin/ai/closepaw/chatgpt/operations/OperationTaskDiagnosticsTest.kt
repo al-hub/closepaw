@@ -32,7 +32,7 @@ class OperationTaskDiagnosticsTest {
         }).toString())
         val before = file.readBytes()
         val result = OperationTaskDiagnostics(file).snapshot()
-        assertEquals("capacity_reached", result["reason_code"]?.jsonPrimitive?.content)
+        assertEquals("legacy_capacity_reached", result["reason_code"]?.jsonPrimitive?.content)
         assertEquals(2000, result["task_count"]?.jsonPrimitive?.int)
         assertEquals(1, result["active_count"]?.jsonPrimitive?.int)
         assertEquals(1, result["unknown_count"]?.jsonPrimitive?.int)
@@ -272,7 +272,7 @@ class OperationTaskDiagnosticsTest {
             repeat(2001) { i -> if (i > 0) out.write(","); out.write("{\"task_id\":\"$i\"}") }
             out.write("]")
         }
-        assertEquals("record_count_exceeded", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(2001, OperationTaskDiagnostics(file).snapshot()["task_count"]?.jsonPrimitive?.int)
         file.writeText("[{\"task_id\":\"a\",\"x\":" + "[".repeat(30) + "0" + "]".repeat(30) + "}]")
         assertEquals("diagnostic_structure_limit", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
         file.writeText("[{\"task_id\":\"a\",\"x\":" + "[".repeat(29) + "0" + "]".repeat(29) + "}]")
@@ -288,7 +288,7 @@ class OperationTaskDiagnosticsTest {
             repeat(100) { i -> if (i > 0) out.write(","); out.write("{\"task_id\":\"$i" + "x".repeat(3000) + "\"}") }
             out.write("]")
         }
-        assertEquals("diagnostic_structure_limit", OperationTaskDiagnostics(file).snapshot()["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(100, OperationTaskDiagnostics(file).snapshot()["task_count"]?.jsonPrimitive?.int)
     }
 
 }

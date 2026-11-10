@@ -10,6 +10,150 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class OperationTaskSqliteCandidateAndroidTest {
+    private fun isolated(block: (File) -> Unit) {
+        val dir = File.createTempFile("task-stream-219-", ".dir",
+            InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
+        check(dir.delete() && dir.mkdirs())
+        try { block(File(dir, "tasks.json")) } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun measuredSizeStreamingMigrationAndReadOnlySqliteAuditPreserveEveryRecord() = isolated { legacy ->
+        legacy.bufferedWriter().use { out ->
+            out.write("[")
+            repeat(2001) { i ->
+                if (i > 0) out.write(",")
+                out.write(JsonObject(record(i) + mapOf("payload" to JsonPrimitive("x".repeat(6200)))).toString())
+            }
+            out.write("]")
+        }
+        assertTrue(legacy.length() > 12_000_000)
+        val original = OperationTaskLegacyStream.read(legacy)
+        val store = OperationTaskStore(legacy)
+        var visited = 0
+        OperationTaskSqliteCandidate(File(legacy.path + ".sqlite")).forEachRecord { task ->
+            val i = visited++
+            assertEquals(JsonObject(record(i) + mapOf("payload" to JsonPrimitive("x".repeat(6200)))),
+                task)
+        }
+        assertEquals(2001, visited)
+        assertEquals("id-2000", store.byRequest("request-2000")?.get("task_id")?.jsonPrimitive?.content)
+        assertTrue(store.claim(record(2001)).created)
+        val diag = OperationTaskDiagnostics(legacy).snapshot()
+        assertEquals("sqlite", diag["backend"]?.jsonPrimitive?.content)
+        assertEquals("readable", diag["read_state"]?.jsonPrimitive?.content)
+        assertEquals("verified_current", diag["legacy_integrity"]?.jsonPrimitive?.content)
+        assertEquals(2001, diag["legacy_exact_count"]?.jsonPrimitive?.int)
+        assertEquals(2002, diag["task_count"]?.jsonPrimitive?.int)
+        assertEquals(original.sha256, diag["legacy_sha256"]?.jsonPrimitive?.content)
+        assertEquals("not_tested", diag["write_health"]?.jsonPrimitive?.content)
+        assertFalse(diag.toString().contains("future_field"))
+        assertEquals(original.sha256, OperationTaskLegacyStream.read(legacy).sha256)
+        assertFalse(OperationTaskStore(legacy).claim(record(2001)).created)
+    }
+
+    @Test fun passiveAuditDoesNotReconcileWriteCreateOrHideChangedHistory() = isolated { legacy ->
+        legacy.writeText(JsonArray(listOf(record(0))).toString())
+        val store = OperationTaskStore(legacy)
+        val dbFile = File(legacy.path + ".sqlite")
+        val before = dbFile.readBytes()
+        val source = legacy.readBytes()
+        assertEquals("verified_current", OperationTaskDiagnostics(legacy).snapshot()["legacy_integrity"]?.jsonPrimitive?.content)
+        assertArrayEquals(before, dbFile.readBytes())
+        store.update("id-0", mapOf("result" to buildJsonObject { put("stdout", "changed") }))
+        val diag = OperationTaskDiagnostics(legacy).snapshot()
+        assertEquals("not_proven", diag["legacy_integrity"]?.jsonPrimitive?.content)
+        assertEquals(1, diag["legacy_mismatch_count"]?.jsonPrimitive?.int)
+        assertArrayEquals(source, legacy.readBytes())
+        assertTrue(dbFile.delete())
+        assertEquals("failed", OperationTaskDiagnostics(legacy).snapshot()["read_state"]?.jsonPrimitive?.content)
+        assertFalse("Passive diagnosis must not manufacture a missing DB", dbFile.exists())
+    }
+
+    @Test fun invalidStreamingImportRollsBackAndDoesNotPublishActivation() = isolated { legacy ->
+        legacy.writeText("[" + record(0) + "," + record(0) + "]")
+        val original = legacy.readBytes()
+        try { OperationTaskStore(legacy); fail("duplicate imported") }
+        catch (_: OperationTaskStorageException) { }
+        assertFalse(File(legacy.path + ".sqlite.ready").exists())
+        android.database.sqlite.SQLiteDatabase.openDatabase(legacy.path + ".sqlite", null,
+            android.database.sqlite.SQLiteDatabase.OPEN_READONLY).use { db ->
+            assertEquals(0, db.version)
+            db.rawQuery("SELECT COUNT(*) FROM tasks", null).use { rows ->
+                assertTrue(rows.moveToFirst()); assertEquals(0, rows.getInt(0))
+            }
+        }
+        assertArrayEquals(original, legacy.readBytes())
+    }
+
+    @Test fun competingConnectionsClaimOnlyOnceAndRestartKeepsUnknownWork() = isolated { legacy ->
+        val first = OperationTaskStore(legacy)
+        val second = OperationTaskStore(legacy)
+        val queued = JsonObject(record(0) + mapOf("state" to JsonPrimitive("queued")))
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(8)
+        try {
+            val claims = (0 until 16).map { i -> pool.submit<OperationTaskClaim> {
+                (if (i % 2 == 0) first else second).claim(queued)
+            } }.map { it.get(30, java.util.concurrent.TimeUnit.SECONDS) }
+            assertEquals(1, claims.count { it.created })
+            assertTrue(claims.all { it.task["task_id"] == JsonPrimitive("id-0") })
+        } finally { pool.shutdownNow() }
+        val restarted = OperationTaskStore(legacy)
+        assertFalse(restarted.claim(queued).created)
+        assertEquals("outcome_unknown", restarted.get("id-0")?.get("state")?.jsonPrimitive?.content)
+        assertEquals(1, OperationTaskDiagnostics(legacy).snapshot()["unknown_count"]?.jsonPrimitive?.int)
+    }
+
+    @Test fun restartAuditAllowsOnlyExactUncertaintyReconciliation() = isolated { legacy ->
+        val running = JsonObject(record(0) + mapOf("state" to JsonPrimitive("running")))
+        legacy.writeText(JsonArray(listOf(running)).toString())
+        OperationTaskStore(legacy)
+        val diag = OperationTaskDiagnostics(legacy).snapshot()
+        assertEquals("verified_current", diag["legacy_integrity"]?.jsonPrimitive?.content)
+        assertEquals(1, diag["legacy_reconciled_count"]?.jsonPrimitive?.int)
+        assertEquals(0, diag["legacy_mismatch_count"]?.jsonPrimitive?.int)
+    }
+
+    @Test fun missingCommittedSchemaNeverManufacturesAnEmptyDedupStore() = isolated { legacy ->
+        legacy.writeText(JsonArray(listOf(record(0))).toString())
+        OperationTaskStore(legacy)
+        val dbFile = File(legacy.path + ".sqlite")
+        android.database.sqlite.SQLiteDatabase.openDatabase(dbFile.path, null, 0).use { db ->
+            db.execSQL("DROP TABLE tasks")
+            assertEquals(1, db.version)
+        }
+        try { OperationTaskStore(legacy).claim(record(0)); fail("lost schema accepted") }
+        catch (_: OperationTaskStorageException) { }
+        assertEquals("failed", OperationTaskDiagnostics(legacy).snapshot()["read_state"]?.jsonPrimitive?.content)
+        android.database.sqlite.SQLiteDatabase.openDatabase(dbFile.path, null,
+            android.database.sqlite.SQLiteDatabase.OPEN_READONLY).use { db ->
+            db.rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tasks'", null).use {
+                assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
+            }
+        }
+    }
+
+    @Test fun passiveAuditRejectsDivergentSafetyIndexes() = isolated { legacy ->
+        legacy.writeText(JsonArray(listOf(record(0))).toString())
+        OperationTaskStore(legacy)
+        android.database.sqlite.SQLiteDatabase.openDatabase(legacy.path + ".sqlite", null, 0).use { db ->
+            db.execSQL("UPDATE tasks SET operation_id='other', created_at_ms=999 WHERE task_id='id-0'")
+        }
+        val diag = OperationTaskDiagnostics(legacy).snapshot()
+        assertEquals("failed", diag["read_state"]?.jsonPrimitive?.content)
+        assertFalse(diag.containsKey("legacy_integrity"))
+    }
+
+    @Test fun maximumDispatcherEscapedOutputsRemainQueryableAfterStreamingImport() = isolated { legacy ->
+        val output = "\u0001".repeat(OperationDispatcher.MAX_OUTPUT)
+        val task = JsonObject(record(0) + mapOf("result" to buildJsonObject {
+            put("stdout", output); put("stderr", output)
+        }))
+        legacy.writeText(JsonArray(listOf(task)).toString())
+        val store = OperationTaskStore(legacy)
+        assertEquals(task, store.get("id-0"))
+        assertEquals("verified_current", OperationTaskDiagnostics(legacy).snapshot()["legacy_integrity"]?.jsonPrimitive?.content)
+    }
+
     private fun record(i: Int): JsonObject = buildJsonObject {
         put("task_id", "id-$i")
         put("request_id", "request-$i")

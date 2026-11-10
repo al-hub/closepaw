@@ -1,16 +1,28 @@
 package ai.closepaw.chatgpt.operations
 
 import java.io.Reader
+import kotlinx.serialization.json.*
 
 /** Strict, bounded JSON scan. Payload strings/numbers are validated, never retained or interpreted. */
-internal class OperationTaskDiagnosticScanner(private val input: Reader) {
+internal class OperationTaskDiagnosticScanner(
+    private val input: Reader,
+    private val historical: Boolean = false,
+    private val onRecord: ((JsonObject) -> Unit)? = null,
+) {
     internal data class Counts(val tasks: Int, val active: Int, val terminal: Int, val unknown: Int)
     private var next = input.read()
     private var nodes = 0
     private var retainedChars = 0
     private val ids = HashSet<String>()
     private val requests = HashSet<String>()
-    private fun advance() { next = input.read() }
+    private var recordText: StringBuilder? = null
+    private fun advance() {
+        recordText?.let {
+            bound(it.length < MAX_RECORD_CHARS)
+            it.append(next.toChar())
+        }
+        next = input.read()
+    }
     private fun whitespace() { while (next == 32 || next == 9 || next == 10 || next == 13) advance() }
     private fun expect(ch: Char) { require(next == ch.code); advance() }
     private fun bound(ok: Boolean) { if (!ok) throw OperationTaskDiagnosticLimitException() }
@@ -67,8 +79,10 @@ internal class OperationTaskDiagnosticScanner(private val input: Reader) {
             '"'.code -> string(false)
             '{'.code -> {
                 advance(); whitespace()
+                val keys = HashSet<String>()
                 if (next != '}'.code) while (true) {
-                    node(depth); string(false); whitespace(); expect(':'); whitespace(); value(depth + 1); whitespace()
+                    node(depth); require(keys.add(string(true)))
+                    whitespace(); expect(':'); whitespace(); value(depth + 1); whitespace()
                     if (next != ','.code) break
                     advance(); whitespace()
                 }
@@ -90,6 +104,8 @@ internal class OperationTaskDiagnosticScanner(private val input: Reader) {
         }
     }
     private fun task(): String? {
+        if (historical) { nodes = 0; retainedChars = 0 }
+        if (onRecord != null) recordText = StringBuilder()
         node(2); expect('{'); whitespace()
         var id: String? = null
         var request: String? = null
@@ -121,15 +137,18 @@ internal class OperationTaskDiagnosticScanner(private val input: Reader) {
             advance(); whitespace()
         }
         expect('}')
-        require(id != null && ids.add(id!!))
+        require(!id.isNullOrBlank() && ids.add(id!!))
         if (request != null) require(requests.add(request!!))
+        val raw = recordText
+        recordText = null
+        if (raw != null) onRecord?.invoke(Json.parseToJsonElement(raw.toString()).jsonObject)
         return state
     }
     fun scan(): Counts {
         node(1); whitespace(); expect('['); whitespace()
         var tasks = 0; var active = 0; var terminal = 0; var unknown = 0
         if (next != ']'.code) while (true) {
-            if (tasks >= OperationTaskStore.MAX_TASKS) throw OperationTaskDiagnosticCountException()
+            if (!historical && tasks >= OperationTaskStore.MAX_TASKS) throw OperationTaskDiagnosticCountException()
             when (task()) {
                 "queued", "running", "cancel_requested" -> active++
                 "succeeded", "failed", "cancelled", "timed_out", "interrupted" -> terminal++
@@ -147,6 +166,9 @@ internal class OperationTaskDiagnosticScanner(private val input: Reader) {
         const val MAX_NODES = 262144
         const val MAX_TOKEN_CHARS = 4096
         const val MAX_RETAINED_CHARS = 262144
+        // At most one complete record is materialized; the legacy file itself
+        // remains byte-bounded independently. Covers escaped 128k outputs.
+        const val MAX_RECORD_CHARS = 4 * 1024 * 1024
     }
 }
 internal class OperationTaskDiagnosticCountException : IllegalArgumentException("Diagnostic record bound")

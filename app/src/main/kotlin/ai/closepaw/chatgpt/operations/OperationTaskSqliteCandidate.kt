@@ -11,8 +11,7 @@ import java.nio.file.StandardOpenOption
 import kotlinx.serialization.json.*
 
 /**
- * Not wired into production admission until full migration and Android
- * instrumentation gates pass. No custom generation/manifest protocol.
+ * Android production ledger. No custom generation/manifest protocol.
  * Caller must arrange external execution only after a durable claim.
  */
 internal class OperationTaskSqliteCandidate(private val dbFile: File) {
@@ -20,7 +19,10 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
         dbFile.parentFile?.let { require(it.isDirectory || it.mkdirs()) }
         val db = SQLiteDatabase.openOrCreateDatabase(dbFile, null)
         try {
-            db.execSQL(
+            if (File(dbFile.path + ".ready").exists()) require(db.version == 1) { "activated_sqlite_schema_invalid" }
+            require(db.version in 0..1) { "sqlite_schema_version_invalid" }
+            if (db.version == 0) {
+                db.execSQL(
                 "CREATE TABLE IF NOT EXISTS tasks (" +
                     "task_id TEXT NOT NULL PRIMARY KEY, " +
                     "request_id TEXT UNIQUE, " +
@@ -30,7 +32,9 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
                     "ordinal INTEGER NOT NULL UNIQUE, " +
                     "payload_json TEXT NOT NULL)"
             )
-            db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_operation_created ON tasks(operation_id,created_at_ms)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_operation_created ON tasks(operation_id,created_at_ms)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_state_ordinal ON tasks(state,ordinal)")
+            } else verifySchema(db)
             return block(db)
         } finally {
             db.close()
@@ -39,6 +43,30 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
 
     private fun requireMigrated(db: SQLiteDatabase) {
         require(db.version == 1) { "migration_not_committed" }
+    }
+
+    companion object {
+        /** Never repair/recreate a committed schema: that could forget dedup. */
+        fun verifySchema(db: SQLiteDatabase) {
+            db.query("tasks", arrayOf("task_id", "request_id", "state", "operation_id",
+                "created_at_ms", "ordinal", "payload_json"), null, null, null, null, null, "0").use { }
+            val uniqueColumns = HashSet<List<String>>()
+            db.rawQuery("PRAGMA index_list('tasks')", null).use { indexes ->
+                while (indexes.moveToNext()) if (indexes.getInt(indexes.getColumnIndexOrThrow("unique")) == 1 &&
+                    indexes.getInt(indexes.getColumnIndexOrThrow("partial")) == 0) {
+                    val index = indexes.getString(indexes.getColumnIndexOrThrow("name"))
+                    val columns = ArrayList<String>()
+                    // Metadata is local DB input, still quote it as SQL text.
+                    db.rawQuery("PRAGMA index_info('" + index.replace("'", "''") + "')", null).use { info ->
+                        while (info.moveToNext()) columns.add(info.getString(info.getColumnIndexOrThrow("name")))
+                    }
+                    uniqueColumns.add(columns)
+                }
+            }
+            require(listOf("task_id", "request_id", "ordinal").all { listOf(it) in uniqueColumns }) {
+                "sqlite_identity_index_missing"
+            }
+        }
     }
 
     private fun field(record: JsonObject, name: String): String =
@@ -63,24 +91,30 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
      * Never deletes or modifies the original ledger.
      * An already populated DB is refused, not overwritten.
      */
-    fun importOnce(records: List<JsonObject>) = database { db ->
+    fun importOnce(records: List<JsonObject>) = importStream { accept -> records.forEach(accept) }
+
+    private fun importStream(source: ((JsonObject) -> Unit) -> Unit) = database { db ->
         db.beginTransaction()
         try {
             require(db.version == 0) { "migration_already_committed" }
             db.rawQuery("SELECT COUNT(*) FROM tasks", null).use {
                 require(it.moveToFirst() && it.getLong(0) == 0L) { "migration_database_not_empty" }
             }
-            records.forEachIndexed { i, record -> insert(db, record, i.toLong()) }
-            db.query("tasks", arrayOf("payload_json"), null, null, null, null, "ordinal ASC").use { rows ->
-                var index = 0
-                while (rows.moveToNext()) {
-                    require(index < records.size &&
-                        Json.parseToJsonElement(rows.getString(0)).jsonObject == records[index]) {
-                        "migration_content_mismatch"
-                    }
-                    index++
+            var count = 0L
+            source { record ->
+                insert(db, record, count++)
+                // Verify through the durable row and both indexed identities,
+                // without retaining an additional copy of the entire ledger.
+                db.query("tasks", arrayOf("payload_json", "request_id", "ordinal"), "task_id=?",
+                    arrayOf(field(record, "task_id")), null, null, null).use { row ->
+                    require(row.moveToFirst() &&
+                        Json.parseToJsonElement(row.getString(0)).jsonObject == record &&
+                        row.getString(1) == (record["request_id"] as? JsonPrimitive)?.contentOrNull &&
+                        row.getLong(2) == count - 1) { "migration_content_mismatch" }
                 }
-                require(index == records.size) { "migration_record_loss" }
+            }
+            db.rawQuery("SELECT COUNT(*) FROM tasks", null).use { rows ->
+                require(rows.moveToFirst() && rows.getLong(0) == count) { "migration_record_loss" }
             }
             // The completion marker must commit atomically with the imported rows.
             // A failed import leaves user_version=0 and no accepted claims.
@@ -89,6 +123,42 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
         } finally {
             db.endTransaction()
         }
+    }
+
+    /** First activation reads bounded records; an existing activation never reimports. */
+    fun ensureMigrated(legacy: File) {
+        if (File(dbFile.path + ".ready").exists()) {
+            ensureMigrated(emptyList(), legacy)
+            return
+        }
+        require(!File(legacy.path + ".history").exists()) { "legacy_overlay_requires_explicit_migration" }
+        val original = originalDigest(legacy)
+        val alreadyCommitted = if (dbFile.isFile) database { it.version == 1 } else false
+        if (!alreadyCommitted) importStream { accept ->
+            if (legacy.exists()) {
+                require(OperationTaskLegacyStream.read(legacy, onRecord = accept).sha256 == original) { "legacy_source_changed" }
+            }
+        }
+        // Also covers a process death after SQLite commit, before .ready.
+        // Compare one record at a time, including order and complete JSON.
+        database { db ->
+            requireMigrated(db)
+            db.query("tasks", arrayOf("payload_json", "ordinal"), null, null, null, null, "ordinal ASC").use { rows ->
+                var index = 0L
+                if (legacy.exists()) {
+                    val verified = OperationTaskLegacyStream.read(legacy) { record ->
+                        require(rows.moveToNext() && rows.getLong(1) == index++ &&
+                            Json.parseToJsonElement(rows.getString(0)).jsonObject == record) {
+                            "sqlite_migration_content_mismatch"
+                        }
+                    }
+                    require(verified.sha256 == original) { "legacy_source_changed" }
+                }
+                require(!rows.moveToNext()) { "sqlite_migration_content_mismatch" }
+            }
+        }
+        require(originalDigest(legacy) == original) { "legacy_source_changed" }
+        publishMarker("closepaw-sqlite-v1 $original")
     }
 
 
@@ -101,7 +171,7 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
         val sentinel = File(dbFile.path + ".ready")
         val marker = "closepaw-sqlite-v1 " + originalDigest(legacy)
         if (sentinel.exists()) {
-            require(sentinel.isFile && sentinel.readText(Charsets.UTF_8).trim() == marker) {
+            require(sentinel.isFile && sentinel.length() <= 128 && sentinel.readText(Charsets.UTF_8).trim() == marker) {
                 "sqlite_activation_marker_invalid"
             }
             require(dbFile.isFile) { "committed_sqlite_missing" }
@@ -113,6 +183,11 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
         // On a crash after DB commit but before sentinel, verify the exact
         // migration snapshot. Do NOT accept a divergent DB.
         require(allRecords() == records) { "sqlite_migration_content_mismatch" }
+        publishMarker(marker)
+    }
+
+    private fun publishMarker(marker: String) {
+        val sentinel = File(dbFile.path + ".ready")
         val parent = sentinel.parentFile ?: throw IllegalStateException("sqlite_parent_missing")
         val tmp = File.createTempFile("sqlite-ready-", ".tmp", parent)
         try {
@@ -129,6 +204,7 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
     }
 
     private fun originalDigest(file: File): String {
+        if (file.exists() && file.length() > OperationTaskDiagnostics.MAX_BYTES) throw OperationTaskDiagnosticByteException()
         val md = java.security.MessageDigest.getInstance("SHA-256")
         if (!file.exists()) md.update("absent".toByteArray(Charsets.UTF_8))
         else file.inputStream().use { input ->
@@ -147,14 +223,18 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
         requireMigrated(db)
         db.beginTransaction()
         try {
-            val interrupted = ArrayList<Pair<String, JsonObject>>()
-            db.query("tasks", arrayOf("task_id", "payload_json"),
-                "state IN ('queued','running','cancel_requested')", null, null, null, null)
-                .use { cursor ->
-                    while (cursor.moveToNext()) interrupted.add(
-                        cursor.getString(0) to Json.parseToJsonElement(cursor.getString(1)).jsonObject)
-                }
-            interrupted.forEach { (id, old) ->
+            // Query a single row each time: updating a cursor's backing table
+            // while refilling its CursorWindow can otherwise skip records.
+            var lastOrdinal = -1L
+            while (true) {
+                val nextRow = db.query("tasks", arrayOf("task_id", "payload_json", "ordinal"),
+                    "ordinal > ? AND state IN ('queued','running','cancel_requested')", arrayOf(lastOrdinal.toString()),
+                    null, null, "ordinal ASC", "1")
+                    .use { cursor -> if (cursor.moveToFirst()) {
+                        lastOrdinal = cursor.getLong(2)
+                        cursor.getString(0) to Json.parseToJsonElement(cursor.getString(1)).jsonObject
+                    } else null } ?: break
+                val (id, old) = nextRow
                 val next = JsonObject(old + mapOf(
                     "state" to JsonPrimitive("outcome_unknown"),
                     "summary" to (old["summary"] ?: JsonPrimitive(
@@ -302,6 +382,13 @@ internal class OperationTaskSqliteCandidate(private val dbFile: File) {
                 while (rows.moveToNext()) result.add(Json.parseToJsonElement(rows.getString(0)).jsonObject)
             }
         result
+    }
+
+    fun forEachRecord(accept: (JsonObject) -> Unit) = database { db ->
+        requireMigrated(db)
+        db.query("tasks", arrayOf("payload_json"), null, null, null, null, "ordinal ASC").use { rows ->
+            while (rows.moveToNext()) accept(Json.parseToJsonElement(rows.getString(0)).jsonObject)
+        }
     }
 
 }
