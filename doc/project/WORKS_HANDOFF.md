@@ -1,3 +1,18 @@
+## v0.1.109/code110 signed Release completed — 2026-11-10 KST
+
+User explicitly authorized merge/publication after disclosure that native GitHub approvals were 0. This replaces the earlier conversational external-approval wait; it is not a GitHub APPROVE or a new independent review. Existing separate independent content/security review and final-HEAD CI reused; protections unchanged.
+
+PR [#227](https://github.com/al-hub/closepaw/pull/227) merged to immutable source/tag `3e65a21137b09a8a3d2d5f64f38f567c173b2a58`; tree `ca6431d9111f68f23d0ada7fb80f75adb95e39bd` exactly matches reviewed PR tree.
+
+- Main [Security42806970645](https://github.com/al-hub/closepaw/actions/runs/42806970645) SUCCESS, including optimized unsigned release. Raw JUnit artifact13761036530 SHA256 `06a4508f7918e70e17e5cf2cc8ca51b99172a4259bfa967c94bb4e1b6dd0a5d9` independently downloaded/hash matched: JVM3139/failures0/errors0/skipped0.
+- Main [UI42806970688](https://github.com/al-hub/closepaw/actions/runs/42806970688) SUCCESS. Raw artifact13759615427 SHA256 `0f09eadd056da67e74903573eeb644bdb2e2e961b2d8ae8e7c2a45736565b945` independently downloaded/hash matched: Android34/failures0/errors0/skipped0,8PNGs.
+- Final [Signed42808675785](https://github.com/al-hub/closepaw/actions/runs/42808675785) SUCCESS. Earlier42807867119 refused before signing because Security was pending, as designed; no manual retry/gate bypass.
+- [Release v0.1.109](https://github.com/al-hub/closepaw/releases/tag/v0.1.109), published2026-11-10 20:35:39KST. [APK](https://github.com/al-hub/closepaw/releases/download/v0.1.109/closepaw-aa-bridge.apk):116952059 bytes, SHA256 `4d49dd33bb2f8a5e0307560c249db8ac6270900ac94ae9620e22cc40eebee58d`.
+- Runner anonymous public re-download verified SHA/checksum, ai.closepaw/version0.1.109/code110, v3 signature, original signer `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba`, both native runtimes and tag/source. Verification artifact13760572177 SHA256 `8f6d54a970cf24b5e13df9e4437794ecb90cc2eec4faa584ebc1530e852f2dad` independently downloaded and inspected.
+- Separate Microduck anonymous public APK/checksum download additionally matched GitHub digest/116952059 bytes; ZIP CRC and both native runtime entries PASS.
+
+**Publication complete; physical installation and v109 acceptance NOT_TESTED in this continuation.** No install request, app-data deletion/reset or uncertain-command replay. Last verified device108 is historical evidence. #219 remains OPEN for real current12.9MB legacy/activation/full-record-ID-result-dedup comparison and new-write/result/dedup acceptance. No pre-v107 full hash exists; do not manufacture retrospective preservation proof. Additional Codex CLI remained usage-limited; not counted as review PASS.
+
 ## 2026-11-02 #219 v0.1.107/code108 signed Release — physical install BLOCKED, normal-function acceptance OPEN
 
 - User chose functionality-first with **independent AI review waived for this release** (not an APPROVE); original installed task history to remain intact. PR [#224](https://github.com/al-hub/closepaw/pull/224) HEAD `6e4858322d4e6b07aab0a097f0f2846fbbf4dda5` merged to exact source/tag `b9ef4f9bbb66ced621d493666a0d3a7334e7122f`. SQLite Android task ledger and isolated clean-start/restart/dedup tests; no physical source-data or Termux acceptance yet.
