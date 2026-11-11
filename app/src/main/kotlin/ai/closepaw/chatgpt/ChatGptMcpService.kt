@@ -14,12 +14,16 @@ import android.os.IBinder
 import androidx.core.content.ContextCompat
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -73,49 +77,55 @@ class ChatGptMcpService : Service() {
         }
         reconnect = TunnelReconnectController(
             scope, tunnel, { ChatGptConnectionSettings(this).enabled },
+            onFailure = { reason ->
+                updateState { current ->
+                    if (connectionActive()) ChatGptConnectionState(
+                        running = true, phase = "Local MCP ready", error = reason,
+                    ) else current
+                }
+            },
             onRetry = { waitMs, reason ->
-                updateState(ChatGptConnectionState(
-                    running = true, phase = "Reconnecting in ${waitMs / 1000}s…", error = reason,
-                ))
-                notifyState("Reconnecting in ${waitMs / 1000}s…")
+                updateState { current ->
+                    if (connectionActive()) ChatGptConnectionState(
+                        running = true, phase = "Reconnecting in ${waitMs / 1000}s…", error = reason,
+                    ) else current
+                }
+                if (connectionActive()) notifyState("Reconnecting in ${waitMs / 1000}s…")
             },
         )
 
         scope.launch {
             tunnel.status.collect { status ->
                 when (status) {
-                    TunnelStatus.Stopped -> updateState(
-                        ChatGptConnectionState(
-                            running = started.get(),
-                            phase = if (started.get()) "Local MCP ready" else "Stopped",
-                        )
-                    )
-                    TunnelStatus.Starting -> updateState(
-                        ChatGptConnectionState(running = true, phase = "Opening tunnel…")
-                    )
+                    TunnelStatus.Stopped -> updateState { current ->
+                        if (connectionActive()) ChatGptConnectionState(
+                            running = true, phase = "Local MCP ready", error = current.error,
+                        ) else current
+                    }
+                    TunnelStatus.Starting -> updateState { current ->
+                        if (tunnelObservationAllowed(current))
+                            ChatGptConnectionState(running = true, phase = "Opening tunnel…")
+                        else current
+                    }
                     is TunnelStatus.Connected -> {
                         val endpoint = status.publicUrl?.let { "$it${server.mcpPath}" }
                         val secure = status.tunnelId != null
-                        updateState(
-                            ChatGptConnectionState(
+                        updateState { current ->
+                            if (tunnelObservationAllowed(current)) ChatGptConnectionState(
                                 running = true,
                                 phase = if (secure) "Secure tunnel runtime ready" else "Connected",
                                 publicMcpUrl = endpoint,
                                 tunnelId = status.tunnelId,
                                 transport = if (secure) "OpenAI Secure MCP Tunnel" else "Cloudflare Quick Tunnel",
-                            )
-                        )
-                        notifyState(
+                            ) else current
+                        }
+                        if (tunnelObservationAllowed(connectionState.value)) notifyState(
                             if (secure) "Secure tunnel runtime ready" else "ChatGPT connection ready"
                         )
                     }
-                    is TunnelStatus.Failed -> updateState(
-                        ChatGptConnectionState(
-                            running = true,
-                            phase = "Local MCP ready",
-                            error = status.reason,
-                        )
-                    )
+                    // The controller owns failure reporting and terminal exhaustion.
+                    // A delayed provider failure must not overwrite that final reason.
+                    is TunnelStatus.Failed -> Unit
                 }
             }
         }
@@ -126,7 +136,12 @@ class ChatGptMcpService : Service() {
             ai.closepaw.app.AgentService.instance?.stopRemoteAndLocalControl()
             return START_STICKY
         }
-        if (intent?.action == ACTION_STOP) ChatGptConnectionSettings(this).enabled = false
+        if (intent?.action == ACTION_STOP) {
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                withContext(NonCancellable + Dispatchers.IO) { stop(applicationContext) }
+            }
+            return START_NOT_STICKY
+        }
         if (!ChatGptConnectionSettings(this).enabled) {
             stopSelf()
             return START_NOT_STICKY
@@ -139,7 +154,8 @@ class ChatGptMcpService : Service() {
         reconnect.stop()
         server.stop()
         started.set(false)
-        updateState(ChatGptConnectionState())
+        updateState(if (ChatGptConnectionSettings.persistenceBlocked) intentPersistenceFailure()
+            else ChatGptConnectionState())
         scope.cancel()
         super.onDestroy()
     }
@@ -219,10 +235,22 @@ class ChatGptMcpService : Service() {
         private val _connectionState = MutableStateFlow(ChatGptConnectionState())
         internal val connectionState: StateFlow<ChatGptConnectionState> = _connectionState.asStateFlow()
 
+        /** Invoked on IO by the device UI; never authorize startup after a failed write. */
         @Synchronized fun start(context: Context) {
-            ChatGptConnectionSettings(context).enabled = true
-            requestStart(context)
+            if (!ChatGptConnectionSettings(context).persistEnabled(true)) {
+                updateState(intentPersistenceFailure())
+                return
+            }
+            requestConnectionStart("connect_start_blocked") { requestStart(context) }
         }
+
+        internal fun requestConnectionStart(failurePrefix: String, request: () -> Unit): Boolean =
+            runCatching { request() }.onFailure { error ->
+                updateState(ChatGptConnectionState(
+                    phase = "Open ClosePaw to reconnect",
+                    error = "$failurePrefix:${error.javaClass.simpleName}",
+                ))
+            }.isSuccess
 
         private fun requestStart(context: Context) {
             ContextCompat.startForegroundService(
@@ -231,23 +259,25 @@ class ChatGptMcpService : Service() {
             )
         }
 
-        @Synchronized fun stop(context: Context) {
-            // Persist intent before stopping: sticky restart/boot/resume must respect Stop.
-            ChatGptConnectionSettings(context).enabled = false
+        /** Invoked on IO. Stop the service even when storage cannot acknowledge durability. */
+        @Synchronized fun stop(context: Context): Boolean {
+            val saved = ChatGptConnectionSettings(context).persistEnabled(false)
             context.stopService(Intent(context, ChatGptMcpService::class.java))
+            updateState(if (saved) ChatGptConnectionState() else intentPersistenceFailure())
+            return saved
         }
+
+        private fun intentPersistenceFailure() = ChatGptConnectionState(
+            phase = "Stopped; connection preference could not be saved",
+            error = "connection_intent_persistence_failed",
+        )
 
         suspend fun restore(context: Context) = withContext(Dispatchers.IO) {
             if (!ChatGptConnectionSettings(context).enabled) return@withContext
             val configured = runCatching { SecureMcpTunnelConfigStore(context).load() != null }.getOrDefault(false)
             synchronized(Companion) {
                 if (ChatGptAutoConnectPolicy.shouldRestore(configured, ChatGptConnectionSettings(context).enabled)) {
-                    runCatching { requestStart(context) }.onFailure { error ->
-                        updateState(ChatGptConnectionState(
-                            phase = "Open ClosePaw to reconnect",
-                            error = "auto_connect_blocked:${error.javaClass.simpleName}",
-                        ))
-                    }
+                    requestConnectionStart("auto_connect_blocked") { requestStart(context) }
                 }
             }
         }
@@ -255,9 +285,23 @@ class ChatGptMcpService : Service() {
         private fun updateState(state: ChatGptConnectionState) {
             _connectionState.value = state
         }
+
+        private fun updateState(transform: (ChatGptConnectionState) -> ChatGptConnectionState) {
+            _connectionState.update(transform)
+        }
     }
+
+    private fun connectionActive() =
+        started.get() && scope.isActive && ChatGptConnectionSettings(this).enabled
+
+    private fun tunnelObservationAllowed(current: ChatGptConnectionState) =
+        connectionActive() && current.error != "tunnel_retry_exhausted"
 
     private fun updateState(state: ChatGptConnectionState) {
         Companion.updateState(state)
+    }
+
+    private fun updateState(transform: (ChatGptConnectionState) -> ChatGptConnectionState) {
+        Companion.updateState(transform)
     }
 }

@@ -94,6 +94,96 @@ class ChatGptAutoConnectTest {
         controller.stop()
     }
 
+    @Test fun repeatedTransientFailuresExhaustBudgetWithoutAnotherAutomaticStart() = runTest {
+        val tunnel = FakeTunnel()
+        val failures = mutableListOf<String>()
+        val retries = mutableListOf<Long>()
+        val controller = TunnelReconnectController(backgroundScope, tunnel, { true },
+            nowMs = { testScheduler.currentTime }, onFailure = { failures += it },
+            onRetry = { wait, _ -> retries += wait })
+        controller.start(18424)
+        runCurrent()
+        val waits = listOf(2000L, 4000L, 8000L, 16000L, 32000L, 60000L, 60000L)
+        for (wait in waits) {
+            tunnel.status.value = TunnelStatus.Failed("secure_tunnel_io_failed:IOException")
+            runCurrent()
+            advanceTimeBy(wait)
+            runCurrent()
+        }
+        assertEquals(8, tunnel.starts)
+        tunnel.status.value = TunnelStatus.Failed("secure_tunnel_io_failed:IOException")
+        runCurrent()
+        advanceTimeBy(3600000)
+        runCurrent()
+        assertEquals("No ninth automatic start after budget exhaustion", 8, tunnel.starts)
+        assertEquals(waits, retries)
+        assertEquals("tunnel_retry_exhausted", failures.last())
+        assertEquals(TunnelStatus.Stopped, tunnel.status.value)
+        controller.start(18424)
+        controller.start(18424)
+        runCurrent()
+        advanceTimeBy(3600000)
+        runCurrent()
+        assertEquals("Duplicate starts must not reopen an exhausted budget", 8, tunnel.starts)
+        controller.stop()
+    }
+
+    @Test fun briefConnectionsDoNotResetTheRetryBudget() = runTest {
+        val tunnel = FakeTunnel()
+        val failures = mutableListOf<String>()
+        val controller = TunnelReconnectController(backgroundScope, tunnel, { true },
+            nowMs = { testScheduler.currentTime }, onFailure = { failures += it })
+        controller.start(18424)
+        runCurrent()
+        for (wait in listOf(2000L, 4000L, 8000L, 16000L, 32000L, 60000L, 60000L)) {
+            tunnel.status.value = TunnelStatus.Connected(tunnelId = "synthetic")
+            runCurrent()
+            advanceTimeBy(1000)
+            tunnel.status.value = TunnelStatus.Failed("secure_tunnel_exited:1")
+            runCurrent()
+            advanceTimeBy(wait)
+            runCurrent()
+        }
+        tunnel.status.value = TunnelStatus.Connected(tunnelId = "synthetic")
+        runCurrent()
+        advanceTimeBy(59999)
+        tunnel.status.value = TunnelStatus.Failed("secure_tunnel_exited:1")
+        runCurrent()
+        advanceTimeBy(3600000)
+        runCurrent()
+        assertEquals(8, tunnel.starts)
+        assertEquals("tunnel_retry_exhausted", failures.last())
+        controller.stop()
+    }
+
+    @Test fun ownerCancellationDuringExhaustionCleanupCannotReportRecovery() = runTest {
+        val owner = kotlinx.coroutines.CoroutineScope(backgroundScope.coroutineContext +
+            kotlinx.coroutines.SupervisorJob(backgroundScope.coroutineContext[kotlinx.coroutines.Job]))
+        val tunnel = FakeTunnel()
+        val failures = mutableListOf<String>()
+        val controller = TunnelReconnectController(owner, tunnel, { true },
+            nowMs = { testScheduler.currentTime }, onFailure = { failures += it })
+        tunnel.onStop = {
+            if (tunnel.starts == 8) owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+        }
+        controller.start(18424)
+        runCurrent()
+        for (wait in listOf(2000L, 4000L, 8000L, 16000L, 32000L, 60000L, 60000L)) {
+            tunnel.status.value = TunnelStatus.Failed("secure_tunnel_exited:1")
+            runCurrent()
+            advanceTimeBy(wait)
+            runCurrent()
+        }
+        tunnel.status.value = TunnelStatus.Failed("secure_tunnel_exited:1")
+        runCurrent()
+        advanceTimeBy(3600000)
+        runCurrent()
+        assertEquals(8, tunnel.starts)
+        assertFalse(failures.contains("tunnel_retry_exhausted"))
+        assertEquals(TunnelStatus.Stopped, tunnel.status.value)
+        owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+    }
+
     @Test fun serviceScopeCancellationStopsTheTunnel() = runTest {
         val tunnel = FakeTunnel()
         val owner = kotlinx.coroutines.CoroutineScope(coroutineContext + kotlinx.coroutines.SupervisorJob(coroutineContext[kotlinx.coroutines.Job]))
@@ -105,10 +195,120 @@ class ChatGptAutoConnectTest {
         assertEquals(TunnelStatus.Stopped, tunnel.status.value)
     }
 
+    @Test fun startPermissionFailureDoesNotEscapeOrRetry() = runTest {
+        val tunnel = FakeTunnel().apply { startFailure = SecurityException("private fixture detail") }
+        val failures = mutableListOf<String>()
+        val controller = TunnelReconnectController(backgroundScope, tunnel, { true },
+            onFailure = { failures += it })
+        controller.start(18424)
+        runCurrent()
+        advanceTimeBy(3600000)
+        runCurrent()
+        assertEquals(1, tunnel.starts)
+        assertEquals(listOf("tunnel_start_failed:SecurityException"), failures)
+        assertEquals(TunnelStatus.Stopped, tunnel.status.value)
+    }
+
+    @Test fun permanentFailuresStopInsteadOfRetryingAndReportTheirReason() = runTest {
+        for (reason in listOf("secure_tunnel_not_configured", "cloudflared_unavailable",
+            "secure_tunnel_start_failed:SecurityException", "secure_tunnel_start_failed:IllegalArgumentException")) {
+            val tunnel = FakeTunnel()
+            val failures = mutableListOf<String>()
+            val controller = TunnelReconnectController(backgroundScope, tunnel, { true },
+                onFailure = { failures += it })
+            controller.start(18424)
+            runCurrent()
+            tunnel.status.value = TunnelStatus.Failed(reason)
+            runCurrent()
+            advanceTimeBy(3600000)
+            runCurrent()
+            assertEquals(reason, 1, tunnel.starts)
+            assertEquals(listOf(reason), failures)
+            controller.stop()
+        }
+    }
+
+    @Test fun transientStartFailureUsesExistingBackoffAndRecovers() = runTest {
+        val tunnel = FakeTunnel().apply { startFailure = java.io.IOException("private fixture detail") }
+        val retries = mutableListOf<Pair<Long, String>>()
+        val controller = TunnelReconnectController(backgroundScope, tunnel, { true },
+            onRetry = { delay, reason -> retries += delay to reason })
+        controller.start(18424)
+        runCurrent()
+        assertEquals(listOf(2000L to "tunnel_start_failed:IOException"), retries)
+        tunnel.startFailure = null
+        advanceTimeBy(1999)
+        runCurrent()
+        assertEquals(1, tunnel.starts)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(2, tunnel.starts)
+        tunnel.status.value = TunnelStatus.Connected(tunnelId = "synthetic")
+        runCurrent()
+        controller.stop()
+    }
+
+    @Test fun stopImmediatelyFollowedByStartWaitsForOldCancellation() = runTest {
+        val tunnel = FakeTunnel()
+        val controller = TunnelReconnectController(backgroundScope, tunnel, { true })
+        controller.start(18424)
+        runCurrent()
+        controller.stop()
+        controller.start(18424)
+        controller.start(18424)
+        runCurrent()
+        assertEquals(2, tunnel.starts)
+        assertEquals(TunnelStatus.Starting, tunnel.status.value)
+        controller.stop()
+    }
+
+    @Test fun cancellationDuringThrowingStartCannotReportRecoveryOrRetry() = runTest {
+        for (cancelOwner in listOf(false, true)) {
+            val owner = kotlinx.coroutines.CoroutineScope(backgroundScope.coroutineContext +
+                kotlinx.coroutines.SupervisorJob(backgroundScope.coroutineContext[kotlinx.coroutines.Job]))
+            val failures = mutableListOf<String>()
+            val retries = mutableListOf<Long>()
+            val tunnel = FakeTunnel().apply { startFailure = java.io.IOException("synthetic") }
+            val controller = TunnelReconnectController(owner, tunnel, { true },
+                onFailure = { failures += it }, onRetry = { wait, _ -> retries += wait })
+            tunnel.onStart = {
+                if (cancelOwner) owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+                else controller.stop()
+            }
+            controller.start(18424)
+            runCurrent()
+            advanceTimeBy(120000)
+            runCurrent()
+            assertEquals(1, tunnel.starts)
+            assertTrue(failures.isEmpty())
+            assertTrue(retries.isEmpty())
+            assertEquals(TunnelStatus.Stopped, tunnel.status.value)
+            owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+        }
+    }
+
+    @Test fun disabledIntentNeverStartsTheTunnel() = runTest {
+        val tunnel = FakeTunnel()
+        val controller = TunnelReconnectController(backgroundScope, tunnel, { false })
+        controller.start(18424)
+        runCurrent()
+        advanceTimeBy(120000)
+        runCurrent()
+        assertEquals(0, tunnel.starts)
+    }
+
     private class FakeTunnel : TunnelProvider {
         override val status = MutableStateFlow<TunnelStatus>(TunnelStatus.Stopped)
         var starts = 0
-        override fun start(localPort: Int) { starts++; status.value = TunnelStatus.Starting }
-        override fun stop() { status.value = TunnelStatus.Stopped }
+        var startFailure: Exception? = null
+        var onStart: () -> Unit = {}
+        var onStop: () -> Unit = {}
+        override fun start(localPort: Int) {
+            starts++
+            onStart()
+            startFailure?.let { throw it }
+            status.value = TunnelStatus.Starting
+        }
+        override fun stop() { status.value = TunnelStatus.Stopped; onStop() }
     }
 }

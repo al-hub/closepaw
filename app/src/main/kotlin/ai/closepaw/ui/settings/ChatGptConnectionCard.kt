@@ -29,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -275,11 +277,15 @@ internal fun ChatGptConnectionCard() {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (state.running) {
-                OutlinedButton(onClick = { ChatGptMcpService.stop(context) }) {
+                OutlinedButton(onClick = {
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                        withContext(NonCancellable + Dispatchers.IO) { ChatGptMcpService.stop(context.applicationContext) }
+                    }
+                }) {
                     Text("Stop")
                 }
             } else {
-                Button(onClick = { ChatGptMcpService.start(context) }) {
+                Button(onClick = { scope.launch(Dispatchers.IO) { ChatGptMcpService.start(context.applicationContext) } }) {
                     Text("Connect")
                 }
             }
