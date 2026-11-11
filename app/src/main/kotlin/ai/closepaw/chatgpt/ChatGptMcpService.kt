@@ -22,6 +22,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -75,23 +77,31 @@ class ChatGptMcpService : Service() {
         }
         reconnect = TunnelReconnectController(
             scope, tunnel, { ChatGptConnectionSettings(this).enabled },
+            onFailure = { reason ->
+                updateState { current ->
+                    if (connectionActive()) ChatGptConnectionState(
+                        running = true, phase = "Local MCP ready", error = reason,
+                    ) else current
+                }
+            },
             onRetry = { waitMs, reason ->
-                updateState(ChatGptConnectionState(
-                    running = true, phase = "Reconnecting in ${waitMs / 1000}s…", error = reason,
-                ))
-                notifyState("Reconnecting in ${waitMs / 1000}s…")
+                updateState { current ->
+                    if (connectionActive()) ChatGptConnectionState(
+                        running = true, phase = "Reconnecting in ${waitMs / 1000}s…", error = reason,
+                    ) else current
+                }
+                if (connectionActive()) notifyState("Reconnecting in ${waitMs / 1000}s…")
             },
         )
 
         scope.launch {
             tunnel.status.collect { status ->
                 when (status) {
-                    TunnelStatus.Stopped -> updateState(
-                        ChatGptConnectionState(
-                            running = started.get(),
-                            phase = if (started.get()) "Local MCP ready" else "Stopped",
-                        )
-                    )
+                    TunnelStatus.Stopped -> updateState { current ->
+                        if (connectionActive()) ChatGptConnectionState(
+                            running = true, phase = "Local MCP ready", error = current.error,
+                        ) else current
+                    }
                     TunnelStatus.Starting -> updateState(
                         ChatGptConnectionState(running = true, phase = "Opening tunnel…")
                     )
@@ -277,9 +287,20 @@ class ChatGptMcpService : Service() {
         private fun updateState(state: ChatGptConnectionState) {
             _connectionState.value = state
         }
+
+        private fun updateState(transform: (ChatGptConnectionState) -> ChatGptConnectionState) {
+            _connectionState.update(transform)
+        }
     }
+
+    private fun connectionActive() =
+        started.get() && scope.isActive && ChatGptConnectionSettings(this).enabled
 
     private fun updateState(state: ChatGptConnectionState) {
         Companion.updateState(state)
+    }
+
+    private fun updateState(transform: (ChatGptConnectionState) -> ChatGptConnectionState) {
+        Companion.updateState(transform)
     }
 }

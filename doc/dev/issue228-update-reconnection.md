@@ -1,4 +1,30 @@
-## Current candidate — verified Stop regression, original reconnect cause still unconfirmed
+## Residual audit — reuse existing coverage and contain tunnel-start exceptions
+
+The existing seven ChatGptAutoConnectTest cases already exercise retry after
+process failure, duplicate start, Stop during backoff, capped backoff with network
+recovery, permanent runtime absence and owner cancellation. These are existing
+JVM tests, not missing tests to rebuild or physical network/OEM acceptance.
+
+The additional fault injection targets a separate concrete boundary: a provider
+can throw synchronously before publishing Failed (for example in binary/config
+preparation). Contain that exception, clean up the provider, and feed only the
+exception class into the existing retry/permanent-failure policy. Preserve
+cancellation and recheck enabled intent before reporting failure or retrying.
+The service retains the reported reason across an asynchronously delivered
+Stopped observation until the next Starting transition.
+
+Six additional JVM tests cover permanent and transient start exceptions,
+permanent reason reporting, immediate stop/start cancellation, cancellation inside
+a throwing start, and disabled intent. No real credential, phone mutation or
+AI-control session is involved. CI outcome and exact reviewed SHA are recorded
+in issue #228; adding a test is not itself a PASS claim.
+
+The unavailable API37 emulator is not a reason to stop these independent tests,
+nor can API35/JVM success replace original Samsung/tunnel/client acceptance.
+No new release is justified merely to obtain diagnostic samples. The original
+v108-to-v109 external reconnect cause remains unconfirmed.
+
+## Earlier candidate — verified Stop regression, original reconnect cause still unconfirmed
 
 The sections below are chronological investigation evidence. The initial tests-only
 scope is superseded only for the confirmed Stop durability defect described here.

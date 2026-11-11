@@ -107,13 +107,35 @@ class ChatGptAutoConnectTest {
 
     @Test fun startPermissionFailureDoesNotEscapeOrRetry() = runTest {
         val tunnel = FakeTunnel().apply { startFailure = SecurityException("private fixture detail") }
-        val controller = TunnelReconnectController(backgroundScope, tunnel, { true })
+        val failures = mutableListOf<String>()
+        val controller = TunnelReconnectController(backgroundScope, tunnel, { true },
+            onFailure = { failures += it })
         controller.start(18424)
         runCurrent()
         advanceTimeBy(3600000)
         runCurrent()
         assertEquals(1, tunnel.starts)
+        assertEquals(listOf("tunnel_start_failed:SecurityException"), failures)
         assertEquals(TunnelStatus.Stopped, tunnel.status.value)
+    }
+
+    @Test fun permanentFailuresStopInsteadOfRetryingAndReportTheirReason() = runTest {
+        for (reason in listOf("secure_tunnel_not_configured", "cloudflared_unavailable",
+            "secure_tunnel_start_failed:SecurityException", "secure_tunnel_start_failed:IllegalArgumentException")) {
+            val tunnel = FakeTunnel()
+            val failures = mutableListOf<String>()
+            val controller = TunnelReconnectController(backgroundScope, tunnel, { true },
+                onFailure = { failures += it })
+            controller.start(18424)
+            runCurrent()
+            tunnel.status.value = TunnelStatus.Failed(reason)
+            runCurrent()
+            advanceTimeBy(3600000)
+            runCurrent()
+            assertEquals(reason, 1, tunnel.starts)
+            assertEquals(listOf(reason), failures)
+            controller.stop()
+        }
     }
 
     @Test fun transientStartFailureUsesExistingBackoffAndRecovers() = runTest {
@@ -150,6 +172,31 @@ class ChatGptAutoConnectTest {
         controller.stop()
     }
 
+    @Test fun cancellationDuringThrowingStartCannotReportRecoveryOrRetry() = runTest {
+        for (cancelOwner in listOf(false, true)) {
+            val owner = kotlinx.coroutines.CoroutineScope(backgroundScope.coroutineContext +
+                kotlinx.coroutines.SupervisorJob(backgroundScope.coroutineContext[kotlinx.coroutines.Job]))
+            val failures = mutableListOf<String>()
+            val retries = mutableListOf<Long>()
+            val tunnel = FakeTunnel().apply { startFailure = java.io.IOException("synthetic") }
+            val controller = TunnelReconnectController(owner, tunnel, { true },
+                onFailure = { failures += it }, onRetry = { wait, _ -> retries += wait })
+            tunnel.onStart = {
+                if (cancelOwner) owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+                else controller.stop()
+            }
+            controller.start(18424)
+            runCurrent()
+            advanceTimeBy(120000)
+            runCurrent()
+            assertEquals(1, tunnel.starts)
+            assertTrue(failures.isEmpty())
+            assertTrue(retries.isEmpty())
+            assertEquals(TunnelStatus.Stopped, tunnel.status.value)
+            owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+        }
+    }
+
     @Test fun disabledIntentNeverStartsTheTunnel() = runTest {
         val tunnel = FakeTunnel()
         val controller = TunnelReconnectController(backgroundScope, tunnel, { false })
@@ -164,8 +211,10 @@ class ChatGptAutoConnectTest {
         override val status = MutableStateFlow<TunnelStatus>(TunnelStatus.Stopped)
         var starts = 0
         var startFailure: Exception? = null
+        var onStart: () -> Unit = {}
         override fun start(localPort: Int) {
             starts++
+            onStart()
             startFailure?.let { throw it }
             status.value = TunnelStatus.Starting
         }
