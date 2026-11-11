@@ -1,0 +1,142 @@
+{
+  "measured_at": "2026-11-11T18:20:06+09:00",
+  "operation_id": "linux.shell.exec",
+  "request_id": "cp228-native-lifecycle-metadata-20261111-01",
+  "task_id": "b9ac12c8-5fc6-400a-a6ad-71b475113c49",
+  "created_at_ms": 1794388806227,
+  "started_at_ms": 1794388806244,
+  "completed_at_ms": 1794388807465,
+  "exit_code": 0,
+  "bridge_job_id": "f26075ba1bbe4663ae66cdda37854b80",
+  "metadata": {
+    "schema_version": 1,
+    "live": true,
+    "ready": true,
+    "snapshot_at": "2026-11-11T09:20:06.480076604Z",
+    "runtime": {
+      "started_at": "2026-11-10T13:17:23.871188787Z",
+      "uptime_seconds": 53358.801730351,
+      "lifecycle": "running",
+      "version": "0.0.15+a390c16",
+      "flavor": "runtime"
+    },
+    "components": {
+      "control-plane": {
+        "status": "ok",
+        "state": "polling",
+        "observed_at": "2026-11-11T09:20:06.200003362Z",
+        "limited": false,
+        "details": {
+          "last_attempt": "2026-11-11T09:20:06.200003362Z",
+          "last_success": "2026-11-11T09:20:06.199924846Z",
+          "consecutive_failures": 0,
+          "current_poll_age_seconds": 0.280072969,
+          "configured_wait_seconds": 30,
+          "effective_wait_seconds": 6.186,
+          "deadline_seconds": 11.186,
+          "last_error_present": true
+        }
+      },
+      "dispatcher": {
+        "status": "ok",
+        "state": "accepting",
+        "observed_at": "2026-11-11T09:20:06.200378635Z",
+        "limited": false,
+        "details": {
+          "active": 1,
+          "pool_limit": 10,
+          "last_start": "2026-11-11T09:20:06.200378635Z",
+          "last_completion": "2026-11-11T09:20:05.539341252Z",
+          "completed": 428,
+          "failures": 0,
+          "timeouts": 0,
+          "accepting": true
+        }
+      },
+      "harpoon": {
+        "status": "ok",
+        "state": "settled",
+        "observed_at": "2026-11-10T13:17:23.968037966Z",
+        "limited": false,
+        "details": {}
+      },
+      "mcp": {
+        "status": "unknown",
+        "state": "not_observed",
+        "reason_code": "same_child_evidence_unavailable",
+        "limited": false,
+        "details": {
+          "initialize_epoch": 0,
+          "evidence": "unsupported_transport",
+          "channel": "main",
+          "transport": "http-streamable",
+          "initialize": {
+            "ok": false,
+            "identity_complete": false,
+            "limited": false
+          },
+          "tools_list": {
+            "ok": false,
+            "limited": false,
+            "retained_count": 0,
+            "complete": false,
+            "partial": false
+          },
+          "startup_probe": {
+            "state": "succeeded",
+            "observed_at": "2026-11-10T13:17:23.970157849Z"
+          }
+        }
+      },
+      "oauth": {
+        "status": "ok",
+        "state": "not_advertised",
+        "reason_code": "metadata_not_advertised",
+        "observed_at": "2026-11-10T13:17:23.965690583Z",
+        "limited": false,
+        "details": {}
+      },
+      "queue": {
+        "status": "ok",
+        "state": "available",
+        "observed_at": "2026-11-11T09:20:06.200276057Z",
+        "limited": false,
+        "details": {
+          "depth": 0,
+          "capacity": 20,
+          "enqueued": 429,
+          "dequeued": 429
+        }
+      },
+      "response-delivery": {
+        "status": "ok",
+        "state": "uploading",
+        "observed_at": "2026-11-11T09:20:05.538575666Z",
+        "limited": false,
+        "details": {
+          "completed": 428,
+          "in_progress": 1,
+          "last_accepted": "2026-11-11T09:20:05.538575666Z",
+          "last_completed": "2026-11-11T09:20:05.538575666Z",
+          "disposition": "accepted",
+          "http_status": 200,
+          "attempts": 429,
+          "retries": 0,
+          "accepted": 428,
+          "terminal_failures": 0
+        }
+      }
+    }
+  },
+  "microduck_mcp_calls": 0,
+  "original_cause": "UNCONFIRMED",
+  "interpretation": {
+    "native_instance_start_is_not_activity_or_receiver_trace": true,
+    "earlier_native_instances": "not_observed",
+    "gap_from_previous_accessibility_connected_ms": 599207.189,
+    "mcp_health_http200_is_not_semantic_ready": true,
+    "mcp_child_status": "unknown/not_observed",
+    "old_counters_only_apply_since": "2026-11-10T13:17:23.871188787Z",
+    "release_gate_unchanged": true
+  }
+}

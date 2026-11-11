@@ -1,3 +1,40 @@
+## #228 observation route preflight — 2026-11-11 18:11 KST
+
+- Runtime candidate remains fb84682e/tree2d934588; exact Security42984443260/UI42984443176 success and prior independent AI review reused. No runtime change, new CI/review, version change, merge, Release or install.
+- Current109/code110; local MCP/native ready/control-plane/MCP health all200. Bounded Termux three-sample telemetry sent over existing strict SSH laptop to WSL and independently recovered by Microduck:826B/SHA2563d77845794c531f66f19ebc0a9e5248676c57e5d3a65524eddece67f9008c4a5. Task5b502d73-b53b-49d0-8bae-04b4ef0f4565 exit0 and exact-ID dedup PASS. This proves healthy-state independent telemetry retrieval only, not outage/process-replacement survival or independent app recovery.
+- Original cause UNCONFIRMED: no supported historical receiver/FGS/native/client trace; current64-event UI ring lacks earlier service entry, Termux logs predate replacement. No private-storage/ADB/admin workaround, listener/key change, deliberate interruption or phone action. Root-solution deployment prerequisite remains unmet; #228 OPEN.
+- Ledger3645→3650 matches five diagnostic tasks; active0/unknown76; original12,901,900B/SHA3fd15e71…/2000exact/mismatch0 unchanged. AI50ff4811… ended/epoch0; old #219 result retained. #219 CLOSED/#229 excluded.
+- [Updated runbook](../dev/issue228-work-result.md) and [new machine evidence](../dev/evidence/issue228/observation-preflight-20261111.json). A future observed reproduction needs receiver/FGS evidence and supported recovery before intentional interruption. No diagnostic-only formal Release.
+
+## #228 required-safety inspection completed; physical acceptance OPEN — 2026-11-11 KST
+
+- Final PR #230 HEAD `fb84682e9d37825e4944d98cc228d8231ac6744e` / tree `2d934588300cf681f4b399f84f5c68c27b351349`. Added mandatory finite7-retry/8-start budget after confirming prior60s backoff was not a count bound. >=60s stable Connected resets, short connections do not; exhaustion cleanup/fixed reason/latch; duplicate start cannot renew budget. No intent/AI/task mutation.
+- New RED Security42983089499: raw3152/1 failure (expected8/actual9 starts). Final Security42984443260/UI42984443176 SUCCESS; independent SHA/CRC/XML JVM3154/Android34/failure-error-skip0/8PNG. AutoConnect16. API35 actual active2170ms/cold3789ms after installer return, Stop no restart45s, synthetic config preserved.
+- Exact-tree independent AI code/security APPROVE after two additional Medium findings resolved, C/H/M0; not CLI/native. Single failure reporting and atomic active/terminal guards retain exhaustion.
+- Formal required-item matrix: [execution/inspection record](../dev/issue228-work-result.md), [machine evidence](../dev/evidence/issue228/work-summary.json). Source/automated safety PASS; original outage root, actual OS/OEM/new-release external unattended acceptance BLOCKED.
+- Main protected=false/rulesets=[]; no extra native approval gate. API37 SDK availability is not a new global gate; skipped is not PASS. Version109/code110 already published; new version/code plus exact-main Security/UI/existing-key/public verification remain required before delivery. No main code merge, new Release/install or physical action.
+- Current updater.check up_to_date/get_status109/110. #219 CLOSED, prior phone command/results/dedup/2000 exact/current SHA/unknown76/ended AI evidence reused, #229 excluded. Older sections below are superseded historical snapshots.
+
+## #228 residual regressions completed; original physical reconnect OPEN — 2026-11-11 KST
+
+- PR #230 HEAD `6570d39a0d129535fcfc299ad7e01dad03bb5df2` / tree `887a8f94b5f8b778422eab82a616f890f3c94892`: Stop durability plus startup-exception containment, cancellation checks and atomic failure-state preservation. Exact-tree independent AI code/security APPROVE, Medium2 resolved/C-H-M0. Not CLI/native review.
+- Additional RED Security42977857763 raw3149/2 failures (only new startup-exception cases). Final Security42979055340/UI42979055337 attempt2 SUCCESS: SHA/CRC/raw XML verified, JVM3151/Android34/failure-error-skip0,8PNG. API35 active local health5019ms/cold2217ms, Stop no restart45s, synthetic preservation PASS. First UI adb pull preparation failure retained; one failed-job retry passed.
+- Existing seven AutoConnect cases for network/backoff/duplicates/Stop/cancellation reused; six additional cases passed. API37 SDK availability is not an extra mandatory gate, and skipped is not PASS. No OEM/native/client acceptance is inferred.
+- Original v108→v109 failure layer remains UNCONFIRMED; retained connector trace is insufficient. Candidate Draft/unmerged/version109/code110; no new main code CI, signed Release, phone installation or external unattended acceptance. No unsupported privileges or diagnostic-only formal APK.
+- #219 CLOSED with [current physical revalidation](https://github.com/al-hub/closepaw/issues/219#issuecomment-6789104140): exit0/Linux/results/dedup/2000 exact/current SHA/unknown76/ended AI preserved. #229 excluded. No physical action requested.
+- [Execution record](../dev/issue228-work-result.md) · [machine evidence](../dev/evidence/issue228/work-summary.json). Older sections below are historical, superseded by this status.
+
+## #228 partial Stop fix validated; original reconnect BLOCKED — 2026-11-11 KST
+
+- Current baseline: published/installed0.1.109/code110; physical Android17/API37 measured. No new APK/installation, phone UI control or AI-session restart in this Work.
+- [Draft PR #230](https://github.com/al-hub/closepaw/pull/230) HEAD `887eb6709dfc7d6640342b1e4a871c4fedf13d51` / tree `5743d4b2ff23bcd5b827c85d6c8b79b93ff02602`: confirmed Stop apply/durability race fixed with IO commit, failure reporting and bounded start-refusal handling. Original physical timeout/session-termination cause is still UNCONFIRMED. Candidate production code remains UNMERGED and version/code unchanged; not a ready final Release.
+- Exact candidate Security42915878283/UI42915878299 SUCCESS. Raw ZIP SHA/CRC independently verified: JVM3145 and Android34, failures/errors/skips0,8PNGs. Same real API35 replacement fixture changed Stop RED→GREEN; final active health3972ms and cold4476ms after installer return, Stop no restart45s, synthetic config/marker retained. Independent AI code/security APPROVE, unresolved C/H/M0; not native GitHub approval or CLI review.
+- API37 CI cannot find platforms;android-37; unsupported retries suspended, skipped is BLOCKED not PASS. AOSP local-health evidence cannot establish Samsung/native tunnel/client recovery, and historical lifecycle data cannot establish the previous phone failure. No speculative fix or extra diagnostic production Release was issued.
+- [Current runbook/evidence](../dev/issue228-work-result.md) records exact runs/digests, limits and remaining gates. This main commit is docs-only [skip ci]; main app code stays the published109 baseline. Do not claim it is PR230 deployment.
+- **#219 is CLOSED**: [actual109 storage acceptance](https://github.com/al-hub/closepaw/issues/219#issuecomment-6768431699). Current original12,901,900B SHA3fd15e71…, all2000records exact/mismatch0 and unknown76 preserved; new Termux/strict-SSH/WSL exit0 and confirmed same-ID dedup baseline also retained. No pre-v107 retrospective hash claim. #229 excluded.
+- #228 stays OPEN for original root-cause evidence and actual new-version unattended acceptance. Before any future release recheck main/latest release, complete cause/gates and choose a new increasing version; never overwrite109 or treat manual app launch as unattended PASS.
+
+Older pending #219/device statements below are historical and superseded by this disposition.
 ## v0.1.109/code110 signed Release completed — 2026-11-10 KST
 
 User explicitly authorized merge/publication after disclosure that native GitHub approvals were 0. This replaces the earlier conversational external-approval wait; it is not a GitHub APPROVE or a new independent review. Existing separate independent content/security review and final-HEAD CI reused; protections unchanged.

@@ -1,0 +1,235 @@
+{
+  "measured_at": "2026-11-11T18:11:27+09:00",
+  "candidate_head": "fb84682e9d37825e4944d98cc228d8231ac6744e",
+  "candidate_tree": "2d934588300cf681f4b399f84f5c68c27b351349",
+  "source_main": "6326f2b0aeddf09beada2063eaba2d9579b0a5b5",
+  "original_physical_cause": "UNCONFIRMED",
+  "runtime_changes": 0,
+  "new_release": false,
+  "new_install_requests": 0,
+  "explicit_user_phone_actions": 0,
+  "ai_sessions_started": 0,
+  "connection_disruptions": 0,
+  "updater": {
+    "current_version": "0.1.109",
+    "current_code": 110,
+    "installed_task": "8c9f30d6-5f14-4a99-9101-1f6a2d7d6395",
+    "installer_session": 1746493600,
+    "check": "up_to_date",
+    "remote_update_enabled": true,
+    "install_source_allowed": true
+  },
+  "preflight": {
+    "local_native_health": {
+      "task": "9fbef78b-afd2-4346-9148-764f531d29b7",
+      "exit_code": 0,
+      "local_mcp": 200,
+      "native_ready": 200,
+      "control_plane": 200,
+      "native_mcp": 200
+    },
+    "route_inventory": {
+      "task": "f2512a2d-941a-43f0-8453-eb83c539bbde",
+      "exit_code": 0,
+      "termux_sshd_binary_present": true,
+      "termux_ssh_8022_accepting": false,
+      "wsl_ssh_config_exists": false,
+      "existing_termux_ssh_alias": "laptop"
+    },
+    "historical_log_metadata": {
+      "task": "85b10986-badd-4e14-87b3-48d674340a1d",
+      "exit_code": 0,
+      "files": [
+        {
+          "name": "bridge.err",
+          "bytes": 0,
+          "mtime_ms": 1792072511299
+        },
+        {
+          "name": "boot.log",
+          "bytes": 1125,
+          "mtime_ms": 1794012281153
+        }
+      ],
+      "conclusion": "Neither file has content updated during the original 17943160... replacement interval; no private app storage was accessed."
+    },
+    "existing_ssh_probe": {
+      "task": "9ab9d540-c782-49d4-8a3e-37af49ed429f",
+      "exit_code": 0,
+      "ssh_exit_code": 0,
+      "linux_confirmed": true
+    },
+    "independent_observer": {
+      "task": "5b502d73-b53b-49d0-8bae-04b4ef0f4565",
+      "request_id": "cp228-bounded-independent-observer-20261111-01",
+      "bridge_job": "2f075dfa1de542a1aa0ef979de6cbe03",
+      "created_at_ms": 1794388198475,
+      "started_at_ms": 1794388198492,
+      "completed_at_ms": 1794388209975,
+      "exit_code": 0,
+      "path": "Termux loopback GETs -> existing strict SSH laptop -> wsl.exe --exec python3 stdin sink -> independent Microduck run_command read",
+      "sink": {
+        "bytes": 826,
+        "sha256": "3d77845794c531f66f19ebc0a9e5248676c57e5d3a65524eddece67f9008c4a5",
+        "evidence": {
+          "scope": "non_disruptive_current_v109_only",
+          "schema_version": 1,
+          "samples": [
+            {
+              "timestamp_ms": 1794388198730,
+              "local_mcp": {
+                "http_status": 200,
+                "elapsed_ms": 4
+              },
+              "native_ready": {
+                "http_status": 200,
+                "elapsed_ms": 2
+              },
+              "control_plane": {
+                "http_status": 200,
+                "elapsed_ms": 2
+              },
+              "native_mcp": {
+                "http_status": 200,
+                "elapsed_ms": 2
+              }
+            },
+            {
+              "timestamp_ms": 1794388203742,
+              "local_mcp": {
+                "http_status": 200,
+                "elapsed_ms": 5
+              },
+              "native_ready": {
+                "http_status": 200,
+                "elapsed_ms": 4
+              },
+              "control_plane": {
+                "http_status": 200,
+                "elapsed_ms": 2
+              },
+              "native_mcp": {
+                "http_status": 200,
+                "elapsed_ms": 1
+              }
+            },
+            {
+              "timestamp_ms": 1794388208756,
+              "local_mcp": {
+                "http_status": 200,
+                "elapsed_ms": 3
+              },
+              "native_ready": {
+                "http_status": 200,
+                "elapsed_ms": 4
+              },
+              "control_plane": {
+                "http_status": 200,
+                "elapsed_ms": 2
+              },
+              "native_mcp": {
+                "http_status": 200,
+                "elapsed_ms": 4
+              }
+            }
+          ]
+        }
+      },
+      "same_id_dedup": "PASS; same task/job/timestamps/stdout/exit code; independent sink SHA unchanged",
+      "bounded": true,
+      "samples": 3,
+      "interval_ms": 5000,
+      "limitations": [
+        "Only a healthy v109 path was measured; no package replacement or MCP outage occurred.",
+        "This establishes independent PC retrieval of pushed telemetry, not survival during Android/Termux death.",
+        "No independent supported receiver/FGS lifecycle trace or remote app-recovery control was established.",
+        "No MCP client-session logs or historical native tunnel startup timeline are exposed by current operations."
+      ]
+    }
+  },
+  "preservation": {
+    "before": {
+      "diagnostic_version": 2,
+      "backend": "sqlite",
+      "snapshot_only": true,
+      "write_test_performed": false,
+      "write_health": "not_tested",
+      "recovery_attempted": false,
+      "pre_upgrade_integrity": "not_available",
+      "file_exists": true,
+      "file_bytes": 12901900,
+      "legacy_sha256": "3fd15e71960d447d0c4a9e9f535c26757d6632c71b68120fefb839a5ca93e438",
+      "task_count": 3645,
+      "active_count": 0,
+      "terminal_count": 3569,
+      "unknown_count": 76,
+      "legacy_task_count": 2000,
+      "legacy_exact_count": 2000,
+      "legacy_reconciled_count": 0,
+      "legacy_mismatch_count": 0,
+      "legacy_integrity": "verified_current",
+      "read_state": "readable",
+      "reason_code": "sqlite_snapshot_verified"
+    },
+    "after": {
+      "diagnostic_version": 2,
+      "backend": "sqlite",
+      "snapshot_only": true,
+      "write_test_performed": false,
+      "write_health": "not_tested",
+      "recovery_attempted": false,
+      "pre_upgrade_integrity": "not_available",
+      "file_exists": true,
+      "file_bytes": 12901900,
+      "legacy_sha256": "3fd15e71960d447d0c4a9e9f535c26757d6632c71b68120fefb839a5ca93e438",
+      "task_count": 3650,
+      "active_count": 0,
+      "terminal_count": 3574,
+      "unknown_count": 76,
+      "legacy_task_count": 2000,
+      "legacy_exact_count": 2000,
+      "legacy_reconciled_count": 0,
+      "legacy_mismatch_count": 0,
+      "legacy_integrity": "verified_current",
+      "read_state": "readable",
+      "reason_code": "sqlite_snapshot_verified"
+    },
+    "ai_session_before": "ended",
+    "ai_session_after": "ended",
+    "ai_session_id": "50ff4811-6a45-4300-b554-ef85486fb553",
+    "epoch": 0,
+    "new_diagnostic_tasks": 5,
+    "old_result_task": "afda9642-bdca-41f0-9734-e8c5cc17d20f",
+    "old_result": "succeeded/exit0/CP219_REVERIFY_20261111_OK\\nLinux\\n",
+    "pre_upgrade_integrity": "not_available"
+  },
+  "reused_validation": {
+    "security_run": 42984443260,
+    "ui_run": 42984443176,
+    "exact_head_status": "success/success rechecked",
+    "jvm_tests": 3154,
+    "android_tests": 34,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "independent_review": "Prior exact HEAD/tree AI code/security APPROVE reused; no runtime change, CLI/native review not claimed"
+  },
+  "actual_repository": {
+    "main_protected": false,
+    "rulesets": [],
+    "in_progress_runs": [],
+    "latest_release": "v0.1.109",
+    "pr_230_draft": true,
+    "pr_230_merged": false
+  },
+  "disposition": {
+    "root_cause": "BLOCKED",
+    "minimal_confirmed_safety_fixes": "PASS (prior candidate)",
+    "release": "BLOCKED by unmet original root-solution prerequisites, not by local SDK/key/native approval",
+    "new_version_unattended_acceptance": "BLOCKED",
+    "issue228_close": false,
+    "issue219": "CLOSED unchanged",
+    "issue229": "excluded"
+  },
+  "next_supported_work": "A future independently observable reproduction must separate installer, receiver/FGS, local/native health and client reinitialize, with supported recovery before an intentional interruption. This work did not establish historical causality or authorize a diagnostic-only formal Release."
+}

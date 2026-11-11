@@ -1,3 +1,12 @@
+## Unpublished candidate preparation — 2026-11-11 KST
+
+- User preference: do not use Microduck MCP for this development unless unavoidable. Existing historical evidence is retained; Microduck is not a required development, CI or acceptance gate.
+- Candidate version0.1.110/code111 replaces the already-published109/code110 candidate value. This is preparation only, not a Release or confirmation of the original outage's cause. Existing reviewed runtime safety code is unchanged; current main evidence documents are integrated.
+- A supported Termux read of native /health?details=true exposed retained runtime start2026-11-10T13:17:23.871188787Z (22:17:23.871KST), startup_probe succeeded13:17:23.970157849Z. Earlier Accessibility service_connected was13:07:24.664Z. The current native instance began599207.189ms later. This identifies a missing interval, not whether earlier native instances existed, which component failed or what caused the later start. Native instance start does not identify an Activity launch or receiver invocation.
+- HTTP200 from /health/mcp means the health request succeeded. Its payload actually reports status=unknown/state=not_observed/reason=same_child_evidence_unavailable, evidence=unsupported_transport, initialize_epoch=0, startup_probe=succeeded. Do not label this HTTP response as full MCP child/client health PASS. Current external get_status is a separate successful response.
+- Current runtime dispatcher/response-delivery had428 completed,0 failures/timeouts/terminal_failures at measurement. Counters apply only since this runtime start and cannot explain the original update interval. Current control-plane last_success is recent, not historical first-ready evidence.
+- Original root-solution prerequisite remains unresolved. Draft/merge/Release/install eligibility must reflect that even if preparation CI succeeds. No repeated installation, intentional connection interruption, phone app launch or AI-session start was performed.
+
 ## Required-safety audit — finite retry budget
 
 The earlier capped-backoff tests bounded the delay, not the number of retries.
