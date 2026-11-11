@@ -24,6 +24,7 @@ A successful `enable` is **scheduler registered**, not proof of a running superv
 ## Safety limits
 
 - Lock-held supervisor: no duplicate launch. Only authenticated, matching maintenance + Bridge health can reset the attempt counter to zero.
+- A **shared owner-private dispatch flock** serializes periodic watchdog entry with explicit Stop/Enable. The durable Stop marker is written before waiting for an in-flight watchdog dispatch; Stop success is not acknowledged until that dispatch completes and the Android job is cancelled. This guards the Stop-versus-launch race; it does not intercept Android's own Task Manager/Settings Stop actions.
 - Lock absent: at most **three** durable restart attempts; no infinite retries, no implicit reset from a scheduler ACK or launcher exit code.
 - Disabled marker or unresolved maintenance transaction: fail closed.
 - Local scripts must be installed as owner-private executable files, reviewed and SHA-verified; never write raw token values or source URLs to public logs.
