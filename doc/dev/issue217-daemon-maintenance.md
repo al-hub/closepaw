@@ -65,6 +65,95 @@ compilation or execution. HTTPS redirects and proxy environment are disabled.
   APK version/code and historical transaction verification. Passive status never
   claims a fresh command PASS.
 
+## 2026-11-12 — Historical unknown job and live-update admission decision
+
+**Decision: retain the current fail-closed runtime gate.** This is a code-level
+engineering disposition, **not** proof of a successful live device update.
+Current physical acceptance: child-daemon recovery, fresh authenticated job and
+supervisor recovery are already evidenced; independently approved *different*
+daemon source activation remains BLOCKED/NOT_TESTED. Do not create a no-op
+target just to satisfy this check.
+
+### Evidence from the actual code
+
+- `closepaw_jobs.py:JobManager._run()` launches each user command using
+  `start_new_session=True` and stores its `Popen` object in the **in-memory**
+  `processes` dictionary. The durable job JSON has request identity,
+  fingerprint, result/state and `outcome_unknown`, **but no authenticated
+  PID/PGID, process start ticks or boot-generation proof** that can exclude
+  surviving command descendants after an interrupted daemon. A historic
+  `interrupted` record is not an execution-completion certificate.
+- `closepaw_bridge.py:Handler.maintenance_request('prepare')` checks
+  `readiness()`, `has_active_jobs()`, `exec_lock` and **all**
+  `outcome_unknown` jobs, then closes admission under the same admission
+  lock as submission. This lock protects new submissions, but a count of zero
+  currently active managed jobs does not establish that an untracked
+  historical command process is gone.
+- `closepaw_maintenance.py:MaintenanceController.apply()` first requires an
+  operator-approved immutable 40-hex source commit and independently
+  authenticated hashes for three files, a clean journal and a successful
+  `prepare` before source replacement. The presence of one historic
+  unknown cannot be bypassed by pin creation alone.
+
+### Required design to *consider* distinguishing historical unknown
+
+Only revisit the refusal if a genuine reviewed daemon change exists and a
+separate change is proven necessary. A possible replacement contract must
+**prove**, not infer, all of the following for the exact running daemon:
+
+1. **Ownership / quiescence:** authenticated same-daemon provenance, single
+   lifetime daemon/supervisor locks, healthy store and dedup indexes, no
+   queued/running jobs, no active command group or descendant whose effects
+   could overlap replacement, and a drain lock covering revalidation and
+   replacement. An empty `processes` dictionary, `pgrep` absence, stale
+   PID, elapsed time or `interrupted` state is not sufficient. Reused PIDs
+   must never count as negative process-existence evidence. For legacy
+   records without a durable provenance/boot-generation link, fail closed
+   unless independently verifiable operator reconciliation exists.
+2. **Unknown preserved as UNKNOWN:** never delete, migrate, overwrite,
+   archive-as-success, cancel, replay or change the old job's state to gain
+   admission. Retain original bytes and SHA and exact-ID / request-ID /
+   fingerprint semantics across daemon changes and rollback. The original
+   request always reads back its original unknown result, never executes
+   again. Do not conflate this Bridge record with Android app SQLite
+   `unknown` counts.
+3. **Fail-closed ambiguity:** any corrupt/missing identity or index,
+   orphan/descendant ambiguity, inconsistent boot/process evidence, active
+   work, interrupted journal, lost response or trust mismatch refuses source
+   replacement. A user-approved pin does not waive any of these checks.
+   Android force-stop/boot policy remains outside this live-daemon contract.
+4. **Bounded failure proof:** in isolated-home/process tests, demonstrate
+   historical UNKNOWN retention and exact byte/SHA/dedup before/after a
+   successful update; show explicit refusal for live or possibly orphaned
+   commands, corrupt history, reused PID/boot mismatch, concurrent submit,
+   activation failure and response-loss. Verify exact command exit0/stdout
+   after activation, conservative rollback before activation, and no
+   destructive automatic rollback after ambiguous activation.
+5. **Change gates:** independent security/code review, exact-HEAD checks,
+   immutable target commit and three independently pinned file SHA values,
+   explicit local operator approval, controlled one-time physical device
+   update, post-update authenticated command and stored-result readback.
+   Neither host simulation nor a verified pin is physical update PASS.
+
+### Current observed outcome and next trigger
+
+On 2026-11-12 the handset was on ClosePaw v0.1.110/code111 with responding
+revision217.1; existing historical Bridge job
+`b65a94743f514dfe847ece9dddcd187a` remained
+`interrupted/outcome_unknown=true/exit_code=null`. Authenticated readback
+and physical file observation could not determine its original effects.
+Approved immutable targets: **0**; requested update: absent; maintenance
+transaction: absent. The existing refusal is therefore **correct** and
+must not be downgraded to a bug merely to close the issue.
+
+**Next trigger:** actual new daemon code requirement. Then assess whether
+independent process/boot provenance or non-destructive operator reconciliation
+is provable; if not, the on-device live update remains blocked. Document the
+gate honestly and keep #217 OPEN, or explicitly separate the untested
+acceptance into a later issue with user approval. No operating process,
+credentials, job records, app installation or release is changed by this
+decision.
+
 ## Android limitations and acceptance
 
 Android force-stop of all Termux processes also stops this monitor. Its absence
