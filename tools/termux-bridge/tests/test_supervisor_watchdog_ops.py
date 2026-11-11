@@ -122,3 +122,31 @@ def test_unknown_stop_marker_is_not_overwritten(tmp_path):
                          env=env, capture_output=True, text=True, timeout=10)
     assert res.returncode != 0
     assert marker.read_text() == "other owner intentionally stopped\n"
+
+
+def test_stop_waits_for_inflight_watchdog_dispatch(tmp_path):
+    """A Stop acknowledgment must wait for the shared dispatch gate."""
+    root, env = fixture_env(tmp_path)
+    ctl = root / CONTROL_NAME
+    assert subprocess.run([sys.executable, str(ctl), "enable"], env=env,
+                          capture_output=True, text=True, timeout=10).returncode == 0
+    guard = root / "supervisor-watchdog-dispatch.lock"
+    fd = os.open(guard, os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    process = subprocess.Popen(
+        [sys.executable, str(ctl), "disable"], env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    try:
+        for _ in range(40):
+            if (root / "supervisor-restart.disabled").exists():
+                break
+            time.sleep(0.025)
+        assert (root / "supervisor-restart.disabled").exists()
+        assert process.poll() is None  # Stop has not falsely acknowledged yet.
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+    out, err = process.communicate(timeout=10)
+    assert process.returncode == 0, (out, err)
+    assert not (tmp_path / ".scheduler-pending").exists()
