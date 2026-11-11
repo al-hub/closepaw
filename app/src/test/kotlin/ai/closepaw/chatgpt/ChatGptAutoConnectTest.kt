@@ -94,6 +94,34 @@ class ChatGptAutoConnectTest {
         controller.stop()
     }
 
+    @Test fun repeatedTransientFailuresExhaustBudgetWithoutAnotherAutomaticStart() = runTest {
+        val tunnel = FakeTunnel()
+        val failures = mutableListOf<String>()
+        val retries = mutableListOf<Long>()
+        val controller = TunnelReconnectController(backgroundScope, tunnel, { true },
+            nowMs = { testScheduler.currentTime }, onFailure = { failures += it },
+            onRetry = { wait, _ -> retries += wait })
+        controller.start(18424)
+        runCurrent()
+        val waits = listOf(2000L, 4000L, 8000L, 16000L, 32000L, 60000L, 60000L)
+        for (wait in waits) {
+            tunnel.status.value = TunnelStatus.Failed("secure_tunnel_io_failed:IOException")
+            runCurrent()
+            advanceTimeBy(wait)
+            runCurrent()
+        }
+        assertEquals(8, tunnel.starts)
+        tunnel.status.value = TunnelStatus.Failed("secure_tunnel_io_failed:IOException")
+        runCurrent()
+        advanceTimeBy(3600000)
+        runCurrent()
+        assertEquals("No ninth automatic start after budget exhaustion", 8, tunnel.starts)
+        assertEquals(waits, retries)
+        assertEquals("tunnel_retry_exhausted", failures.last())
+        assertEquals(TunnelStatus.Stopped, tunnel.status.value)
+        controller.stop()
+    }
+
     @Test fun serviceScopeCancellationStopsTheTunnel() = runTest {
         val tunnel = FakeTunnel()
         val owner = kotlinx.coroutines.CoroutineScope(coroutineContext + kotlinx.coroutines.SupervisorJob(coroutineContext[kotlinx.coroutines.Job]))
