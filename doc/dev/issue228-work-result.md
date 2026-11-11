@@ -1,3 +1,32 @@
+## v0.1.110 delivered; real unattended update accepted — 2026-11-11 KST
+
+**Release/public integrity/install/external MCP/command/result/dedup/preservation PASS for this one real update. Original v108→v109 cause remains UNCONFIRMED; #228 stays OPEN as explicitly agreed. #219 CLOSED/#229 excluded.** This supersedes earlier deployment-blocked snapshots below.
+
+User accepted the concrete proposal to retain the historical cause as unconfirmed and keep #228 OPEN while shipping the verified safety fixes and performing actual update acceptance ([approval record](https://github.com/al-hub/closepaw/issues/228#issuecomment-6793477419)). PR230 reviewed head12e9c2aa/tree0daeb2d9 merged to immutable source/tag `9c8eaacd6f326edb23584b5149b54997d30a3f27`. app/tools/scripts/workflows/gradle inputs match the reviewed candidate; merge adds recorded documents. No extra native GitHub review gate was introduced.
+
+- Exact-main [Security43004499563](https://github.com/al-hub/closepaw/actions/runs/43004499563)/[UI43004499538](https://github.com/al-hub/closepaw/actions/runs/43004499538) SUCCESS. Independently re-downloaded digest/CRC/XML: JVM3154/Android34, failures/errors/skips0,8PNG. API35 active2810ms/PID change/cold1629ms after installer return; Stop45s no restart; synthetic preservation PASS. Physical Samsung acceptance below is separate.
+- [Signed43005672169](https://github.com/al-hub/closepaw/actions/runs/43005672169) SUCCESS. Earlier43005642854 refused before signing while the both-CI gate was not satisfied; the later automatic completion event succeeded. No manual rerun or gate bypass.
+- [Release v0.1.110](https://github.com/al-hub/closepaw/releases/tag/v0.1.110), code111, published19:41:47KST. [APK](https://github.com/al-hub/closepaw/releases/download/v0.1.110/closepaw-aa-bridge.apk)116960251B/SHA256 `3697ec7e3d93161e43fd36a5bf614309e367c4f25f1ee191400731e65fb31d9c`. Anonymous runner and independent Work download/checksum/CRC/two-native entries matched. Digest-verified public evidence confirms ai.closepaw/110-code111/v3/original signer `d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba` and source/tag.
+- Main JVM artifact13848565727 SHA2d70d13e…; UI13848141795 SHA4af6cec3…; public verification13848181896 SHA04136d01…. [Permanent structured result](evidence/issue228/v0.1.110-delivery-acceptance.json) records full digests, source and counts.
+
+### Actual device update and external acceptance
+
+After public verification, current discovery/check returned ready/available0.1.110. Independent GitHub telemetry was preflighted through existing strict SSH→WSL gh, without Microduck. A bounded detached Termux observer's first healthy sample was read from GitHub before installation. Its bootstrap task finished before the pre-install ledger baseline; no long-running admitted task was left to become unknown across the update.
+
+Install submitted exactly once: request cp228-install-0.1.110-20261111-01/task1a11b561-a6c2-42e0-ba0d-c072d0c3da0f/session1605895705. Task returned installing at1794396342871 with old109/current; that was not installation completion. After a reconnect allowance, durable status confirmed installed/current110-code111 and independent get_status responded110-code111. No user approval/app-launch request, manual recovery report, MCP re-registration, UI action or AI-session start/resume.
+
+Native process start was20:26:18.543891KST,52986.891ms after install submission and35672.891ms after the task's installing result. The first sampled new-runtime control-plane ok was20:26:35.340 (69783ms after submission). A timestamped external acceptance command was admitted20:27:58.553 (152996ms after submission): this is an observed external-working upper bound, not the exact first recovery time; earlier successful durable/get_status responses were not individually timestamped. All150 roughly2s samples returned local/native HTTP200; sub-sample downtime is not excluded. Native MCP semantic unknown/unsupported_transport remains distinct from these actual successful external requests.
+
+Fresh Termux→strict SSH→WSL task837fd618-384f-476a-b907-d98264704e4b/jobc96ce259e4c842fb9c2783a05221b802 completed exit0/stdout CP228_V110_ACCEPTANCE_OK + Linux. Exact identical request after confirmed success returned the same task/job/times/result; no duplicate execution. Prior v109 result afda9642…/job244dc104… remains exit0/Linux.
+
+Pre-install ledger3655/terminal3579→post-install3656/3580→after command+dedup3657/3581: exactly install1+command1. active0/unknown76 unchanged. Original12901900B/SHA3fd15e71…/legacy2000-exact2000/reconciled0/mismatch0 preserved; pre_upgrade_integrity=not_available unchanged. AI before/after ended/epoch0; in-memory UUID changed50ff4811…→e368f79b… on process recreation, not an identical-session-ID preservation claim. Existing authorization/SSH and update/install-source permissions worked; no private settings-byte comparison is available.
+
+The observer completed150 samples with no failed prior publication; [GitHub observer](https://github.com/al-hub/closepaw/issues/228#issuecomment-6793518256)/[full sanitized data](evidence/issue228/update-observer-v0.1.110.json). It only reads local HTTP and writes bounded status/time evidence through existing approved GitHub access. No listener/daemon/key/token change, private app storage, ADB/admin workaround or Microduck MCP call.
+
+### Remaining disposition
+
+The approved release and one actual unattended update are complete. The original old failure layer is still unconfirmed; one success is not long-run reliability or proof that a particular safety fix caused the original incident. Actual OS permission-revocation/approval/OEM combinations not exercised remain untested. #228 remains OPEN under the agreed disposition; #117 owns long-run repeat scope and #229 is not accepted here. Do not repeat this installation or issue another diagnostic-only production APK.
+
 ## Unpublished v0.1.110/code111 candidate verification — 2026-11-11 KST
 
 Candidate HEAD `12e9c2aac37f34360ea8cdb1dfffcc719f67cc8b` / tree `0daeb2d9625d5f084259d3844cafdc7b8404c332`. [Draft PR230](https://github.com/al-hub/closepaw/pull/230) is unmerged. Current phone and latest published APK remain109/code110; no new Release or installation. This section supersedes older candidate/version snapshots below. Microduck MCP is optional only if unavoidable, is not a required gate, and was called0 times in this continuation.

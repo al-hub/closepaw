@@ -1,0 +1,455 @@
+{
+  "scope": "one real v109-to-v110 automatic update; no manual app launch/recovery requested or reported",
+  "source_commit": "9c8eaacd6f326edb23584b5149b54997d30a3f27",
+  "release_tag": "v0.1.110",
+  "version_name": "0.1.110",
+  "version_code": 111,
+  "merged_pr": 230,
+  "pr_head": "12e9c2aac37f34360ea8cdb1dfffcc719f67cc8b",
+  "reviewed_tree": "0daeb2d9625d5f084259d3844cafdc7b8404c332",
+  "source_equal_to_reviewed_candidate": "app/tools/scripts/workflows/gradle.properties identical; merge only integrates recorded documents",
+  "approved_gate_adjustment_comment": 6793477419,
+  "original_physical_cause": "UNCONFIRMED",
+  "release": {
+    "published_at": "2026-11-11T10:41:47Z",
+    "apk_url": "https://github.com/al-hub/closepaw/releases/download/v0.1.110/closepaw-aa-bridge.apk",
+    "checksum_url": "https://github.com/al-hub/closepaw/releases/download/v0.1.110/closepaw-aa-bridge.apk.sha256",
+    "bytes": 116960251,
+    "sha256": "3697ec7e3d93161e43fd36a5bf614309e367c4f25f1ee191400731e65fb31d9c",
+    "certificate_sha256": "d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba",
+    "v3_signature": true,
+    "package": "ai.closepaw",
+    "native_runtimes": [
+      "lib/arm64-v8a/libopenaitunnel.so",
+      "lib/arm64-v8a/libcloudflared.so"
+    ],
+    "main_security_run": 43004499563,
+    "main_ui_run": 43004499538,
+    "signed_run": 43005672169,
+    "early_gate_refusal_run": 43005642854,
+    "early_gate_refusal": "Before signing; both exact-main CI required. Later automatic completion trigger succeeded, no manual re-run or bypass.",
+    "public_anonymous_redownload": "Runner plus separate Work host SHA/checksum/CRC/native entries matched",
+    "signature_manifest_provenance": "Downloaded digest-matched runner anonymous-public-verification artifact; source/tag/package/version/code/cert/v3 matched the independently downloaded APK hash"
+  },
+  "artifact_verification": {
+    "jvm": {
+      "artifact_id": 13848565727,
+      "bytes": 991871,
+      "sha256": "2d70d13e6719cdfeec5c725a29cc17ff01d635e2fbe542739480ad75caaa7d4d",
+      "digest_match": true,
+      "crc": "PASS",
+      "counts": {
+        "tests": 3154,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "xml_files": 372,
+      "pngs": 0,
+      "fixtures": []
+    },
+    "ui": {
+      "artifact_id": 13848141795,
+      "bytes": 526721,
+      "sha256": "4af6cec3db63f135a44dc69454a6f3eb73bc6d2149924ee797c3ae1182e7c1c2",
+      "digest_match": true,
+      "crc": "PASS",
+      "counts": {
+        "tests": 34,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "xml_files": 1,
+      "pngs": 8,
+      "fixtures": [
+        {
+          "status": "PASS",
+          "scope": "isolated_emulator_receiver_fgs_local_mcp_only",
+          "events": [
+            {
+              "case": "fixture_package_install",
+              "duration_ms": 8003
+            },
+            {
+              "case": "active_package_replacement",
+              "local_mcp_ready": true,
+              "process_changed": true,
+              "elapsed_ms": 2810
+            },
+            {
+              "case": "fixture_package_install",
+              "duration_ms": 1730
+            },
+            {
+              "case": "enabled_cold_package_replacement",
+              "local_mcp_ready": true,
+              "elapsed_ms": 1629
+            },
+            {
+              "case": "fixture_package_install",
+              "duration_ms": 5073
+            },
+            {
+              "case": "stopped_package_replacement",
+              "unexpected_local_mcp": false
+            }
+          ],
+          "android_api": "35",
+          "synthetic_config_and_marker_preserved": true
+        }
+      ]
+    },
+    "public": {
+      "artifact_id": 13848181896,
+      "bytes": 2307,
+      "sha256": "04136d01863167de42dd339c04c5d1120bae5a52b6efbd99688afc13675b3658",
+      "digest_match": true,
+      "crc": "PASS"
+    }
+  },
+  "independent_review": {
+    "type": "Separate AI code/security; not CLI/native GitHub",
+    "head": "12e9c2aac37f34360ea8cdb1dfffcc719f67cc8b",
+    "tree": "0daeb2d9625d5f084259d3844cafdc7b8404c332",
+    "verdict": "APPROVE",
+    "unresolved_critical": 0,
+    "unresolved_high": 0,
+    "unresolved_medium": 0,
+    "prior_runtime_review_reused": true
+  },
+  "updater_schema": {
+    "operation_version": 1,
+    "install_hash": "532f837ca065cecb2342af7edf192980bca0b1ff9da65a94683d48dadbd5d757",
+    "ready": true,
+    "check_available_version": "0.1.110"
+  },
+  "installation": {
+    "submissions": 1,
+    "request_id": "cp228-install-0.1.110-20261111-01",
+    "task_id": "1a11b561-a6c2-42e0-ba0d-c072d0c3da0f",
+    "created_at_ms": 1794396325557,
+    "started_at_ms": 1794396325569,
+    "task_installing_at_ms": 1794396342871,
+    "installer_session": 1605895705,
+    "task_completion_is_not_install_completion": true,
+    "durable_post": {
+      "state": "installed",
+      "task_id": "1a11b561-a6c2-42e0-ba0d-c072d0c3da0f",
+      "target_version": "0.1.110",
+      "session_id": 1605895705,
+      "target_code": 111,
+      "installed_version": "0.1.110",
+      "current_version": "0.1.110",
+      "current_code": 111,
+      "install_source_allowed": true,
+      "remote_update_enabled": true
+    },
+    "independent_get_status": {
+      "status": "succeeded",
+      "summary": "ClosePaw is reachable and responding.",
+      "app": "ClosePaw",
+      "version_name": "0.1.110",
+      "version_code": 111,
+      "capability": "status",
+      "operation_contract_version": 1,
+      "operation_discovery_tool": "discover_operations",
+      "supported_read_apps": [
+        {
+          "id": "samsung_internet",
+          "package_name": "com.sec.android.app.sbrowser",
+          "display_name": "Samsung Internet"
+        },
+        {
+          "id": "chrome",
+          "package_name": "com.android.chrome",
+          "display_name": "Chrome"
+        },
+        {
+          "id": "gemini",
+          "package_name": "com.google.android.apps.bard",
+          "display_name": "Gemini"
+        }
+      ],
+      "mcp_tool_count": 9,
+      "runtime_info_tool": "get_runtime_info",
+      "tool_list_refresh_verified": false
+    },
+    "user_approval_prompts": 0,
+    "manual_app_launch_requests": 0,
+    "manual_recovery_reported": 0,
+    "unknown_install_replays": 0
+  },
+  "observer": {
+    "bootstrap_task_id": "09a7a6e1-f5ed-4df9-a443-7519225ce83b",
+    "independent_route": "Detached bounded Termux observer -> existing strict SSH laptop -> WSL gh PATCH -> GitHub read",
+    "comment_id": 6793518256,
+    "run_id": "cp228-update-110-20261111-01",
+    "state": "completed",
+    "sample_count": 150,
+    "started_ms": 1794396286311,
+    "last_sample_ms": 1794396591274,
+    "publication_failures": 0,
+    "transitions": [
+      {
+        "ms": 1794396286311,
+        "local_http": 200,
+        "native_http": 200,
+        "ready": true,
+        "native_started_at": "2026-11-10T13:17:23.871188787Z",
+        "control_plane_status": "ok",
+        "mcp_status": "unknown"
+      },
+      {
+        "ms": 1794396379336,
+        "local_http": 200,
+        "native_http": 200,
+        "ready": true,
+        "native_started_at": "2026-11-11T11:26:18.543891232Z",
+        "control_plane_status": "unknown",
+        "mcp_status": "unknown"
+      },
+      {
+        "ms": 1794396395340,
+        "local_http": 200,
+        "native_http": 200,
+        "ready": true,
+        "native_started_at": "2026-11-11T11:26:18.543891232Z",
+        "control_plane_status": "ok",
+        "mcp_status": "unknown"
+      }
+    ],
+    "full_evidence": "update-observer-v0.1.110.json",
+    "microduck_calls": 0,
+    "disruption_or_recovery_actions": 0
+  },
+  "timing": {
+    "native_started_at": "2026-11-11T11:26:18.543891232Z",
+    "native_start_after_install_submission_ms": 52986.891,
+    "native_start_after_install_task_returned_installing_ms": 35672.891,
+    "first_sample_new_native_ms": 1794396379336,
+    "first_observed_new_native_control_plane_ok_ms": 1794396395340,
+    "control_plane_ok_after_install_submission_ms": 69783,
+    "external_verified_command_admission_ms": 1794396478553,
+    "external_verified_admission_after_install_submission_ms": 152996,
+    "external_verified_admission_after_installing_ms": 135682,
+    "interpretation": "Native exact start; control-plane sampled time; timestamped external admission upper bound. Earlier successful durable/get_status calls were not individually timestamped. Do not claim 152996ms is the exact first recovery time. No local HTTP failure was sampled at ~2s intervals; does not prove zero downtime. Native HTTP MCP semantic status remains unknown for unsupported_transport, distinct from actual external successful calls."
+  },
+  "actual_command": {
+    "task": {
+      "task_id": "837fd618-384f-476a-b907-d98264704e4b",
+      "request_id": "cp228-v110-acceptance-20261111-01",
+      "operation_id": "linux.shell.exec",
+      "operation_version": 1,
+      "schema_hash": "7530a59aaea146ace4a3082267455bc0b3b3a62f1195f480304beaa1b2ceaa7e",
+      "state": "succeeded",
+      "created_at_ms": 1794396478553,
+      "summary": "Termux job succeeded; exit code 0.",
+      "started_at_ms": 1794396478573,
+      "completed_at_ms": 1794396479812,
+      "status": "succeeded",
+      "result": {
+        "status": "succeeded",
+        "summary": "Termux job succeeded; exit code 0.",
+        "data": {
+          "job_id": "c96ce259e4c842fb9c2783a05221b802",
+          "state": "succeeded",
+          "adapter_id": "termux-local-bridge-jobs",
+          "timed_out": false,
+          "output_truncated": false,
+          "outcome_unknown": false,
+          "duration_ms": 916,
+          "cancel_confirmed": false
+        },
+        "stdout": "CP228_V110_ACCEPTANCE_OK\nLinux\n",
+        "stderr": "",
+        "output_truncated": false,
+        "exit_code": 0
+      },
+      "output_offset": 0,
+      "output_limit": 8000,
+      "offset_unit": "unicode_code_points",
+      "has_more": false
+    },
+    "exact_id_input_dedup": {
+      "task_id": "837fd618-384f-476a-b907-d98264704e4b",
+      "request_id": "cp228-v110-acceptance-20261111-01",
+      "operation_id": "linux.shell.exec",
+      "operation_version": 1,
+      "schema_hash": "7530a59aaea146ace4a3082267455bc0b3b3a62f1195f480304beaa1b2ceaa7e",
+      "state": "succeeded",
+      "created_at_ms": 1794396478553,
+      "summary": "Termux job succeeded; exit code 0.",
+      "started_at_ms": 1794396478573,
+      "completed_at_ms": 1794396479812,
+      "status": "succeeded",
+      "result": {
+        "status": "succeeded",
+        "summary": "Termux job succeeded; exit code 0.",
+        "data": {
+          "job_id": "c96ce259e4c842fb9c2783a05221b802",
+          "state": "succeeded",
+          "adapter_id": "termux-local-bridge-jobs",
+          "timed_out": false,
+          "output_truncated": false,
+          "outcome_unknown": false,
+          "duration_ms": 916,
+          "cancel_confirmed": false
+        },
+        "stdout": "CP228_V110_ACCEPTANCE_OK\nLinux\n",
+        "stderr": "",
+        "output_truncated": false,
+        "exit_code": 0
+      },
+      "output_offset": 0,
+      "output_limit": 8000,
+      "offset_unit": "unicode_code_points",
+      "has_more": false
+    },
+    "dedup": "Same task/job/create/start/complete/result; no second execution",
+    "unknown_replays": 0
+  },
+  "preservation": {
+    "pre_install": {
+      "diagnostic_version": 2,
+      "backend": "sqlite",
+      "snapshot_only": true,
+      "write_test_performed": false,
+      "write_health": "not_tested",
+      "recovery_attempted": false,
+      "pre_upgrade_integrity": "not_available",
+      "file_exists": true,
+      "file_bytes": 12901900,
+      "legacy_sha256": "3fd15e71960d447d0c4a9e9f535c26757d6632c71b68120fefb839a5ca93e438",
+      "task_count": 3655,
+      "active_count": 0,
+      "terminal_count": 3579,
+      "unknown_count": 76,
+      "legacy_task_count": 2000,
+      "legacy_exact_count": 2000,
+      "legacy_reconciled_count": 0,
+      "legacy_mismatch_count": 0,
+      "legacy_integrity": "verified_current",
+      "read_state": "readable",
+      "reason_code": "sqlite_snapshot_verified"
+    },
+    "post_install_before_command": {
+      "diagnostic_version": 2,
+      "backend": "sqlite",
+      "snapshot_only": true,
+      "write_test_performed": false,
+      "write_health": "not_tested",
+      "recovery_attempted": false,
+      "pre_upgrade_integrity": "not_available",
+      "file_exists": true,
+      "file_bytes": 12901900,
+      "legacy_sha256": "3fd15e71960d447d0c4a9e9f535c26757d6632c71b68120fefb839a5ca93e438",
+      "task_count": 3656,
+      "active_count": 0,
+      "terminal_count": 3580,
+      "unknown_count": 76,
+      "legacy_task_count": 2000,
+      "legacy_exact_count": 2000,
+      "legacy_reconciled_count": 0,
+      "legacy_mismatch_count": 0,
+      "legacy_integrity": "verified_current",
+      "read_state": "readable",
+      "reason_code": "sqlite_snapshot_verified"
+    },
+    "after_command_and_dedup": {
+      "diagnostic_version": 2,
+      "backend": "sqlite",
+      "snapshot_only": true,
+      "write_test_performed": false,
+      "write_health": "not_tested",
+      "recovery_attempted": false,
+      "pre_upgrade_integrity": "not_available",
+      "file_exists": true,
+      "file_bytes": 12901900,
+      "legacy_sha256": "3fd15e71960d447d0c4a9e9f535c26757d6632c71b68120fefb839a5ca93e438",
+      "task_count": 3657,
+      "active_count": 0,
+      "terminal_count": 3581,
+      "unknown_count": 76,
+      "legacy_task_count": 2000,
+      "legacy_exact_count": 2000,
+      "legacy_reconciled_count": 0,
+      "legacy_mismatch_count": 0,
+      "legacy_integrity": "verified_current",
+      "read_state": "readable",
+      "reason_code": "sqlite_snapshot_verified"
+    },
+    "expected_task_increment": 2,
+    "why": "One install task plus one acceptance command; observer bootstrap completed before the baseline",
+    "old_result": {
+      "task_id": "afda9642-bdca-41f0-9734-e8c5cc17d20f",
+      "request_id": "cp219-reverify-20261111-01",
+      "operation_id": "linux.shell.exec",
+      "operation_version": 1,
+      "schema_hash": "7530a59aaea146ace4a3082267455bc0b3b3a62f1195f480304beaa1b2ceaa7e",
+      "state": "succeeded",
+      "created_at_ms": 1794379549136,
+      "summary": "Termux job succeeded; exit code 0.",
+      "started_at_ms": 1794379549153,
+      "completed_at_ms": 1794379550375,
+      "status": "succeeded",
+      "result": {
+        "status": "succeeded",
+        "summary": "Termux job succeeded; exit code 0.",
+        "data": {
+          "job_id": "244dc10423424539a72f2549ff0f5895",
+          "state": "succeeded",
+          "adapter_id": "termux-local-bridge-jobs",
+          "timed_out": false,
+          "output_truncated": false,
+          "outcome_unknown": false,
+          "duration_ms": 1020,
+          "cancel_confirmed": false
+        },
+        "stdout": "CP219_REVERIFY_20261111_OK\nLinux\n",
+        "stderr": "** WARNING: connection is not using a post-quantum key exchange algorithm.\r\n** This session may be vulnerable to \"store now, decrypt later\" attacks.\r\n** The server may need to be upgraded. See https://openssh.com/pq.html\r\n",
+        "output_truncated": false,
+        "exit_code": 0
+      },
+      "output_offset": 0,
+      "output_limit": 1500,
+      "offset_unit": "unicode_code_points",
+      "has_more": false
+    },
+    "ai_before": {
+      "state": "ended",
+      "session_id": "50ff4811-6a45-4300-b554-ef85486fb553",
+      "epoch": 0,
+      "physical_resume_required": false,
+      "external_effects_undone": false
+    },
+    "ai_after": {
+      "state": "ended",
+      "session_id": "e368f79b-93e0-4159-93b4-e68e47297af6",
+      "epoch": 0,
+      "physical_resume_required": false,
+      "external_effects_undone": false
+    },
+    "ai_interpretation": "ended/epoch0 before and after, no start/resume. In-memory session UUID changed with process recreation; not claimed identical.",
+    "settings_and_tokens": "No writes/reset/key/token/endpoint re-registration. Existing external MCP authorization and strict SSH worked; remote_update/install-source permissions retained. Full private settings byte comparison not exposed and not claimed.",
+    "connection_intent": "Not directly exposed by current read schema. Active pre-update service and permitted post-update restore observed; not a private-preference byte comparison.",
+    "pre_upgrade_integrity": "not_available remains unchanged"
+  },
+  "final_status": {
+    "original_cause": "BLOCKED/UNCONFIRMED historical",
+    "confirmed_safety_fixes": "PASS",
+    "automated_regressions": "PASS in stated JVM/API35 scope",
+    "independent_review": "PASS",
+    "pr_ci_main_merge": "PASS",
+    "exact_main_security_ui": "PASS",
+    "release_public_integrity": "PASS",
+    "automatic_install": "PASS",
+    "external_mcp_without_requested_manual_launch": "PASS for one actual update",
+    "actual_command_result_dedup_preservation": "PASS in measured scope",
+    "user_intervention": "none requested/reported",
+    "issue228_close": "NO; explicit OPEN disposition and original historical cause unresolved",
+    "issue219": "CLOSED unchanged",
+    "issue229": "excluded"
+  },
+  "recorded_at": "2026-11-11T11:32:38Z"
+}

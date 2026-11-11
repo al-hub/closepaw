@@ -1,0 +1,1402 @@
+{
+  "run_id": "cp228-update-110-20261111-01",
+  "state": "completed",
+  "started_ms": 1794396286311,
+  "last_sample_ms": 1794396591274,
+  "sample_count": 150,
+  "samples": [
+    {
+      "ms": 1794396286311,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396288550,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396290550,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396292552,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396294553,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396296553,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396298554,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396300554,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396302555,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396304555,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396306555,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396308556,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396310556,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396312556,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396314556,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396316557,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396318710,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396320711,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396322711,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396324712,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396326712,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396328713,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396330713,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396332713,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396334713,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396336713,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396338714,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396340714,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396342714,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396344714,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396346715,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396349152,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396351152,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396353152,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396355155,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396357155,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396359155,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396361156,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396363156,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396365156,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396367156,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396369158,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396371158,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396373158,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396375159,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396377159,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-10T13:17:23.871188787Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396379336,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "unknown",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396381337,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "unknown",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396383339,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "unknown",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396385339,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "unknown",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396387340,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "unknown",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396389340,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "unknown",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396391340,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "unknown",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396393340,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "unknown",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396395340,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396397341,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396399341,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396401341,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396403342,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396405342,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396407342,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396409435,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396411435,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396413435,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396415435,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396417436,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396419436,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396421436,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396423437,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396425437,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396427437,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396429438,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396431438,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396433439,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396435440,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396437440,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396439585,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396441586,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396443586,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396445586,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396447587,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396449588,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396451588,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396453589,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396455589,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396457589,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396459589,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396461590,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396463590,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396465591,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396467591,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396469906,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396471907,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396473908,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396475908,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396477910,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396479911,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396481911,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396483912,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396485913,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396488168,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396491096,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396493097,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396495097,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396497097,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396499097,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396501274,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396505878,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396507878,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396509879,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396512213,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396514214,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396516214,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396518214,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396520214,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396522215,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396524215,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396526215,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396528217,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396530219,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396532220,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396534251,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396536252,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396539056,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396541057,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396543057,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396545057,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396547058,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396549058,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396551058,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396553059,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396555059,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396557059,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396559059,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396561059,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396563060,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396565268,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396567268,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396569269,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396571269,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396573269,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396575270,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396577270,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396579271,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396581271,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396583272,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396585272,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396587272,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396589273,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    },
+    {
+      "ms": 1794396591274,
+      "local_http": 200,
+      "native_http": 200,
+      "ready": true,
+      "native_started_at": "2026-11-11T11:26:18.543891232Z",
+      "control_plane_status": "ok",
+      "mcp_status": "unknown"
+    }
+  ],
+  "publication": [
+    {
+      "ms": 1794396288548,
+      "ok": true
+    },
+    {
+      "ms": 1794396318705,
+      "ok": true
+    },
+    {
+      "ms": 1794396349150,
+      "ok": true
+    },
+    {
+      "ms": 1794396379335,
+      "ok": true
+    },
+    {
+      "ms": 1794396409428,
+      "ok": true
+    },
+    {
+      "ms": 1794396439572,
+      "ok": true
+    },
+    {
+      "ms": 1794396469878,
+      "ok": true
+    },
+    {
+      "ms": 1794396501252,
+      "ok": true
+    },
+    {
+      "ms": 1794396534224,
+      "ok": true
+    },
+    {
+      "ms": 1794396565239,
+      "ok": true
+    }
+  ],
+  "scope": "local_http_and_native_metadata_only_not_external_client_acceptance"
+}
