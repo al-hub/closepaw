@@ -1,3 +1,12 @@
+## #228 residual regressions completed; original physical reconnect OPEN — 2026-11-11 KST
+
+- PR #230 HEAD `6570d39a0d129535fcfc299ad7e01dad03bb5df2` / tree `887a8f94b5f8b778422eab82a616f890f3c94892`: Stop durability plus startup-exception containment, cancellation checks and atomic failure-state preservation. Exact-tree independent AI code/security APPROVE, Medium2 resolved/C-H-M0. Not CLI/native review.
+- Additional RED Security42977857763 raw3149/2 failures (only new startup-exception cases). Final Security42979055340/UI42979055337 attempt2 SUCCESS: SHA/CRC/raw XML verified, JVM3151/Android34/failure-error-skip0,8PNG. API35 active local health5019ms/cold2217ms, Stop no restart45s, synthetic preservation PASS. First UI adb pull preparation failure retained; one failed-job retry passed.
+- Existing seven AutoConnect cases for network/backoff/duplicates/Stop/cancellation reused; six additional cases passed. API37 SDK availability is not an extra mandatory gate, and skipped is not PASS. No OEM/native/client acceptance is inferred.
+- Original v108→v109 failure layer remains UNCONFIRMED; retained connector trace is insufficient. Candidate Draft/unmerged/version109/code110; no new main code CI, signed Release, phone installation or external unattended acceptance. No unsupported privileges or diagnostic-only formal APK.
+- #219 CLOSED with [current physical revalidation](https://github.com/al-hub/closepaw/issues/219#issuecomment-6789104140): exit0/Linux/results/dedup/2000 exact/current SHA/unknown76/ended AI preserved. #229 excluded. No physical action requested.
+- [Execution record](../dev/issue228-work-result.md) · [machine evidence](../dev/evidence/issue228/work-summary.json). Older sections below are historical, superseded by this status.
+
 ## #228 partial Stop fix validated; original reconnect BLOCKED — 2026-11-11 KST
 
 - Current baseline: published/installed0.1.109/code110; physical Android17/API37 measured. No new APK/installation, phone UI control or AI-session restart in this Work.

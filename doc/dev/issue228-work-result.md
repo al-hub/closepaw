@@ -1,29 +1,30 @@
 # #228 Work disposition — 2026-11-11 KST
 
-**Partial production fix validated; original physical reconnect cause BLOCKED / #228 OPEN.**
+**Feasible independent regressions completed; original physical reconnect cause UNCONFIRMED / #228 OPEN.**
 
-- Candidate [Draft PR #230](https://github.com/al-hub/closepaw/pull/230), HEAD `887eb6709dfc7d6640342b1e4a871c4fedf13d51`, tree `5743d4b2ff23bcd5b827c85d6c8b79b93ff02602`. Production code remains unmerged. VERSION_NAME/CODE remain0.1.109/110; do not merge this candidate as a new release with the old published version.
-- Confirmed defect: Stop used asynchronous preference apply and could be lost across immediate process replacement. Actual unchanged-code RED followed by same-fixture GREEN after synchronous durable commit on IO. Connect/restore start refusal is bounded and reported; the independent Medium finding was fixed.
-- Exact-head [Security42915878283](https://github.com/al-hub/closepaw/actions/runs/42915878283) and [UI42915878299](https://github.com/al-hub/closepaw/actions/runs/42915878299) SUCCESS. Independently downloaded raw ZIP digests matched GitHub metadata and CRC passed: JVM3145 / Android34, failures0/errors0/skipped0; changed JVM classes6+3;8render PNGs. Bridge95/core8/scripts46 PASS.
-- Final API35 fixture: package replacement13533ms then active local-health readiness3972ms with PID change; cold replacement2504ms then readiness4476ms; Stop replacement5001ms then no local MCP over45s. Synthetic encrypted config/marker preserved. No post-update Activity used for PASS. Recent pre-update Activity conditions do not prove every long-background/OEM case.
-- Separate independent AI code/security review APPROVE for the confirmed Stop fix and investigation; unresolved Critical/High/Medium0. This is not a Codex CLI result or native GitHub review submission. Repository main was unprotected with no active rulesets; no additional native APPROVE gate was invented.
-- Raw JVM artifact13809567560 SHA256 `b93f77b4497e8e125b0e428b1700b6ac84fca25ceb164e7673f65588d6038ca6`; UI artifact13810601083 SHA256 `178cfde89b684c434bae91efb87713c0c700664753f0ec4affdba23821cebcf4`. [Machine-readable evidence](evidence/issue228/work-summary.json).
+- [Draft PR #230](https://github.com/al-hub/closepaw/pull/230) HEAD `6570d39a0d129535fcfc299ad7e01dad03bb5df2`, tree `887a8f94b5f8b778422eab82a616f890f3c94892`. Production code UNMERGED, version0.1.109/code110 unchanged.
+- Confirmed defects: Stop intent used asynchronous apply across process replacement; synchronous tunnel-provider start exceptions escaped before publishing Failed. Minimal fixes use durable IO commit, class-only reason codes, existing transient/permanent retry policy, cancellation/enabled checks and atomic error-state transforms. No watchdog, timeout increase, credential change or AI-session restart.
+- Existing seven AutoConnect tests already cover duplicate starts, Stop during backoff, network return/capped delay, permanent runtime absence and owner cancellation. Reuse them. Six additional tests cover startup exceptions, permanent reasons, disabled intent, immediate restart and cancellation inside a throwing start.
+- New unchanged-controller RED: HEADfe1958c419a472a6abcf68b6fb03053670274309, [Security42977857763](https://github.com/al-hub/closepaw/actions/runs/42977857763), raw3149/2 failures/0 errors/skips. Only two new startup-exception cases failed. Earlier real Stop RED remains in chronological evidence.
+- Exact final [Security42979055340](https://github.com/al-hub/closepaw/actions/runs/42979055340) and [UI42979055337](https://github.com/al-hub/closepaw/actions/runs/42979055337) attempt2 SUCCESS. ZIP/SHA/CRC/raw XML independently verified: **JVM3151 / Android34, failures0/errors0/skipped0**, AutoConnect13/settings6/service-start3,8PNG. Bridge95/core8/scripts46 PASS.
+- Final API35 fixture: install9920ms then active local MCP5019ms/PID changed; cold install3202ms then local MCP2217ms; Stop install6379ms then no local MCP45s. Synthetic config/marker preserved. No post-update Activity for PASS. Local x86 health is not native arm64/OEM/client acceptance.
+- UI attempt1 failed at adb pull before replacement, with zero lifecycle events/JUnit0. Artifact13837355038 retained. One failed-job rerun on fresh runner passed, job130387355075; no code/gate changes for retry.
+- Exact final HEAD/tree independent AI code/security APPROVE after Medium2 findings resolved; unresolved Critical/High/Medium0. Separate from Codex CLI/native GitHub review; no extra native approval gate.
+- RED artifact13836517867 SHA256 `b96f04c59862fe433fc2c8fd7ca4e1780f43695b75ab2be0d049779e7ae04350`; final JVM13837675297 SHA256 `7d168a80cf155e7aaecbf6b28992cca423a862f798f8ec5b5c89b0d4aeb1924a`; final UI13836694876 SHA256 `ad6ec014eac16d0bd6b16a5cb3bc036aa6f74d1dc081f2834e03d7d8dd08ab90`. [Machine-readable evidence](evidence/issue228/work-summary.json).
 
-## Remaining hard boundary
+## Remaining actual boundary
 
-The v108-to-v109 phone timeout/session-termination cause remains UNCONFIRMED. Current in-memory accessibility service_connected was about31s after update submission, while the user's manual-launch report was later; these are not MCP/tunnel readiness or raw OS launch timestamps. The existing connector exposes no historical receiver/FGS/tunnel lifecycle trace sufficient to establish the old failing layer. Local HTTP /health on an AOSP x86 emulator is not native arm64 tunnel/control-plane or ChatGPT client-session acceptance.
+The original v108-to-v109 timeout/session termination layer remains unconfirmed. Retained observations cannot distinguish Android receiver/service, native tunnel/control plane, server or ChatGPT client. These new safety regressions are not proof of that historical cause. Current supported connector diagnostics expose no sufficient historical lifecycle trace or independent observation/recovery path for deliberately dropping the physical connection safely.
 
-Physical OS was directly measured as Android17/API37. CI API37 job42909197801 could not find `platforms;android-37` before emulator startup. This is an environment BLOCKED, not an OS policy refusal. Identical unsupported retries were suspended; later skipped status is never PASS.
+The API37 emulator previously failed SDK preparation. Suspended/skipped is not PASS. SDK availability is not an additional mandatory release gate by itself and does not stop independent JVM/API35 work. Same-OS reproduction is one possible investigation route; actual failing-layer evidence and physical external unattended acceptance remain required. No SDK skip or manual app launch substitutes for those results.
 
-These constraints prevent claiming the validated Stop fix is the original outage's root solution. No speculative watchdog, timeout increase, endpoint re-registration, permission bypass or diagnostic-only production APK is substituted. The next investigation needs supported same-OS reproduction and independent receiver/service/tunnel/client timing evidence. Do not manufacture a cause or use a manual post-update launch as unattended PASS.
+No formal diagnostic-sample APK, repeated install, uncertain command replay or permission bypass. A new final Release/automatic install/external unattended reconnect remain unperformed while original root-solution conditions are unmet. #228 stays OPEN.
 
-## Delivery and device state
+## Delivery and preservation
 
-No version bump, production-code merge, new main build, signed Release, public-APK verification or phone install was performed. The main update containing this record is documentation only [skip ci]; it does not deploy the candidate. Published/installed baseline stays0.1.109/code110, source/tag `3e65a21137b09a8a3d2d5f64f38f567c173b2a58`, APK SHA256 `4d49dd33bb2f8a5e0307560c249db8ac6270900ac94ae9620e22cc40eebee58d`.
+Main updates for this record are docs only [skip ci]. Published/installed baseline remains0.1.109/code110, source/tag `3e65a21137b09a8a3d2d5f64f38f567c173b2a58`, APK SHA256 `4d49dd33bb2f8a5e0307560c249db8ac6270900ac94ae9620e22cc40eebee58d`. No phone UI control/physical action request, reset, token/key change, new install or ended AI-session restart.
 
-Baseline real Termux task597d496d-0130-434a-a65b-a87e8ed587ba completed exit0 and same-ID dedup returned identical task/job/timestamps/result. WSL task08b3e850-767d-4399-b0dc-4be1ad32f01e returned CP228_WSL_BASELINE_OK/Linux/exit0 with existing strict SSH checks. Original12,901,900-byte JSON/current SHA `3fd15e71960d447d0c4a9e9f535c26757d6632c71b68120fefb839a5ca93e438`, legacy2000/exact2000/mismatch0, unknown76 were preserved at the recorded snapshots. No retrospective pre-v107 hash is claimed.
-
-No phone UI session or physical user action was requested in this Work, and no ended AI session was resumed. #219 remains CLOSED under its actual acceptance evidence; #229 remains outside scope.
+[#219 current physical revalidation](https://github.com/al-hub/closepaw/issues/219#issuecomment-6789104140) is reused: strict SSH→WSL exit0/Linux, result/same-ID dedup, original2000 exact/current SHA/unknown76 and ended AI session preserved. This is v109 baseline evidence, not candidate acceptance. #219 CLOSED, #229 excluded.
 
 ## Detailed chronological investigation
 ## Current candidate — verified Stop regression, original reconnect cause still unconfirmed
