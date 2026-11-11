@@ -19,14 +19,16 @@ internal class TunnelReconnectController(
     private val onFailure: (String) -> Unit = { _ -> },
 ) {
     private var job: Job? = null
+    @Volatile private var retryBudgetExhausted = false
 
     fun start(localPort: Int) {
-        if (job?.isActive == true) return
+        if (retryBudgetExhausted || job?.isActive == true) return
         val previous = job
         job = scope.launch {
             previous?.join()
             try {
                 var failures = 0
+                var retries = 0
                 while (enabled()) {
                     var connectedAt: Long? = null
                     val failure = try {
@@ -48,9 +50,22 @@ internal class TunnelReconnectController(
                     onFailure(failure.reason)
                     if (!isRetryable(failure.reason)) return@launch
                     // A briefly healthy crash loop must not reset exponential backoff.
-                    if (connectedAt?.let { nowMs() - it >= 60_000 } == true) failures = 0
+                    if (connectedAt?.let { nowMs() - it >= 60_000 } == true) {
+                        failures = 0
+                        retries = 0
+                    }
+                    if (retries >= MAX_RETRIES) {
+                        // A duplicate start on this service-owned controller must not
+                        // silently open a new budget after persistent failure.
+                        retryBudgetExhausted = true
+                        tunnel.stop()
+                        currentCoroutineContext().ensureActive()
+                        if (enabled()) onFailure("tunnel_retry_exhausted")
+                        return@launch
+                    }
                     val waitMs = minOf(2_000L shl failures.coerceAtMost(5), 60_000L)
                     failures = (failures + 1).coerceAtMost(5)
+                    retries++
                     tunnel.stop()
                     onRetry(waitMs, failure.reason)
                     delay(waitMs)
@@ -71,4 +86,8 @@ internal class TunnelReconnectController(
         reason != "secure_tunnel_runtime_unavailable" &&
             reason != "secure_tunnel_not_configured" && reason != "cloudflared_unavailable" &&
             !reason.contains("SecurityException") && !reason.contains("IllegalArgumentException")
+
+    private companion object {
+        const val MAX_RETRIES = 7
+    }
 }

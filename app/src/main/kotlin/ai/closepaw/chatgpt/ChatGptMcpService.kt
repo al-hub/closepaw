@@ -102,32 +102,30 @@ class ChatGptMcpService : Service() {
                             running = true, phase = "Local MCP ready", error = current.error,
                         ) else current
                     }
-                    TunnelStatus.Starting -> updateState(
-                        ChatGptConnectionState(running = true, phase = "Opening tunnel…")
-                    )
+                    TunnelStatus.Starting -> updateState { current ->
+                        if (tunnelObservationAllowed(current))
+                            ChatGptConnectionState(running = true, phase = "Opening tunnel…")
+                        else current
+                    }
                     is TunnelStatus.Connected -> {
                         val endpoint = status.publicUrl?.let { "$it${server.mcpPath}" }
                         val secure = status.tunnelId != null
-                        updateState(
-                            ChatGptConnectionState(
+                        updateState { current ->
+                            if (tunnelObservationAllowed(current)) ChatGptConnectionState(
                                 running = true,
                                 phase = if (secure) "Secure tunnel runtime ready" else "Connected",
                                 publicMcpUrl = endpoint,
                                 tunnelId = status.tunnelId,
                                 transport = if (secure) "OpenAI Secure MCP Tunnel" else "Cloudflare Quick Tunnel",
-                            )
-                        )
-                        notifyState(
+                            ) else current
+                        }
+                        if (tunnelObservationAllowed(connectionState.value)) notifyState(
                             if (secure) "Secure tunnel runtime ready" else "ChatGPT connection ready"
                         )
                     }
-                    is TunnelStatus.Failed -> updateState(
-                        ChatGptConnectionState(
-                            running = true,
-                            phase = "Local MCP ready",
-                            error = status.reason,
-                        )
-                    )
+                    // The controller owns failure reporting and terminal exhaustion.
+                    // A delayed provider failure must not overwrite that final reason.
+                    is TunnelStatus.Failed -> Unit
                 }
             }
         }
@@ -295,6 +293,9 @@ class ChatGptMcpService : Service() {
 
     private fun connectionActive() =
         started.get() && scope.isActive && ChatGptConnectionSettings(this).enabled
+
+    private fun tunnelObservationAllowed(current: ChatGptConnectionState) =
+        connectionActive() && current.error != "tunnel_retry_exhausted"
 
     private fun updateState(state: ChatGptConnectionState) {
         Companion.updateState(state)

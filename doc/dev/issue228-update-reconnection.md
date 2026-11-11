@@ -1,3 +1,26 @@
+## Required-safety audit — finite retry budget
+
+The earlier capped-backoff tests bounded the delay, not the number of retries.
+That did not satisfy the explicit no-infinite-retry condition. The controller now
+allows seven retries (eight total starts), retaining the existing delay sequence.
+Only an observed Connected interval of at least60 seconds resets both backoff and
+budget. Brief connections do not renew the budget. Exhaustion cleans up the tunnel,
+reports only tunnel_retry_exhausted, and latches the current controller so duplicate
+start/restore cannot reopen its budget. A new permitted service activation obtains
+a new controller; no connection-intent write, AI restart or task replay is involved.
+The controller is the single failure reporter; late provider observations cannot
+overwrite exhaustion or revive a stopped service.
+
+The local MCP service remains available when the external tunnel budget is exhausted;
+exhaustion is an explicit safe stop, not a reconnect PASS. A deliberate Stop/Connect
+cycle can create a new service activation. There is no automatic budget-reset timer.
+New regression assertions cover exact starts/retries, long idle after exhaustion,
+duplicate starts, sub60-second connections and cancellation during exhaustion cleanup.
+The existing60-second stable-connection recovery case verifies budget renewal.
+
+CI results and exact reviewed source are recorded in #228, separately from the
+still-unconfirmed original physical outage. This safety limit is not its asserted cure.
+
 ## Residual audit — reuse existing coverage and contain tunnel-start exceptions
 
 The existing seven ChatGptAutoConnectTest cases already exercise retry after
