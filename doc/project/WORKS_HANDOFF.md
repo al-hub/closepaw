@@ -1,3 +1,10 @@
+## #228 CLOSED; old failure investigation #231 OPEN — 2026-11-11 KST
+
+- User requested separating the historical v108→v109 cause investigation and closing #228. #228 CLOSED(completed)20:40:10KST; [#231](https://github.com/al-hub/closepaw/issues/231) OPEN, historical cause stillUNCONFIRMED. Do not interpret the transfer/closure as root-cause proof.
+- #228 closure uses existing110/code111 release/public integrity/automatic install1/external unattended MCP/actual WSL exit0/Linux/dedup/2000exact/unknown76 acceptance. No new runtime/CI/Release/install/device test. Source/tag9c8eaacd/APK SHA3697ec7e… unchanged.
+- [Closure record](https://github.com/al-hub/closepaw/issues/228#issuecomment-6794827644), [actual acceptance](https://github.com/al-hub/closepaw/issues/228#issuecomment-6794701757), current machine state in work-summary.json / closure_disposition. Earlier OPEN/Close NO snapshots below remain historical, superseded by this disposition.
+- #231 owns the specific historical failure layer; #117 long-run stability and #229 display diagnostics remain separate. #219 CLOSED.
+
 ## #228 v0.1.110 delivery and actual unattended acceptance — 2026-11-11 KST
 
 - User approved shipping while retaining original causeUNCONFIRMED/#228OPEN. PR230 merged to immutable source/tag9c8eaacd6f326edb23584b5149b54997d30a3f27,110/code111. Exact main Security43004499563/UI43004499538 SUCCESS; raw digest/CRC/JUnit JVM3154/Android34/failure-error-skip0/8PNG. Signed43005672169 SUCCESS; earlier43005642854 safely gated before signing, no manual rerun.

@@ -293,7 +293,7 @@
     "api": 37,
     "new_install_requests": 0
   },
-  "issue228_closed": false,
+  "issue228_closed": true,
   "verified_artifacts": [
     {
       "artifact_id": 13809567560,
@@ -1533,6 +1533,30 @@
       "issue219": "CLOSED unchanged",
       "issue229": "excluded"
     },
-    "recorded_at": "2026-11-11T11:32:38Z"
+    "recorded_at": "2026-11-11T11:32:38Z",
+    "historical_disposition_note": "Delivery snapshot recorded #228 OPEN before the later user-approved closure. Current issue state and follow-up are in closure_disposition; original measured acceptance evidence is unchanged."
+  },
+  "closure_disposition": {
+    "closed_at": "2026-11-11T11:40:10Z",
+    "issue": 228,
+    "state": "closed",
+    "state_reason": "completed",
+    "followup_issue": 231,
+    "followup_url": "https://github.com/al-hub/closepaw/issues/231",
+    "followup_state": "open",
+    "historical_root_cause": "UNCONFIRMED",
+    "historical_root_excluded_from_issue228_completion": true,
+    "user_decision": "Move historical cause investigation to a separate issue and close the accepted delivery issue",
+    "completion_scope": "v0.1.110/code111 release/public integrity/one automatic install/external unattended MCP/WSL command/results/dedup/preservation",
+    "evidence_comment": "https://github.com/al-hub/closepaw/issues/228#issuecomment-6794701757",
+    "closure_comment": "https://github.com/al-hub/closepaw/issues/228#issuecomment-6794827644",
+    "long_run_issue": 117,
+    "display_diagnostics_issue": 229,
+    "storage_issue219": "CLOSED unchanged",
+    "new_runtime_changes": 0,
+    "new_ci_runs": 0,
+    "new_releases": 0,
+    "new_installations": 0,
+    "new_device_tests": 0
   }
 }

@@ -1,3 +1,11 @@
+## #228 closed; historical investigation moved to #231 — 2026-11-11 KST
+
+**#228 CLOSED(completed) at20:40:10KST.** User requested moving the old v108→v109 cause investigation and closing the accepted update-delivery issue. [#231](https://github.com/al-hub/closepaw/issues/231) is the single open follow-up for that historical cause, which remains **UNCONFIRMED**. Moving the investigation does not establish a cause or a new test PASS.
+
+Closure scope is the completed v0.1.110/code111 release/public integrity/one automatic installation/external unattended reconnection/actual WSL command/results/dedup/data-preservation acceptance. [Closure and scope record](https://github.com/al-hub/closepaw/issues/228#issuecomment-6794827644); [unchanged actual acceptance evidence](https://github.com/al-hub/closepaw/issues/228#issuecomment-6794701757). Prior OPEN/Close NO statements below and in the delivery snapshot describe their earlier measurement time and are superseded by this disposition; source/tag/APK/test results are not rewritten.
+
+No runtime code, CI, Release, install or device test was repeated for this administrative separation. Long-run stability stays #117, display diagnostics #229, and #219 CLOSED. The current machine-readable closure is work-summary.json / closure_disposition.
+
 ## v0.1.110 delivered; real unattended update accepted — 2026-11-11 KST
 
 **Release/public integrity/install/external MCP/command/result/dedup/preservation PASS for this one real update. Original v108→v109 cause remains UNCONFIRMED; #228 stays OPEN as explicitly agreed. #219 CLOSED/#229 excluded.** This supersedes earlier deployment-blocked snapshots below.
