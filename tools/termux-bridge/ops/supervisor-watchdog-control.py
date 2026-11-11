@@ -12,7 +12,7 @@ from pathlib import Path
 
 root = Path.home() / ".closepaw"
 watcher = root / "supervisor-watchdog-job.py"
-watch_sha = "c0dd2abf740e1b1f0bcfcfc5eb13d02245b160afad840a387cb9e6bc5a13669d"
+watch_sha = "b2efb364cdd4eb18bfcd10c85c7dd9d5a42244d491524836415cd13ef88bdc4a"
 marker = root / "supervisor-restart.disabled"
 control_lock = root / "supervisor-watchdog-control.lock"
 job_id = "152218"
@@ -36,8 +36,9 @@ def pending():
     return "Job " + job_id + ":" in result.stdout
 
 def write_stop_marker():
-    if marker.exists() and not regular(marker):
-        raise RuntimeError("unsafe_existing_stop_marker")
+    if marker.exists():
+        if not regular(marker) or marker.read_text() != magic:
+            raise RuntimeError("unsafe_existing_stop_marker")
     fd, temp = tempfile.mkstemp(prefix=".watchdog-disabled-", dir=root)
     try:
         with os.fdopen(fd, "w") as stream:
@@ -78,9 +79,23 @@ def main():
         os.close(fd)
         print("BLOCKED_control_busy")
         return 3
+    # Durable Stop marker precedes the serialized dispatch gate. Wait until any
+    # already-running watcher finishes before reporting Stop as confirmed.
     try:
         if choice == "disable":
-            write_stop_marker()  # Durable user stop before scheduler cancellation.
+            write_stop_marker()
+        dispatch_lock = root / "supervisor-watchdog-dispatch.lock"
+        if dispatch_lock.is_symlink():
+            raise RuntimeError("unsafe_dispatch_lock")
+        guard_fd = os.open(dispatch_lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        fcntl.flock(guard_fd, fcntl.LOCK_EX)
+    except (OSError, RuntimeError):
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+        print("BLOCKED_dispatch_gate")
+        return 4
+    try:
+        if choice == "disable":
             res = jobs("--cancel", "--job-id", job_id)
             if res.returncode or pending():
                 print("BLOCKED_cancel_unconfirmed_marker_remains")
@@ -110,6 +125,8 @@ def main():
         print("AUTO_RECOVERY_ENABLED_scheduler_registered")
         return 0
     finally:
+        fcntl.flock(guard_fd, fcntl.LOCK_UN)
+        os.close(guard_fd)
         fcntl.flock(fd, fcntl.LOCK_UN)
         os.close(fd)
 
