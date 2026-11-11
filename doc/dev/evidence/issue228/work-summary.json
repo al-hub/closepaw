@@ -1,5 +1,24 @@
 {
-  "latest_observation_preflight": {"measured_at":"2026-11-11T18:11:27+09:00","evidence_file":"observation-preflight-20261111.json","original_cause":"UNCONFIRMED","independent_healthy_telemetry_retrieval":"PASS","outage_survival":"NOT_TESTED","historical_receiver_fgs_native_client_trace":"NOT_AVAILABLE","runtime_candidate_unchanged":true,"new_release":false,"new_install_requests":0,"ledger_before":3645,"ledger_after":3650,"diagnostic_tasks":5,"unknown_before":76,"unknown_after":76,"legacy_exact_count":2000,"legacy_mismatch_count":0,"ai_session":"ended","issue228_close":false},
+  "latest_observation_preflight": {
+    "measured_at": "2026-11-11T18:11:27+09:00",
+    "evidence_file": "observation-preflight-20261111.json",
+    "original_cause": "UNCONFIRMED",
+    "independent_healthy_telemetry_retrieval": "PASS",
+    "outage_survival": "NOT_TESTED",
+    "historical_receiver_fgs_native_client_trace": "NOT_AVAILABLE",
+    "runtime_candidate_unchanged": true,
+    "new_release": false,
+    "new_install_requests": 0,
+    "ledger_before": 3645,
+    "ledger_after": 3650,
+    "diagnostic_tasks": 5,
+    "unknown_before": 76,
+    "unknown_after": 76,
+    "legacy_exact_count": 2000,
+    "legacy_mismatch_count": 0,
+    "ai_session": "ended",
+    "issue228_close": false
+  },
   "original_physical_cause": "unconfirmed",
   "scope": "API35 x86 isolated local MCP health; no native tunnel or client acceptance",
   "before": {
@@ -78,89 +97,24 @@
     "github_reported_digest": "sha256:accbda216f24f055f4d4c6636666e11b9195a6ad4a65397a7f701bb2a73e110d"
   },
   "final_candidate": {
-    "head": "fb84682e9d37825e4944d98cc228d8231ac6744e",
-    "tree": "2d934588300cf681f4b399f84f5c68c27b351349",
-    "security_run": 42984443260,
+    "measured_at": "2026-11-11T09:33:47Z",
+    "head": "12e9c2aac37f34360ea8cdb1dfffcc719f67cc8b",
+    "tree": "0daeb2d9625d5f084259d3844cafdc7b8404c332",
+    "version_name": "0.1.110",
+    "version_code": 111,
+    "runtime_source_unchanged_from": "fb84682e9d37825e4944d98cc228d8231ac6744e",
+    "integrated_main": "852a17317dca23e2ebada48e52ba82756fd4b257",
+    "security_run": 42994706594,
     "security_status": "success",
-    "ui_run": 42984443176,
+    "security_job": 130435776871,
+    "ui_run": 42994707077,
     "ui_status": "success",
-    "ui_job": 130402166855,
-    "ui": {
-      "artifact_id": 13838788716,
-      "bytes": 560441,
-      "sha256": "1783252f682fa36a0e8e58c5f36239fa740712dab0a27b2d92e934e51f5b4d00",
-      "crc": "PASS",
-      "xml_files": 1,
-      "counts": {
-        "tests": 34,
-        "failures": 0,
-        "errors": 0,
-        "skipped": 0
-      },
-      "classes": {},
-      "failed": [],
-      "pngs": 8,
-      "fixtures": [
-        {
-          "scope": "isolated_emulator_receiver_fgs_local_mcp_only",
-          "status": "PASS",
-          "events": [
-            {
-              "case": "fixture_package_install",
-              "duration_ms": 3050
-            },
-            {
-              "case": "active_package_replacement",
-              "local_mcp_ready": true,
-              "process_changed": true,
-              "elapsed_ms": 2170
-            },
-            {
-              "case": "fixture_package_install",
-              "duration_ms": 3601
-            },
-            {
-              "case": "enabled_cold_package_replacement",
-              "local_mcp_ready": true,
-              "elapsed_ms": 3789
-            },
-            {
-              "case": "fixture_package_install",
-              "duration_ms": 2325
-            },
-            {
-              "case": "stopped_package_replacement",
-              "unexpected_local_mcp": false
-            }
-          ],
-          "android_api": "35",
-          "synthetic_config_and_marker_preserved": true
-        }
-      ]
-    },
-    "independent_review": {
-      "head": "fb84682e9d37825e4944d98cc228d8231ac6744e",
-      "tree": "2d934588300cf681f4b399f84f5c68c27b351349",
-      "verdict": "APPROVE",
-      "scope": "independent AI code/security; not CLI/native GitHub",
-      "unresolved_Critical": 0,
-      "unresolved_High": 0,
-      "unresolved_Medium": 0,
-      "additional_medium_findings_resolved": 2
-    },
-    "retry_policy": {
-      "max_retries": 7,
-      "max_starts": 8,
-      "stable_connected_reset_ms": 60000,
-      "short_connections_do_not_reset": true,
-      "exhaustion_latch_blocks_same_controller_start": true,
-      "automatic_timer_reset": false,
-      "reason": "tunnel_retry_exhausted"
-    },
+    "ui_job": 130435778060,
     "jvm": {
-      "artifact_id": 13838619850,
-      "bytes": 992775,
-      "sha256": "03e095e74befade1ac4f0a08bfc3043bedf3ca8de6f83cad3775427b698a6b97",
+      "artifact_id": 13843991439,
+      "bytes": 990751,
+      "sha256": "1334cdea1cee4d259a03b41d9e1e743821ce0cab6fe3cc885aeafb9f0e948dc5",
+      "digest_match": true,
       "crc": "PASS",
       "xml_files": 372,
       "counts": {
@@ -174,14 +128,154 @@
         "ai.closepaw.chatgpt.ChatGptConnectionSettingsTest": 6,
         "ai.closepaw.chatgpt.ChatGptServiceStartTest": 3
       },
+      "failed": []
+    },
+    "ui": {
+      "artifact_id": 13843916827,
+      "bytes": 542878,
+      "sha256": "cfd781de135489a33def52bb51cea1be5af87c67c4a22408b6250adfbeb348d2",
+      "digest_match": true,
+      "crc": "PASS",
+      "xml_files": 1,
+      "counts": {
+        "tests": 34,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
       "failed": [],
-      "pngs": 0,
-      "fixtures": []
+      "pngs": 8,
+      "fixtures": [
+        {
+          "path": "build/package-replacement/evidence.json",
+          "status": "PASS",
+          "scope": "isolated_emulator_receiver_fgs_local_mcp_only",
+          "events": [
+            {
+              "case": "fixture_package_install",
+              "duration_ms": 6712
+            },
+            {
+              "case": "active_package_replacement",
+              "local_mcp_ready": true,
+              "process_changed": true,
+              "elapsed_ms": 2817
+            },
+            {
+              "case": "fixture_package_install",
+              "duration_ms": 2653
+            },
+            {
+              "case": "enabled_cold_package_replacement",
+              "local_mcp_ready": true,
+              "elapsed_ms": 4920
+            },
+            {
+              "case": "fixture_package_install",
+              "duration_ms": 2084
+            },
+            {
+              "case": "stopped_package_replacement",
+              "unexpected_local_mcp": false
+            }
+          ],
+          "android_api": "35",
+          "synthetic_config_and_marker_preserved": true
+        }
+      ]
     },
     "bridge_pytest_passed": 95,
     "core_pytest_passed": 8,
     "scripts_unittest_passed": 46,
-    "status": "PASS for confirmed lifecycle safety requirements within JVM/API35 scope; original outage unconfirmed"
+    "independent_review": {
+      "reviewed_head": "12e9c2aac37f34360ea8cdb1dfffcc719f67cc8b",
+      "reviewed_tree": "0daeb2d9625d5f084259d3844cafdc7b8404c332",
+      "review_type": "independent AI code/security delta review; not Codex CLI or native GitHub",
+      "verdict": "APPROVE",
+      "unresolved_critical": 0,
+      "unresolved_high": 0,
+      "unresolved_medium": 0,
+      "prior_runtime_review_head": "fb84682e9d37825e4944d98cc228d8231ac6744e",
+      "runtime_diff": "No app/tools/scripts/.github changes relative to prior reviewed source",
+      "new_build_input": "VERSION_NAME0.1.110/VERSION_CODE111",
+      "validations": [
+        "Exact SHA/tree git objects checked",
+        "main852a1731 historical documents integrated unchanged",
+        "JSON privacy and timestamp interpretation checked",
+        "HTTP200 versus semantic MCP unknown distinguished",
+        "git diff --check PASS"
+      ],
+      "limits": [
+        "Not original cause confirmation",
+        "Not current-head CI success",
+        "Not deployment gate waiver",
+        "Not physical new-version acceptance"
+      ]
+    },
+    "native_metadata_evidence": "native-health-20261111.json",
+    "authoritative_native_source": {
+      "commit": "a390c168ff1b2d14e73a95991c186c6aba3ff5a0",
+      "health_contract": "https://github.com/openai/tunnel-client/blob/a390c168ff1b2d14e73a95991c186c6aba3ff5a0/docs/health.md",
+      "process_start_definition": "https://github.com/openai/tunnel-client/blob/a390c168ff1b2d14e73a95991c186c6aba3ff5a0/pkg/runtimehealth/components.go",
+      "meanings": [
+        "processStartedAt = time.Now() at package initialization",
+        "Health snapshots return HTTP200 even when component degraded; startup readiness is separate",
+        "HTTP-streamable transport lacks same-child stdio protocol observations; startup_probe evidence is distinct"
+      ]
+    },
+    "physical_baseline": {
+      "installed_version": "0.1.109",
+      "installed_code": 110,
+      "ledger": {
+        "diagnostic_version": 2,
+        "backend": "sqlite",
+        "snapshot_only": true,
+        "write_test_performed": false,
+        "write_health": "not_tested",
+        "recovery_attempted": false,
+        "pre_upgrade_integrity": "not_available",
+        "file_exists": true,
+        "file_bytes": 12901900,
+        "legacy_sha256": "3fd15e71960d447d0c4a9e9f535c26757d6632c71b68120fefb839a5ca93e438",
+        "task_count": 3652,
+        "active_count": 0,
+        "terminal_count": 3576,
+        "unknown_count": 76,
+        "legacy_task_count": 2000,
+        "legacy_exact_count": 2000,
+        "legacy_reconciled_count": 0,
+        "legacy_mismatch_count": 0,
+        "legacy_integrity": "verified_current",
+        "read_state": "readable",
+        "reason_code": "sqlite_snapshot_verified"
+      },
+      "new_diagnostic_tasks": 2,
+      "microduck_mcp_calls": 0,
+      "ai_session_starts": 0,
+      "user_phone_actions": 0,
+      "old_v109_command_result_dedup_preservation": "Existing evidence reused; no new-version acceptance"
+    },
+    "pr_state": "open/draft/unmerged",
+    "root_cause": "UNCONFIRMED",
+    "release_eligibility": "BLOCKED by original root-solution prerequisite; not CI/review/version/native approval",
+    "new_release": false,
+    "new_install_requests": 0,
+    "new_version_external_unattended_acceptance": false,
+    "issue228_close": false,
+    "current_apk_sha256": "4d49dd33bb2f8a5e0307560c249db8ac6270900ac94ae9620e22cc40eebee58d",
+    "current_apk_url": "https://github.com/al-hub/closepaw/releases/download/v0.1.109/closepaw-aa-bridge.apk",
+    "issue219": "CLOSED",
+    "issue229": "excluded",
+    "skipped_jobs": [
+      {
+        "name": "unsigned-release",
+        "meaning": "Intentionally main-only; skipped on PR, not release validation"
+      },
+      {
+        "name": "package-replacement-api37",
+        "meaning": "Previously unsupported SDK; not matching-OS PASS and not an extra gate"
+      }
+    ]
   },
   "sdk37": {
     "run": 42909197801,
@@ -862,5 +956,127 @@
         "scope": "no new signed Release or installation; current connectivity does not prove unattended update recovery"
       }
     ]
+  },
+  "previous_fb84682e_candidate": {
+    "head": "fb84682e9d37825e4944d98cc228d8231ac6744e",
+    "tree": "2d934588300cf681f4b399f84f5c68c27b351349",
+    "security_run": 42984443260,
+    "security_status": "success",
+    "ui_run": 42984443176,
+    "ui_status": "success",
+    "ui_job": 130402166855,
+    "ui": {
+      "artifact_id": 13838788716,
+      "bytes": 560441,
+      "sha256": "1783252f682fa36a0e8e58c5f36239fa740712dab0a27b2d92e934e51f5b4d00",
+      "crc": "PASS",
+      "xml_files": 1,
+      "counts": {
+        "tests": 34,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "classes": {},
+      "failed": [],
+      "pngs": 8,
+      "fixtures": [
+        {
+          "scope": "isolated_emulator_receiver_fgs_local_mcp_only",
+          "status": "PASS",
+          "events": [
+            {
+              "case": "fixture_package_install",
+              "duration_ms": 3050
+            },
+            {
+              "case": "active_package_replacement",
+              "local_mcp_ready": true,
+              "process_changed": true,
+              "elapsed_ms": 2170
+            },
+            {
+              "case": "fixture_package_install",
+              "duration_ms": 3601
+            },
+            {
+              "case": "enabled_cold_package_replacement",
+              "local_mcp_ready": true,
+              "elapsed_ms": 3789
+            },
+            {
+              "case": "fixture_package_install",
+              "duration_ms": 2325
+            },
+            {
+              "case": "stopped_package_replacement",
+              "unexpected_local_mcp": false
+            }
+          ],
+          "android_api": "35",
+          "synthetic_config_and_marker_preserved": true
+        }
+      ]
+    },
+    "independent_review": {
+      "head": "fb84682e9d37825e4944d98cc228d8231ac6744e",
+      "tree": "2d934588300cf681f4b399f84f5c68c27b351349",
+      "verdict": "APPROVE",
+      "scope": "independent AI code/security; not CLI/native GitHub",
+      "unresolved_Critical": 0,
+      "unresolved_High": 0,
+      "unresolved_Medium": 0,
+      "additional_medium_findings_resolved": 2
+    },
+    "retry_policy": {
+      "max_retries": 7,
+      "max_starts": 8,
+      "stable_connected_reset_ms": 60000,
+      "short_connections_do_not_reset": true,
+      "exhaustion_latch_blocks_same_controller_start": true,
+      "automatic_timer_reset": false,
+      "reason": "tunnel_retry_exhausted"
+    },
+    "jvm": {
+      "artifact_id": 13838619850,
+      "bytes": 992775,
+      "sha256": "03e095e74befade1ac4f0a08bfc3043bedf3ca8de6f83cad3775427b698a6b97",
+      "crc": "PASS",
+      "xml_files": 372,
+      "counts": {
+        "tests": 3154,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "classes": {
+        "ai.closepaw.chatgpt.ChatGptAutoConnectTest": 16,
+        "ai.closepaw.chatgpt.ChatGptConnectionSettingsTest": 6,
+        "ai.closepaw.chatgpt.ChatGptServiceStartTest": 3
+      },
+      "failed": [],
+      "pngs": 0,
+      "fixtures": []
+    },
+    "bridge_pytest_passed": 95,
+    "core_pytest_passed": 8,
+    "scripts_unittest_passed": 46,
+    "status": "PASS for confirmed lifecycle safety requirements within JVM/API35 scope; original outage unconfirmed"
+  },
+  "latest_candidate_preparation": {
+    "head": "12e9c2aac37f34360ea8cdb1dfffcc719f67cc8b",
+    "tree": "0daeb2d9625d5f084259d3844cafdc7b8404c332",
+    "version_name": "0.1.110",
+    "version_code": 111,
+    "security_run": 42994706594,
+    "ui_run": 42994707077,
+    "ci_status": "success/success",
+    "independent_review": "APPROVE",
+    "original_cause": "UNCONFIRMED",
+    "new_release": false,
+    "new_install_requests": 0,
+    "issue228_close": false,
+    "microduck_mcp_calls": 0,
+    "evidence_file": "candidate-0.1.110-verification.json"
   }
 }

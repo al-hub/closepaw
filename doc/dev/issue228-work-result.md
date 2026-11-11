@@ -1,3 +1,22 @@
+## Unpublished v0.1.110/code111 candidate verification — 2026-11-11 KST
+
+Candidate HEAD `12e9c2aac37f34360ea8cdb1dfffcc719f67cc8b` / tree `0daeb2d9625d5f084259d3844cafdc7b8404c332`. [Draft PR230](https://github.com/al-hub/closepaw/pull/230) is unmerged. Current phone and latest published APK remain109/code110; no new Release or installation. This section supersedes older candidate/version snapshots below. Microduck MCP is optional only if unavoidable, is not a required gate, and was called0 times in this continuation.
+
+Compared with reviewed fb84682e, app/tools/scripts/workflows are unchanged. Prepared unpublished VERSION_NAME0.1.110/CODE111 and integrated main852a1731 investigation documents. Exact new [Security42994706594](https://github.com/al-hub/closepaw/actions/runs/42994706594)/[UI42994707077](https://github.com/al-hub/closepaw/actions/runs/42994707077) SUCCESS. SHA/CRC/raw XML: JVM3154/Android34/failures0/errors0/skipped0,8PNG. Bridge95/core8/scripts46 PASS. API35 actual replacement active2817ms/PID changed, cold4920ms after installer return; Stop45s no unexpected MCP; synthetic config/marker preserved. The intentionally skipped main-only unsigned-release and unsupported API37 job are not runtime test PASS.
+
+- JVM artifact13843991439/990751B/SHA256 `1334cdea1cee4d259a03b41d9e1e743821ce0cab6fe3cc885aeafb9f0e948dc5`.
+- UI artifact13843916827/542878B/SHA256 `cfd781de135489a33def52bb51cea1be5af87c67c4a22408b6250adfbeb348d2`.
+- Exact-head/tree independent AI delta code/security APPROVE, unresolved C/H/M0; prior runtime review reused. Not CLI/native GitHub review or deployment gate waiver.
+- [Current machine evidence](evidence/issue228/candidate-0.1.110-verification.json) and [native metadata](evidence/issue228/native-health-20261111.json).
+
+New native evidence is available through supported Termux loopback reads without Microduck. Runtime started2026-11-10T13:17:23.871188787Z (22:17:23.871KST), startup probe succeeded13:17:23.970157849Z. The earlier Accessibility connection13:07:24.664Z precedes this runtime by599207.189ms. Pinned upstream components.go confirms started_at derives from processStartedAt=time.Now(). The gap does not identify a receiver/Activity trigger or exclude previous failed native instances.
+
+Correct interpretation: /health/mcp HTTP200 returned a successful snapshot whose semantic payload is unknown/not_observed/same_child_evidence_unavailable with unsupported_transport/initialize_epoch0. Pinned upstream docs/health.md explicitly separates snapshot HTTP status, startup readiness and same-child protocol evidence. Startup probe and current external get_status success are separate observations. Prior raw HTTP200 evidence remains valid as HTTP reachability only; it is not semantic MCP child/client health PASS.428 completed/0 failures/timeouts/terminal failures applies only to the current native instance after22:17.
+
+Physical baseline after the two new diagnostic tasks: ledger3652/terminal3576/active0/unknown76; original12,901,900B/SHA3fd15e71…/legacy2000exact/mismatch0 unchanged, pre_upgrade_integrity=not_available unchanged. Prior ended AI session and v109 command/result/dedup evidence are reused, not new-version acceptance. No app launch, AI session restart, intentional interruption, new listener/keys/tokens or install request.
+
+**Original cause remains UNCONFIRMED.** Original root-solution deployment prerequisite is still unmet. Candidate CI/review/version readiness does not independently authorize changing that condition; merge/exact-main CI/original-key/public APK/new-version one-install/external unattended acceptance remain unperformed. #228 OPEN/#219 CLOSED/#229 excluded. The remaining decision is whether to retain this prerequisite pending historical/reproduction evidence, or explicitly permit the verified safety candidate to ship with the original cause unconfirmed and use the actual update for acceptance. No diagnostic-only production APK was issued.
+
 ## Observation-path preflight — 2026-11-11 18:11 KST
 
 The runtime candidate and its exact HEAD/tree remain unchanged. Security42984443260 and UI42984443176 were rechecked as completed/success for fb84682e; their raw artifacts and separate exact-tree AI code/security approval are reused. No repeated CI/review, version change, merge, Release, install, phone UI action or AI session start was performed.

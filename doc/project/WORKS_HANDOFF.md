@@ -1,3 +1,13 @@
+## #228 v0.1.110 candidate CI/review complete; deployment gate unresolved — 2026-11-11 KST
+
+- PR230 OPEN/Draft/unmerged: HEAD12e9c2aac37f34360ea8cdb1dfffcc719f67cc8b/tree0daeb2d9625d5f084259d3844cafdc7b8404c332, candidate110/code111. App/tools/scripts/workflows unchanged from prior reviewed fb84682e; version and evidence/main documents updated.
+- Security42994706594/UI42994707077 SUCCESS. Independently downloaded/hash/CRC/XML: JVM3154/Android34/failure-error-skip0,8PNG. Bridge95/core8/scripts46 PASS. API35 active2817ms/PID change/cold4920ms after install return, Stop45s no restart, synthetic config preserved. Exact-head/tree independent AI delta code/security APPROVE/C-H-M0; runtime review reused; not CLI/native or deployment waiver.
+- [Candidate evidence](../dev/evidence/issue228/candidate-0.1.110-verification.json). JVM13843991439 SHA1334cdea…; UI13843916827 SHAcfd781de….
+- New supported native metadata: current process started22:17:23.871KST/probe success22:17:23.970,599207.189ms after earlier Accessibility connection. No earlier native instance/receiver/Activity cause is established. HTTP200 /health/mcp means snapshot reachability; payload unknown/not_observed/same_child_evidence_unavailable/unsupported_transport. Pinned native source verifies these semantics.
+- Current phone/latest public109/code110; ledger3652/active0/unknown76/2000exact/mismatch0/current SHA preserved. Two diagnostic tasks; Microduck MCP calls0 in continuation. Use GitHub/ClosePaw/Termux→SSH→WSL; Microduck only if unavoidable and never a required gate.
+- Original cause UNCONFIRMED and original root-solution deployment prerequisite unchanged. No merge/new Release/install/manual app action/AI restart/intentional interruption. #228 OPEN/#219 CLOSED/#229 excluded. Candidate readiness does not itself waive that prerequisite; an explicit decision to ship verified safety changes while keeping cause unconfirmed would change it. Do not repeat exact-head tests/review without new changes/failures.
+- [Full current record](../dev/issue228-work-result.md). Older snapshots below are historical and superseded.
+
 ## #228 observation route preflight — 2026-11-11 18:11 KST
 
 - Runtime candidate remains fb84682e/tree2d934588; exact Security42984443260/UI42984443176 success and prior independent AI review reused. No runtime change, new CI/review, version change, merge, Release or install.
