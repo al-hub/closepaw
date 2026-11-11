@@ -1,3 +1,11 @@
+## #228 observation route preflight — 2026-11-11 18:11 KST
+
+- Runtime candidate remains fb84682e/tree2d934588; exact Security42984443260/UI42984443176 success and prior independent AI review reused. No runtime change, new CI/review, version change, merge, Release or install.
+- Current109/code110; local MCP/native ready/control-plane/MCP health all200. Bounded Termux three-sample telemetry sent over existing strict SSH laptop to WSL and independently recovered by Microduck:826B/SHA2563d77845794c531f66f19ebc0a9e5248676c57e5d3a65524eddece67f9008c4a5. Task5b502d73-b53b-49d0-8bae-04b4ef0f4565 exit0 and exact-ID dedup PASS. This proves healthy-state independent telemetry retrieval only, not outage/process-replacement survival or independent app recovery.
+- Original cause UNCONFIRMED: no supported historical receiver/FGS/native/client trace; current64-event UI ring lacks earlier service entry, Termux logs predate replacement. No private-storage/ADB/admin workaround, listener/key change, deliberate interruption or phone action. Root-solution deployment prerequisite remains unmet; #228 OPEN.
+- Ledger3645→3650 matches five diagnostic tasks; active0/unknown76; original12,901,900B/SHA3fd15e71…/2000exact/mismatch0 unchanged. AI50ff4811… ended/epoch0; old #219 result retained. #219 CLOSED/#229 excluded.
+- [Updated runbook](../dev/issue228-work-result.md) and [new machine evidence](../dev/evidence/issue228/observation-preflight-20261111.json). A future observed reproduction needs receiver/FGS evidence and supported recovery before intentional interruption. No diagnostic-only formal Release.
+
 ## #228 required-safety inspection completed; physical acceptance OPEN — 2026-11-11 KST
 
 - Final PR #230 HEAD `fb84682e9d37825e4944d98cc228d8231ac6744e` / tree `2d934588300cf681f4b399f84f5c68c27b351349`. Added mandatory finite7-retry/8-start budget after confirming prior60s backoff was not a count bound. >=60s stable Connected resets, short connections do not; exhaustion cleanup/fixed reason/latch; duplicate start cannot renew budget. No intent/AI/task mutation.

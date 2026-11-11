@@ -1,3 +1,19 @@
+## Observation-path preflight — 2026-11-11 18:11 KST
+
+The runtime candidate and its exact HEAD/tree remain unchanged. Security42984443260 and UI42984443176 were rechecked as completed/success for fb84682e; their raw artifacts and separate exact-tree AI code/security approval are reused. No repeated CI/review, version change, merge, Release, install, phone UI action or AI session start was performed.
+
+Current installed/durable version is0.1.109/code110; updater.check is up_to_date. Passive self status reports Accessibility connected and AI ended. Termux confirmed local MCP /health and native /readyz, /health/control-plane, /health/mcp all HTTP200. These are current healthy-state observations.
+
+A new limited independent observation route was exercised successfully: a bounded Termux task sampled those four health endpoints three times, sent only timestamps/status/latency through the existing BatchMode/StrictHostKeyChecking SSH laptop connection to a WSL temporary file, then Microduck independently read that file.826bytes, SHA256 `3d77845794c531f66f19ebc0a9e5248676c57e5d3a65524eddece67f9008c4a5`. The task completed exit0 and a confirmed identical-ID request returned the same task/job/times/result; sink SHA was unchanged. No new listener, key, token, pairing or security setting was created.
+
+This improves the previous blanket statement that no independent observation route existed: **independent retrieval of pushed healthy-state telemetry is now proven**. It does not prove observer survival during package/Android/Termux death, capture receiver/FGS or process replacement, or provide supported independent app recovery/client-session history. Termux sshd was not accepting8022, WSL had no user SSH config/forward, and no SSH service was started. No deliberate outage was introduced.
+
+Original failure remains UNCONFIRMED. Current operation schemas expose point-in-time self state and installed/current but no historical receiver/service/tunnel transitions or client reset trace. The bounded control diagnostic ring now has64 UI events and no service_connected entry; this absence does not negate the earlier historical event. Termux bridge.err is empty and boot.log last changed before the original replacement interval. Cross-app private storage, ADB/admin and unsupported shell recovery were not attempted. Current HTTP200 cannot recover those missing historical facts, and no new production fault was observed to justify another speculative fix.
+
+Preservation before/after: total3645→3650 and terminal3569→3574, matching exactly five diagnostic tasks; active0 and unknown76 unchanged. Original12,901,900bytes/SHA3fd15e71…/legacy2000-exact2000/mismatch0 unchanged. Old #219 result afda9642… remains exit0/Linux. AI session50ff4811… remains ended/epoch0. pre_upgrade_integrity=not_available remains unchanged.
+
+Root-solution prerequisites remain unmet, so candidate version109/code110 was not reused for new code, and merge/main CI/Release/one-install/new-version external unattended acceptance remain BLOCKED. #228 OPEN; #219 CLOSED; #229 excluded. This is a tool/data boundary, not a request for repeated permission or an additional native GitHub approval gate. [Machine evidence](evidence/issue228/observation-preflight-20261111.json) includes task IDs, exact timings and samples.
+
 # #228 Required-acceptance inspection — 2026-11-11 KST
 
 **Source/automated safety inspection PASS; full #228 root-solution/physical acceptance BLOCKED. Keep OPEN.**

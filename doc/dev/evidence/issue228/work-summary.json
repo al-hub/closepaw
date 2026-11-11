@@ -1,4 +1,5 @@
 {
+  "latest_observation_preflight": {"measured_at":"2026-11-11T18:11:27+09:00","evidence_file":"observation-preflight-20261111.json","original_cause":"UNCONFIRMED","independent_healthy_telemetry_retrieval":"PASS","outage_survival":"NOT_TESTED","historical_receiver_fgs_native_client_trace":"NOT_AVAILABLE","runtime_candidate_unchanged":true,"new_release":false,"new_install_requests":0,"ledger_before":3645,"ledger_after":3650,"diagnostic_tasks":5,"unknown_before":76,"unknown_after":76,"legacy_exact_count":2000,"legacy_mismatch_count":0,"ai_session":"ended","issue228_close":false},
   "original_physical_cause": "unconfirmed",
   "scope": "API35 x86 isolated local MCP health; no native tunnel or client acceptance",
   "before": {
