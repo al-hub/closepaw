@@ -105,6 +105,15 @@ def rearm_only_after_authenticated_health():
             AttributeError, TimeoutError, UnicodeError):
         return
 
+dispatch_lock = root / "supervisor-watchdog-dispatch.lock"
+try:
+    if dispatch_lock.is_symlink():
+        sys.exit(0)
+    dispatch_fd = os.open(dispatch_lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    fcntl.flock(dispatch_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except (BlockingIOError, OSError):
+    sys.exit(0)  # Another watchdog/Stop owns the one-at-a-time dispatch gate.
+
 if (root / "supervisor-restart.disabled").exists():
     sys.exit(0)
 if (root / "maintenance-transaction.json").exists():
