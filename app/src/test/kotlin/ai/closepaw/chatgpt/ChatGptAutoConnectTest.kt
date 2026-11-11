@@ -105,10 +105,70 @@ class ChatGptAutoConnectTest {
         assertEquals(TunnelStatus.Stopped, tunnel.status.value)
     }
 
+    @Test fun startPermissionFailureDoesNotEscapeOrRetry() = runTest {
+        val tunnel = FakeTunnel().apply { startFailure = SecurityException("private fixture detail") }
+        val controller = TunnelReconnectController(backgroundScope, tunnel, { true })
+        controller.start(18424)
+        runCurrent()
+        advanceTimeBy(3600000)
+        runCurrent()
+        assertEquals(1, tunnel.starts)
+        assertEquals(TunnelStatus.Stopped, tunnel.status.value)
+    }
+
+    @Test fun transientStartFailureUsesExistingBackoffAndRecovers() = runTest {
+        val tunnel = FakeTunnel().apply { startFailure = java.io.IOException("private fixture detail") }
+        val retries = mutableListOf<Pair<Long, String>>()
+        val controller = TunnelReconnectController(backgroundScope, tunnel, { true },
+            onRetry = { delay, reason -> retries += delay to reason })
+        controller.start(18424)
+        runCurrent()
+        assertEquals(listOf(2000L to "tunnel_start_failed:IOException"), retries)
+        tunnel.startFailure = null
+        advanceTimeBy(1999)
+        runCurrent()
+        assertEquals(1, tunnel.starts)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(2, tunnel.starts)
+        tunnel.status.value = TunnelStatus.Connected(tunnelId = "synthetic")
+        runCurrent()
+        controller.stop()
+    }
+
+    @Test fun stopImmediatelyFollowedByStartWaitsForOldCancellation() = runTest {
+        val tunnel = FakeTunnel()
+        val controller = TunnelReconnectController(backgroundScope, tunnel, { true })
+        controller.start(18424)
+        runCurrent()
+        controller.stop()
+        controller.start(18424)
+        controller.start(18424)
+        runCurrent()
+        assertEquals(2, tunnel.starts)
+        assertEquals(TunnelStatus.Starting, tunnel.status.value)
+        controller.stop()
+    }
+
+    @Test fun disabledIntentNeverStartsTheTunnel() = runTest {
+        val tunnel = FakeTunnel()
+        val controller = TunnelReconnectController(backgroundScope, tunnel, { false })
+        controller.start(18424)
+        runCurrent()
+        advanceTimeBy(120000)
+        runCurrent()
+        assertEquals(0, tunnel.starts)
+    }
+
     private class FakeTunnel : TunnelProvider {
         override val status = MutableStateFlow<TunnelStatus>(TunnelStatus.Stopped)
         var starts = 0
-        override fun start(localPort: Int) { starts++; status.value = TunnelStatus.Starting }
+        var startFailure: Exception? = null
+        override fun start(localPort: Int) {
+            starts++
+            startFailure?.let { throw it }
+            status.value = TunnelStatus.Starting
+        }
         override fun stop() { status.value = TunnelStatus.Stopped }
     }
 }
