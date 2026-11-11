@@ -1,3 +1,12 @@
+## #228 required-safety inspection completed; physical acceptance OPEN — 2026-11-11 KST
+
+- Final PR #230 HEAD `fb84682e9d37825e4944d98cc228d8231ac6744e` / tree `2d934588300cf681f4b399f84f5c68c27b351349`. Added mandatory finite7-retry/8-start budget after confirming prior60s backoff was not a count bound. >=60s stable Connected resets, short connections do not; exhaustion cleanup/fixed reason/latch; duplicate start cannot renew budget. No intent/AI/task mutation.
+- New RED Security42983089499: raw3152/1 failure (expected8/actual9 starts). Final Security42984443260/UI42984443176 SUCCESS; independent SHA/CRC/XML JVM3154/Android34/failure-error-skip0/8PNG. AutoConnect16. API35 actual active2170ms/cold3789ms after installer return, Stop no restart45s, synthetic config preserved.
+- Exact-tree independent AI code/security APPROVE after two additional Medium findings resolved, C/H/M0; not CLI/native. Single failure reporting and atomic active/terminal guards retain exhaustion.
+- Formal required-item matrix: [execution/inspection record](../dev/issue228-work-result.md), [machine evidence](../dev/evidence/issue228/work-summary.json). Source/automated safety PASS; original outage root, actual OS/OEM/new-release external unattended acceptance BLOCKED.
+- Main protected=false/rulesets=[]; no extra native approval gate. API37 SDK availability is not a new global gate; skipped is not PASS. Version109/code110 already published; new version/code plus exact-main Security/UI/existing-key/public verification remain required before delivery. No main code merge, new Release/install or physical action.
+- Current updater.check up_to_date/get_status109/110. #219 CLOSED, prior phone command/results/dedup/2000 exact/current SHA/unknown76/ended AI evidence reused, #229 excluded. Older sections below are superseded historical snapshots.
+
 ## #228 residual regressions completed; original physical reconnect OPEN — 2026-11-11 KST
 
 - PR #230 HEAD `6570d39a0d129535fcfc299ad7e01dad03bb5df2` / tree `887a8f94b5f8b778422eab82a616f890f3c94892`: Stop durability plus startup-exception containment, cancellation checks and atomic failure-state preservation. Exact-tree independent AI code/security APPROVE, Medium2 resolved/C-H-M0. Not CLI/native review.

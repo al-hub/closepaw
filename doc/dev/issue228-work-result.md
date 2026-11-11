@@ -1,30 +1,41 @@
-# #228 Work disposition — 2026-11-11 KST
+# #228 Required-acceptance inspection — 2026-11-11 KST
 
-**Feasible independent regressions completed; original physical reconnect cause UNCONFIRMED / #228 OPEN.**
+**Source/automated safety inspection PASS; full #228 root-solution/physical acceptance BLOCKED. Keep OPEN.**
 
-- [Draft PR #230](https://github.com/al-hub/closepaw/pull/230) HEAD `6570d39a0d129535fcfc299ad7e01dad03bb5df2`, tree `887a8f94b5f8b778422eab82a616f890f3c94892`. Production code UNMERGED, version0.1.109/code110 unchanged.
-- Confirmed defects: Stop intent used asynchronous apply across process replacement; synchronous tunnel-provider start exceptions escaped before publishing Failed. Minimal fixes use durable IO commit, class-only reason codes, existing transient/permanent retry policy, cancellation/enabled checks and atomic error-state transforms. No watchdog, timeout increase, credential change or AI-session restart.
-- Existing seven AutoConnect tests already cover duplicate starts, Stop during backoff, network return/capped delay, permanent runtime absence and owner cancellation. Reuse them. Six additional tests cover startup exceptions, permanent reasons, disabled intent, immediate restart and cancellation inside a throwing start.
-- New unchanged-controller RED: HEADfe1958c419a472a6abcf68b6fb03053670274309, [Security42977857763](https://github.com/al-hub/closepaw/actions/runs/42977857763), raw3149/2 failures/0 errors/skips. Only two new startup-exception cases failed. Earlier real Stop RED remains in chronological evidence.
-- Exact final [Security42979055340](https://github.com/al-hub/closepaw/actions/runs/42979055340) and [UI42979055337](https://github.com/al-hub/closepaw/actions/runs/42979055337) attempt2 SUCCESS. ZIP/SHA/CRC/raw XML independently verified: **JVM3151 / Android34, failures0/errors0/skipped0**, AutoConnect13/settings6/service-start3,8PNG. Bridge95/core8/scripts46 PASS.
-- Final API35 fixture: install9920ms then active local MCP5019ms/PID changed; cold install3202ms then local MCP2217ms; Stop install6379ms then no local MCP45s. Synthetic config/marker preserved. No post-update Activity for PASS. Local x86 health is not native arm64/OEM/client acceptance.
-- UI attempt1 failed at adb pull before replacement, with zero lifecycle events/JUnit0. Artifact13837355038 retained. One failed-job rerun on fresh runner passed, job130387355075; no code/gate changes for retry.
-- Exact final HEAD/tree independent AI code/security APPROVE after Medium2 findings resolved; unresolved Critical/High/Medium0. Separate from Codex CLI/native GitHub review; no extra native approval gate.
-- RED artifact13836517867 SHA256 `b96f04c59862fe433fc2c8fd7ca4e1780f43695b75ab2be0d049779e7ae04350`; final JVM13837675297 SHA256 `7d168a80cf155e7aaecbf6b28992cca423a862f798f8ec5b5c89b0d4aeb1924a`; final UI13836694876 SHA256 `ad6ec014eac16d0bd6b16a5cb3bc036aa6f74d1dc081f2834e03d7d8dd08ab90`. [Machine-readable evidence](evidence/issue228/work-summary.json).
+- Candidate [Draft PR #230](https://github.com/al-hub/closepaw/pull/230) HEAD `fb84682e9d37825e4944d98cc228d8231ac6744e`, tree `2d934588300cf681f4b399f84f5c68c27b351349`. Code unmerged; published/installed baseline remains0.1.109/code110.
+- Mandatory inspection found a real gap in the prior verdict: capped backoff limited delay to60s but did not limit total attempts. Added unchanged-controller RED3152/1 failure (expected8 starts, observed9), then finite7-retry/8-start policy. Only >=60s observed Connected resets the budget; short connections do not. Exhaustion cleans up/reports tunnel_retry_exhausted and latches the controller against duplicate start. No automatic reset timer or intent/AI/task mutation.
+- Controller owns failure reporting. Atomic active/terminal checks prevent late provider events from erasing exhaustion or reviving a stopped service. Independent exact-tree code/security APPROVE after two additional Medium findings resolved, unresolved C/H/M0; not CLI/native review.
+- Exact final [Security42984443260](https://github.com/al-hub/closepaw/actions/runs/42984443260) / [UI42984443176](https://github.com/al-hub/closepaw/actions/runs/42984443176) SUCCESS. Independently downloaded ZIP/SHA/CRC/raw XML: **JVM3154 / Android34, failures0/errors0/skipped0**, AutoConnect16/settings6/service-start3,8PNG. Bridge95/core8/scripts46 PASS.
+- Separate API35 actual replacement fixture PASS: installer3050ms then active local readiness2170ms/PID changed; cold installer3601ms then readiness3789ms; Stop installer2325ms then no local MCP45s; synthetic config/marker preserved. No post-update Activity for PASS. Local x86 health is not external native/OEM/client acceptance.
+- New RED [Security42983089499](https://github.com/al-hub/closepaw/actions/runs/42983089499) artifact13838517330/921222B/SHA256 `7ad5ef67a722930e8e09e5a50e32c7dc1fe68986f8988a8cfbfb1f1acd71304a`, CRC/372 XML, only repeatedTransientFailuresExhaustBudgetWithoutAnotherAutomaticStart failed. Same-source UI42983089176 SUCCESS.
+- Final JVM artifact13838619850/992775B/SHA256 `03e095e74befade1ac4f0a08bfc3043bedf3ca8de6f83cad3775427b698a6b97`; final UI13838788716/560441B/SHA256 `1783252f682fa36a0e8e58c5f36239fa740712dab0a27b2d92e934e51f5b4d00`. [Machine-readable evidence](evidence/issue228/work-summary.json) retains earlier Stop/start-exception RED/GREEN snapshots.
 
-## Remaining actual boundary
+## Required item disposition
 
-The original v108-to-v109 timeout/session termination layer remains unconfirmed. Retained observations cannot distinguish Android receiver/service, native tunnel/control plane, server or ChatGPT client. These new safety regressions are not proof of that historical cause. Current supported connector diagnostics expose no sufficient historical lifecycle trace or independent observation/recovery path for deliberately dropping the physical connection safely.
+| Requirement | Result | Scope / remaining limit |
+|---|---|---|
+| Confirmed Stop/start-exception/finite-retry RED-to-GREEN | PASS | deterministic fault injection and unchanged-controller RED; not original physical root |
+| Intent/Stop/inactive/permission-start failure guards | PASS | source and JVM injection; real package replacement Stop on API35 |
+| Finite retries/duplicates/cancellation/stable reset | PASS | seven retries/eight starts, exhaustion latch, 59999ms refusal, >=60000ms reset, cancellation cleanup |
+| Exact-head CI and raw artifacts | PASS | JVM3154/Android34; failures/errors/skipped0; SHA/CRC/XML/head matched |
+| Independent code/security | PASS | exact HEAD/tree separate AI approval; not CLI/native review |
+| Existing phone preservation and command/dedup | PASS | v109 baseline reused; not candidate post-update acceptance |
+| Original physical failing layer and cause | BLOCKED | insufficient historical lifecycle/tunnel/client trace |
+| Actual OS approval/revocation/network/replacement combinations | BLOCKED | actual new-package/OEM combinations not observed; injection is not physical proof |
+| New version/code, main Security/UI, original-key/public APK | BLOCKED | unperformed pending root-solution conditions; current published version/code cannot be reused |
+| New-release one-install/external unattended MCP/command/dedup/AI preservation | BLOCKED | no new signed Release or installation; current connectivity does not prove unattended update recovery |
 
-The API37 emulator previously failed SDK preparation. Suspended/skipped is not PASS. SDK availability is not an additional mandatory release gate by itself and does not stop independent JVM/API35 work. Same-OS reproduction is one possible investigation route; actual failing-layer evidence and physical external unattended acceptance remain required. No SDK skip or manual app launch substitutes for those results.
+The test envelope is explicit: permission/start failures and approval state are JVM policy/fault injections, not actual new-package OS dialogs or revoked-permission lifecycle acceptance. Existing phone command/ledger/dedup evidence belongs to v109. No current read success is converted into post-update unattended PASS.
 
-No formal diagnostic-sample APK, repeated install, uncertain command replay or permission bypass. A new final Release/automatic install/external unattended reconnect remain unperformed while original root-solution conditions are unmet. #228 stays OPEN.
+## Actual delivery gate and tool boundary
 
-## Delivery and preservation
+Original v108-to-v109 Android/native tunnel/server/client failing layer is still unconfirmed. Retained connector observations expose no sufficient historical lifecycle trace or supported independent fault-observation/recovery route. These confirmed safety defects are not retrospectively asserted as that cause.
 
-Main updates for this record are docs only [skip ci]. Published/installed baseline remains0.1.109/code110, source/tag `3e65a21137b09a8a3d2d5f64f38f567c173b2a58`, APK SHA256 `4d49dd33bb2f8a5e0307560c249db8ac6270900ac94ae9620e22cc40eebee58d`. No phone UI control/physical action request, reset, token/key change, new install or ended AI-session restart.
+Same-OS emulator reproduction is one possible investigation route. API37 SDK preparation was unavailable and the suspended job is not PASS; emulator availability itself is not an additional global release gate. Reuse already successful network/dedup/storage evidence within its original scope. No extra native GitHub approval is required: main protected=false/rulesets=[] verified during this inspection.
 
-[#219 current physical revalidation](https://github.com/al-hub/closepaw/issues/219#issuecomment-6789104140) is reused: strict SSH→WSL exit0/Linux, result/same-ID dedup, original2000 exact/current SHA/unknown76 and ended AI session preserved. This is v109 baseline evidence, not candidate acceptance. #219 CLOSED, #229 excluded.
+Current candidate VERSION_NAME0.1.109/VERSION_CODE110 is already published. Before a final delivery, use an unpublished increased version/code and exact-main Security/UI success, existing-key signing and public verification. Those steps and new physical one-install/external unattended acceptance remain unperformed while original root-solution conditions are unmet. No speculative watchdog, duplicate install, unsupported privileged route or diagnostic-only formal Release is substituted.
+
+Current updater.check reports up_to_date; independent get_status109/110. No new install, physical user action, AI restart, reset or key/token change. [#219 current physical evidence](https://github.com/al-hub/closepaw/issues/219#issuecomment-6789104140) is reused and #219 stays CLOSED; #229 excluded. Main edits for this record are docs only [skip ci], not deployed candidate code.
 
 ## Detailed chronological investigation
 ## Current candidate — verified Stop regression, original reconnect cause still unconfirmed

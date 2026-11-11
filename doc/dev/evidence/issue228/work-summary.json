@@ -77,53 +77,17 @@
     "github_reported_digest": "sha256:accbda216f24f055f4d4c6636666e11b9195a6ad4a65397a7f701bb2a73e110d"
   },
   "final_candidate": {
-    "head": "6570d39a0d129535fcfc299ad7e01dad03bb5df2",
-    "tree": "887a8f94b5f8b778422eab82a616f890f3c94892",
-    "security_run": 42979055340,
+    "head": "fb84682e9d37825e4944d98cc228d8231ac6744e",
+    "tree": "2d934588300cf681f4b399f84f5c68c27b351349",
+    "security_run": 42984443260,
     "security_status": "success",
-    "jvm": {
-      "artifact_id": 13837675297,
-      "bytes": 991347,
-      "sha256": "7d168a80cf155e7aaecbf6b28992cca423a862f798f8ec5b5c89b0d4aeb1924a",
-      "crc": "PASS",
-      "xml_files": 372,
-      "counts": {
-        "tests": 3151,
-        "failures": 0,
-        "errors": 0,
-        "skipped": 0
-      },
-      "classes": {
-        "ai.closepaw.chatgpt.ChatGptAutoConnectTest": 13,
-        "ai.closepaw.chatgpt.ChatGptConnectionSettingsTest": 6,
-        "ai.closepaw.chatgpt.ChatGptServiceStartTest": 3
-      },
-      "failed": [],
-      "pngs": 0,
-      "fixtures": []
-    },
-    "ui_run": 42979055337,
-    "ui_status": "success after one failed-job rerun; first attempt preparation failure retained",
-    "independent_review": {
-      "head": "6570d39a0d129535fcfc299ad7e01dad03bb5df2",
-      "tree": "887a8f94b5f8b778422eab82a616f890f3c94892",
-      "verdict": "APPROVE",
-      "medium_findings_resolved": 2,
-      "unresolved_critical": 0,
-      "unresolved_high": 0,
-      "unresolved_medium": 0,
-      "review_type": "independent AI code and security review; not Codex CLI or native GitHub review",
-      "native_github_review_submitted": false
-    },
-    "bridge_pytest_passed": 95,
-    "core_pytest_passed": 8,
-    "scripts_unittest_passed": 46,
-    "ui_job": 130387355075,
-    "ui_run_attempt": 2,
+    "ui_run": 42984443176,
+    "ui_status": "success",
+    "ui_job": 130402166855,
     "ui": {
-      "artifact_id": 13836694876,
-      "bytes": 611124,
-      "sha256": "ad6ec014eac16d0bd6b16a5cb3bc036aa6f74d1dc081f2834e03d7d8dd08ab90",
+      "artifact_id": 13838788716,
+      "bytes": 560441,
+      "sha256": "1783252f682fa36a0e8e58c5f36239fa740712dab0a27b2d92e934e51f5b4d00",
       "crc": "PASS",
       "xml_files": 1,
       "counts": {
@@ -137,31 +101,31 @@
       "pngs": 8,
       "fixtures": [
         {
-          "path": "build/package-replacement/evidence.json",
+          "scope": "isolated_emulator_receiver_fgs_local_mcp_only",
           "status": "PASS",
           "events": [
             {
               "case": "fixture_package_install",
-              "duration_ms": 9920
+              "duration_ms": 3050
             },
             {
               "case": "active_package_replacement",
               "local_mcp_ready": true,
               "process_changed": true,
-              "elapsed_ms": 5019
+              "elapsed_ms": 2170
             },
             {
               "case": "fixture_package_install",
-              "duration_ms": 3202
+              "duration_ms": 3601
             },
             {
               "case": "enabled_cold_package_replacement",
               "local_mcp_ready": true,
-              "elapsed_ms": 2217
+              "elapsed_ms": 3789
             },
             {
               "case": "fixture_package_install",
-              "duration_ms": 6379
+              "duration_ms": 2325
             },
             {
               "case": "stopped_package_replacement",
@@ -169,73 +133,54 @@
             }
           ],
           "android_api": "35",
-          "keys": [
-            "scope",
-            "events",
-            "android_api",
-            "fixture_apk_bytes",
-            "fixture_apk_sha256",
-            "pre_update_launch",
-            "before_replace_0",
-            "before_replace_2",
-            "before_replace_4",
-            "synthetic_config_and_marker_preserved",
-            "status"
-          ]
+          "synthetic_config_and_marker_preserved": true
         }
       ]
     },
-    "fixture": {
-      "path": "build/package-replacement/evidence.json",
-      "status": "PASS",
-      "events": [
-        {
-          "case": "fixture_package_install",
-          "duration_ms": 9920
-        },
-        {
-          "case": "active_package_replacement",
-          "local_mcp_ready": true,
-          "process_changed": true,
-          "elapsed_ms": 5019
-        },
-        {
-          "case": "fixture_package_install",
-          "duration_ms": 3202
-        },
-        {
-          "case": "enabled_cold_package_replacement",
-          "local_mcp_ready": true,
-          "elapsed_ms": 2217
-        },
-        {
-          "case": "fixture_package_install",
-          "duration_ms": 6379
-        },
-        {
-          "case": "stopped_package_replacement",
-          "unexpected_local_mcp": false
-        }
-      ],
-      "android_api": "35",
-      "keys": [
-        "scope",
-        "events",
-        "android_api",
-        "fixture_apk_bytes",
-        "fixture_apk_sha256",
-        "pre_update_launch",
-        "before_replace_0",
-        "before_replace_2",
-        "before_replace_4",
-        "synthetic_config_and_marker_preserved",
-        "status"
-      ],
-      "synthetic_config_and_marker_preserved": true,
-      "stop_observation_seconds": 45,
-      "scope": "API35 x86 local MCP only; no physical/native/client acceptance"
+    "independent_review": {
+      "head": "fb84682e9d37825e4944d98cc228d8231ac6744e",
+      "tree": "2d934588300cf681f4b399f84f5c68c27b351349",
+      "verdict": "APPROVE",
+      "scope": "independent AI code/security; not CLI/native GitHub",
+      "unresolved_Critical": 0,
+      "unresolved_High": 0,
+      "unresolved_Medium": 0,
+      "additional_medium_findings_resolved": 2
     },
-    "status": "PASS for confirmed Stop and tunnel-start safety fixes; original physical outage unconfirmed"
+    "retry_policy": {
+      "max_retries": 7,
+      "max_starts": 8,
+      "stable_connected_reset_ms": 60000,
+      "short_connections_do_not_reset": true,
+      "exhaustion_latch_blocks_same_controller_start": true,
+      "automatic_timer_reset": false,
+      "reason": "tunnel_retry_exhausted"
+    },
+    "jvm": {
+      "artifact_id": 13838619850,
+      "bytes": 992775,
+      "sha256": "03e095e74befade1ac4f0a08bfc3043bedf3ca8de6f83cad3775427b698a6b97",
+      "crc": "PASS",
+      "xml_files": 372,
+      "counts": {
+        "tests": 3154,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "classes": {
+        "ai.closepaw.chatgpt.ChatGptAutoConnectTest": 16,
+        "ai.closepaw.chatgpt.ChatGptConnectionSettingsTest": 6,
+        "ai.closepaw.chatgpt.ChatGptServiceStartTest": 3
+      },
+      "failed": [],
+      "pngs": 0,
+      "fixtures": []
+    },
+    "bridge_pytest_passed": 95,
+    "core_pytest_passed": 8,
+    "scripts_unittest_passed": 46,
+    "status": "PASS for confirmed lifecycle safety requirements within JVM/API35 scope; original outage unconfirmed"
   },
   "sdk37": {
     "run": 42909197801,
@@ -601,5 +546,320 @@
       ]
     }
   ],
-  "additional_gate_removed": "SDK37 emulator availability is not a separate prerequisite for independent JVM/API35 work; not a new release gate by itself"
+  "additional_gate_removed": "SDK37 emulator availability is not a separate prerequisite for independent JVM/API35 work; not a new release gate by itself",
+  "previous_startup_candidate": {
+    "head": "6570d39a0d129535fcfc299ad7e01dad03bb5df2",
+    "tree": "887a8f94b5f8b778422eab82a616f890f3c94892",
+    "security_run": 42979055340,
+    "security_status": "success",
+    "jvm": {
+      "artifact_id": 13837675297,
+      "bytes": 991347,
+      "sha256": "7d168a80cf155e7aaecbf6b28992cca423a862f798f8ec5b5c89b0d4aeb1924a",
+      "crc": "PASS",
+      "xml_files": 372,
+      "counts": {
+        "tests": 3151,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "classes": {
+        "ai.closepaw.chatgpt.ChatGptAutoConnectTest": 13,
+        "ai.closepaw.chatgpt.ChatGptConnectionSettingsTest": 6,
+        "ai.closepaw.chatgpt.ChatGptServiceStartTest": 3
+      },
+      "failed": [],
+      "pngs": 0,
+      "fixtures": []
+    },
+    "ui_run": 42979055337,
+    "ui_status": "success after one failed-job rerun; first attempt preparation failure retained",
+    "independent_review": {
+      "head": "6570d39a0d129535fcfc299ad7e01dad03bb5df2",
+      "tree": "887a8f94b5f8b778422eab82a616f890f3c94892",
+      "verdict": "APPROVE",
+      "medium_findings_resolved": 2,
+      "unresolved_critical": 0,
+      "unresolved_high": 0,
+      "unresolved_medium": 0,
+      "review_type": "independent AI code and security review; not Codex CLI or native GitHub review",
+      "native_github_review_submitted": false
+    },
+    "bridge_pytest_passed": 95,
+    "core_pytest_passed": 8,
+    "scripts_unittest_passed": 46,
+    "ui_job": 130387355075,
+    "ui_run_attempt": 2,
+    "ui": {
+      "artifact_id": 13836694876,
+      "bytes": 611124,
+      "sha256": "ad6ec014eac16d0bd6b16a5cb3bc036aa6f74d1dc081f2834e03d7d8dd08ab90",
+      "crc": "PASS",
+      "xml_files": 1,
+      "counts": {
+        "tests": 34,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "classes": {},
+      "failed": [],
+      "pngs": 8,
+      "fixtures": [
+        {
+          "path": "build/package-replacement/evidence.json",
+          "status": "PASS",
+          "events": [
+            {
+              "case": "fixture_package_install",
+              "duration_ms": 9920
+            },
+            {
+              "case": "active_package_replacement",
+              "local_mcp_ready": true,
+              "process_changed": true,
+              "elapsed_ms": 5019
+            },
+            {
+              "case": "fixture_package_install",
+              "duration_ms": 3202
+            },
+            {
+              "case": "enabled_cold_package_replacement",
+              "local_mcp_ready": true,
+              "elapsed_ms": 2217
+            },
+            {
+              "case": "fixture_package_install",
+              "duration_ms": 6379
+            },
+            {
+              "case": "stopped_package_replacement",
+              "unexpected_local_mcp": false
+            }
+          ],
+          "android_api": "35",
+          "keys": [
+            "scope",
+            "events",
+            "android_api",
+            "fixture_apk_bytes",
+            "fixture_apk_sha256",
+            "pre_update_launch",
+            "before_replace_0",
+            "before_replace_2",
+            "before_replace_4",
+            "synthetic_config_and_marker_preserved",
+            "status"
+          ]
+        }
+      ]
+    },
+    "fixture": {
+      "path": "build/package-replacement/evidence.json",
+      "status": "PASS",
+      "events": [
+        {
+          "case": "fixture_package_install",
+          "duration_ms": 9920
+        },
+        {
+          "case": "active_package_replacement",
+          "local_mcp_ready": true,
+          "process_changed": true,
+          "elapsed_ms": 5019
+        },
+        {
+          "case": "fixture_package_install",
+          "duration_ms": 3202
+        },
+        {
+          "case": "enabled_cold_package_replacement",
+          "local_mcp_ready": true,
+          "elapsed_ms": 2217
+        },
+        {
+          "case": "fixture_package_install",
+          "duration_ms": 6379
+        },
+        {
+          "case": "stopped_package_replacement",
+          "unexpected_local_mcp": false
+        }
+      ],
+      "android_api": "35",
+      "keys": [
+        "scope",
+        "events",
+        "android_api",
+        "fixture_apk_bytes",
+        "fixture_apk_sha256",
+        "pre_update_launch",
+        "before_replace_0",
+        "before_replace_2",
+        "before_replace_4",
+        "synthetic_config_and_marker_preserved",
+        "status"
+      ],
+      "synthetic_config_and_marker_preserved": true,
+      "stop_observation_seconds": 45,
+      "scope": "API35 x86 local MCP only; no physical/native/client acceptance"
+    },
+    "status": "PASS for confirmed Stop and tunnel-start safety fixes; original physical outage unconfirmed"
+  },
+  "finite_retry_red": {
+    "head": "8c07db6906aa7aa13d2047f187c91d1aa20a6888",
+    "run": 42983089499,
+    "verified_artifact": {
+      "artifact_id": 13838517330,
+      "bytes": 921222,
+      "sha256": "7ad5ef67a722930e8e09e5a50e32c7dc1fe68986f8988a8cfbfb1f1acd71304a",
+      "crc": "PASS",
+      "xml_files": 372,
+      "counts": {
+        "tests": 3152,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 0
+      },
+      "classes": {
+        "ai.closepaw.chatgpt.ChatGptAutoConnectTest": 14,
+        "ai.closepaw.chatgpt.ChatGptConnectionSettingsTest": 6,
+        "ai.closepaw.chatgpt.ChatGptServiceStartTest": 3
+      },
+      "failed": [
+        {
+          "classname": "ai.closepaw.chatgpt.ChatGptAutoConnectTest",
+          "name": "repeatedTransientFailuresExhaustBudgetWithoutAnotherAutomaticStart",
+          "kind": "failure"
+        }
+      ],
+      "pngs": 0,
+      "fixtures": []
+    },
+    "assertion": "expected8 starts, observed9 automatic starts"
+  },
+  "required_acceptance_audit": {
+    "date": "2026-11-11 KST",
+    "candidate_head": "fb84682e9d37825e4944d98cc228d8231ac6744e",
+    "candidate_tree": "2d934588300cf681f4b399f84f5c68c27b351349",
+    "lead_acceptance_review": "not an independent AI review; independent code/security review recorded separately",
+    "root_cause": {
+      "status": "BLOCKED",
+      "reason": "Historical phone Android/tunnel/server/client failing layer remains unconfirmed; no supported independent lifecycle trace/recovery route"
+    },
+    "retry_bound_finding": {
+      "severity": "Medium",
+      "required_condition": "Prevent infinite retries; bounded retry and safe stop",
+      "prior_behavior": "60s delay cap only; unbounded total attempts",
+      "proposed_bound": "7 retries / 8 starts per controller activation; reset only after >=60s observed Connected; exhausted latch blocks duplicate start"
+    },
+    "repository": {
+      "protected_main": false,
+      "rulesets": [],
+      "additional_native_approve_required": false
+    },
+    "release_eligibility": {
+      "status": "BLOCKED",
+      "version_name": "0.1.109",
+      "version_code": 110,
+      "reason": "Already published version/code; final new code is not on main and original root-solution conditions are unmet"
+    },
+    "device_preflight": {
+      "status": "PASS",
+      "scope": "existing version baseline only",
+      "installed_version": "0.1.109",
+      "installed_code": 110,
+      "updater_check": "up_to_date",
+      "new_install_submissions": 0
+    },
+    "independent_review": {
+      "status": "APPROVE",
+      "scope": "exact candidate code/security; not CLI/native GitHub",
+      "unresolved_critical": 0,
+      "unresolved_high": 0,
+      "unresolved_medium": 0,
+      "medium_findings_resolved": 2
+    },
+    "explicitly_optional_or_reused": [
+      "SDK37 emulator availability is not an extra mandatory global gate",
+      "No extra native GitHub approval gate",
+      "Previously passed network/dedup/storage tests reused within original version scope",
+      "No diagnostics-only production Release"
+    ],
+    "actual_new_release": false,
+    "actual_new_install": false,
+    "actual_external_unattended_acceptance": false,
+    "automated_scope": [
+      "JVM exception and consent-policy injection; not actual OS install/permission UI",
+      "API35 real debug replacement/active-cold local health/Stop and synthetic marker preservation",
+      "SQLite/operation/unit regressions from current candidate CI",
+      "Existing phone v109 command/results/dedup/data/ended-AI evidence reused"
+    ],
+    "not_yet_accepted": [
+      "Original physical failing layer and before-after reproduction matching that layer",
+      "Actual package replacement with network/permission/approval/OEM boundary combinations",
+      "Unpublished final version/code and exact-main Security/UI, original-key signing and public integrity",
+      "New-release automatic install exactly once and physical external MCP without manual app launch",
+      "New-version physical command/results/dedup/preservation and ended AI retention"
+    ],
+    "final_security_run": 42984443260,
+    "final_ui_run": 42984443176,
+    "final_security_status": "success",
+    "final_ui_status": "success",
+    "lead_inspection_verdict": "Source/automated safety audit PASS; full issue acceptance and release eligibility BLOCKED",
+    "requirements": [
+      {
+        "item": "Confirmed Stop/start-exception/finite-retry RED-to-GREEN",
+        "status": "PASS",
+        "scope": "deterministic fault injection and unchanged-controller RED; not original physical root"
+      },
+      {
+        "item": "Intent/Stop/inactive/permission-start failure guards",
+        "status": "PASS",
+        "scope": "source and JVM injection; real package replacement Stop on API35"
+      },
+      {
+        "item": "Finite retries/duplicates/cancellation/stable reset",
+        "status": "PASS",
+        "scope": "seven retries/eight starts, exhaustion latch, 59999ms refusal, >=60000ms reset, cancellation cleanup"
+      },
+      {
+        "item": "Exact-head CI and raw artifacts",
+        "status": "PASS",
+        "scope": "JVM3154/Android34; failures/errors/skipped0; SHA/CRC/XML/head matched"
+      },
+      {
+        "item": "Independent code/security",
+        "status": "PASS",
+        "scope": "exact HEAD/tree separate AI approval; not CLI/native review"
+      },
+      {
+        "item": "Existing phone preservation and command/dedup",
+        "status": "PASS",
+        "scope": "v109 baseline reused; not candidate post-update acceptance"
+      },
+      {
+        "item": "Original physical failing layer and cause",
+        "status": "BLOCKED",
+        "scope": "insufficient historical lifecycle/tunnel/client trace"
+      },
+      {
+        "item": "Actual OS approval/revocation/network/replacement combinations",
+        "status": "BLOCKED",
+        "scope": "actual new-package/OEM combinations not observed; injection is not physical proof"
+      },
+      {
+        "item": "New version/code, main Security/UI, original-key/public APK",
+        "status": "BLOCKED",
+        "scope": "unperformed pending root-solution conditions; current published version/code cannot be reused"
+      },
+      {
+        "item": "New-release one-install/external unattended MCP/command/dedup/AI preservation",
+        "status": "BLOCKED",
+        "scope": "no new signed Release or installation; current connectivity does not prove unattended update recovery"
+      }
+    ]
+  }
 }
