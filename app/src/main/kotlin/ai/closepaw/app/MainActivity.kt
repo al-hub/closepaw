@@ -145,8 +145,15 @@ class MainActivity : ComponentActivity() {
             onProjectionConsentResult(result.resultCode, result.data)
         }
 
-    internal fun requestProjectionConsent() {
-        if (!MediaProjectionCaptureService.consentGate.onRequestStarted()) {
+    internal fun requestProjectionConsent(screenObservation: Boolean = false) {
+        if (screenObservation && android.os.Build.VERSION.SDK_INT < 34) return
+        if (screenObservation && MediaProjectionCaptureService.consentGate.state ==
+            ai.closepaw.platform.virtualdisplay.ProjectionConsentState.Consumed) {
+            android.widget.Toast.makeText(this,
+                "기존 화면 공유를 중지한 뒤 관찰용 화면 공유를 시작해 주세요.", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+        if (!MediaProjectionCaptureService.consentGate.onRequestStarted(screenObservation)) {
             Log.w(TAG, "requestProjectionConsent: a consent round is already live; ignoring")
             return
         }
@@ -154,7 +161,11 @@ class MainActivity : ComponentActivity() {
             MediaProjectionCaptureService.consentGate.onCancelled()
             return
         }
-        projectionConsentLauncher.launch(manager.createScreenCaptureIntent())
+        projectionConsentLauncher.launch(
+            if (screenObservation && android.os.Build.VERSION.SDK_INT >= 34) manager.createScreenCaptureIntent(
+                android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay())
+            else manager.createScreenCaptureIntent()
+        )
     }
 
     private fun onProjectionConsentResult(resultCode: Int, resultData: Intent?) {
@@ -330,6 +341,7 @@ class MainActivity : ComponentActivity() {
                     },
                     onOverlayClick = { openOverlaySettings(this@MainActivity) },
                     onRequestProjectionConsent = { requestProjectionConsent() },
+                    onRequestScreenObservationConsent = { requestProjectionConsent(screenObservation = true) },
                     repairModel = repairModel,
                     onFixBattery = {
                         handleOnboardingEffect(OnboardingEffect.OpenBatteryOptimization)

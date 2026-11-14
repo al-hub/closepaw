@@ -173,10 +173,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     override fun visualDisclosureAllowed(frame: ControlFrame): Boolean = frame.visual?.sourceDisclosureAllowed() == true && reason(AgentService.instance) == null &&
         editorImageRefusal(AgentService.instance,frame.packageName)==null && editorGenerationMatches(frame.visual,AgentService.instance) &&
         packageAllowed(frame.packageName, operation = "read") && (runtime?.snapshot()?.revision ?: 0L) == frame.configurationRevision &&
-        (frame.visual?.scope !in setOf("keyboard", "display") || (frame.visual?.scope == "display" && frame.keyboard == null) || frame.keyboard?.let {
+        (frame.visual?.scope !in setOf("keyboard", "display", "screen_observe") || (frame.visual?.scope in setOf("display", "screen_observe") && frame.keyboard == null) || frame.keyboard?.let {
             packageAllowed(it.packageName, operation = "read") &&
                 Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) == it.inputMethodId
-        } == true) && (frame.visual?.scope != "display" || AgentService.instance?.let { service ->
+        } == true) && (frame.visual?.scope !in setOf("display", "screen_observe") || AgentService.instance?.let { service ->
             val proof=frame.visual ?: return@let false
             // Cache reads can run off Main; never read mutable decoration Views
             // here. Native window-event generation invalidates the whole proof.
@@ -283,6 +283,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     override suspend fun visual(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "app")
     override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "keyboard")
     override suspend fun visualDisplay(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "display")
+    override suspend fun visualScreenObserve(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "screen_observe")
     private data class DisplayPlan(val bounds: TapBounds, val rotation: Int, val region: Region,
         val appBounds: String, val imeBounds: String, val surfaces: List<IsolatedVisualSurface>)
     private fun displayPlan(service: AgentService, frame: ControlFrame): DisplayPlan? {
@@ -337,6 +338,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private suspend fun captureVisual(frame: ControlFrame, scope: String): VisualTargetProof? {
         fun fail(code: String): VisualTargetProof? { visualFailureReason=code; return null }
         visualFailureReason="visual_observation_unavailable"
+        val observationOnly = scope == "screen_observe"
+        val displayCapture = scope == "display" || observationOnly
         val imageConsentEpoch = ai.closepaw.security.ImageRevocationAuthority.currentEpoch
         if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageConsentEpoch)) return fail("screen_share_revoked")
         if (frame.reason != null || frame.truncated || frame.navigationOnly || frame.touchContext.isEmpty()) return fail("visual_frame_unverified")
@@ -350,11 +353,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         editorImageRefusal(service,frame.packageName)?.let {return fail(it)}
         val keyboardImage = scope != "app"
         val keyboard = frame.keyboard
-        if ((scope == "keyboard" || (scope == "display" && keyboard != null)) &&
+        if ((scope == "keyboard" || (displayCapture && keyboard != null)) &&
             VisualKeyboardPolicy.imageReadRefusal(keyboard, keyboard?.let { packageAllowed(it.packageName, operation = "read") } == true,
                 scope == "keyboard", frame.inputTarget != null) != null) return fail("visual_keyboard_policy_denied")
         val captureId = if (scope == "keyboard") keyboard!!.windowId else frame.windowId
-        if(scope=="display") {
+        if(displayCapture) {
             // These are our pixel-only intent/ripple cues, never user controls.
             // Remove them before planning both observations and key revalidation;
             // the border, X, island and all source/coverage checks stay in place.
@@ -363,23 +366,24 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             islandRefusal(sessionFor(service).id)?.let {return fail(it)}
         }
         val displayGeneration = service.remoteDisplayChanges.version()
-        val plan = if (scope=="display") withContext(Dispatchers.Main) { displayPlan(service,frame) } else null
-        if (scope=="display" && plan==null) return fail("display_surface_unverified")
+        val plan = if (displayCapture) withContext(Dispatchers.Main) { displayPlan(service,frame) } else null
+        if (displayCapture && plan==null) return fail("display_surface_unverified")
         val bounds = plan?.bounds ?: withContext(Dispatchers.Main) {
             val windows = service.windows.orEmpty()
             try { windows.singleOrNull { it.id == captureId }?.let { bounds(windowBounds(it)) } }
             finally { windows.forEach { runCatching { it.recycle() } } }
         } ?: return fail("visual_window_unavailable")
-        val projection = if (scope == "display") ai.closepaw.platform.virtualdisplay.ProjectionImageTransport.active() else null
-        if (scope == "display" && projection == null) return fail("screen_share_not_active")
+        val projection = if (displayCapture) ai.closepaw.platform.virtualdisplay.ProjectionImageTransport.active() else null
+        if (displayCapture && projection == null) return fail("screen_share_not_active")
+        if (observationOnly && projection?.screenObservationAllowed() != true) return fail("screen_observation_consent_required")
         val projectionRequestId = if (projection != null) java.util.UUID.randomUUID().toString().replace("-", "") else null
         probeThrottle.awaitSlot()
-        var captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty(), projection = projection, requestId = projectionRequestId) { probeThrottle.awaitSlot() }
+        var captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,displayCapture,plan?.region,plan?.surfaces.orEmpty(), projection = projection, requestId = projectionRequestId, observationOnly = observationOnly) { probeThrottle.awaitSlot() }
         // Retry only an explicit OS screenshot rate refusal, before any action.
         // Never retry a denied/masked/changed screen or replay a gesture.
         if (captured.proof == null && captured.reason == "screenshot_throttled") {
             probeThrottle.awaitSlot()
-            captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,scope=="display",plan?.region,plan?.surfaces.orEmpty(), projection = projection, requestId = projectionRequestId) { probeThrottle.awaitSlot() }
+            captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,displayCapture,plan?.region,plan?.surfaces.orEmpty(), projection = projection, requestId = projectionRequestId, observationOnly = observationOnly) { probeThrottle.awaitSlot() }
         }
         if (projectionRequestId != null) ControlDiagnostics.record("projection_observe_result",
             captured.reason ?: if (captured.proof != null) "acquired" else "visual_observation_unavailable",
@@ -388,7 +392,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val after = capture()
         if(!ai.closepaw.platform.InputTypePrivacyPolicy.sameGeneration(admittedEditorGeneration,editorGeneration(service))) return fail("visual_editor_privacy_changed")
         editorImageRefusal(service,frame.packageName)?.let {return fail(it)}
-        if (scope=="display") {
+        if (displayCapture) {
             // Accessibility window events can be coalesced by the service's25ms
             // notification timeout. Drain that bounded delivery interval before
             // comparing the monotonic generation; never replay a capture here.
@@ -411,7 +415,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             } == true
         }
         if (!disclosureCheck()) return fail("visual_source_revoked_or_expired")
-        return proof.copy(sourceDisclosureAllowed=disclosureCheck,scope=scope,sourceWindowId=if(scope=="display") -1 else captureId,
+        return proof.copy(sourceDisclosureAllowed=disclosureCheck,scope=scope,sourceWindowId=if(displayCapture) -1 else captureId,
             sourceDisplayId=if(plan!=null) 0 else -1,rotation=plan?.rotation ?: -1,
             applicationBounds=plan?.appBounds.orEmpty(),imeBounds=plan?.imeBounds.orEmpty(),
             sourceImeWindowId=if(plan!=null) keyboard?.windowId ?: -1 else -1,displayGeneration=if(plan!=null) displayGeneration else -1,editorPrivacyGeneration=admittedEditorGeneration)

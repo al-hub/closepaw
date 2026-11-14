@@ -7,6 +7,8 @@ import ai.closepaw.platform.virtualdisplay.ProjectionBitmap
 import ai.closepaw.platform.virtualdisplay.ProjectionImageLease
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.graphics.ColorSpace
 import android.graphics.Region
 import android.hardware.display.DisplayManager
@@ -115,5 +117,77 @@ class WindowVisualCaptureGeometryTest {
         } finally {
             if (!bitmap.isRecycled) bitmap.recycle()
         }
+    }
+
+    @Test fun explicitScreenObservationUsesProjectionCoordinatesAndNeverTheImeBuffer() = runBlocking {
+        val bitmap = Bitmap.createBitmap(100, 200, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(Color.GREEN)
+        for (y in 100 until 200) for (x in 0 until 100) bitmap.setPixel(x, y, Color.RED)
+        val projection = mockk<ProjectionImageLease>()
+        every { projection.screenObservationAllowed() } returns true
+        every { projection.permitsDelivery(1L) } returns true
+        coEvery { projection.capture("screen236") } returns ProjectionBitmap(bitmap, projection, 1L)
+        val service = mockk<AccessibilityService>()
+        val bounds = TapBounds(0, 0, 100, 200)
+        val result = WindowVisualCapture.capture(service, 17, bounds, "screen", display = true,
+            visibleRegion = Region(0, 100, 100, 200),
+            surfaces = listOf(IsolatedVisualSurface(23, TapBounds(0, 1798, 1440, 3120), emptyList())),
+            projection = projection, requestId = "screen236", observationOnly = true)
+        assertNull(result.reason)
+        val proof = requireNotNull(result.proof)
+        assertEquals("screen_observe", proof.scope)
+        assertTrue(proof.disclosedRegions.isEmpty())
+        assertNull(proof.map(TapBounds(10, 120, 20, 130)))
+        val decoded = requireNotNull(BitmapFactory.decodeByteArray(proof.image.bytes, 0, proof.image.bytes.size))
+        try {
+            assertEquals(100, decoded.width); assertEquals(200, decoded.height)
+            assertTrue(Color.red(decoded.getPixel(50, 150)) > 240)
+            assertTrue(Color.green(decoded.getPixel(50, 150)) < 15)
+            assertTrue(Color.red(decoded.getPixel(50, 40)) < 15)
+            assertTrue(Color.green(decoded.getPixel(50, 40)) < 15)
+        } finally { decoded.recycle() }
+        assertTrue(bitmap.isRecycled)
+        verify(exactly = 0) { service.takeScreenshotOfWindow(any(), any(), any()) }
+        verify(exactly = 0) { service.takeScreenshot(any(), any(), any()) }
+    }
+
+    @Test fun screenObservationWithoutSeparateConsentNeverAcquiresPixels() = runBlocking {
+        val projection = mockk<ProjectionImageLease>()
+        every { projection.screenObservationAllowed() } returns false
+        val service = mockk<AccessibilityService>()
+        val result = WindowVisualCapture.capture(service, 17, TapBounds(0, 0, 100, 200), "screen",
+            display = true, visibleRegion = Region(0, 0, 100, 200), projection = projection, observationOnly = true)
+        assertNull(result.proof)
+        assertEquals("screen_observation_consent_required", result.reason)
+        coVerify(exactly = 0) { projection.capture(any()) }
+        verify(exactly = 0) { service.takeScreenshotOfWindow(any(), any(), any()) }
+        verify(exactly = 0) { service.takeScreenshot(any(), any(), any()) }
+    }
+
+    @Test fun observationRevokedDuringCaptureWithholdsImageAndRecyclesFrame() = runBlocking {
+        val bitmap = Bitmap.createBitmap(100, 200, Bitmap.Config.ARGB_8888)
+        val projection = mockk<ProjectionImageLease>()
+        every { projection.screenObservationAllowed() } returnsMany listOf(true, false)
+        every { projection.permitsDelivery(1L) } returns true
+        coEvery { projection.capture(any()) } returns ProjectionBitmap(bitmap, projection, 1L)
+        val result = WindowVisualCapture.capture(mockk(), 17, TapBounds(0, 0, 100, 200), "screen",
+            display = true, visibleRegion = Region(0, 0, 100, 200), projection = projection, observationOnly = true)
+        assertNull(result.proof)
+        assertEquals("projection_session_expired", result.reason)
+        assertTrue(bitmap.isRecycled)
+    }
+
+    @Test fun observationDoesNotAcceptAnAppSizedProjectionAsDisplayGeometry() = runBlocking {
+        val bitmap = Bitmap.createBitmap(100, 150, Bitmap.Config.ARGB_8888)
+        val projection = mockk<ProjectionImageLease>()
+        every { projection.screenObservationAllowed() } returns true
+        coEvery { projection.capture(any()) } returns ProjectionBitmap(bitmap, projection, 1L)
+        val service = mockk<AccessibilityService>()
+        every { service.getSystemService(DisplayManager::class.java) } returns null
+        val result = WindowVisualCapture.capture(service, 17, TapBounds(0, 0, 100, 200), "screen",
+            display = true, visibleRegion = Region(0, 0, 100, 200), projection = projection, observationOnly = true)
+        assertNull(result.proof)
+        assertEquals("screenshot_buffer_geometry_mismatch", result.reason)
+        assertTrue(bitmap.isRecycled)
     }
 }

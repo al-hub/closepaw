@@ -142,13 +142,23 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         VisualImageCache.remove(current?.frame?.visual?.id); current = null
         chainStarted = now(); chainActions = 0; noProgress = 0
         if (!allowed()) return failure("generic_control_disabled")
-        if (imageScope !in setOf("app", "keyboard", "display") || (imageScope != "app" && !includeImage)) return failure("image_scope_invalid")
+        if (imageScope !in setOf("app", "keyboard", "display", "screen_observe") || (imageScope != "app" && !includeImage)) return failure("image_scope_invalid")
         val visualEpoch = port.session()?.epoch
         port.presentation(ControlSession.VisualPhase.OBSERVING, visualEpoch)
         var frame = port.capture()
         if (includeImage && frame.reason == null && !frame.truncated && !frame.navigationOnly) {
-            val visual = when(imageScope) { "keyboard" -> port.visualKeyboard(frame); "display" -> port.visualDisplay(frame); else -> port.visual(frame) }
-            frame = if (visual == null) frame.copy(reason = port.visualFailure()) else frame.copy(visual = visual)
+            val visual = when(imageScope) {
+                "keyboard" -> port.visualKeyboard(frame)
+                "display" -> port.visualDisplay(frame)
+                "screen_observe" -> port.visualScreenObserve(frame)
+                else -> port.visual(frame)
+            }
+            frame = when {
+                visual == null -> frame.copy(reason = port.visualFailure())
+                imageScope == "screen_observe" && visual.scope != "screen_observe" ->
+                    frame.copy(reason = "screen_observation_proof_invalid")
+                else -> frame.copy(visual = visual)
+            }
         }
         val result = publish(frame, filter)
         port.presentation(if (result.success) ControlSession.VisualPhase.WAITING else ControlSession.VisualPhase.FAILED, visualEpoch)

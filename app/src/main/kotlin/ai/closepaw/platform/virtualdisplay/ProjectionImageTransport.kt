@@ -11,7 +11,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 /** No Context or projection token is retained here. Only the service can publish a lease.
- * Raw frames stay invocation-local and must pass the accessibility ownership/masking path. */
+ * Raw frames stay invocation-local. Strict images require isolated verification;
+ * separately consented screen observation has no visual-action authority. */
 internal object ProjectionImageTransport {
     @Volatile private var current: ProjectionImageLease? = null
     fun active(): ProjectionImageLease? = current?.takeIf { it.isActive() }
@@ -32,6 +33,8 @@ internal class ProjectionImageLease(
     private val capturing = java.util.concurrent.atomic.AtomicBoolean(false)
     fun isActive(): Boolean = consent.generation == generation && consent.state == ProjectionConsentState.Consumed &&
         policy.acquireAllowed() && scope.isOpen()
+
+    fun screenObservationAllowed(): Boolean = isActive() && consent.screenObservationAuthorized()
 
     fun permitsDelivery(capturedAt: Long): Boolean = isActive() &&
         policy.isDeliveryFresh(capturedAt, SystemClock.elapsedRealtime())

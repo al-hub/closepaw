@@ -41,7 +41,8 @@ class ScreenObservationTest {
 
     @Test fun explicitScreenObservationReturnsAnImageWithoutOwnershipOrActionClaims() = runBlocking {
         val port = Port()
-        val result = GenericControl(port, { true }).observe(includeImage = true, imageScope = "screen_observe")
+        val control = GenericControl(port, { true })
+        val result = control.observe(includeImage = true, imageScope = "screen_observe")
         assertTrue(result.summary, result.success)
         assertEquals(1, port.screenCalls)
         assertEquals(0, port.strictCalls)

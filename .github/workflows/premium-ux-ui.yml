@@ -6,6 +6,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      build_capture_candidate:
+        description: 'Build a separate debug package for physical capture acceptance'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,6 +21,7 @@ concurrency:
 
 jobs:
   panel-instrumentation:
+    if: github.event_name != 'workflow_dispatch' || !inputs.build_capture_candidate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -87,6 +93,48 @@ jobs:
             build/reports/profile
           if-no-files-found: warn
           retention-days: 14
+
+  capture-candidate:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_capture_candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: never
+      - name: Build side-by-side debug capture candidate and its test APK
+        run: bash scripts/ci-gradle.sh capture-candidate :app:assembleDebug :app:assembleDebugAndroidTest -PclosepawCaptureCandidate=true -Pandroid.injected.build.abi=arm64-v8a
+      - name: Verify candidate identity and record exact-source integrity
+        run: |
+          set -euo pipefail
+          aapt="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -1)"
+          "$aapt" dump badging app/build/outputs/apk/debug/app-debug.apk > build/capture-candidate-manifest.txt
+          grep -q "^package: name='ai.closepaw.capturecandidate'" build/capture-candidate-manifest.txt
+          grep -q '^application-debuggable' build/capture-candidate-manifest.txt
+          printf '%s\n' "$GITHUB_SHA" > build/capture-candidate-source.txt
+          sha256sum app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk > build/capture-candidate-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capture-candidate-${{ github.sha }}
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            build/capture-candidate-manifest.txt
+            build/capture-candidate-source.txt
+            build/capture-candidate-sha256.txt
+          if-no-files-found: error
+          retention-days: 7
 
   package-replacement-api37:
     # BLOCKED: run42909197801 cannot find platforms;android-37. No unsupported retries.

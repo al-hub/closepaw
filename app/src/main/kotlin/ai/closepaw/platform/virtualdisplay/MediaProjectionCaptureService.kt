@@ -32,8 +32,10 @@ import ai.closepaw.security.ImageRevocationAuthority
  *   cannot revoke or tear down a newer consent round. For the owning session,
  *   release capture resources, stopForeground/stopSelf.
  * - The single bounded mirror surface supplies explicit display-image requests only.
- *   WindowVisualCapture verifies pixels against isolated accessibility screenshots and
- *   masks everything else; native policy and active control consent remain mandatory.
+ *   WindowVisualCapture verifies strict images against isolated screenshots. A separately
+ *   locally approved full-display observation may read the requested regions without
+ *   certifying ownership or authorizing gestures. Native policy and active control consent
+ *   remain mandatory for both modes.
  *   No raw frame is cached, persisted, logged or returned directly to MCP.
  * - Revocation races fail closed: the [MediaProjectionFramePolicy] is invalidated before
  *   any resource release, so no acquire can be legal after revocation.

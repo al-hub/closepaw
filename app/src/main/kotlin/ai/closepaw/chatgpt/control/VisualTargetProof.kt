@@ -12,10 +12,18 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
     val sourceImeWindowId: Int = -1, val displayGeneration: Long = -1, val disclosedRegions: List<TapBounds> = emptyList(), val editorPrivacyGeneration: Long = -1,
     val sourceDisclosureAllowed: () -> Boolean = { true }) {
     fun metadata() = buildJsonObject {
+        val observationOnly = scope == "screen_observe"
+        put("observation_only", observationOnly)
+        put("visual_actions_allowed", !observationOnly)
+        if (observationOnly) {
+            put("capture_authority", "explicit_shared_display_consent")
+            put("visible_overlays_may_be_included", true)
+            put("outside_requested_regions_masked", true)
+        }
         put("image_source", image.source.name.lowercase()); put("scope", scope); put("source_window_id", sourceWindowId); put("visual_id", id); put("image_width", image.width); put("image_height", image.height)
         put("source_display_id", sourceDisplayId); put("rotation", rotation)
         put("source_width", window.right-window.left); put("source_height", window.bottom-window.top)
-        put("source_ime_window_id", sourceImeWindowId); put("intervening_window_changes_checked", scope == "display")
+        put("source_ime_window_id", sourceImeWindowId); put("intervening_window_changes_checked", scope in setOf("display", "screen_observe"))
         put("application_bounds", applicationBounds); put("ime_bounds", imeBounds)
         put("verified_region_count", disclosedRegions.size); put("verified_pixel_count", disclosedRegions.sumOf { (it.right-it.left).toLong()*(it.bottom-it.top) }); put("unverified_pixels_masked", scope == "display")
         put("masked_outside_owned_regions", scope == "display"); put("owned_pixels_verified_against_isolated_windows", scope == "display")
@@ -23,6 +31,7 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
         put("coordinate_space", "snapshot_image_pixels"); put("expires_in_ms", if (image.source == ai.closepaw.model.ScreenImageSource.MEDIA_PROJECTION) 10_000 else 60_000)
     }
     fun map(rect: TapBounds): TapBounds? {
+        if (scope == "screen_observe") return null
         if (image.width <= 0 || image.height <= 0 || !TapBounds(0, 0, image.width, image.height).contains(rect)) return null
         val w = window.right - window.left; val h = window.bottom - window.top
         fun x(v: Int) = window.left + (v.toLong() * w / image.width).toInt()

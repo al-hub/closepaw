@@ -51,7 +51,8 @@ internal fun SettingsHomePage(
     approvalMode: ApprovalMode,
     onNavigate: (SettingsPage) -> Unit,
     onDismiss: () -> Unit,
-    onRequestProjectionConsent: () -> Unit = {}
+    onRequestProjectionConsent: () -> Unit = {},
+    onRequestScreenObservationConsent: () -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         PageMastheadIdentity(title = "Settings", onClose = onDismiss)
@@ -95,6 +96,11 @@ internal fun SettingsHomePage(
                 title = "Share screen images with ChatGPT",
                 subtitle = "Android approval required · masked images only during active control",
                 onClick = onRequestProjectionConsent
+            )
+            SettingsNavigationRow(
+                title = "Observe shared screen with ChatGPT",
+                subtitle = "View only · notifications and other app overlays may be visible · Android approval required",
+                onClick = onRequestScreenObservationConsent
             )
             ChatGptConnectionCard()
 

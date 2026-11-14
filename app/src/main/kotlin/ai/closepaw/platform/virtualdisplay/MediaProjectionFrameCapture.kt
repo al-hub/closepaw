@@ -102,7 +102,8 @@ internal class ProjectionRequestQueue(val reader: ImageReader, val lowerBoundEla
 /**
  * Surface creation and geometry diagnostics for issue #165. ProjectionImageLease is
  * the bounded pixel consumer; ownership and region masking remain exclusively in
- * WindowVisualCapture. A raw mirror is never sufficient for image disclosure.
+ * WindowVisualCapture. A raw mirror is never an ownership/action proof; the separate
+ * screen-observation path also requires its own explicit local consent.
  */
 internal object MediaProjectionFrameCapture {
     private const val TAG = "MediaProjectionCapture"
