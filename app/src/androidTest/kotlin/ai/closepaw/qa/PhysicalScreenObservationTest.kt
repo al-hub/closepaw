@@ -32,7 +32,10 @@ class PhysicalScreenObservationTest {
         instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         // The isolated debug fixture needs no LLM credential or onboarding demo.
         // This does not grant accessibility, overlay, generic control or projection.
-        ai.closepaw.onboarding.OnboardingStore(instrumentation.targetContext).setCompleted()
+        ai.closepaw.onboarding.OnboardingStore(instrumentation.targetContext).apply {
+            migrateIfNeeded { false }
+            setCompleted()
+        }
         val expected = args.getString("fixture_package")
         require(expected in setOf("com.android.chrome", "com.samsung.android.app.notes"))
         // Standard instrumentation may restart the target. Never reuse a pre-run
