@@ -73,10 +73,17 @@ unaffected. Obtain the artifact for the exact candidate SHA only.
 allowlist. It runs only with physical_screen_observation=true and only against
 the candidate package. It does not open apps, change settings or policy, approve
 projection, type or dispatch gestures. It requires the locally enabled
-accessibility service, generic control and observation projection. Chrome and
+accessibility service, generic control, permitted fixture apps and observation projection.
+Standard instrumentation can restart the target, so the test waits up to180 seconds
+for a fresh local observation approval in the test process and for the expected
+foreground package. Start instrumentation BEFORE approving the observation share;
+then reopen the candidate, approve sharing, and open the blank fixture. Never
+assume a pre-instrumentation projection token survived. The phone help did not
+advertise --no-restart; no unsupported flag or hidden API is used. Chrome and
 Samsung Notes must be blank fixtures with the Samsung keyboard already visible.
 It uses the real AndroidControlPort and local permissions. Candidate session
-cleanup is unconditional. Explicit export_image=true may save one private bounded
+cleanup ends only the successfully started test session with the same session ID;
+preexisting paused/waiting/active sessions are never replaced or terminated. Explicit export_image=true may save one private bounded
 JPEG in the candidate cache for pixel/position inspection; retrieve then delete
 that temporary evidence. Do not upload private screen pixels to GitHub.
 
@@ -87,3 +94,19 @@ input and stop/revocation boundaries. Emulator tests do not replace Galaxy
 acceptance. No release/merge is justified before required candidate verification,
 final independent review and exact-head required CI. Existing signed main-only
 release and public integrity gates remain unchanged.
+
+Example development invocation (same-phone ADB, no PC/USB):
+
+```sh
+adb shell am instrument -w \
+  -e class ai.closepaw.qa.PhysicalScreenObservationTest \
+  -e physical_screen_observation true \
+  -e fixture_package com.android.chrome \
+  -e export_image true \
+  ai.closepaw.capturecandidate.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+Once the run starts, locally reopen the candidate and approve observation sharing
+again. Generic-control/App Access choices persist, but projection consent does not.
+Read the actual instrumentation success/failure result; a queued job or an old
+cache file is never PASS. Keep physical images private and clear them after QA.
