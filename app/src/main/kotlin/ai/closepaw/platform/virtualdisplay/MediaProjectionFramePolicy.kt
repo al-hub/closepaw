@@ -10,7 +10,8 @@ package ai.closepaw.platform.virtualdisplay
  *   [invalidate] (revocation/teardown) permanently arms it; after that no path —
  *   including a racing concurrent [openSurface] — can make acquisition legal again.
  * - ProjectionImageLease may acquire bounded fresh pixels while this policy is open;
- *   transport still requires isolated accessibility ownership verification and masking.
+ *   strict transport requires isolated ownership verification and masking; explicit
+ *   screen-observation consent permits a separate read-only image with no action proof.
  */
 class MediaProjectionFramePolicy(
     private val maxFrameAgeMs: Long = 1_000L,

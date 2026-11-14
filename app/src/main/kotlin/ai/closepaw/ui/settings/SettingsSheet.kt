@@ -71,6 +71,7 @@ fun SettingsSheet(
     onAccessibilityClick: () -> Unit,
     onOverlayClick: () -> Unit,
     onRequestProjectionConsent: () -> Unit = {},
+    onRequestScreenObservationConsent: () -> Unit = {},
     platformMode: PlatformMode,
     effectivePlatformMode: PlatformMode?,
     onPlatformModeChange: (PlatformMode) -> Unit,
@@ -156,7 +157,8 @@ fun SettingsSheet(
                         approvalMode = approvalMode,
                         onNavigate = { settingsPage = it },
                         onDismiss = onDismiss,
-                        onRequestProjectionConsent = onRequestProjectionConsent
+                        onRequestProjectionConsent = onRequestProjectionConsent,
+                        onRequestScreenObservationConsent = onRequestScreenObservationConsent
                     )
                     SettingsPage.LLM_AUTH -> LlmAuthSettingsPage(
                         llmBackend = llmBackend,

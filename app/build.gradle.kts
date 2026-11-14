@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import com.android.build.api.artifact.SingleArtifact
 
 plugins {
     id("com.android.application")
@@ -17,6 +18,7 @@ android {
 
     defaultConfig {
         applicationId = "ai.closepaw"
+        manifestPlaceholders["closepawAppLabel"] = "@string/app_name"
         // Required by LiquidAI Leap SDK for local inference.
         // If we need to support Android < 12, consider a cloud-only flavor.
         minSdk = 31
@@ -48,6 +50,12 @@ android {
 
     buildTypes {
         debug {
+            // Opt-in side-by-side physical capture acceptance, never a production update.
+            if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
+                applicationIdSuffix = ".capturecandidate"
+                versionNameSuffix = "-capturecandidate"
+                manifestPlaceholders["closepawAppLabel"] = "ClosePaw Capture Candidate"
+            }
             val evalSsl = project.findProperty("insecureSslForEval")?.toString()?.toBoolean() ?: false
             buildConfigField("boolean", "INSECURE_SSL_FOR_EVAL", evalSsl.toString())
         }
@@ -116,6 +124,26 @@ android {
                     showStackTraces = true
                 }
             }
+        }
+    }
+}
+
+// AGP may place IDE/ABI-optimized APKs outside outputs/apk. Consume its public
+// artifact providers, never infer a deployable file from a conventional path.
+if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
+    androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) { variant ->
+        val testVariant = requireNotNull(variant.androidTest)
+        tasks.register<org.gradle.api.tasks.Sync>("stageCaptureCandidate") {
+            from(variant.artifacts.get(SingleArtifact.APK)) {
+                include("*.apk")
+                rename { "candidate-app.apk" }
+            }
+            from(testVariant.artifacts.get(SingleArtifact.APK)) {
+                include("*.apk")
+                rename { "candidate-tests.apk" }
+            }
+            duplicatesStrategy = org.gradle.api.file.DuplicatesStrategy.FAIL
+            into(rootProject.layout.buildDirectory.dir("capture-candidate"))
         }
     }
 }

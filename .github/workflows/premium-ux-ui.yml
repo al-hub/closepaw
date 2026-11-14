@@ -6,6 +6,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      build_capture_candidate:
+        description: 'Build a separate debug package for physical capture acceptance'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,6 +21,8 @@ concurrency:
 
 jobs:
   panel-instrumentation:
+    # A candidate dispatch must never replace the real main UI signing gate.
+    if: github.ref == 'refs/heads/main' || github.event_name != 'workflow_dispatch' || !inputs.build_capture_candidate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -58,7 +65,7 @@ jobs:
             bash scripts/ci-gradle.sh replacement-install :app:installDebug :app:installDebugAndroidTest -PclosepawInputFixtures=true -Pandroid.injected.build.abi=x86_64
             python3 scripts/qa-package-replacement.py
             bash scripts/ci-gradle.sh terminal-fixture-install :terminal-fixture:installDebug -PclosepawInputFixtures=true -Pandroid.injected.build.abi=x86_64
-            bash scripts/ci-gradle.sh ui-test :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.BrowserReadResolverTest,ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest,ai.closepaw.qa.ControlOverlayWindowTest,ai.closepaw.qa.IslandOperationTest,ai.closepaw.qa.IslandScreenCoordinatesTest,ai.closepaw.qa.ClipboardProvenanceTest,ai.closepaw.qa.TerminalInputConnectionTest,ai.closepaw.qa.ProjectionTuningPersistenceTest,ai.closepaw.chatgpt.operations.OperationTaskSqliteCandidateAndroidTest -PclosepawInputFixtures=true --stacktrace
+            bash scripts/ci-gradle.sh ui-test :app:connectedDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=ai.closepaw.qa.BrowserReadResolverTest,ai.closepaw.qa.RemoteControlPanelTest,ai.closepaw.qa.RemoteControlPanelRenderingTest,ai.closepaw.qa.ControlOverlayWindowTest,ai.closepaw.qa.IslandOperationTest,ai.closepaw.qa.IslandScreenCoordinatesTest,ai.closepaw.qa.ClipboardProvenanceTest,ai.closepaw.qa.TerminalInputConnectionTest,ai.closepaw.qa.ProjectionTuningPersistenceTest,ai.closepaw.qa.WindowVisualCaptureGeometryTest,ai.closepaw.chatgpt.operations.OperationTaskSqliteCandidateAndroidTest -PclosepawInputFixtures=true --stacktrace
             mkdir -p ui-render-evidence
             adb pull /sdcard/Download/closepaw-premium-ux-qa ui-render-evidence
             test "$(find ui-render-evidence -name '*.png' | wc -l)" -eq 8
@@ -87,6 +94,45 @@ jobs:
             build/reports/profile
           if-no-files-found: warn
           retention-days: 14
+
+  capture-candidate:
+    if: github.ref != 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.build_capture_candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: never
+      - name: Build side-by-side debug capture candidate and its test APK
+        run: bash scripts/ci-gradle.sh capture-candidate :app:stageCaptureCandidate -PclosepawCaptureCandidate=true -Pandroid.injected.build.abi=arm64-v8a
+      - name: Verify candidate identity and record exact-source integrity
+        run: |
+          set -euo pipefail
+          test -s build/capture-candidate/candidate-app.apk
+          test -s build/capture-candidate/candidate-tests.apk
+          aapt="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -1)"
+          "$aapt" dump badging build/capture-candidate/candidate-app.apk > build/capture-candidate/manifest.txt
+          grep -q "^package: name='ai.closepaw.capturecandidate'" build/capture-candidate/manifest.txt
+          grep -q '^application-debuggable' build/capture-candidate/manifest.txt
+          printf '%s\n' "$GITHUB_SHA" > build/capture-candidate/source.txt
+          sha256sum build/capture-candidate/candidate-app.apk build/capture-candidate/candidate-tests.apk > build/capture-candidate/sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capture-candidate-${{ github.sha }}
+          path: build/capture-candidate
+          if-no-files-found: error
+          retention-days: 7
 
   package-replacement-api37:
     # BLOCKED: run42909197801 cannot find platforms;android-37. No unsupported retries.

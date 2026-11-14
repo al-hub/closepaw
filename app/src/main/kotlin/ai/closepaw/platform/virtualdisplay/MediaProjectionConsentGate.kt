@@ -61,17 +61,25 @@ class MediaProjectionConsentGate {
     @Volatile var generation: Long = 0
         private set
 
+    private var screenObservationRequested = false
+
+    /** Only a separate local full-display consent request may enable this mode. */
+    @Synchronized
+    internal fun screenObservationAuthorized(): Boolean =
+        screenObservationRequested && state == ProjectionConsentState.Consumed
+
     /**
      * Mark that the caller surfaced the OS consent dialog. Only valid before any terminal
      * round or after a closed round; ignored while a grant is live so a new request cannot
      * silently invalidate an in-flight grant without an explicit [onRevoked].
      */
     @Synchronized
-    fun onRequestStarted(): Boolean {
+    fun onRequestStarted(screenObservation: Boolean = false): Boolean {
         val current = state
         if (current is ProjectionConsentState.Granted) return false
         if (current is ProjectionConsentState.Requesting) return false
         generation++
+        screenObservationRequested = screenObservation
         state = ProjectionConsentState.Requesting
         return true
     }
@@ -193,6 +201,7 @@ class MediaProjectionConsentGate {
     @Synchronized
     fun reset() {
         generation++
+        screenObservationRequested = false
         state = ProjectionConsentState.NotRequested
     }
 }
