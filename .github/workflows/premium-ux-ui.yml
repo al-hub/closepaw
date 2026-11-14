@@ -21,7 +21,8 @@ concurrency:
 
 jobs:
   panel-instrumentation:
-    if: github.event_name != 'workflow_dispatch' || !inputs.build_capture_candidate
+    # A candidate dispatch must never replace the real main UI signing gate.
+    if: github.ref == 'refs/heads/main' || github.event_name != 'workflow_dispatch' || !inputs.build_capture_candidate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -95,7 +96,7 @@ jobs:
           retention-days: 14
 
   capture-candidate:
-    if: github.event_name == 'workflow_dispatch' && inputs.build_capture_candidate
+    if: github.ref != 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.build_capture_candidate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -118,21 +119,22 @@ jobs:
       - name: Verify candidate identity and record exact-source integrity
         run: |
           set -euo pipefail
+          mkdir -p build/capture-candidate
+          mapfile -t apps < <(find app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -type f)
+          mapfile -t tests < <(find app/build/outputs/apk/androidTest/debug -maxdepth 1 -name '*.apk' -type f)
+          test "${#apps[@]}" -eq 1 && test "${#tests[@]}" -eq 1
+          cp "${apps[0]}" build/capture-candidate/candidate-app.apk
+          cp "${tests[0]}" build/capture-candidate/candidate-tests.apk
           aapt="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -1)"
-          "$aapt" dump badging app/build/outputs/apk/debug/app-debug.apk > build/capture-candidate-manifest.txt
-          grep -q "^package: name='ai.closepaw.capturecandidate'" build/capture-candidate-manifest.txt
-          grep -q '^application-debuggable' build/capture-candidate-manifest.txt
-          printf '%s\n' "$GITHUB_SHA" > build/capture-candidate-source.txt
-          sha256sum app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk > build/capture-candidate-sha256.txt
+          "$aapt" dump badging build/capture-candidate/candidate-app.apk > build/capture-candidate/manifest.txt
+          grep -q "^package: name='ai.closepaw.capturecandidate'" build/capture-candidate/manifest.txt
+          grep -q '^application-debuggable' build/capture-candidate/manifest.txt
+          printf '%s\n' "$GITHUB_SHA" > build/capture-candidate/source.txt
+          sha256sum build/capture-candidate/candidate-app.apk build/capture-candidate/candidate-tests.apk > build/capture-candidate/sha256.txt
       - uses: actions/upload-artifact@v4
         with:
           name: capture-candidate-${{ github.sha }}
-          path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-            build/capture-candidate-manifest.txt
-            build/capture-candidate-source.txt
-            build/capture-candidate-sha256.txt
+          path: build/capture-candidate
           if-no-files-found: error
           retention-days: 7
 

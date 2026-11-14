@@ -24,8 +24,9 @@ import kotlinx.serialization.json.put
 import kotlin.coroutines.resume
 
 /** Explicit window OR display capture. A failed window call never falls back.
- * Display pixels outside certified application/IME regions are blacked out before
- * hashing/compression; no raw bitmap or clipboard/screen text is logged. */
+ * Strict display pixels require isolated certification. Separately consented
+ * observation masks outside requested regions without asserting pixel ownership.
+ * Masking precedes hashing/compression; no raw bitmap or screen text is logged. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 internal data class IsolatedVisualSurface(val windowId: Int, val bounds: TapBounds, val visible: List<TapBounds>)
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)

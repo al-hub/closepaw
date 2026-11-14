@@ -64,15 +64,18 @@ and version suffix -capturecandidate. It never replaces the production package,
 uses no production signing credentials and is not a published Release APK.
 
 The existing Premium UX UI workflow has a manually dispatched
-`build_capture_candidate=true` job. Ordinary PR/main UI checks stay unchanged.
+`build_capture_candidate=true` job on a non-main ref. Ordinary PR/main UI checks
+stay unchanged; even a candidate dispatch on main runs the normal UI gate and
+cannot count as a candidate-only UI success for signing.
 The candidate job builds arm64 app/test APKs and verifies the separate manifest
 package/debuggable flag, source SHA and hashes. The default release build is
 unaffected. Obtain the artifact for the exact candidate SHA only.
 
 `PhysicalScreenObservationTest` is excluded from the automatic emulator class
 allowlist. It runs only with physical_screen_observation=true and only against
-the candidate package. It does not open apps, change settings or policy, approve
-projection, type or dispatch gestures. It requires the locally enabled
+the candidate package. It marks only the isolated candidate onboarding wizard complete so no LLM
+credentials or demo are needed. It does not open apps, change access policy or
+permission settings, approve projection, type or dispatch gestures. It requires the locally enabled
 accessibility service, generic control, permitted fixture apps and observation projection.
 Standard instrumentation can restart the target, so the test waits up to180 seconds
 for a fresh local observation approval in the test process and for the expected
