@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import com.android.build.api.artifact.SingleArtifact
 
 plugins {
     id("com.android.application")
@@ -123,6 +124,26 @@ android {
                     showStackTraces = true
                 }
             }
+        }
+    }
+}
+
+// AGP may place IDE/ABI-optimized APKs outside outputs/apk. Consume its public
+// artifact providers, never infer a deployable file from a conventional path.
+if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
+    androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) { variant ->
+        val testVariant = requireNotNull(variant.androidTest)
+        tasks.register<org.gradle.api.tasks.Sync>("stageCaptureCandidate") {
+            from(variant.artifacts.get(SingleArtifact.APK)) {
+                include("*.apk")
+                rename { "candidate-app.apk" }
+            }
+            from(testVariant.artifacts.get(SingleArtifact.APK)) {
+                include("*.apk")
+                rename { "candidate-tests.apk" }
+            }
+            duplicatesStrategy = org.gradle.api.file.DuplicatesStrategy.FAIL
+            into(rootProject.layout.buildDirectory.dir("capture-candidate"))
         }
     }
 }

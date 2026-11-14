@@ -67,7 +67,9 @@ The existing Premium UX UI workflow has a manually dispatched
 `build_capture_candidate=true` job on a non-main ref. Ordinary PR/main UI checks
 stay unchanged; even a candidate dispatch on main runs the normal UI gate and
 cannot count as a candidate-only UI success for signing.
-The candidate job builds arm64 app/test APKs and verifies the separate manifest
+The candidate job builds arm64 app/test APKs through the public AGP
+SingleArtifact.APK providers and stages them with a candidate-only Sync task;
+it does not assume outputs/apk paths for IDE/ABI-optimized builds. It verifies the separate manifest
 package/debuggable flag, source SHA and hashes. The default release build is
 unaffected. Obtain the artifact for the exact candidate SHA only.
 
