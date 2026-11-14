@@ -79,7 +79,10 @@ the candidate package. It marks only the isolated candidate onboarding wizard co
 credentials or demo are needed. It does not open apps, change access policy or
 permission settings, approve projection, type or dispatch gestures. It requires the locally enabled
 accessibility service, generic control, permitted fixture apps and observation projection.
-Standard instrumentation can restart the target, so the test waits up to180 seconds
+Standard instrumentation can restart the target, so the test waits180 seconds by default
+(physical_wait_ms can explicitly select30000..600000ms). It emits only changed readiness
+booleans for service, control, projection lease, observation opt-in, expected foreground
+and visible IME; no text, pixels or unrelated app identities are printed.
 for a fresh local observation approval in the test process and for the expected
 foreground package. Start instrumentation BEFORE approving the observation share;
 then reopen the candidate, approve sharing, and open the blank fixture. Never
@@ -106,12 +109,18 @@ Example development invocation (same-phone ADB, no PC/USB):
 adb shell am instrument -w \
   -e class ai.closepaw.qa.PhysicalScreenObservationTest \
   -e physical_screen_observation true \
+  -e physical_wait_ms 600000 \
   -e fixture_package com.android.chrome \
   -e export_image true \
   ai.closepaw.capturecandidate.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 Once the run starts, locally reopen the candidate and approve observation sharing
-again. Generic-control/App Access choices persist, but projection consent does not.
+again. On this Galaxy, instrumentation force-stops the target and can leave its
+accessibility service enabled but unbound/Crashed. After starting instrumentation,
+locally switch the candidate accessibility service off/on before granting observation
+sharing. Never write secure settings to grant it. Generic-control/App Access choices
+persist, but projection consent does not. Attempts with180s expired before the user's
+service rebind/projection approval completed; use the explicit600000ms setup window.
 Read the actual instrumentation success/failure result; a queued job or an old
 cache file is never PASS. Keep physical images private and clear them after QA.

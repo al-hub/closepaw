@@ -5,6 +5,7 @@ import ai.closepaw.chatgpt.McpExecutionSettings
 import ai.closepaw.chatgpt.control.AndroidControlPort
 import ai.closepaw.platform.virtualdisplay.ProjectionImageTransport
 import android.app.UiAutomation
+import android.os.Bundle
 import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -40,26 +41,45 @@ class PhysicalScreenObservationTest {
         require(expected in setOf("com.android.chrome", "com.samsung.android.app.notes"))
         // Standard instrumentation may restart the target. Never reuse a pre-run
         // projection assumption: wait for fresh local approval in this process.
-        val deadline = SystemClock.elapsedRealtime() + 180_000
+        val waitMillis = args.getString("physical_wait_ms")?.toLongOrNull() ?: 180_000L
+        require(waitMillis in 30_000L..600_000L) { "physical_wait_ms must be between30000 and600000" }
+        val deadline = SystemClock.elapsedRealtime() + waitMillis
         var ready = false
+        var lastStatus: String? = null
         while (!ready && SystemClock.elapsedRealtime() < deadline) {
             val current = AgentService.instance
-            if (current != null && McpExecutionSettings(current).genericControlEnabled &&
-                ProjectionImageTransport.active()?.screenObservationAllowed() == true) {
-                ready = withContext(Dispatchers.Main) {
+            val controlEnabled = current != null && McpExecutionSettings(current).genericControlEnabled
+            val lease = ProjectionImageTransport.active()
+            val observationAllowed = lease?.screenObservationAllowed() == true
+            var expectedForeground = false
+            var imeVisible = false
+            if (current != null) {
+                withContext(Dispatchers.Main) {
                     val root = current.rootInActiveWindow
                     val windows = current.windows.orEmpty()
-                    try { root?.packageName?.toString() == expected && windows.any {
-                        it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD
-                    } } finally {
+                    try {
+                        expectedForeground = root?.packageName?.toString() == expected
+                        imeVisible = windows.any {
+                            it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD
+                        }
+                    } finally {
                         root?.recycle()
                         windows.forEach { it.recycle() }
                     }
                 }
             }
+            ready = controlEnabled && observationAllowed && expectedForeground && imeVisible
+            // Bounded booleans only: no screen pixels, text, unrelated app identities,
+            // credentials or consent tokens in instrumentation output.
+            val status = "service=${current != null} control=$controlEnabled lease=${lease != null} " +
+                "observation=$observationAllowed fixture=$expectedForeground ime=$imeVisible"
+            if (status != lastStatus) {
+                instrumentation.sendStatus(1, Bundle().apply { putString("stream", "\nPHYSICAL_READY $status\n") })
+                lastStatus = status
+            }
             if (!ready) delay(500)
         }
-        assertTrue("Grant candidate local observation sharing, then show the blank fixture", ready)
+        assertTrue("Physical setup deadline reached: $lastStatus", ready)
         val service = requireNotNull(AgentService.instance) { "Enable candidate accessibility locally first" }
         val settings = McpExecutionSettings(service)
         assertTrue("Enable candidate generic control locally first", settings.genericControlEnabled)
