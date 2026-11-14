@@ -110,6 +110,8 @@ internal interface ControlPort : IslandControlPort {
     suspend fun visual(frame: ControlFrame): VisualTargetProof? = null
     suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = null
     suspend fun visualDisplay(frame: ControlFrame): VisualTargetProof? = null
+    /** Explicitly consented shared-screen reading; never a visual action proof. */
+    suspend fun visualScreenObserve(frame: ControlFrame): VisualTargetProof? = null
     fun visualFailure(): String = "visual_observation_unavailable"
     fun visualDisclosureAllowed(frame: ControlFrame): Boolean = false
     suspend fun capture(): ControlFrame
