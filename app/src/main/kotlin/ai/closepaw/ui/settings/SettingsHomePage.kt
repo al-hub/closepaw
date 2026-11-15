@@ -102,6 +102,17 @@ internal fun SettingsHomePage(
                 subtitle = "View only · notifications and other app overlays may be visible · Android approval required",
                 onClick = onRequestScreenObservationConsent
             )
+            val qaContext = LocalContext.current
+            if (BuildConfig.DEBUG && qaContext.packageName == "ai.closepaw.capturecandidate") {
+                SettingsNavigationRow(
+                    title = "Local capture QA",
+                    subtitle = "Candidate only · no ADB · blank fixtures · private test evidence",
+                    onClick = {
+                        qaContext.startActivity(android.content.Intent().setClassName(
+                            qaContext, "ai.closepaw.qa.LocalCaptureQaActivity"))
+                    }
+                )
+            }
             ChatGptConnectionCard()
 
             SectionHeader("About")

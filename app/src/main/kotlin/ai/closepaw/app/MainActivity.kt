@@ -219,6 +219,11 @@ class MainActivity : ComponentActivity() {
         onboardingStore.migrateIfNeeded {
             hasLegacyUsageEvidence()
         }
+        // Disposable QA package only: no LLM credential/demo is needed. Real OS
+        // permissions, app policy and generic-control consent are never granted here.
+        if (BuildConfig.DEBUG && packageName == "ai.closepaw.capturecandidate") {
+            onboardingStore.setCompleted()
+        }
         deriveOpenAiAuthUiState()
 
         // Eval/debug bypass: EXTRA_FRESH_SESSION + EXTRA_GOAL → skip onboarding (debug only)

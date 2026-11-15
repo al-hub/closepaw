@@ -115,7 +115,9 @@ jobs:
         with:
           cache-cleanup: never
       - name: Build side-by-side debug capture candidate and its test APK
-        run: bash scripts/ci-gradle.sh capture-candidate :app:stageCaptureCandidate -PclosepawCaptureCandidate=true -Pandroid.injected.build.abi=arm64-v8a
+        # Public candidate ndk.abiFilters limits packaging. No IDE-injected ABI
+        # build: the app APK must install with the ordinary Android installer.
+        run: bash scripts/ci-gradle.sh capture-candidate :app:stageCaptureCandidate -PclosepawCaptureCandidate=true
       - name: Verify candidate identity and record exact-source integrity
         run: |
           set -euo pipefail
@@ -125,6 +127,13 @@ jobs:
           "$aapt" dump badging build/capture-candidate/candidate-app.apk > build/capture-candidate/manifest.txt
           grep -q "^package: name='ai.closepaw.capturecandidate'" build/capture-candidate/manifest.txt
           grep -q '^application-debuggable' build/capture-candidate/manifest.txt
+          if grep -q '^application-testOnly' build/capture-candidate/manifest.txt; then
+            echo 'Candidate app is testOnly; ordinary installation would fail' >&2
+            exit 1
+          fi
+          grep -q "native-code: 'arm64-v8a'" build/capture-candidate/manifest.txt
+          "$aapt" dump xmltree build/capture-candidate/candidate-app.apk AndroidManifest.xml > build/capture-candidate/manifest-tree.txt
+          grep -q 'ai.closepaw.qa.LocalCaptureQaActivity' build/capture-candidate/manifest-tree.txt
           printf '%s\n' "$GITHUB_SHA" > build/capture-candidate/source.txt
           sha256sum build/capture-candidate/candidate-app.apk build/capture-candidate/candidate-tests.apk > build/capture-candidate/sha256.txt
       - uses: actions/upload-artifact@v4

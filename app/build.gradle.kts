@@ -19,6 +19,7 @@ android {
     defaultConfig {
         applicationId = "ai.closepaw"
         manifestPlaceholders["closepawAppLabel"] = "@string/app_name"
+        manifestPlaceholders["captureQaEnabled"] = "false"
         // Required by LiquidAI Leap SDK for local inference.
         // If we need to support Android < 12, consider a cloud-only flavor.
         minSdk = 31
@@ -50,11 +51,14 @@ android {
 
     buildTypes {
         debug {
+            buildConfigField("String", "CAPTURE_QA_SOURCE_SHA", "\"${providers.environmentVariable("GITHUB_SHA").orNull ?: "unavailable"}\"")
             // Opt-in side-by-side physical capture acceptance, never a production update.
             if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
                 applicationIdSuffix = ".capturecandidate"
                 versionNameSuffix = "-capturecandidate"
                 manifestPlaceholders["closepawAppLabel"] = "ClosePaw Capture Candidate"
+                manifestPlaceholders["captureQaEnabled"] = "true"
+                ndk { abiFilters += "arm64-v8a" }
             }
             val evalSsl = project.findProperty("insecureSslForEval")?.toString()?.toBoolean() ?: false
             buildConfigField("boolean", "INSECURE_SSL_FOR_EVAL", evalSsl.toString())

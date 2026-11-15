@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Only explicitly prepared historical exports, never arbitrary app files. -->
+    <cache-path name="capture_qa_exports" path="capture-qa/exports/" />
+</paths>

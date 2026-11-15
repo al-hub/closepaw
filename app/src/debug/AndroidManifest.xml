@@ -5,6 +5,19 @@
     <!-- Debug-only: allow ADB to launch the VD viewer for testing -->
     <application>
         <activity
+            android:name="ai.closepaw.qa.LocalCaptureQaActivity"
+            android:enabled="${captureQaEnabled}"
+            android:exported="false" />
+        <provider
+            android:name="ai.closepaw.qa.CaptureQaFileProvider"
+            android:authorities="${applicationId}.captureqa"
+            android:enabled="${captureQaEnabled}"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/capture_qa_paths" />
+        </provider>
+        <activity
             android:name=".ui.viewer.VirtualDisplayViewerActivity"
             android:exported="true"
             tools:replace="android:exported" />
