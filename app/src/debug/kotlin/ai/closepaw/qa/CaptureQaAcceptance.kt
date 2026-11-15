@@ -30,7 +30,7 @@ import kotlinx.serialization.json.*
 /** DEBUG source only. Both local UI and ADB use this exact guarded capture path.
  * No permissions, app policy, gestures or text input are granted/dispatched here. */
 internal object CaptureQaAcceptance {
-    const val CANDIDATE = "ai.closepaw.capturecandidate"
+    const val CANDIDATE = "ai.closepaw.capturecandidate239"
     val fixtures = listOf("com.android.chrome", "com.samsung.android.app.notes")
     val scopes = listOf("screen_observe", "keyboard", "display", "revoked")
     private var positiveEpoch: Long? = null

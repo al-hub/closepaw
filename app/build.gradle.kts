@@ -54,9 +54,9 @@ android {
             buildConfigField("String", "CAPTURE_QA_SOURCE_SHA", "\"${providers.environmentVariable("GITHUB_SHA").orNull ?: "unavailable"}\"")
             // Opt-in side-by-side physical capture acceptance, never a production update.
             if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
-                applicationIdSuffix = ".capturecandidate"
-                versionNameSuffix = "-capturecandidate"
-                manifestPlaceholders["closepawAppLabel"] = "ClosePaw Capture Candidate"
+                applicationIdSuffix = ".capturecandidate239"
+                versionNameSuffix = "-capturecandidate239"
+                manifestPlaceholders["closepawAppLabel"] = "ClosePaw Capture QA 239"
                 manifestPlaceholders["captureQaEnabled"] = "true"
                 ndk { abiFilters += "arm64-v8a" }
             }

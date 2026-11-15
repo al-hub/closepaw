@@ -221,7 +221,7 @@ class MainActivity : ComponentActivity() {
         }
         // Disposable QA package only: no LLM credential/demo is needed. Real OS
         // permissions, app policy and generic-control consent are never granted here.
-        if (BuildConfig.DEBUG && packageName == "ai.closepaw.capturecandidate") {
+        if (BuildConfig.DEBUG && packageName == "ai.closepaw.capturecandidate239") {
             onboardingStore.setCompleted()
         }
         deriveOpenAiAuthUiState()

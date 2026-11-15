@@ -125,7 +125,7 @@ jobs:
           test -s build/capture-candidate/candidate-tests.apk
           aapt="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -1)"
           "$aapt" dump badging build/capture-candidate/candidate-app.apk > build/capture-candidate/manifest.txt
-          grep -q "^package: name='ai.closepaw.capturecandidate'" build/capture-candidate/manifest.txt
+          grep -q "^package: name='ai.closepaw.capturecandidate239'" build/capture-candidate/manifest.txt
           grep -q '^application-debuggable' build/capture-candidate/manifest.txt
           if grep -q '^application-testOnly' build/capture-candidate/manifest.txt; then
             echo 'Candidate app is testOnly; ordinary installation would fail' >&2

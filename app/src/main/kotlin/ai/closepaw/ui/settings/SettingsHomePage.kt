@@ -103,7 +103,7 @@ internal fun SettingsHomePage(
                 onClick = onRequestScreenObservationConsent
             )
             val qaContext = LocalContext.current
-            if (BuildConfig.DEBUG && qaContext.packageName == "ai.closepaw.capturecandidate") {
+            if (BuildConfig.DEBUG && qaContext.packageName == "ai.closepaw.capturecandidate239") {
                 SettingsNavigationRow(
                     title = "Local capture QA",
                     subtitle = "Candidate only · no ADB · blank fixtures · private test evidence",
