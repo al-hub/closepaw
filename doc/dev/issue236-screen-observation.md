@@ -150,6 +150,15 @@ capture IDs/timestamps/JPEG hashes are expected; byte equality is not required.
 A match states **numeric contract only; pixels require separate review**.
 Wrong source/fixture/geometry/authority or matching setup failures cannot count.
 
+For #239, the earlier `blank_samsung_ime_fixture_required` bundled several
+fixture checks. Candidate-only QA now records the first blocker as a fixed
+`fixture_app_mismatch`, `fixture_keyboard_missing`, `fixture_keyboard_not_samsung`,
+`fixture_editor_unverified`, `fixture_editor_password`, `fixture_editor_not_editable`,
+`fixture_editor_not_focused`, or `fixture_editor_not_empty` reason. No observed
+package, editor data, or pixels are added to these diagnostics. An unverified
+editor means no eligible input target was available in the captured frame, not
+proof that the screen has no editor. Admission and capture guards are unchanged.
+
 After real local image/position/masking and boundary acceptance, compare against
 same-source ADB when available. Final review/requiredCI, protected normal merge,
 exact-main Security+UI, existing production-key signing, one Release and independent

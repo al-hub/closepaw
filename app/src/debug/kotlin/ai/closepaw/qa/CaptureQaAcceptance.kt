@@ -164,9 +164,19 @@ internal object CaptureQaAcceptance {
             val frame = port.capture()
             guard()?.let { return report("STOPPED", it).also { result = it } }
             if (frame.reason != null) return report("CAPTURE_BLOCKED", safeReason(frame.reason)).also { result = it }
-            if (frame.packageName != fixture || frame.keyboard?.packageName != "com.samsung.android.honeyboard" ||
-                frame.inputTarget?.let { it.empty && it.editable && it.focused && !it.password } != true) {
-                return report("SETUP_BLOCKED", "blank_samsung_ime_fixture_required").also { result = it }
+            val input = frame.inputTarget
+            val fixtureBlocker = CaptureQaFixtureReadiness.blocker(
+                fixtureMatches = frame.packageName == fixture,
+                keyboardPresent = frame.keyboard != null,
+                samsungKeyboard = frame.keyboard?.packageName == "com.samsung.android.honeyboard",
+                editorPresent = input != null,
+                editorEmpty = input?.empty == true,
+                editorEditable = input?.editable == true,
+                editorFocused = input?.focused == true,
+                editorNotPassword = input?.let { !it.password } == true,
+            )
+            if (fixtureBlocker != null) {
+                return report("SETUP_BLOCKED", fixtureBlocker).also { result = it }
             }
             val proof = when (scope) {
                 "keyboard" -> port.visualKeyboard(frame)
@@ -226,6 +236,30 @@ internal object CaptureQaAcceptance {
     }
     private fun safeReason(value: String) = value.takeIf { it.matches(Regex("[a-z0-9_]{1,160}")) } ?: "native_refusal"
     fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+}
+
+/** Debug QA only. Return the first blocker as a fixed code, never actual package or editor data. */
+internal object CaptureQaFixtureReadiness {
+    fun blocker(
+        fixtureMatches: Boolean,
+        keyboardPresent: Boolean,
+        samsungKeyboard: Boolean,
+        editorPresent: Boolean,
+        editorEmpty: Boolean,
+        editorEditable: Boolean,
+        editorFocused: Boolean,
+        editorNotPassword: Boolean,
+    ): String? = when {
+        !fixtureMatches -> "fixture_app_mismatch"
+        !keyboardPresent -> "fixture_keyboard_missing"
+        !samsungKeyboard -> "fixture_keyboard_not_samsung"
+        !editorPresent -> "fixture_editor_unverified"
+        !editorNotPassword -> "fixture_editor_password"
+        !editorEditable -> "fixture_editor_not_editable"
+        !editorFocused -> "fixture_editor_not_focused"
+        !editorEmpty -> "fixture_editor_not_empty"
+        else -> null
+    }
 }
 
 /** Fixed at arm time. A resumed/new session is never substituted for this run. */

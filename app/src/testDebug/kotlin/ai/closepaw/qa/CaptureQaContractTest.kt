@@ -25,6 +25,39 @@ class CaptureQaContractTest {
     }
     private fun JsonObject.replacing(key: String, value: JsonElement) = JsonObject(toMutableMap().apply { put(key, value) })
 
+    @Test fun fixtureDiagnosticsPreserveTheOldAdmissionRule() {
+        fun flag(bits: Int, index: Int) = (bits and (1 shl index)) != 0
+        for (bits in 0..255) {
+            val actual = CaptureQaFixtureReadiness.blocker(
+                fixtureMatches = flag(bits, 0),
+                keyboardPresent = flag(bits, 1),
+                samsungKeyboard = flag(bits, 2),
+                editorPresent = flag(bits, 3),
+                editorEmpty = flag(bits, 4),
+                editorEditable = flag(bits, 5),
+                editorFocused = flag(bits, 6),
+                editorNotPassword = flag(bits, 7),
+            )
+            assertEquals("mask=$bits", bits == 255, actual == null)
+        }
+    }
+
+    @Test fun fixtureDiagnosticsSeparateEachFailureWithoutRawEditorData() {
+        val expected = listOf(
+            "fixture_app_mismatch", "fixture_keyboard_missing", "fixture_keyboard_not_samsung",
+            "fixture_editor_unverified", "fixture_editor_not_empty", "fixture_editor_not_editable",
+            "fixture_editor_not_focused", "fixture_editor_password",
+        )
+        for ((index, code) in expected.withIndex()) {
+            assertEquals(code, CaptureQaFixtureReadiness.blocker(
+                index != 0, index != 1, index != 2, index != 3,
+                index != 4, index != 5, index != 6, index != 7,
+            ))
+        }
+        assertEquals("fixture_editor_unverified",
+            CaptureQaFixtureReadiness.blocker(true, true, true, false, false, false, false, false))
+    }
+
     @Test fun separatelyCapturedPixelsNeedNotBeByteIdentical() {
         assertEquals("numeric_contract_match_pixels_require_separate_review", CaptureQaComparison.compare(report("local", "first-frame"), report("adb", "later-frame")))
     }
