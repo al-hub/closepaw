@@ -13,14 +13,10 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: 'Enable release processing (held versions stage unless an approved SHA-256 is supplied)'
+        description: 'Create version tag and publish GitHub Release'
         required: true
         default: true
         type: boolean
-      approved_apk_sha256:
-        description: 'Device-tested APK SHA-256 to publish an existing held draft'
-        required: false
-        type: string
 
 permissions:
   contents: write
@@ -116,7 +112,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
-          APPROVED_SHA256: ${{ inputs.approved_apk_sha256 }}
         run: |
           set -euo pipefail
           git fetch origin main --quiet
@@ -142,30 +137,6 @@ jobs:
             echo "tag_exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "tag_exists=false" >> "$GITHUB_OUTPUT"
-          fi
-          held_tag="$(sed -n 's/^RELEASE_DEVICE_GATE_TAG=//p' gradle.properties)"
-          if [[ -n "$APPROVED_SHA256" ]]; then
-            [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && "$held_tag" == "$TAG" ]]
-            [[ "$APPROVED_SHA256" =~ ^[0-9a-f]{64}$ ]]
-            echo "mode=promote" >> "$GITHUB_OUTPUT"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [[ "$held_tag" == "$TAG" ]]; then
-            echo "mode=stage" >> "$GITHUB_OUTPUT"
-            # Authenticated releases listing includes drafts. Fail closed on API errors.
-            existing="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-              --jq ".[] | select(.tag_name == \"$TAG\") | .id")"
-            if [[ -n "$existing" ]]; then
-              echo "Held release already exists; will not rebuild or replace its assets."
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-            else
-              if [[ -n "$(git tag --list "$TAG")" ]]; then
-                echo "Held release cannot stage over a tag without its draft." >&2; exit 1
-              fi
-              echo "skip=false" >> "$GITHUB_OUTPUT"
-            fi
-            exit 0
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release already exists: validating both published assets"
@@ -341,69 +312,8 @@ jobs:
             exit 1
           fi
 
-      - name: Stage signed APK in unpublished release
-        if: steps.state.outputs.mode == 'stage' && steps.state.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          set -euo pipefail
-          sha256sum -c closepaw-aa-bridge.apk.sha256
-          source_sha="$(git rev-parse HEAD)"
-          git fetch origin main --quiet
-          test "$source_sha" = "$(git rev-parse origin/main)"
-          gh release create "$TAG" closepaw-aa-bridge.apk closepaw-aa-bridge.apk.sha256 \
-            --draft --target "$source_sha" --title "ClosePaw AA-Bridge $TAG" --generate-notes
-          draft="$(gh release view "$TAG" --json url,isDraft,targetCommitish,assets)"
-          jq -e --arg sha "$source_sha" '.isDraft and .targetCommitish == $sha and
-            ([.assets[].name] | sort == ["closepaw-aa-bridge.apk","closepaw-aa-bridge.apk.sha256"])' <<< "$draft" >/dev/null
-          {
-            echo "### Signed APK staged for device acceptance"
-            echo "Source: $source_sha"
-            echo "SHA-256: $(cut -d' ' -f1 closepaw-aa-bridge.apk.sha256)"
-            jq -r '.url' <<< "$draft"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Promote only the exact device-approved draft APK
-        if: steps.state.outputs.mode == 'promote'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
-          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
-          EXPECTED_CODE: ${{ steps.version.outputs.code }}
-          APPROVED_SHA256: ${{ inputs.approved_apk_sha256 }}
-        run: |
-          set -euo pipefail
-          source_sha="$(git rev-parse HEAD)"
-          draft="$(gh release view "$TAG" --json isDraft,targetCommitish,assets)"
-          jq -e --arg sha "$source_sha" '.isDraft and .targetCommitish == $sha and
-            ([.assets[].name] | sort == ["closepaw-aa-bridge.apk","closepaw-aa-bridge.apk.sha256"])' <<< "$draft" >/dev/null
-          gh release download "$TAG" -p closepaw-aa-bridge.apk -p closepaw-aa-bridge.apk.sha256
-          printf '%s  closepaw-aa-bridge.apk\n' "$APPROVED_SHA256" | sha256sum -c -
-          printf '%s  closepaw-aa-bridge.apk\n' "$APPROVED_SHA256" | cmp - closepaw-aa-bridge.apk.sha256
-          signer="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
-          aapt="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)"
-          "$signer" verify --verbose --print-certs closepaw-aa-bridge.apk > "$RUNNER_TEMP/draft-signer.txt"
-          grep -Fq 'certificate SHA-256 digest: d6be7285b96b9f67b50df6daaf55e5501aef35ab484c170e60dd993590695aba' "$RUNNER_TEMP/draft-signer.txt"
-          "$aapt" dump badging closepaw-aa-bridge.apk > "$RUNNER_TEMP/draft-manifest.txt"
-          grep -F "package: name='ai.closepaw' versionCode='$EXPECTED_CODE' versionName='$EXPECTED_VERSION'" "$RUNNER_TEMP/draft-manifest.txt"
-          if grep -q 'application-debuggable' "$RUNNER_TEMP/draft-manifest.txt"; then
-            echo 'Refusing debuggable APK' >&2; exit 1
-          fi
-          unzip -Z1 closepaw-aa-bridge.apk > "$RUNNER_TEMP/draft-entries.txt"
-          grep -Fx 'lib/arm64-v8a/libopenaitunnel.so' "$RUNNER_TEMP/draft-entries.txt"
-          grep -Fx 'lib/arm64-v8a/libcloudflared.so' "$RUNNER_TEMP/draft-entries.txt"
-          git fetch origin main --tags --quiet
-          test "$source_sha" = "$(git rev-parse origin/main)"
-          if git show-ref --verify --quiet "refs/tags/$TAG"; then
-            test "$source_sha" = "$(git rev-list -n 1 "$TAG")"
-          fi
-          # Detect a release/asset change after the verification download.
-          test "$draft" = "$(gh release view "$TAG" --json isDraft,targetCommitish,assets)"
-          gh release edit "$TAG" --draft=false
-
       - name: Create version tag only if absent
-        if: steps.state.outputs.mode != 'stage' && steps.state.outputs.skip != 'true' && steps.state.outputs.tag_exists == 'false'
+        if: steps.state.outputs.skip != 'true' && steps.state.outputs.tag_exists == 'false'
         env:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
@@ -414,7 +324,7 @@ jobs:
           git push origin "$TAG"
 
       - name: Publish missing Release
-        if: steps.state.outputs.mode != 'stage' && steps.state.outputs.skip != 'true'
+        if: steps.state.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
@@ -440,7 +350,7 @@ jobs:
           fi
 
       - name: Independently verify public APK download
-        if: steps.state.outputs.mode == 'promote' || (steps.state.outputs.mode != 'stage' && steps.state.outputs.skip != 'true')
+        if: steps.state.outputs.skip != 'true'
         env:
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
           EXPECTED_VERSION: ${{ steps.version.outputs.version }}
@@ -464,7 +374,6 @@ jobs:
           unzip -l "$out/closepaw-aa-bridge.apk" > "$out/entries.txt"
           grep -F 'lib/arm64-v8a/libopenaitunnel.so' "$out/entries.txt"
           grep -F 'lib/arm64-v8a/libcloudflared.so' "$out/entries.txt"
-          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --quiet
           test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$(git rev-parse HEAD)"
           {
             echo "source_commit=$(git rev-parse HEAD)"
@@ -476,7 +385,7 @@ jobs:
           } | tee "$out/verification.txt"
 
       - name: Upload public APK verification evidence
-        if: success() && (steps.state.outputs.mode == 'promote' || (steps.state.outputs.mode != 'stage' && steps.state.outputs.skip != 'true'))
+        if: success() && steps.state.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: public-apk-verification-${{ github.run_id }}

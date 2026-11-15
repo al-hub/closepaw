@@ -51,14 +51,6 @@ native cache는 정확한 source/toolchain/flags/script key만 사용하며 main
 소스가 현재 main인지 검증하며, 완료 후 만드는 태그는 그 APK 소스를 가리킨다.
 완료 기록은 발행이 끝난 뒤 docs-only 커밋으로 추가한다.
 
-### 단말 선검증 지정 버전 (#239)
-
-`gradle.properties`의 `RELEASE_DEVICE_GATE_TAG`와 일치하는 버전은 main의 두 CI와 기존 운영키 검사 뒤 **미공개 GitHub Release 초안**에만 APK와 체크섬을 올린다. 공개 저장소의 Actions artifact에는 APK를 올리지 않는다. 운영 자동 업데이트에는 초안이 표시되지 않는다. 다른 버전은 기존 발행 절차를 유지한다.
-
-저장소 쓰기 권한이 있는 계정으로 초안 APK를 받고 SHA-256을 대조해 지정한 단말에만 설치한다. #239의 범용 회전·보호 창·공유 철회 및 정리를 통과한 정확한 APK의 SHA-256을 이슈에 기록한다. 삼성 노트는 #240이다. 실패하거나 미실행이면 초안을 공개하지 않는다.
-
-통과한 경우에만 main에서 `gh workflow run signed-release.yml --ref main -f publish=true -f approved_apk_sha256=<검증한-APK의-SHA256> --repo al-hub/closepaw`를 실행한다. 초안의 출처·파일·해시·인증서를 확인한 뒤 같은 릴리스를 공개한다. 재빌드·재서명·자산 교체는 하지 않으며 공개 다운로드를 다시 대조한다.
-
 ## 3. 자동 시작이 없거나 커넥터에 dispatch 도구가 없을 때
 
 먼저 현재 main SHA의 Actions 실행을 확인한다. 진행 중인 실행이 있으면 중복
