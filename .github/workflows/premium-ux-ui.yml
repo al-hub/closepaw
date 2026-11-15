@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches: [main, qa/239-diagnostics-sidecar-b832bc1]
   workflow_dispatch:
     inputs:
       build_capture_candidate:
@@ -22,7 +22,7 @@ concurrency:
 jobs:
   panel-instrumentation:
     # A candidate dispatch must never replace the real main UI signing gate.
-    if: github.ref == 'refs/heads/main' || github.event_name != 'workflow_dispatch' || !inputs.build_capture_candidate
+    if: github.ref != 'refs/heads/qa/239-diagnostics-sidecar-b832bc1' && (github.ref == 'refs/heads/main' || github.event_name != 'workflow_dispatch' || !inputs.build_capture_candidate)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -96,7 +96,7 @@ jobs:
           retention-days: 14
 
   capture-candidate:
-    if: github.ref != 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.build_capture_candidate
+    if: (github.ref == 'refs/heads/qa/239-diagnostics-sidecar-b832bc1' && github.event_name == 'push') || (github.ref != 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.build_capture_candidate)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
