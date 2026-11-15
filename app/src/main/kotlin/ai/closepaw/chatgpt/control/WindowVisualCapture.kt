@@ -24,8 +24,9 @@ import kotlinx.serialization.json.put
 import kotlin.coroutines.resume
 
 /** Explicit window OR display capture. A failed window call never falls back.
- * Display pixels outside certified application/IME regions are blacked out before
- * hashing/compression; no raw bitmap or clipboard/screen text is logged. */
+ * Strict display pixels require isolated certification. Separately consented
+ * observation masks outside requested regions without asserting pixel ownership.
+ * Masking precedes hashing/compression; no raw bitmap or screen text is logged. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 internal data class IsolatedVisualSurface(val windowId: Int, val bounds: TapBounds, val visible: List<TapBounds>)
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -33,8 +34,11 @@ internal object WindowVisualCapture {
     suspend fun capture(service: AccessibilityService, windowId: Int, window: TapBounds, context: String,
         display: Boolean = false, visibleRegion: Region? = null,
         surfaces: List<IsolatedVisualSurface> = emptyList(), projection: ProjectionImageLease? = null,
-        requestId: String? = null, awaitSlot: suspend () -> Unit = {}): VisualCaptureResult {
+        requestId: String? = null, observationOnly: Boolean = false,
+        awaitSlot: suspend () -> Unit = {}): VisualCaptureResult {
         fun failure(code: String) = VisualCaptureResult(reason=code)
+        if (observationOnly && (!display || projection?.screenObservationAllowed() != true))
+            return failure("screen_observation_consent_required")
         if (Build.VERSION.SDK_INT < 34 || !window.valid || (display && visibleRegion == null)) return failure("screenshot_geometry_unverified")
         var nativeReason = "screenshot_timeout"
         // Projection is an explicit display-only source, never an ownership proof.
@@ -80,27 +84,35 @@ internal object WindowVisualCapture {
                 }
                 if (source.width.toLong()*source.height > 8_000_000) return@withContext failure("screenshot_pixel_limit")
                 if (display) {
-                    if(surfaces.isEmpty()) return@withContext failure("display_isolated_sources_required")
-                    val actual=IntArray(source.width*source.height)
-                    source.getPixels(actual,0,source.width,0,0,source.width,source.height)
                     val verified=Region()
-                    for(surface in surfaces) {
-                        awaitSlot()
-                        // Window-isolated verification never uses a display fallback.
-                        val isolated=capturePixels(service,surface.windowId,surface.bounds)
-                        val expected=isolated.pixels ?: return@withContext failure("display_isolated_"+isolated.reason)
-                        val runs=OwnedPixelPolicy.verifiedRegions(actual,source.width,expected,surface.bounds,surface.visible,
-                            limit = 4096 / surfaces.size)
-                            ?: return@withContext failure("display_pixel_verification_fragmented")
-                        runs.forEach { verified.op(Rect(it.left,it.top,it.right,it.bottom),Region.Op.UNION) }
+                    if (observationOnly) {
+                        // Coordinates come from this display frame, never an IME buffer.
+                        // The region limits disclosure but is NOT a pixel-ownership proof.
+                        verified.set(visibleRegion!!)
+                        verified.op(Rect(0,0,source.width,source.height),Region.Op.INTERSECT)
+                        if (verified.isEmpty) return@withContext failure("screen_observation_region_empty")
+                    } else {
+                        if(surfaces.isEmpty()) return@withContext failure("display_isolated_sources_required")
+                        val actual=IntArray(source.width*source.height)
+                        source.getPixels(actual,0,source.width,0,0,source.width,source.height)
+                        for(surface in surfaces) {
+                            awaitSlot()
+                            // Window-isolated verification never uses a display fallback.
+                            val isolated=capturePixels(service,surface.windowId,surface.bounds)
+                            val expected=isolated.pixels ?: return@withContext failure("display_isolated_"+isolated.reason)
+                            val runs=OwnedPixelPolicy.verifiedRegions(actual,source.width,expected,surface.bounds,surface.visible,
+                                limit = 4096 / surfaces.size)
+                                ?: return@withContext failure("display_pixel_verification_fragmented")
+                            runs.forEach { verified.op(Rect(it.left,it.top,it.right,it.bottom),Region.Op.UNION) }
+                        }
+                        if(verified.isEmpty) return@withContext failure("display_owned_pixels_unavailable")
                     }
-                    if(verified.isEmpty) return@withContext failure("display_owned_pixels_unavailable")
                     val parts=mutableListOf<TapBounds>();val partsIterator=RegionIterator(verified);val part=Rect()
                     while(partsIterator.next(part)) {
                         if(parts.size>=4096) return@withContext failure("display_pixel_verification_fragmented")
                         parts.add(TapBounds(part.left,part.top,part.right,part.bottom))
                     }
-                    disclosed=parts
+                    disclosed=if (observationOnly) emptyList() else parts
                     val hidden = Region(0,0,source.width,source.height).apply { op(verified,Region.Op.DIFFERENCE) }
                     val iterator=RegionIterator(hidden); val rect=Rect(); val canvas=Canvas(source); val paint=Paint().apply { color=Color.BLACK }
                     while(iterator.next(rect)) canvas.drawRect(rect,paint)
@@ -115,13 +127,15 @@ internal object WindowVisualCapture {
                 if (bytes.size > 1_500_000) return@withContext failure("screenshot_byte_limit")
                 val sourceAllowed: () -> Boolean = if (projected == null) ({ true }) else {
                     val lease = projected.lease; val at = projected.capturedAt
-                    val check: () -> Boolean = { lease.permitsDelivery(at) }
+                    val check: () -> Boolean = { lease.permitsDelivery(at) &&
+                        (!observationOnly || lease.screenObservationAllowed()) }
                     check
                 }
                 if (!sourceAllowed()) return@withContext failure("projection_session_expired")
                 VisualCaptureResult(VisualTargetProof(ScreenImage(image.width,image.height,"image/jpeg",bytes,
                     if (projected == null) ScreenImageSource.ACCESSIBILITY_SCREENSHOT else ScreenImageSource.MEDIA_PROJECTION),
-                    hash,window,context,System.currentTimeMillis(),disclosedRegions=disclosed,sourceDisclosureAllowed=sourceAllowed))
+                    hash,window,context,System.currentTimeMillis(),scope=if (observationOnly) "screen_observe" else "app",
+                    disclosedRegions=disclosed,sourceDisclosureAllowed=sourceAllowed))
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { failure("screenshot_conversion_failed") }
             finally { if (scaled !== bitmap) scaled?.recycle(); bitmap?.recycle() }

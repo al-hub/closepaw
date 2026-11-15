@@ -51,7 +51,8 @@ internal fun SettingsHomePage(
     approvalMode: ApprovalMode,
     onNavigate: (SettingsPage) -> Unit,
     onDismiss: () -> Unit,
-    onRequestProjectionConsent: () -> Unit = {}
+    onRequestProjectionConsent: () -> Unit = {},
+    onRequestScreenObservationConsent: () -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         PageMastheadIdentity(title = "Settings", onClose = onDismiss)
@@ -96,6 +97,22 @@ internal fun SettingsHomePage(
                 subtitle = "Android approval required · masked images only during active control",
                 onClick = onRequestProjectionConsent
             )
+            SettingsNavigationRow(
+                title = "Observe shared screen with ChatGPT",
+                subtitle = "View only · notifications and other app overlays may be visible · Android approval required",
+                onClick = onRequestScreenObservationConsent
+            )
+            val qaContext = LocalContext.current
+            if (BuildConfig.DEBUG && qaContext.packageName == "ai.closepaw.capturecandidate") {
+                SettingsNavigationRow(
+                    title = "Local capture QA",
+                    subtitle = "Candidate only · no ADB · blank fixtures · private test evidence",
+                    onClick = {
+                        qaContext.startActivity(android.content.Intent().setClassName(
+                            qaContext, "ai.closepaw.qa.LocalCaptureQaActivity"))
+                    }
+                )
+            }
             ChatGptConnectionCard()
 
             SectionHeader("About")
