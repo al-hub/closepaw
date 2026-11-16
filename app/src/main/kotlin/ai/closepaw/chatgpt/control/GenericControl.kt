@@ -52,7 +52,8 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
     val focused: Boolean = false, val selectionStart: Int = -1, val selectionEnd: Int = -1,
     val setText: Boolean = false, val paste: Boolean = false, val focusable: Boolean = false,
     val scrollDirections: Set<String> = emptySet(), val sourceWindowId: Int = -1,
-    val sourcePackage: String = "", val keyboardKey: String = "", val textEntryKey: Boolean = false, val visualKeyCandidate: Boolean = false, val terminal: TerminalEvidence? = null) {
+    val sourcePackage: String = "", val keyboardKey: String = "", val textEntryKey: Boolean = false, val visualKeyCandidate: Boolean = false, val terminal: TerminalEvidence? = null,
+    val visualKeyChildCount: Int = -1) {
     fun json() = buildJsonObject {
         put("terminal_input_supported", terminal != null)
         if (terminal != null) {

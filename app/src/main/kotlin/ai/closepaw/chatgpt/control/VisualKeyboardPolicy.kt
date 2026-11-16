@@ -20,6 +20,22 @@ internal object VisualKeyboardPolicy {
             it.kind != KeyboardKeyPolicy.Kind.SUBMIT && it.label != "🌐"
         }
 
+    /** Samsung exposes this exact description on a non-clickable key wrapper.
+     * Admit it only as a visual layout candidate of the selected IME. */
+    fun identifyImeKey(keyboard: ControlKeyboard?, sourcePackage: String, text: String, description: String,
+        className: String, childCount: Int): KeyboardKeyPolicy.Key? {
+        if (keyboard?.packageName == "com.samsung.android.honeyboard" &&
+            keyboard.inputMethodId == "com.samsung.android.honeyboard/.service.HoneyBoardService" &&
+            sourcePackage == keyboard.packageName && text.isEmpty() && description == "영어(미국)로 변경" &&
+            className == "android.view.ViewGroup" && childCount == 1) {
+            return KeyboardKeyPolicy.Key("한/영", KeyboardKeyPolicy.Kind.LAYOUT)
+        }
+        return identify(text, description)
+    }
+
+    fun identifyCandidate(node: ControlNode, keyboard: ControlKeyboard?): KeyboardKeyPolicy.Key? =
+        identifyImeKey(keyboard, node.sourcePackage, node.text, node.description, node.className, node.visualKeyChildCount)
+
     private fun bounds(value: String): TapBounds? {
         val parts = value.split(' ').map { it.toIntOrNull() ?: return null }
         if (parts.size != 4) return null
@@ -48,7 +64,7 @@ internal object VisualKeyboardPolicy {
         if (node == null || !node.visualKeyCandidate || !node.enabled || node.password ||
             node.sourceWindowId != keyboard.windowId || node.sourcePackage != keyboard.packageName)
             return "keyboard_visual_candidate_unverified"
-        val key = identify(node.text,node.description) ?: return "keyboard_key_unrecognized"
+        val key = identifyCandidate(node, keyboard) ?: return "keyboard_key_unrecognized"
         if (key.label != node.keyboardKey || (key.kind != KeyboardKeyPolicy.Kind.LAYOUT && KeyboardKeyPolicy.expectedText(field,key) == null))
             return "keyboard_literal_unverified"
         val target = bounds(node.bounds) ?: return "keyboard_visual_bounds_invalid"
@@ -57,14 +73,14 @@ internal object VisualKeyboardPolicy {
             if (field.selectionStart !in 0..field.text.length || field.selectionEnd !in field.selectionStart..field.text.length)
                 return "keyboard_selection_unverified"
             if (frame.nodes.any { it.id != node.id && it.sourceWindowId == keyboard.windowId &&
-                    identify(it.text,it.description) == key && bounds(it.bounds)?.center != target.center })
+                    identifyCandidate(it,keyboard) == key && bounds(it.bounds)?.center != target.center })
                 return "keyboard_layout_ambiguous"
         }
         // Equal parent/child labels describe one purpose. Conflicting labels at
         // the injected point are ambiguous even when the image looks plausible.
         if (frame.nodes.any { it.sourceWindowId == keyboard.windowId && it.id != node.id &&
                 bounds(it.bounds)?.contains(x,y) == true &&
-                KeyboardKeyPolicy.identifyLabel(it.text,it.description)?.let { other -> other != key } == true })
+                (identifyCandidate(it,keyboard) ?: KeyboardKeyPolicy.identifyLabel(it.text,it.description))?.let { other -> other != key } == true })
             return "keyboard_visual_label_ambiguous"
         return null
     }

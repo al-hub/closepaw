@@ -545,8 +545,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val hint = node.hintText?.toString().orEmpty()
                 val key = if (keyboard) KeyboardKeyPolicy.identify(text, description, node.className?.toString().orEmpty(),
                     node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, node.isTextEntryKey) else null
-                val labelEvidence = if (keyboard) KeyboardKeyPolicy.identifyLabel(text, description) else null
-                val visualKey = if (keyboard && node.childCount <= 1) VisualKeyboardPolicy.identify(text, description) else null
+                val visualKey = if (keyboard && node.childCount <= 1)
+                    VisualKeyboardPolicy.identifyImeKey(selected.keyboard, node.packageName?.toString().orEmpty(),
+                        text, description, node.className?.toString().orEmpty(), node.childCount) else null
+                val labelEvidence = if (keyboard) KeyboardKeyPolicy.identifyLabel(text, description) ?: visualKey else null
                 if (keyboard) keyboardScan.record(text, description, node.className?.toString().orEmpty(),
                     node.isVisibleToUser, node.isEnabled, node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
                     node.isTextEntryKey, key != null)
@@ -588,7 +590,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                             } }.toSet(), sourceWindowId = node.windowId, sourcePackage = node.packageName?.toString().orEmpty(),
                             keyboardKey = (key ?: labelEvidence)?.label.orEmpty(), textEntryKey = node.isTextEntryKey,
                             visualKeyCandidate = visualKey != null,
-                            terminal = terminalBinding?.evidence(node)))
+                            terminal = terminalBinding?.evidence(node),
+                            visualKeyChildCount = if (visualKey != null) node.childCount else -1))
                         native.add(node)
                     }
                 }
@@ -935,10 +938,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (fresh.keyboard == null || !fresh.keyboard.readAllowed || !fresh.keyboard.interactAllowed || fresh.keyboard != frame.keyboard || fresh.inputTargetId == null ||
                     fresh.inputTargetId != frame.inputTargetId || (action == "key" && !target.isTextEntryKey) || expected.keyboardKey.isEmpty())
                     return@withTree ControlEffect(false, false, "keyboard_target_unverified")
-                val key = (if (action == "visual_key") VisualKeyboardPolicy.identify(currentText, target.contentDescription?.toString().orEmpty())
+                val key = (if (action == "visual_key") VisualKeyboardPolicy.identifyImeKey(fresh.keyboard,
+                    target.packageName?.toString().orEmpty(), currentText, target.contentDescription?.toString().orEmpty(),
+                    target.className?.toString().orEmpty(), target.childCount)
                 else KeyboardKeyPolicy.identify(currentText, target.contentDescription?.toString().orEmpty(),
                     target.className?.toString().orEmpty(), target.isClickable || target.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, target.isTextEntryKey))
                     ?: return@withTree ControlEffect(false, false, "keyboard_key_unrecognized")
+                if (key.label != expected.keyboardKey) return@withTree ControlEffect(false, false, "keyboard_key_changed")
                 if (key.kind == KeyboardKeyPolicy.Kind.SUBMIT && input["submit_authorized"]?.jsonPrimitive?.booleanOrNull != true)
                     return@withTree ControlEffect(false, false, "submission_authorization_required")
                 val field = fresh.inputTarget ?: return@withTree ControlEffect(false, false, "keyboard_target_unverified")
@@ -989,6 +995,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                                     target.packageName?.toString() != expectedPackage || keyBounds != rect ||
                                     target.text?.toString().orEmpty() != expected.text ||
                                     target.contentDescription?.toString().orEmpty().take(100) != expected.description ||
+                                    (action == "visual_key" && (target.childCount != expected.visualKeyChildCount ||
+                                        target.className?.toString().orEmpty() != expected.className)) ||
                                     (Build.VERSION.SDK_INT >= 34 && target.isAccessibilityDataSensitive)) "keyboard_key_changed" else null
                             }
                         }

@@ -15,7 +15,7 @@ internal object ControlResultPolicy {
                 before.packageName != after.packageName || before.windowId != after.windowId)
                 return Verdict(false, "keyboard_postcondition_unavailable")
             val field = before.inputTarget ?: return Verdict(false, "keyboard_input_target_unverified")
-            val key = (if (action == "visual_key") VisualKeyboardPolicy.identify(node.text, node.description)
+            val key = (if (action == "visual_key") VisualKeyboardPolicy.identifyCandidate(node, before.keyboard)
                 else KeyboardKeyPolicy.identify(node.text, node.description, node.className, node.clickable, node.textEntryKey))
                 ?: return Verdict(false, "keyboard_key_unrecognized")
             val candidate = after.inputTarget
