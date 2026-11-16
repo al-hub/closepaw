@@ -16,4 +16,9 @@ internal class MediaProjectionSessionOwner(private val gate: MediaProjectionCons
             action()
             true
         }
+
+    fun stopSharingIfCurrent(
+        currentOwner: MediaProjectionSessionOwner?, activeRound: String?, requestedRound: String?,
+        stop: () -> Unit,
+    ): Boolean = activeRound != null && activeRound == requestedRound && runIfCurrent(currentOwner, stop)
 }

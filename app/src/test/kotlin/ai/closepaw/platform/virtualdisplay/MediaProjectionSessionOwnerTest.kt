@@ -1,5 +1,6 @@
 package ai.closepaw.platform.virtualdisplay
 
+import ai.closepaw.chatgpt.control.ControlSession
 import ai.closepaw.security.ImageRevocationAuthority
 import org.junit.Assert.*
 import org.junit.Before
@@ -131,5 +132,31 @@ class MediaProjectionSessionOwnerTest {
 
         assertFalse(owner.runIfCurrent(null) { gate.revokeImageConsent() })
         assertEquals(epoch, ImageRevocationAuthority.currentEpoch)
+    }
+
+    @Test fun localShareStopRevokesOnlyTheMatchedProjectionRound() {
+        val control = ControlSession().also { assertTrue(it.start()) }
+        val controlId = control.id
+        val controlEpoch = control.epoch
+        val old = approvedProjection("old")
+        val oldEpoch = ImageRevocationAuthority.currentEpoch
+        fun stop() { gate.revokeImageConsent() }
+
+        assertFalse(old.stopSharingIfCurrent(old, "old", null, ::stop))
+        assertFalse(old.stopSharingIfCurrent(old, "old", "mismatch", ::stop))
+        assertTrue(ImageRevocationAuthority.isConsentStillValid(oldEpoch))
+        assertTrue(old.stopSharingIfCurrent(old, "old", "old", ::stop))
+        assertFalse(ImageRevocationAuthority.isConsentStillValid(oldEpoch))
+        assertEquals(ProjectionConsentState.Revoked, gate.state)
+        assertFalse(gate.onProjectionObtained("old", ImageRevocationAuthority.currentEpoch))
+
+        val fresh = approvedProjection("fresh")
+        val freshEpoch = ImageRevocationAuthority.currentEpoch
+        assertFalse(fresh.stopSharingIfCurrent(fresh, "fresh", "old", ::stop))
+        assertFalse(old.stopSharingIfCurrent(fresh, "old", "old", ::stop))
+        assertTrue(ImageRevocationAuthority.isConsentStillValid(freshEpoch))
+        assertEquals(ControlSession.State.ACTIVE, control.state)
+        assertEquals(controlId, control.id)
+        assertEquals(controlEpoch, control.epoch)
     }
 }

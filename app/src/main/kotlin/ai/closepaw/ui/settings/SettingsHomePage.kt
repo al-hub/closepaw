@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -18,10 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ai.closepaw.BuildConfig
 import ai.closepaw.llm.AuthMode
 import ai.closepaw.llm.ModelCatalog
 import ai.closepaw.platform.AppManager
+import ai.closepaw.platform.virtualdisplay.MediaProjectionCaptureService
 import ai.closepaw.protocol.AppTier
 import ai.closepaw.protocol.ApprovalMode
 import ai.closepaw.protocol.LLMBackendType
@@ -54,6 +57,8 @@ internal fun SettingsHomePage(
     onRequestProjectionConsent: () -> Unit = {},
     onRequestScreenObservationConsent: () -> Unit = {}
 ) {
+    val sharingRound by MediaProjectionCaptureService.sharingRound.collectAsStateWithLifecycle()
+    val appContext = LocalContext.current
     Column(modifier = Modifier.fillMaxWidth()) {
         PageMastheadIdentity(title = "Settings", onClose = onDismiss)
 
@@ -102,6 +107,17 @@ internal fun SettingsHomePage(
                 subtitle = "View only · notifications and other app overlays may be visible · Android approval required",
                 onClick = onRequestScreenObservationConsent
             )
+            Text(
+                text = if (sharingRound == null) "화면 공유 꺼짐" else "화면 공유 중",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = { sharingRound?.let { MediaProjectionCaptureService.requestStopSharing(appContext, it) } },
+                enabled = sharingRound != null,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("화면 공유 중지") }
+
             val qaContext = LocalContext.current
             if (BuildConfig.DEBUG && qaContext.packageName == "ai.closepaw.capturecandidate") {
                 SettingsNavigationRow(

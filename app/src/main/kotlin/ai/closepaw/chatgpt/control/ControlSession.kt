@@ -5,6 +5,10 @@ import java.util.UUID
 /** User priority state machine. No Context, screen content, command queue or automatic replay. */
 internal class ControlSession(initial: String = "idle", private val persist: (String) -> Unit = {}) {
     enum class State { IDLE, ACTIVE, WAITING, PAUSED, REOBSERVING, ENDED }
+    enum class UserAction(val id: String, val label: String) {
+        ALLOW_SCREEN_SHARE("allow_screen_share", "공유를 허용하세요"),
+        STOP_SCREEN_SHARE("stop_screen_share", "공유를 중지하세요"),
+    }
     enum class VisualPhase { PREPARING, OBSERVING, EXECUTING, WAITING, COMPLETED, FAILED }
     @Volatile var visualPhase = VisualPhase.PREPARING
         private set
@@ -105,9 +109,16 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         if (state != State.REOBSERVING || epoch != expectedEpoch) return
         transition(if (safe) State.ACTIVE else State.PAUSED, if (safe) "AI 제어 중 · 새 명령 대기" else "화면 확인 필요 · 일시정지")
     }
-    @Synchronized fun waitForUser(): Boolean {
-        if (state != State.ACTIVE) return false
-        transition(State.WAITING, "사용자 응답 대기"); interrupt(); return true
+    @Synchronized fun waitForUser(action: UserAction? = null, expectedSessionId: String? = null): Boolean {
+        if (state != State.ACTIVE || (expectedSessionId != null && id != expectedSessionId)) return false
+        transition(State.WAITING, action?.label ?: "사용자 응답 대기"); interrupt(); return true
+    }
+
+    /** Clear the screen-specific instruction without resuming AI control. */
+    @Synchronized fun clearUserActionHint(completed: UserAction? = null) {
+        if (state != State.WAITING || label == "사용자 응답 대기" ||
+            (completed != null && label != completed.label)) return
+        label = "사용자 응답 대기"; changed()
     }
     @Synchronized fun userResponded(): Boolean {
         if (state != State.WAITING) return false

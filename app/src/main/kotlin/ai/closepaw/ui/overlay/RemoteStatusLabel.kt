@@ -3,6 +3,8 @@ package ai.closepaw.ui.overlay
 /** Allowlisted executor feedback only. Never display raw target, package or error strings. */
 object RemoteStatusLabel {
     fun sanitize(text: String): String = when (text) {
+        "공유를 허용하세요" -> "공유를 허용하세요"
+        "공유를 중지하세요" -> "공유를 중지하세요"
         "사용자 제어 중 · 일시정지", "직접 조작 중 · AI 일시정지" -> "사용자 제어 중 · AI 일시정지"
         "사용자 응답 대기", "응답 대기 중" -> "AI 제어 중 - 응답 대기"
         "화면 확인 중", "화면 보안 확인 중", "접근성 정보 읽는 중", "화면 캡처 중", "보안 확인용 화면 캡처 중" -> "AI 제어 중 - 화면 확인"

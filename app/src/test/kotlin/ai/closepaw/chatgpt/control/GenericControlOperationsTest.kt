@@ -367,4 +367,29 @@ class GenericControlOperationsTest {
             }
         }
     }
+
+    @Test fun waitActionSchemaAcceptsOnlyFixedHintsAndPreservesLegacyCall() = runBlocking {
+        val session = ControlSession().also { it.start() }
+        val registry = OperationRegistry()
+        ControlSessionOperations({ session }, {}) { OperationReadiness() }.register(registry)
+        val wait = requireNotNull(registry.get("android.control.session.wait"))
+        fun args(action: String? = null) = buildJsonObject {
+            put("session_id", session.id)
+            action?.let { put("user_action", it) }
+        }
+
+        assertNull(OperationSchemaValidator.validate(wait.descriptor.inputSchema, args()))
+        assertNotNull(OperationSchemaValidator.validate(wait.descriptor.inputSchema, args("private request")))
+        assertFalse(wait.handler.invoke(OperationInvocation("invalid-hint", args("private request"))).success)
+        assertEquals(ControlSession.State.ACTIVE, session.state)
+        assertTrue(wait.handler.invoke(OperationInvocation("legacy-wait", args())).success)
+        assertEquals("사용자 응답 대기", session.label)
+
+        session.end()
+        assertTrue(session.start())
+        val typed = args("stop_screen_share")
+        assertNull(OperationSchemaValidator.validate(wait.descriptor.inputSchema, typed))
+        assertTrue(wait.handler.invoke(OperationInvocation("typed-wait", typed)).success)
+        assertEquals("공유를 중지하세요", session.label)
+    }
 }

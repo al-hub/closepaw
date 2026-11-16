@@ -136,4 +136,34 @@ class ControlSessionTest {
         assertNull(session.progressDetail)
     }
 
+
+    @Test fun sharingPromptHasPriorityAndClearsWithoutResuming() {
+        val session = ControlSession()
+        assertTrue(session.start())
+        val id = session.id
+        val startingEpoch = session.epoch
+        assertTrue(session.waitForUser(ControlSession.UserAction.ALLOW_SCREEN_SHARE, id))
+        val waitingEpoch = session.epoch
+        assertNotEquals(startingEpoch, waitingEpoch)
+
+        session.feedback("화면 확인 중", waitingEpoch)
+        session.present(ControlSession.VisualPhase.COMPLETED, waitingEpoch)
+        session.clearUserActionHint(ControlSession.UserAction.STOP_SCREEN_SHARE)
+        assertEquals("공유를 허용하세요", session.label)
+        session.clearUserActionHint(ControlSession.UserAction.ALLOW_SCREEN_SHARE)
+        assertEquals("사용자 응답 대기", session.label)
+        assertEquals(waitingEpoch, session.epoch)
+        assertEquals(id, session.id)
+        assertEquals("control_waiting_for_user", session.refusal(id, true))
+
+        session.end()
+        assertTrue(session.start())
+        assertFalse(session.waitForUser(ControlSession.UserAction.STOP_SCREEN_SHARE, id))
+        assertTrue(session.waitForUser(ControlSession.UserAction.STOP_SCREEN_SHARE, session.id))
+        assertEquals("공유를 중지하세요", session.label)
+        session.pause()
+        assertEquals("사용자 제어 중 · 일시정지", session.label)
+        session.clearUserActionHint()
+        assertEquals("사용자 제어 중 · 일시정지", session.label)
+    }
 }

@@ -147,10 +147,10 @@ class MainActivity : ComponentActivity() {
 
     internal fun requestProjectionConsent(screenObservation: Boolean = false) {
         if (screenObservation && android.os.Build.VERSION.SDK_INT < 34) return
-        if (screenObservation && MediaProjectionCaptureService.consentGate.state ==
+        if (MediaProjectionCaptureService.consentGate.state ==
             ai.closepaw.platform.virtualdisplay.ProjectionConsentState.Consumed) {
             android.widget.Toast.makeText(this,
-                "기존 화면 공유를 중지한 뒤 관찰용 화면 공유를 시작해 주세요.", android.widget.Toast.LENGTH_LONG).show()
+                "기존 화면 공유를 먼저 중지하세요.", android.widget.Toast.LENGTH_LONG).show()
             return
         }
         if (!MediaProjectionCaptureService.consentGate.onRequestStarted(screenObservation)) {

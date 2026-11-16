@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.buildJsonObject
@@ -525,6 +526,7 @@ class AgentService : AccessibilityService() {
             if (intent?.action == android.content.Intent.ACTION_SCREEN_OFF) {
                 ai.closepaw.chatgpt.control.VisualImageCache.clear()
                 controlUiRestoreJob?.cancel()
+                remoteControlSession.clearUserActionHint()
                 remoteControlIndicator.hide()
                 actionVisualizer?.clear()
             } else {
@@ -538,6 +540,18 @@ class AgentService : AccessibilityService() {
     override fun onCreate() {
         super.onCreate()
         serviceLifecycleOwner.onCreate()
+        serviceScope.launch {
+            var previous = MediaProjectionCaptureService.sharingRound.value
+            MediaProjectionCaptureService.sharingRound.collect { round ->
+                if ((previous == null) != (round == null)) {
+                    val action = if (round != null)
+                        ai.closepaw.chatgpt.control.ControlSession.UserAction.ALLOW_SCREEN_SHARE
+                    else ai.closepaw.chatgpt.control.ControlSession.UserAction.STOP_SCREEN_SHARE
+                    remoteControlSession.clearUserActionHint(action)
+                }
+                previous = round
+            }
+        }
         val filter = android.content.IntentFilter().apply {
             addAction(android.content.Intent.ACTION_SCREEN_OFF)
             addAction(android.content.Intent.ACTION_SCREEN_ON)
