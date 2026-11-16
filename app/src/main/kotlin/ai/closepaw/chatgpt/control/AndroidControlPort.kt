@@ -662,13 +662,19 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val rawInputTarget = nodes.filter { it.keyboardKey.isEmpty() && it.sourceWindowId == selected.selection.target &&
                 it.sourcePackage == pkg && it.editable && it.enabled && it.focused && it.focusable && !it.password }.singleOrNull()
             val keyboard = selected.keyboard
-            val epoch = session()?.epoch
+            val caretSession = session()
+            val epoch = caretSession?.epoch
             val cursorGeneration = if (code == null && !truncated && rawInputTarget != null &&
                 keyboard?.readAllowed == true && keyboard.interactAllowed && packageAllowed(pkg, operation = "read") &&
-                session()?.state == ControlSession.State.ACTIVE) {
-                native.getOrNull(nodes.indexOf(rawInputTarget))?.let { KeyboardCursorBinding.prove(service, rawInputTarget, it) }
-                    ?.takeIf { session()?.epoch == epoch && reason(service) == null &&
-                        (runtime?.snapshot()?.revision ?: 0L) == revision }
+                packageAllowed(pkg, operation = "interact") && caretSession?.state == ControlSession.State.ACTIVE &&
+                caretSession.explicit && KeyboardCursorProof.needsProof(rawInputTarget)) {
+                val proof = native.getOrNull(nodes.indexOf(rawInputTarget))?.let { KeyboardCursorBinding.prove(service, rawInputTarget, it) }
+                reason(service)?.let { return@withContext block(denied(it), emptyList()) }
+                if (session() !== caretSession || caretSession.epoch != epoch)
+                    return@withContext block(denied("control_session_changed_observe_again"), emptyList())
+                if ((runtime?.snapshot()?.revision ?: 0L) != revision)
+                    return@withContext block(denied("configuration_revision_changed"), emptyList())
+                proof
             } else null
             val inputTarget = if (cursorGeneration == null) rawInputTarget else
                 rawInputTarget?.copy(selectionStart = 0, selectionEnd = 0, keyboardCursorGeneration = cursorGeneration)
