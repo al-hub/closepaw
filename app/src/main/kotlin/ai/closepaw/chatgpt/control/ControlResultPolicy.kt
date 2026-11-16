@@ -15,12 +15,20 @@ internal object ControlResultPolicy {
                 before.packageName != after.packageName || before.windowId != after.windowId)
                 return Verdict(false, "keyboard_postcondition_unavailable")
             val field = before.inputTarget ?: return Verdict(false, "keyboard_input_target_unverified")
-            val key = (if (action == "visual_key") VisualKeyboardPolicy.identify(node.text, node.description)
+            val key = (if (action == "visual_key" && node.keyboardImageCandidate)
+                KeyboardImageFallbackPolicy.key((input["image_key_label"] as? JsonPrimitive)?.contentOrNull)
+                else if (action == "visual_key") VisualKeyboardPolicy.identifyCandidate(node, before.keyboard)
                 else KeyboardKeyPolicy.identify(node.text, node.description, node.className, node.clickable, node.textEntryKey))
                 ?: return Verdict(false, "keyboard_key_unrecognized")
             val candidate = after.inputTarget
-            val sameField = candidate != null && candidate.resourceId == field.resourceId && candidate.className == field.className &&
-                candidate.bounds == field.bounds && candidate.sourceWindowId == field.sourceWindowId && candidate.sourcePackage == field.sourcePackage
+            fun sameIdentity(other: ControlNode) = other.resourceId == field.resourceId && other.className == field.className &&
+                other.sourceWindowId == field.sourceWindowId && other.sourcePackage == field.sourcePackage
+            // A clear affordance can resize an editor after a literal changes its
+            // text. Document the same target by unique owned native resource in
+            // both complete frames. Anonymous fields still require exact bounds.
+            val sameField = candidate != null && sameIdentity(candidate) && if (field.resourceId.isNotEmpty()) {
+                before.nodes.count(::sameIdentity) == 1 && after.nodes.count(::sameIdentity) == 1
+            } else candidate.bounds == field.bounds
             if (key.kind == KeyboardKeyPolicy.Kind.LAYOUT) {
                 val beforeKeys = before.nodes.filter { it.sourceWindowId == before.keyboard.windowId &&
                     KeyboardKeyPolicy.identify(it.text,it.description,it.className,it.clickable,it.textEntryKey) != null }.map { it.keyboardKey }.filter { it.isNotEmpty() }.sorted()

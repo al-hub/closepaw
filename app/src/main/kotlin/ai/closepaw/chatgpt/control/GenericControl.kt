@@ -52,7 +52,9 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
     val focused: Boolean = false, val selectionStart: Int = -1, val selectionEnd: Int = -1,
     val setText: Boolean = false, val paste: Boolean = false, val focusable: Boolean = false,
     val scrollDirections: Set<String> = emptySet(), val sourceWindowId: Int = -1,
-    val sourcePackage: String = "", val keyboardKey: String = "", val textEntryKey: Boolean = false, val visualKeyCandidate: Boolean = false, val terminal: TerminalEvidence? = null) {
+    val sourcePackage: String = "", val keyboardKey: String = "", val textEntryKey: Boolean = false, val visualKeyCandidate: Boolean = false, val terminal: TerminalEvidence? = null,
+    val visualKeyChildCount: Int = -1, val keyboardCursorGeneration: Long? = null,
+    val keyboardImageCandidate: Boolean = false) {
     fun json() = buildJsonObject {
         put("terminal_input_supported", terminal != null)
         if (terminal != null) {
@@ -67,6 +69,7 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
         put("scroll_directions", JsonArray(scrollDirections.sorted().map { JsonPrimitive(it) }))
         put("expandable", expandable); put("collapsible", collapsible); put("class_name", className.take(100)); put("selected", selected)
         put("checkable", checkable); put("checked", checked)
+        put("keyboard_image_candidate", keyboardImageCandidate)
         put("visual_key_candidate", visualKeyCandidate); put("source_window_id", sourceWindowId); put("keyboard_key", keyboardKey)
         put("node_id", id); put("text", if (keyboardKey.isNotEmpty()) keyboardKey else text.take(100)); put("description", if (keyboardKey.isNotEmpty()) "" else description.take(100)); put("resource_id", resourceId.take(100))
         put("long_clickable", longClickable); put("bounds", bounds); put("parent", parent); put("clickable", clickable); put("editable", editable); put("scrollable", scrollable); put("enabled", enabled)
@@ -171,7 +174,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val rendered = mutableListOf<JsonElement>()
         var size = 0
         val candidates = frame.nodes.filter { filter.isEmpty() || it.text.contains(filter, true) ||
-            it.description.contains(filter, true) || it.resourceId.contains(filter, true) }
+            it.description.contains(filter, true) || it.resourceId.contains(filter, true) || it.keyboardKey.contains(filter, true) ||
+            filter == "keyboard_image_candidate" && it.keyboardImageCandidate }
         val exposed = mutableListOf<ControlNode>()
         for (node in candidates.take(frame.outputLimit)) {
             val json = node.json()
@@ -201,6 +205,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     frame.inputTargetId == null -> "keyboard_input_target_unverified"
                     else -> "available"
                 })
+                put("selection_source", frame.inputTarget?.let { field -> when {
+                    field.keyboardCursorGeneration != null -> "bound_empty_editor"
+                    field.selectionStart in 0..field.text.length && field.selectionEnd in field.selectionStart..field.text.length -> "accessibility"
+                    else -> "unverified"
+                } } ?: "unverified")
                 put("semantic_keys_only", false); put("visual_keys_require_keyboard_image", true); put("input_target_verified", frame.inputTargetId != null)
                 frame.keyboardDiagnostics?.let { diagnostics -> put("scan", diagnostics) }
             }) }
@@ -274,6 +283,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             return failure("control_chain_limit_observe_again")
         val action = input["action"]?.jsonPrimitive?.content.orEmpty()
         if (action !in setOf("click", "tap", "long_press", "type", "input", "terminal_input", "terminal_submit", "focus", "key", "scroll", "visual_tap", "visual_long_press", "visual_drag", "visual_scroll", "visual_key", "expand", "collapse", "home", "back", "open_app")) return failure("unsupported_action")
+        val imageLabel = (input["image_key_label"] as? JsonPrimitive)?.contentOrNull
+        if (imageLabel != null && action != "visual_key") return failure("keyboard_image_label_unexpected")
         val pending = pendingTerminal
         pendingTerminal = null // Submission authority is single-use, including failures.
         val candidate = observation.frame.nodes.singleOrNull { it.id == input["node_id"]?.jsonPrimitive?.intOrNull }
@@ -306,9 +317,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             if ((action in setOf("click", "tap") && !node.clickable) || (action == "long_press" && !node.longClickable)) return failure("target_not_clickable")
             if ((action == "expand" && !node.expandable) || (action == "collapse" && !node.collapsible)) return failure("native_action_unavailable")
             if (action == "scroll" && (!node.scrollable || input["direction"]?.jsonPrimitive?.content !in (node.scrollDirections + setOf("up", "down")))) return failure("target_not_scrollable")
-            if (node.keyboardKey.isNotEmpty() && action !in setOf("key", "visual_key")) return failure("keyboard_key_action_required")
+            if ((node.keyboardKey.isNotEmpty() || node.keyboardImageCandidate) && action !in setOf("key", "visual_key"))
+                return failure("keyboard_key_action_required")
             if (action == "visual_key") {
-                VisualKeyboardPolicy.refusal(frame, node, frame.visual?.scope.orEmpty())?.let { return failure(it) }
+                VisualKeyboardPolicy.refusal(observation.verificationFrame, node, frame.visual?.scope.orEmpty(), imageLabel)
+                    ?.let { return failure(it) }
             }
             if (action == "key") {
                 if (frame.keyboard == null || !frame.keyboard.readAllowed || !frame.keyboard.interactAllowed || frame.inputTargetId == null || node.sourceWindowId != frame.keyboard.windowId ||
@@ -384,6 +397,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 put("observation_age_ms", (started - observation.at).coerceAtLeast(0))
                 put("validation_scope", GenericControlActionPolicy.validationScope(action))
                 put("reason_code", resultReason)
+                if (action == "key" || action == "visual_key") put("keyboard_key_origin", when {
+                    node?.keyboardImageCandidate == true -> "image_fallback"
+                    action == "visual_key" -> "accessibility_label_with_image"
+                    else -> "accessibility"
+                })
                 put("action_attempted", effect.attempted); put("action_acknowledged", effect.acknowledged)
                 put("outcome_unknown", effect.attempted && !verified); put("screen_changed", changed)
                 put("app_result_verified", verified && verdict.goalVerified)

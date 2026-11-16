@@ -43,6 +43,47 @@ class ControlResultPolicyTest {
         selections.clear()
         assertEquals("app_selection_required", selections.refusal("gemini", true))
     }
+    @Test fun samsungLanguageAliasNeedsTwoChangedKeyPositionsAndPreservedEmptyCaret() {
+        val ime = ControlKeyboard(4, "com.samsung.android.honeyboard",
+            "com.samsung.android.honeyboard/.service.HoneyBoardService")
+        val field = ControlNode(1, resourceId = "browser:id/url", className = "android.widget.EditText",
+            bounds = "0 0 100 30", sourcePackage = "browser", sourceWindowId = 1, editable = true, focusable = true,
+            focused = true, selectionStart = 0, selectionEnd = 0, keyboardCursorGeneration = 3)
+        val alias = ControlNode(2, description = "영어(미국)로 변경", keyboardKey = "한/영", className = "android.view.ViewGroup",
+            visualKeyChildCount = 1, sourcePackage = ime.packageName, sourceWindowId = ime.windowId, visualKeyCandidate = true)
+        fun literal(id: Int, bounds: String, label: String) = ControlNode(id, text = label, bounds = bounds, keyboardKey = label,
+            sourcePackage = ime.packageName, sourceWindowId = ime.windowId, visualKeyCandidate = true)
+        val first = literal(3, "0 50 50 90", "ㅂ")
+        val second = literal(4, "55 50 105 90", "ㅈ")
+        val old = ControlFrame("browser", 1, "before", listOf(field, alias, first, second),
+            keyboard = ime, inputTarget = field, inputTargetId = field.id)
+        val q = first.copy(text = "q", keyboardKey = "q")
+        val w = second.copy(text = "w", keyboardKey = "w")
+        fun verify(post: ControlFrame) = ControlResultPolicy.verify("visual_key", old, post, alias, buildJsonObject {}).confirmed
+        assertTrue(verify(old.copy(nodes = listOf(field, q, w))))
+        assertFalse(verify(old.copy(nodes = listOf(field, q, second))))
+        assertFalse(verify(old.copy(nodes = listOf(field, q, w), inputTarget = field.copy(selectionEnd = -1))))
+    }
+
+    @Test fun visualKeyRequiresExactTextCaretAndSameUniqueFieldThenBackspaceRestoresIt() {
+        val ime = ControlKeyboard(2, "ime", "ime/.Keyboard")
+        val empty = ControlNode(7, resourceId = "browser:id/url", className = "android.widget.EditText",
+            bounds = "20 10 100 30", sourcePackage = "browser", sourceWindowId = 1, focusable = true,
+            focused = true, editable = true, selectionStart = 0, selectionEnd = 0, keyboardCursorGeneration = 4)
+        val old = ControlFrame("browser", 1, "before", listOf(empty), keyboard = ime, inputTarget = empty, inputTargetId = empty.id)
+        val a = empty.copy(bounds = "20 10 85 30", text = "a", selectionStart = 1, selectionEnd = 1, keyboardCursorGeneration = null)
+        val next = old.copy(nodes = listOf(a), inputTarget = a)
+        val imageKey = ControlNode(8, keyboardImageCandidate = true)
+        val input = buildJsonObject { put("image_key_label", "a") }
+        assertTrue(ControlResultPolicy.verify("visual_key", old, next, imageKey, input).confirmed)
+        for (wrong in listOf(a.copy(text = "aa"), a.copy(selectionEnd = 0), a.copy(resourceId = "browser:id/other"))) {
+            assertFalse(ControlResultPolicy.verify("visual_key", old, next.copy(nodes = listOf(wrong), inputTarget = wrong), imageKey, input).confirmed)
+        }
+        assertFalse(ControlResultPolicy.verify("visual_key", old, next.copy(nodes = listOf(a, a.copy(id = 9))), imageKey, input).confirmed)
+        assertFalse(ControlResultPolicy.verify("visual_key", old, next, imageKey, buildJsonObject { put("image_key_label", "↵") }).confirmed)
+        val backspace = ControlNode(9, text = "Backspace", keyboardKey = "Backspace")
+        assertTrue(ControlResultPolicy.verify("visual_key", next, old, backspace, buildJsonObject {}).confirmed)
+    }
     @Test fun exactInputSurvivesUniqueSemanticFieldResizeOnlyAfterDispatch() {
         val field = ControlNode(7, resourceId = "browser:id/url", className = "android.widget.EditText",
             bounds = "224 127 1076 323", sourceWindowId = 1, sourcePackage = "browser", editable = true,

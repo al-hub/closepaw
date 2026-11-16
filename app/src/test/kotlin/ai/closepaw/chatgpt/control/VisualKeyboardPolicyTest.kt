@@ -56,6 +56,29 @@ class VisualKeyboardPolicyTest {
         assertNotNull(VisualKeyboardPolicy.literal("Backspace",""))
         assertNull(VisualKeyboardPolicy.literal("a","Enter"))
     }
+    @Test fun measuredSamsungLanguageAliasIsVisualOnlyAndBindsImeAndShape() {
+        val samsung = keyboard.copy(packageName = "com.samsung.android.honeyboard",
+            inputMethodId = "com.samsung.android.honeyboard/.service.HoneyBoardService")
+        val alias = key.copy(text = "", description = "영어(미국)로 변경", keyboardKey = "한/영",
+            sourcePackage = samsung.packageName, className = "android.view.ViewGroup", visualKeyChildCount = 1)
+        val samsungFrame = frame.copy(keyboard = samsung, nodes = listOf(field, alias))
+        assertEquals(KeyboardKeyPolicy.Key("한/영", KeyboardKeyPolicy.Kind.LAYOUT),
+            VisualKeyboardPolicy.identifyCandidate(alias, samsung))
+        assertNull(KeyboardKeyPolicy.identify(alias.text, alias.description, alias.className, true, true))
+        assertNull(VisualKeyboardPolicy.refusal(samsungFrame, alias, "keyboard"))
+        assertEquals("keyboard_layout_ambiguous", VisualKeyboardPolicy.refusal(
+            samsungFrame.copy(nodes = samsungFrame.nodes + alias.copy(id = 3, bounds = "40 110 60 140")),
+            alias, "keyboard"))
+        assertEquals("keyboard_selection_unverified", VisualKeyboardPolicy.refusal(
+            samsungFrame.copy(inputTarget = field.copy(selectionStart = -1, selectionEnd = -1)), alias, "keyboard"))
+        for (wrong in listOf(alias.copy(visualKeyChildCount = 0), alias.copy(className = "android.widget.Button"),
+            alias.copy(sourcePackage = "another.ime"), alias.copy(text = "a"),
+            alias.copy(description = "한국어로 변경"), alias.copy(description = "영어(미국)로 변경!"))) {
+            assertNull(VisualKeyboardPolicy.identifyCandidate(wrong, samsung))
+        }
+        assertNull(VisualKeyboardPolicy.identifyCandidate(alias, samsung.copy(inputMethodId = "com.samsung.android.honeyboard/.Other")))
+        assertNull(VisualKeyboardPolicy.identifyCandidate(alias, keyboard))
+    }
     @Test fun duplicateAncestorLabelsCanOnlyCorroborateTheSamePurpose() {
         assertNull(VisualKeyboardPolicy.refusal(frame.copy(nodes=frame.nodes+key.copy(id=3,parent=2)),key,"keyboard"))
         for (label in listOf("b", "Enter", "Send", "Shift"))
