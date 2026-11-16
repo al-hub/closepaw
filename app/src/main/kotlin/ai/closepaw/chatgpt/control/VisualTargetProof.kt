@@ -23,10 +23,11 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
         put("image_source", image.source.name.lowercase()); put("scope", scope); put("source_window_id", sourceWindowId); put("visual_id", id); put("image_width", image.width); put("image_height", image.height)
         put("source_display_id", sourceDisplayId); put("rotation", rotation)
         put("source_width", window.right-window.left); put("source_height", window.bottom-window.top)
-        put("source_ime_window_id", sourceImeWindowId); put("intervening_window_changes_checked", scope in setOf("display", "screen_observe"))
+        put("source_ime_window_id", sourceImeWindowId); put("intervening_window_changes_checked", displayGeneration >= 0)
         put("application_bounds", applicationBounds); put("ime_bounds", imeBounds)
-        put("verified_region_count", disclosedRegions.size); put("verified_pixel_count", disclosedRegions.sumOf { (it.right-it.left).toLong()*(it.bottom-it.top) }); put("unverified_pixels_masked", scope == "display")
-        put("masked_outside_owned_regions", scope == "display"); put("owned_pixels_verified_against_isolated_windows", scope == "display")
+        val independentlyVerified = scope == "display" || (scope == "keyboard" && sourceDisplayId == 0)
+        put("verified_region_count", disclosedRegions.size); put("verified_pixel_count", disclosedRegions.sumOf { (it.right-it.left).toLong()*(it.bottom-it.top) }); put("unverified_pixels_masked", independentlyVerified)
+        put("masked_outside_owned_regions", independentlyVerified); put("owned_pixels_verified_against_isolated_windows", independentlyVerified)
         put("window_bounds", "${window.left} ${window.top} ${window.right} ${window.bottom}")
         put("coordinate_space", "snapshot_image_pixels"); put("expires_in_ms", if (image.source == ai.closepaw.model.ScreenImageSource.MEDIA_PROJECTION) 10_000 else 60_000)
     }
@@ -37,7 +38,7 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
         fun x(v: Int) = window.left + (v.toLong() * w / image.width).toInt()
         fun y(v: Int) = window.top + (v.toLong() * h / image.height).toInt()
         return TapBounds(x(rect.left), y(rect.top), x(rect.right), y(rect.bottom)).takeIf { window.contains(it) &&
-            (scope !in setOf("display", "keyboard") || (scope == "keyboard" && disclosedRegions.isEmpty()) || OwnedPixelPolicy.contains(disclosedRegions,it)) }
+            (scope !in setOf("display", "keyboard") || (scope == "keyboard" && sourceDisplayId < 0 && disclosedRegions.isEmpty()) || OwnedPixelPolicy.contains(disclosedRegions,it)) }
     }
 }
 /** At most two private screenshots, memory only. Retrieval rechecks live consent/

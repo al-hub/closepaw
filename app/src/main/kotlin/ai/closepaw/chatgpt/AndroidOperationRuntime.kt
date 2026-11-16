@@ -75,10 +75,7 @@ internal class AndroidOperationRuntime(
         val genericPort = AndroidControlPort(context, mutationBlock = { pkg ->
             if (pkg in setOf(AndroidGeminiDraftUi.PACKAGE, AndroidGeminiDraftUi.GOOGLE_HOST) &&
                 store.latestOutcomeUnknown("gemini.question.ask")) "dedicated_submission_unresolved" else null
-        }, runtime = settings.runtimeControl, geometryAuthority = TermuxAdbImeGeometryAuthority(context,
-            TermuxJobClient(TermuxBridgeAuth.existingToken(context).orEmpty(),requestTimeoutMs=400)) {
-            settings.enabled && settings.genericControlEnabled
-        }) { settings.enabled && settings.genericControlEnabled }
+        }, runtime = settings.runtimeControl) { settings.enabled && settings.genericControlEnabled }
         val genericControl = GenericControl(genericPort, { settings.enabled && settings.genericControlEnabled })
         fun bindResume() {
             AgentService.instance?.remoteResumeCheck = {
