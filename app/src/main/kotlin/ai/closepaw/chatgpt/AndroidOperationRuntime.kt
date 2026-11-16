@@ -93,6 +93,7 @@ internal class AndroidOperationRuntime(
                     ControlSessionOperations.HintEnvironment(
                         ai.closepaw.platform.virtualdisplay.MediaProjectionCaptureService.sharingRound.value != null,
                         android.os.SystemClock.elapsedRealtime(),
+                        canRequestScreenShare = android.os.Build.VERSION.SDK_INT >= 34,
                     )
                 } else null
             },

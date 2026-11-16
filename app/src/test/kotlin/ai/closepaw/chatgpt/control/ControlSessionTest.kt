@@ -248,4 +248,72 @@ class ControlSessionTest {
             session.updateUserAction(id, session.userActionEpoch, 3, allow, false, 6))
         assertNull(session.currentUserAction(false, 7))
     }
+
+    @Test fun directSharePersistsUntilLocalTapAndExactProjection() {
+        val s = ControlSession().apply { start() }
+        val action = ControlSession.UserAction.REQUEST_SCREEN_SHARE
+        val epoch = s.epoch
+        assertFalse(s.waitForUser(action, s.id)) // The legacy wait operation must not accept this action.
+        assertEquals(ControlSession.HintUpdate.SHOWN, s.updateUserAction(s.id, s.userActionEpoch, 1, action, false, 0))
+        val token = requireNotNull(s.currentUserAction(false, 90_000)?.shareRequest)
+        assertEquals(ControlSession.ShareRequestState.AWAITING_TAP, s.shareRequestState)
+        assertFalse(s.beginShareRequestStartup(token, "projection-1"))
+        assertFalse(s.claimShareRequest(ControlSession.ShareRequest()))
+        assertTrue(s.claimShareRequest(token))
+        assertFalse(s.claimShareRequest(token))
+        assertEquals(ControlSession.ShareRequestState.AWAITING_ANDROID, s.shareRequestState)
+        assertTrue(s.beginShareRequestStartup(token, "projection-1"))
+        assertFalse(s.ownsShareStartup(token, "wrong"))
+        assertTrue(s.ownsShareStartup(token, "projection-1"))
+        assertEquals(ControlSession.ShareRequestState.STARTING, s.shareRequestState)
+        assertNotNull(s.currentUserAction(false, 120_000))
+        assertFalse(s.publishShareStartup(token, "other") { error("wrong projection published") })
+        var published = false
+        assertTrue(s.publishShareStartup(token, "projection-1") { published = true })
+        assertTrue(published)
+        assertNull(s.currentUserAction(true, 120_001))
+        assertEquals(ControlSession.ShareRequestState.SHARING_STARTED, s.shareRequestState)
+        assertFalse(s.ownsShareStartup(token, "projection-1"))
+        assertEquals(ControlSession.State.ACTIVE, s.state)
+        assertEquals(epoch, s.epoch)
+    }
+
+    @Test fun directShareCancelReplaceLockAndEndDoNotAcceptLateApproval() {
+        val s = ControlSession().apply { start() }
+        val action = ControlSession.UserAction.REQUEST_SCREEN_SHARE
+        var revision = 0
+        fun prompt(): ControlSession.ShareRequest {
+            assertEquals(ControlSession.HintUpdate.SHOWN, s.updateUserAction(s.id, s.userActionEpoch, ++revision, action, false, 0))
+            return requireNotNull(s.currentUserAction(false, 0)?.shareRequest).also { assertTrue(s.claimShareRequest(it)) }
+        }
+        val denied = prompt()
+        s.cancelShareRequest(denied)
+        assertEquals(ControlSession.ShareRequestState.CANCELLED, s.shareRequestState)
+        assertFalse(s.beginShareRequestStartup(denied, "denied"))
+        val replaced = prompt()
+        assertEquals(ControlSession.HintUpdate.CLEARED, s.updateUserAction(s.id, s.userActionEpoch, ++revision, null, false, 0))
+        val locked = prompt()
+        s.cancelShareRequest(replaced)
+        assertTrue(s.ownsShareRequest(locked, ControlSession.ShareRequestState.AWAITING_ANDROID))
+        s.dropUserActionForScreenOff()
+        assertFalse(s.beginShareRequestStartup(locked, "locked"))
+        val ended = prompt()
+        assertTrue(s.beginShareRequestStartup(ended, "late"))
+        s.end()
+        assertFalse(s.ownsShareStartup(ended, "late"))
+        assertNull(s.currentUserAction(true, 1))
+        assertEquals(ControlSession.ShareRequestState.CANCELLED, s.shareRequestState)
+    }
+
+    @Test fun unrelatedSharingIsNotConfirmationOfTheDirectRequest() {
+        val s = ControlSession().apply { start() }
+        val action = ControlSession.UserAction.REQUEST_SCREEN_SHARE
+        assertEquals(ControlSession.HintUpdate.NOT_NEEDED, s.updateUserAction(s.id, s.userActionEpoch, 1, action, true, 0))
+        assertEquals(ControlSession.HintUpdate.SHOWN, s.updateUserAction(s.id, s.userActionEpoch, 2, action, false, 0))
+        val token = requireNotNull(s.currentUserAction(false, 0)?.shareRequest)
+        assertTrue(s.claimShareRequest(token))
+        assertTrue(s.beginShareRequestStartup(token, "expected"))
+        assertNull(s.currentUserAction(true, 1))
+        assertEquals(ControlSession.ShareRequestState.CANCELLED, s.shareRequestState)
+    }
 }

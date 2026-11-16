@@ -8,7 +8,9 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.HapticFeedbackConstants
+import ai.closepaw.chatgpt.control.ControlSession.ShareRequest
 import ai.closepaw.ui.overlay.IslandDragGesture
 import ai.closepaw.ui.overlay.IslandStatusText
 import android.view.WindowManager
@@ -26,12 +28,13 @@ import ai.closepaw.ui.overlay.model.CapsuleMode
 import ai.closepaw.ui.overlay.model.deriveGlowState
 import kotlinx.coroutines.CoroutineScope
 
-class IslandOverlayHost(
+class IslandOverlayHost internal constructor(
     private val service: AccessibilityService,
     lifecycleOwner: LifecycleOwner,
     savedStateRegistryOwner: SavedStateRegistryOwner,
     private val onExpandCapsule: () -> Unit,
     private val emergencyStopBounds: () -> android.graphics.Rect? = { null },
+    private val onShareRequestTap: (ShareRequest) -> Unit = {},
 ) {
     companion object {
         private const val TAG = "IslandOverlayHost"
@@ -56,20 +59,27 @@ class IslandOverlayHost(
     private var syntheticInput = false
     private var physicalInputEpoch = 0L
     private var automaticDrag = false
+    private val shareTapSlop = ViewConfiguration.get(service).scaledTouchSlop
+    private var shareTapCandidate: ShareRequest? = null
+    private var tapX = 0f
+    private var tapY = 0f
     private fun cancelTouch() {
         holdFeedback?.let { touchView?.removeCallbacks(it) }
         holdFeedback = null; touchView = null
         dragGesture.cancel()
+        shareTapCandidate = null
     }
     private var remoteStatusText by mutableStateOf<String?>(null)
     private var remoteDetail by mutableStateOf<String?>(null)
     private var remoteUserAction by mutableStateOf<String?>(null)
+    private var remoteShareRequest: ShareRequest? = null
     private var detailVisible by mutableStateOf(false)
 
     /** Same window serves bridge-only sessions; never create another status surface. */
-    fun setRemoteStatus(text: String?, detail: String? = null, userAction: String? = null) {
+    internal fun setRemoteStatus(text: String?, detail: String? = null, userAction: String? = null, shareRequest: ShareRequest? = null) {
         remoteStatusText = text; remoteDetail = detail
         remoteUserAction = userAction
+        remoteShareRequest = shareRequest
         if (text == null || detail == null || userAction != null) detailVisible = false
     }
     private val positions = service.getSharedPreferences("closepaw_island_position", android.content.Context.MODE_PRIVATE)
@@ -177,11 +187,17 @@ class IslandOverlayHost(
     private fun handleTouch(view: View, event: MotionEvent): Boolean {
         if (!syntheticInput) physicalInputEpoch++
         if (!readOnlyMode) return false
+        val clearPhysicalTouch = !syntheticInput && event.source and android.view.InputDevice.SOURCE_TOUCHSCREEN ==
+            android.view.InputDevice.SOURCE_TOUCHSCREEN &&
+            event.flags and (MotionEvent.FLAG_WINDOW_IS_OBSCURED or MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED) == 0
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 cancelTouch()
                 fractionX = 0f; fractionY = 0f
                 touchView = view; holdVibrated = false
+                shareTapCandidate = remoteShareRequest.takeIf { clearPhysicalTouch && event.pointerCount == 1 }
+                tapX = event.rawX
+                tapY = event.rawY
                 holdFeedback = Runnable {
                     if (touchView === view && !holdVibrated) {
                         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
@@ -192,6 +208,8 @@ class IslandOverlayHost(
             }
             MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP -> {
                 if (event.pointerCount != 1) { cancelTouch(); return true }
+                if (!clearPhysicalTouch || kotlin.math.abs(event.rawX - tapX) > shareTapSlop ||
+                    kotlin.math.abs(event.rawY - tapY) > shareTapSlop) shareTapCandidate = null
                 dragGesture.move(event.rawX, event.rawY, event.eventTime, event.pointerCount)?.let {
                     if (it.began && !holdVibrated) {
                         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); holdVibrated = true
@@ -199,13 +217,17 @@ class IslandOverlayHost(
                     dragBy(it.dx, it.dy)
                 }
                 if (event.actionMasked == MotionEvent.ACTION_UP) {
+                    val request = shareTapCandidate?.takeIf {
+                        it == remoteShareRequest && event.eventTime - event.downTime in 0L until 450L && !holdVibrated
+                    }
                     if (!holdVibrated && remoteDetail != null && remoteUserAction == null) detailVisible = !detailVisible
                     persistPosition(); cancelTouch()
+                    request?.let(onShareRequestTap)
                 }
             }
             MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> cancelTouch()
         }
-        return true // Short tap toggles only trusted progress details; never terminates or controls underlying apps.
+        return true // Ordinary taps toggle detail; only the exact physical share tap opens the private Activity.
     }
 
     fun hide() {
