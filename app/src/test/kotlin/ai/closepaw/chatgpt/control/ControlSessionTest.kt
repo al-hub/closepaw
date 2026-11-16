@@ -166,4 +166,86 @@ class ControlSessionTest {
         session.clearUserActionHint()
         assertEquals("사용자 제어 중 · 일시정지", session.label)
     }
+
+    @Test fun outstandingActionFollowsConfirmedSharingWithoutChangingControl() {
+        val session = ControlSession().apply { assertTrue(start()) }
+        val id = session.id
+        val epoch = session.epoch
+        val hintEpoch = session.userActionEpoch
+        val allow = ControlSession.UserAction.ALLOW_SCREEN_SHARE
+        val stop = ControlSession.UserAction.STOP_SCREEN_SHARE
+        var interrupts = 0
+        session.interrupt = { interrupts++ }
+        fun update(revision: Int, action: ControlSession.UserAction, sharing: Boolean) =
+            session.updateUserAction(id, hintEpoch, revision, action, sharing, 10L)
+
+        assertEquals(ControlSession.HintUpdate.NOT_NEEDED, update(1, stop, false))
+        assertNull(session.currentUserAction(false, 10))
+        assertEquals(ControlSession.HintUpdate.SHOWN, update(2, allow, false))
+        assertEquals(allow, session.currentUserAction(false, 11)?.action)
+        // A button being tapped or text being seen does not change the actual sharing state.
+        assertEquals(allow, session.currentUserAction(false, 12)?.action)
+        assertNull(session.currentUserAction(true, 13))
+        assertNull(session.currentUserAction(false, 14))
+        assertEquals(ControlSession.HintUpdate.NOT_NEEDED, update(3, allow, true))
+        assertEquals(ControlSession.HintUpdate.SHOWN, update(4, stop, true))
+        assertEquals(stop, session.currentUserAction(true, 15)?.action)
+        assertNull(session.currentUserAction(false, 16))
+        assertEquals(ControlSession.State.ACTIVE, session.state)
+        assertEquals(epoch, session.epoch)
+        assertEquals(id, session.id)
+        assertEquals(0, interrupts)
+        assertNull(session.refusal(id, mutation = true))
+    }
+
+    @Test fun revisionsDeduplicateReplaceClearAndExpireWithoutRevivingOldActions() {
+        val session = ControlSession().apply { start() }
+        val allow = ControlSession.UserAction.ALLOW_SCREEN_SHARE
+        val stop = ControlSession.UserAction.STOP_SCREEN_SHARE
+        fun update(revision: Int, action: ControlSession.UserAction?, sharing: Boolean = false, now: Long = 0) =
+            session.updateUserAction(session.id, session.userActionEpoch, revision, action, sharing, now)
+
+        assertEquals(ControlSession.HintUpdate.SHOWN, update(1, allow))
+        val original = session.currentUserAction(false, 0)
+        assertEquals(ControlSession.HintUpdate.UNCHANGED, update(1, allow, now = 1))
+        assertEquals(ControlSession.HintUpdate.UNCHANGED, update(2, allow, now = 2))
+        assertSame(original, session.currentUserAction(false, ControlSession.USER_ACTION_TTL_MS - 1))
+        assertNull(session.currentUserAction(false, ControlSession.USER_ACTION_TTL_MS))
+        assertEquals(ControlSession.HintUpdate.UNCHANGED, update(2, allow, now = ControlSession.USER_ACTION_TTL_MS))
+        assertNull(session.currentUserAction(false, ControlSession.USER_ACTION_TTL_MS))
+
+        assertEquals(ControlSession.HintUpdate.SHOWN, update(3, allow, now = 40_000))
+        assertEquals(ControlSession.HintUpdate.SHOWN, update(5, stop, sharing = true, now = 40_001))
+        assertEquals(ControlSession.HintUpdate.STALE, update(4, null, sharing = true, now = 40_002))
+        assertEquals(ControlSession.HintUpdate.STALE, update(5, allow, sharing = true, now = 40_003))
+        assertEquals(stop, session.currentUserAction(true, 40_004)?.action)
+        assertEquals(ControlSession.HintUpdate.CLEARED, update(6, null, sharing = true, now = 40_005))
+        assertNull(session.currentUserAction(true, 40_006))
+        assertEquals(ControlSession.State.ACTIVE, session.state)
+    }
+
+    @Test fun lockAndControlTransitionsInvalidatePromptAdmissions() {
+        val session = ControlSession().apply { start() }
+        val id = session.id
+        val admission = session.userActionEpoch
+        val controlEpoch = session.epoch
+        val allow = ControlSession.UserAction.ALLOW_SCREEN_SHARE
+        assertEquals(ControlSession.HintUpdate.SHOWN, session.updateUserAction(id, admission, 1, allow, false, 0))
+        session.dropUserActionForScreenOff()
+        assertNull(session.currentUserAction(false, 1))
+        assertEquals(controlEpoch, session.epoch)
+        assertEquals(ControlSession.HintUpdate.REFUSED, session.updateUserAction(id, admission, 2, allow, false, 2))
+        assertEquals(ControlSession.HintUpdate.SHOWN,
+            session.updateUserAction(id, session.userActionEpoch, 2, allow, false, 3))
+        session.pause()
+        assertNull(session.currentUserAction(false, 4))
+        assertEquals(ControlSession.HintUpdate.REFUSED,
+            session.updateUserAction(id, session.userActionEpoch, 3, allow, false, 5))
+        session.end()
+        assertTrue(session.start())
+        assertEquals(0, session.userActionRevision)
+        assertEquals(ControlSession.HintUpdate.REFUSED,
+            session.updateUserAction(id, session.userActionEpoch, 3, allow, false, 6))
+        assertNull(session.currentUserAction(false, 7))
+    }
 }

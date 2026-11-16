@@ -1,5 +1,8 @@
 package ai.closepaw.ui.overlay.compose
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -14,12 +17,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import android.view.HapticFeedbackConstants
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -30,6 +37,8 @@ import ai.closepaw.protocol.compactThought
 import ai.closepaw.ui.capsule.surface.StatusPawGlyph
 import ai.closepaw.ui.theme.ClosePawMotion
 import ai.closepaw.ui.theme.closePaw
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -43,6 +52,7 @@ fun StatusIslandCompose(
     onDragEnd: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     expanded: Boolean = false,
+    userAction: String? = null,
 ) {
     val shape = MaterialTheme.shapes.large
     val spacing = MaterialTheme.closePaw.spacing
@@ -87,7 +97,7 @@ fun StatusIslandCompose(
                 onClick = onClick,
             ) else Modifier)
             .semantics {
-                contentDescription = "Status: $text"
+                contentDescription = if (userAction != null) userAction else "Status: $text"
             },
         shape = shape,
         color = MaterialTheme.colorScheme.surface,
@@ -96,6 +106,7 @@ fun StatusIslandCompose(
     ) {
         Row(
             modifier = Modifier
+                .then(if (userAction != null && !reducedMotion) userActionWave(userAction) else Modifier)
                 .defaultMinSize(minHeight = 32.dp)
                 .padding(horizontal = spacing.md, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -106,12 +117,12 @@ fun StatusIslandCompose(
                 size = 14.dp,
             )
             val textModifier = Modifier.widthIn(max = 220.dp)
-            if (reducedMotion) {
+            if (userAction != null || reducedMotion) {
                 Text(
-                    text = if (expanded) text else compactThought(text),
+                    text = userAction ?: if (expanded) text else compactThought(text),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = if (expanded) 8 else 1,
+                    maxLines = if (expanded && userAction == null) 8 else 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = textModifier,
                 )
@@ -129,5 +140,30 @@ fun StatusIslandCompose(
                 )
             }
         }
+    }
+}
+
+/** A decorative sweep behind stationary text. No frame loop runs during the rest interval. */
+@Composable
+private fun userActionWave(action: String): Modifier {
+    val position = remember(action) { Animatable(0f) }
+    val tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+    LaunchedEffect(action) {
+        while (isActive) {
+            position.snapTo(0f)
+            position.animateTo(1f, tween(ClosePawMotion.UserActionSweep, easing = LinearEasing))
+            delay(ClosePawMotion.UserActionRest.toLong())
+        }
+    }
+    return Modifier.drawBehind {
+        val fraction = position.value
+        if (fraction <= 0f || fraction >= 1f || size.width <= 0f) return@drawBehind
+        val half = size.width * 0.19f
+        val center = -half + fraction * (size.width + 2f * half)
+        drawRect(Brush.horizontalGradient(
+            listOf(Color.Transparent, tint, Color.Transparent),
+            startX = center - half,
+            endX = center + half,
+        ))
     }
 }

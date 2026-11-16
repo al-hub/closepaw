@@ -392,4 +392,40 @@ class GenericControlOperationsTest {
         assertTrue(wait.handler.invoke(OperationInvocation("typed-wait", typed)).success)
         assertEquals("공유를 중지하세요", session.label)
     }
+
+    @Test fun islandUserActionAllowsOnlyBoundedDisplayRequestsAndPreservesControl() = runBlocking {
+        val session = ControlSession().apply { start() }
+        val registry = OperationRegistry()
+        var unlocked = true
+        var sharing = false
+        ControlSessionOperations({ session }, { error("Hint must not invalidate control") },
+            hintEnvironment = { if (unlocked) ControlSessionOperations.HintEnvironment(sharing, 1) else null },
+            hintDispatcher = Dispatchers.Unconfined,
+        ) { OperationReadiness() }.register(registry)
+        val op = requireNotNull(registry.get(ControlSessionOperations.USER_ACTION))
+        val admission = session.userActionEpoch
+        fun args(action: String, revision: Int) = buildJsonObject {
+            put("session_id", session.id); put("action", action); put("revision", revision)
+        }
+        suspend fun send(action: String, revision: Int, epoch: Long? = admission) =
+            op.handler.invoke(OperationInvocation("hint", args(action, revision), epoch))
+        assertNull(OperationSchemaValidator.validate(op.descriptor.inputSchema, args("allow_screen_share", 1)))
+        assertNotNull(OperationSchemaValidator.validate(op.descriptor.inputSchema, args("arbitrary message", 1)))
+        assertNotNull(OperationSchemaValidator.validate(op.descriptor.inputSchema, args("clear", 0)))
+        assertFalse(send("arbitrary message", 1).success)
+        assertFalse(send("allow_screen_share", 1, null).success)
+        unlocked = false
+        assertFalse(send("allow_screen_share", 1).success)
+        unlocked = true
+        assertEquals("island_user_action_shown", send("allow_screen_share", 1).summary)
+        assertEquals(ControlSession.UserAction.ALLOW_SCREEN_SHARE, session.currentUserAction(false, 1)?.action)
+        assertEquals("island_user_action_unchanged", send("allow_screen_share", 1).summary)
+        sharing = true
+        assertNull(session.currentUserAction(true, 2))
+        assertEquals("island_user_action_shown", send("stop_screen_share", 3).summary)
+        assertFalse(send("clear", 2).success)
+        assertEquals("island_user_action_cleared", send("clear", 4).summary)
+        assertNull(session.currentUserAction(true, 2))
+        assertEquals(ControlSession.State.ACTIVE, session.state)
+    }
 }

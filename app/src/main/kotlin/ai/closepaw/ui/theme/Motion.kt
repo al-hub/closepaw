@@ -33,6 +33,8 @@ object ClosePawMotion {
     const val OverlayFadeOut: Int = Pulse       // 480ms overlay fade-out
     const val CapsuleBreath: Int = Breath       // 900ms capsule breath in running mode
     const val GlowPulse: Int = Breath           // 900ms glow pulse
+    const val UserActionSweep: Int = Breath     // Wave behind an outstanding physical action.
+    const val UserActionRest: Int = 3_000       // No frames between sweeps.
 
     // D1 §8 reduced-motion contract:
     //  - trace enter → instant + 120ms fade
