@@ -230,6 +230,28 @@ class WindowVisualCaptureGeometryTest {
         verify(exactly=0) { service.takeScreenshot(any(),any(),any()) }
     }
 
+    @Test fun nativeKeyboardDisplayRejectsAnOlderIsolatedFrame() = runBlocking {
+        Surface(60,100).use { full ->
+            Surface(60,90).use { isolated ->
+                var displayTime = -1L
+                every { full.screenshot.timestamp } answers { displayTime }
+                every { isolated.screenshot.timestamp } answers { displayTime - 1 }
+                val service = service(23,isolated)
+                every { service.takeScreenshot(0,any(),any()) } answers {
+                    displayTime = SystemClock.uptimeMillis()
+                    thirdArg<AccessibilityService.TakeScreenshotCallback>().onSuccess(full.screenshot)
+                }
+                val touch = TapBounds(0,50,60,100)
+                val result = WindowVisualCapture.capture(service,23,TapBounds(0,0,60,100),"keyboard",
+                    display=true,visibleRegion=Region(0,50,60,100),
+                    surfaces=listOf(IsolatedVisualSurface(23,touch,listOf(touch))),nativeKeyboardDisplay=true)
+                assertNull(result.proof)
+                assertEquals("display_isolated_keyboard_window_timestamp_unverified",result.reason)
+                assertTrue(isolated.buffer.isClosed); assertTrue(full.buffer.isClosed)
+            }
+        }
+    }
+
     @Test fun certifiedTranslationRetainsNativeBufferAndMasksOutsideTouchableRegion() = runBlocking {
         Surface(200,300).use { surface ->
             val timestamp = android.os.SystemClock.uptimeMillis()

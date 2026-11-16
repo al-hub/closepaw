@@ -77,8 +77,8 @@ internal object WindowVisualCapture {
             var bitmap: Bitmap? = null; var scaled: Bitmap? = null
             var disclosed: List<TapBounds> = emptyList()
             try {
-                if (nativeKeyboardDisplay && (captured == null ||
-                        captured.timestamp !in snapshotStart..android.os.SystemClock.uptimeMillis()))
+                val displayTimestamp = if (nativeKeyboardDisplay) captured?.timestamp ?: -1L else -1L
+                if (nativeKeyboardDisplay && displayTimestamp !in snapshotStart..android.os.SystemClock.uptimeMillis())
                     return@withContext failure("keyboard_display_timestamp_unverified")
                 if (projected != null) {
                     bitmap = projected.bitmap
@@ -124,7 +124,7 @@ internal object WindowVisualCapture {
                             awaitSlot()
                             // Window-isolated verification never uses a display fallback.
                             val isolated=capturePixels(service,surface.windowId,surface.bounds,
-                                minimumUptimeMs=if (nativeKeyboardDisplay) captured!!.timestamp else -1L)
+                                minimumUptimeMs=displayTimestamp)
                             val expected=isolated.pixels ?: return@withContext failure("display_isolated_"+isolated.reason)
                             val coordinatesInDisplay = if (nativeKeyboardDisplay)
                                 KeyboardDisplayAlignment.locate(window,isolated.width,expected.size / isolated.width,surface.bounds)
@@ -214,7 +214,8 @@ internal object WindowVisualCapture {
             }
         } } ?: return PixelResult(reason=failure)
         try {
-            if (minimumUptimeMs >= 0 && captured.timestamp !in minimumUptimeMs..android.os.SystemClock.uptimeMillis())
+            val isolatedTimestamp = if (minimumUptimeMs >= 0) captured.timestamp else -1L
+            if (minimumUptimeMs >= 0 && isolatedTimestamp !in minimumUptimeMs..android.os.SystemClock.uptimeMillis())
                 return PixelResult(reason="keyboard_window_timestamp_unverified")
             val buffer=captured.hardwareBuffer
             val width=buffer.width;val height=buffer.height
