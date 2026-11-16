@@ -1,11 +1,22 @@
 package ai.closepaw.chatgpt.control
 
 import ai.closepaw.chatgpt.operations.*
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 
-internal class ControlSessionOperations(private val session: () -> ControlSession?,
-    private val invalidate: () -> Unit, private val readiness: () -> OperationReadiness) {
+internal class ControlSessionOperations(
+    private val session: () -> ControlSession?,
+    private val invalidate: () -> Unit,
+    private val hintEnvironment: () -> HintEnvironment? = { null },
+    private val hintDispatcher: () -> CoroutineDispatcher = { Dispatchers.Main.immediate },
+    private val readiness: () -> OperationReadiness,
+) {
+    data class HintEnvironment(val sharing: Boolean, val nowMs: Long)
+
     fun register(registry: OperationRegistry) {
+        registerUserAction(registry)
         for (command in listOf("status", "start", "wait", "end")) {
             val properties = if (command in setOf("wait", "end")) buildJsonObject {
                 put("session_id", buildJsonObject { put("type", "string"); put("maxLength", 128); put("minLength", 1) })
@@ -48,11 +59,67 @@ internal class ControlSessionOperations(private val session: () -> ControlSessio
                     return OperationResult(success = changed, summary = if (changed) "Control session state returned." else "control_session_transition_refused",
                         data = buildJsonObject {
                             put("state", value.state.name.lowercase()); put("session_id", value.id); put("epoch", value.epoch)
+                            put("user_action_revision", value.userActionRevision)
                             put("physical_resume_required", value.state == ControlSession.State.PAUSED)
                             put("external_effects_undone", false)
                         })
                 }
             })
         }
+    }
+
+    private fun registerUserAction(registry: OperationRegistry) {
+        val fields = listOf("session_id", "revision", "action")
+        registry.register(OperationDescriptor(USER_ACTION,
+            "Show, replace, or clear a one-line user-action prompt (and subtle wave) on the ClosePaw island. " +
+                "Use only when the user must physically allow or stop screen sharing. Requires the current explicit active session. " +
+                "Use a strictly increasing revision starting at 1 for each new request or clear; read session.status for the last revision. " +
+                "The same revision is idempotent. Repeating a pending action does not extend its 30s lifetime. " +
+                "The local sharing state clears the prompt automatically. This operation cannot change control, start or stop sharing, or grant consent.",
+            inputSchema = buildJsonObject {
+                put("type", "object")
+                put("properties", buildJsonObject {
+                    put("session_id", buildJsonObject { put("type", "string"); put("minLength", 1); put("maxLength", 128) })
+                    put("revision", buildJsonObject { put("type", "integer"); put("minimum", 1); put("maximum", Int.MAX_VALUE) })
+                    put("action", buildJsonObject {
+                        put("type", "string")
+                        put("enum", JsonArray((ControlSession.UserAction.entries.map { it.id } + "clear").map { JsonPrimitive(it) }))
+                    })
+                })
+                put("required", JsonArray(fields.map { JsonPrimitive(it) }))
+                put("additionalProperties", false)
+            },
+            readOnly = false, permissions = listOf("accessibility", "generic_android_control"),
+            effects = listOf("island_user_action_hint"), readiness = readiness,
+        ), object : OperationHandler {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult = withContext(hintDispatcher()) {
+                if (!readiness().ready) return@withContext OperationResult(success = false, summary = "generic_control_unavailable")
+                val current = session() ?: return@withContext OperationResult(success = false, summary = "accessibility_permission_missing")
+                val epoch = invocation.admittedEpoch
+                    ?: return@withContext OperationResult(success = false, summary = "user_action_epoch_required")
+                val sessionId = (invocation.input["session_id"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+                    ?: return@withContext OperationResult(success = false, summary = "control_session_id_required")
+                val revision = (invocation.input["revision"] as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull
+                if (revision == null || revision < 1)
+                    return@withContext OperationResult(success = false, summary = "invalid_user_action_revision")
+                val raw = invocation.input["action"]
+                val action = if (raw == JsonPrimitive("clear")) null else {
+                    ControlSession.UserAction.entries.firstOrNull { raw == JsonPrimitive(it.id) }
+                        ?: return@withContext OperationResult(success = false, summary = "invalid_user_action")
+                }
+                val environment = hintEnvironment()
+                    ?: return@withContext OperationResult(success = false, summary = "device_locked_or_unavailable")
+                val result = current.updateUserAction(sessionId, epoch, revision, action, environment.sharing, environment.nowMs)
+                OperationResult(
+                    success = result !in setOf(ControlSession.HintUpdate.STALE, ControlSession.HintUpdate.REFUSED),
+                    summary = "island_user_action_${result.name.lowercase()}",
+                    data = buildJsonObject { put("user_action_revision", current.userActionRevision) },
+                )
+            }
+        })
+    }
+
+    companion object {
+        const val USER_ACTION = "android.control.island.user_action"
     }
 }

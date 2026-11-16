@@ -8,7 +8,19 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     enum class UserAction(val id: String, val label: String) {
         ALLOW_SCREEN_SHARE("allow_screen_share", "공유를 허용하세요"),
         STOP_SCREEN_SHARE("stop_screen_share", "공유를 중지하세요"),
+
+        ;
+
+        fun satisfiedBy(sharing: Boolean) = sharing == (this == ALLOW_SCREEN_SHARE)
     }
+    data class UserActionHint(val action: UserAction, val expiresAtMs: Long)
+    enum class HintUpdate { SHOWN, UNCHANGED, NOT_NEEDED, CLEARED, STALE, REFUSED }
+    @Volatile var userActionEpoch = 0L
+        private set
+    @Volatile var userActionRevision = 0
+        private set
+    private var lastUserAction: UserAction? = null
+    private var userActionHint: UserActionHint? = null
     enum class VisualPhase { PREPARING, OBSERVING, EXECUTING, WAITING, COMPLETED, FAILED }
     @Volatile var visualPhase = VisualPhase.PREPARING
         private set
@@ -83,6 +95,7 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     @Synchronized fun start(): Boolean {
         if (state !in setOf(State.IDLE, State.ENDED)) return false
         id = UUID.randomUUID().toString(); explicit = true
+        userActionRevision = 0; lastUserAction = null
         transition(State.ACTIVE, "AI 제어 중")
         return true
     }
@@ -120,6 +133,50 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
             (completed != null && label != completed.label)) return
         label = "사용자 응답 대기"; changed()
     }
+
+    /** A display-only request. Neither completion nor dismissal changes control state. */
+    @Synchronized fun updateUserAction(
+        sessionId: String, expectedHintEpoch: Long, revision: Int, action: UserAction?,
+        sharing: Boolean, nowMs: Long,
+    ): HintUpdate {
+        if (state != State.ACTIVE || !explicit || id != sessionId || userActionEpoch != expectedHintEpoch)
+            return HintUpdate.REFUSED
+        if (revision < userActionRevision ||
+            (revision == userActionRevision && lastUserAction != action)) return HintUpdate.STALE
+        if (revision == userActionRevision) return HintUpdate.UNCHANGED
+        userActionRevision = revision
+        lastUserAction = action
+        val previous = userActionHint
+        userActionHint = when {
+            action == null || action.satisfiedBy(sharing) -> null
+            previous != null && previous.action == action && previous.expiresAtMs > nowMs -> previous
+            else -> UserActionHint(action, nowMs + USER_ACTION_TTL_MS)
+        }
+        if (previous !== userActionHint) changed()
+        return when {
+            action == null -> HintUpdate.CLEARED
+            userActionHint == null -> HintUpdate.NOT_NEEDED
+            previous === userActionHint -> HintUpdate.UNCHANGED
+            else -> HintUpdate.SHOWN
+        }
+    }
+
+    /** Called with the current OS sharing state. Timeout and successful action only clear UI. */
+    @Synchronized fun currentUserAction(sharing: Boolean, nowMs: Long): UserActionHint? {
+        val hint = userActionHint ?: return null
+        if (hint.expiresAtMs <= nowMs || hint.action.satisfiedBy(sharing)) {
+            userActionHint = null
+            return null
+        }
+        return hint
+    }
+
+    @Synchronized fun dropUserActionForScreenOff() {
+        userActionEpoch++
+        if (userActionHint == null) return
+        userActionHint = null
+        changed()
+    }
     @Synchronized fun userResponded(): Boolean {
         if (state != State.WAITING) return false
         transition(State.PAUSED, "응답 확인 · 재개 전 화면 확인"); return true
@@ -139,8 +196,13 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     }
     private fun transition(next: State, text: String) {
         state = next; epoch++; label = text
+        userActionHint = null; userActionEpoch++
         progressDetail = null
         if (next == State.ACTIVE) visualPhase = VisualPhase.PREPARING
         persist(next.name.lowercase()); changed()
+    }
+
+    companion object {
+        const val USER_ACTION_TTL_MS = 30_000L
     }
 }

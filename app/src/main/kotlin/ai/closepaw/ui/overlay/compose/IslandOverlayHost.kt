@@ -63,12 +63,14 @@ class IslandOverlayHost(
     }
     private var remoteStatusText by mutableStateOf<String?>(null)
     private var remoteDetail by mutableStateOf<String?>(null)
+    private var remoteUserAction by mutableStateOf<String?>(null)
     private var detailVisible by mutableStateOf(false)
 
     /** Same window serves bridge-only sessions; never create another status surface. */
-    fun setRemoteStatus(text: String?, detail: String? = null) {
+    fun setRemoteStatus(text: String?, detail: String? = null, userAction: String? = null) {
         remoteStatusText = text; remoteDetail = detail
-        if (text == null || detail == null) detailVisible = false
+        remoteUserAction = userAction
+        if (text == null || detail == null || userAction != null) detailVisible = false
     }
     private val positions = service.getSharedPreferences("closepaw_island_position", android.content.Context.MODE_PRIVATE)
     private var islandX = positions.getInt("x", -1)
@@ -140,12 +142,14 @@ class IslandOverlayHost(
         composeHost.show(layout, onTouch = ::handleTouch, onLayout = ::correctMeasuredPosition) {
             val holder = stateHolder
             val remote = remoteStatusText
+            val userAction = remoteUserAction
             if (remote != null || holder == null) {
                 StatusIslandCompose(
                     text = if (detailVisible) remoteDetail ?: remote ?: "AI 제어 중 - 실행" else remote ?: "AI 제어 중 - 실행",
                     dotColor = MaterialTheme.colorScheme.primary,
                     pulsing = true,
                     expanded = detailVisible,
+                    userAction = userAction,
                     onClick = if (readOnlyMode) ({ if (remoteDetail != null) detailVisible = !detailVisible }) else onExpandCapsule,
                     onDrag = if (readOnlyMode) null else ::dragBy,
                     onDragEnd = ::persistPosition,
@@ -160,6 +164,7 @@ class IslandOverlayHost(
                     text = if (text.isBlank()) "Working..." else text,
                     dotColor = glowState.toStatusColor(),
                     pulsing = mode is CapsuleMode.Running,
+                    userAction = userAction,
                     onClick = if (readOnlyMode) null else onExpandCapsule,
                     onDrag = if (readOnlyMode) null else ::dragBy,
                     onDragEnd = ::persistPosition,
@@ -194,7 +199,7 @@ class IslandOverlayHost(
                     dragBy(it.dx, it.dy)
                 }
                 if (event.actionMasked == MotionEvent.ACTION_UP) {
-                    if (!holdVibrated && remoteDetail != null) detailVisible = !detailVisible
+                    if (!holdVibrated && remoteDetail != null && remoteUserAction == null) detailVisible = !detailVisible
                     persistPosition(); cancelTouch()
                 }
             }

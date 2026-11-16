@@ -144,6 +144,7 @@ class ServiceOverlayController(
     private var showPreference = ShowPreference.ISLAND
     private var remoteStatusText: String? = null
     private var remoteDetail: String? = null
+    private var remoteUserAction: String? = null
     private var disposed = false
     private var modeObserver: kotlinx.coroutines.Job? = null
 
@@ -153,9 +154,10 @@ class ServiceOverlayController(
         holdMs: Long, moveMs: Long, permitted: () -> Boolean): Boolean =
         statusIslandManager?.dragOwnedWindow(before, dx, dy, holdMs, moveMs, permitted) ?: false
 
-    fun setRemoteStatus(text: String?, detail: String? = null) {
+    fun setRemoteStatus(text: String?, detail: String? = null, userAction: String? = null) {
         remoteDetail = detail
         remoteStatusText = text?.let { ai.closepaw.ui.overlay.RemoteStatusLabel.sanitize(it) }
+        remoteUserAction = userAction
         applyVisibility()
     }
 
@@ -254,8 +256,11 @@ class ServiceOverlayController(
         }
 
         val showRemoteIsland = remoteStatusText != null && !stateHolder.hasActiveTask
-        statusIslandManager?.setRemoteStatus(if (showRemoteIsland) remoteStatusText else null,
-            if (showRemoteIsland) remoteDetail else null)
+        statusIslandManager?.setRemoteStatus(
+            if (showRemoteIsland) remoteStatusText else null,
+            if (showRemoteIsland) remoteDetail else null,
+            remoteUserAction.takeIf { showRemoteIsland || activeSurfaces.showStatusIsland },
+        )
         statusIslandManager?.setReadOnly(showSingleX || showRemoteIsland)
         if (activeSurfaces.showStatusIsland || showRemoteIsland) {
             statusIslandManager?.show()

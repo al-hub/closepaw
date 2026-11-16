@@ -12,7 +12,9 @@ import kotlinx.serialization.json.*
 
 /** The same screen mutex spans observation, generic effects and Gemini collection. */
 internal class GenericControlOperations(private val control: GenericControl, private val port: ControlPort,
-    private val mutex: Mutex, private val runtime: RuntimeControlSettings? = null, private val readiness: () -> OperationReadiness) {
+    private val mutex: Mutex, private val runtime: RuntimeControlSettings? = null,
+    private val hintEnvironment: () -> ControlSessionOperations.HintEnvironment? = { null },
+    private val readiness: () -> OperationReadiness) {
     // Main operation mutex serializes these timestamps. This measures only time
     // *between local operation handlers*, not AI thinking or network latency.
     private var previousReleaseNs: Long? = null
@@ -96,7 +98,8 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                 }
             }
         }
-        ControlSessionOperations({ session() }, { control.invalidate(true) }, readiness).register(registry)
+        ControlSessionOperations({ session() }, { control.invalidate(true) }, hintEnvironment, readiness = readiness)
+            .register(registry)
         registry.register(OperationDescriptor(ISLAND_OBSERVE,
             "Observe only the attached ClosePaw island. Requires an explicitly active session. Returns a single-use 60s observation for island drag; never observes or targets underlying apps.",
             inputSchema = obj(required = listOf("session_id")),

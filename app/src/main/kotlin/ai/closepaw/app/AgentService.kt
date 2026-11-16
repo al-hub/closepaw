@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -185,14 +186,39 @@ class AgentService : AccessibilityService() {
         hideRemoteControlActivity(force = true)
         submitOp(Op.Shutdown)
     }
+    private var userActionExpiryJob: Job? = null
+    private var scheduledUserActionExpiry: Long? = null
+
+    private fun scheduleUserActionExpiry(expiresAtMs: Long?) {
+        if (scheduledUserActionExpiry == expiresAtMs) return
+        userActionExpiryJob?.cancel()
+        scheduledUserActionExpiry = expiresAtMs
+        userActionExpiryJob = expiresAtMs?.let { deadline ->
+            serviceScope.launch {
+                delay((deadline - android.os.SystemClock.elapsedRealtime()).coerceAtLeast(1L))
+                scheduledUserActionExpiry = null
+                userActionExpiryJob = null
+                showRemoteControlActivity()
+            }
+        }
+    }
+
     internal fun showRemoteControlActivity() {
         val unlocked = !getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
             getSystemService(android.os.PowerManager::class.java).isInteractive
         val active = remoteControlSession.state !in setOf(
             ai.closepaw.chatgpt.control.ControlSession.State.IDLE,
             ai.closepaw.chatgpt.control.ControlSession.State.ENDED)
-        overlayController?.setRemoteStatus(if (active) remoteControlSession.label else null,
-            if (unlocked && active) remoteControlSession.progressDetail else null)
+        val hint = if (unlocked && active) remoteControlSession.currentUserAction(
+            sharing = MediaProjectionCaptureService.sharingRound.value != null,
+            nowMs = android.os.SystemClock.elapsedRealtime(),
+        ) else null
+        scheduleUserActionExpiry(hint?.expiresAtMs)
+        overlayController?.setRemoteStatus(
+            if (active) remoteControlSession.label else null,
+            if (unlocked && active) remoteControlSession.progressDetail else null,
+            userAction = hint?.action?.label,
+        )
         if (!unlocked) { remoteControlIndicator.hide(); return }
         remoteControlIndicator.show(showEmergencyX = !modernEmergencyXVisible)
         if (remoteControlSession.state == ai.closepaw.chatgpt.control.ControlSession.State.PAUSED)
@@ -527,6 +553,8 @@ class AgentService : AccessibilityService() {
                 ai.closepaw.chatgpt.control.VisualImageCache.clear()
                 controlUiRestoreJob?.cancel()
                 remoteControlSession.clearUserActionHint()
+                remoteControlSession.dropUserActionForScreenOff()
+                scheduleUserActionExpiry(null)
                 remoteControlIndicator.hide()
                 actionVisualizer?.clear()
             } else {
@@ -548,6 +576,7 @@ class AgentService : AccessibilityService() {
                         ai.closepaw.chatgpt.control.ControlSession.UserAction.ALLOW_SCREEN_SHARE
                     else ai.closepaw.chatgpt.control.ControlSession.UserAction.STOP_SCREEN_SHARE
                     remoteControlSession.clearUserActionHint(action)
+                    showRemoteControlActivity()
                 }
                 previous = round
             }
