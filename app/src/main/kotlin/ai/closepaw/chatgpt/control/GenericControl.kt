@@ -53,7 +53,7 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
     val setText: Boolean = false, val paste: Boolean = false, val focusable: Boolean = false,
     val scrollDirections: Set<String> = emptySet(), val sourceWindowId: Int = -1,
     val sourcePackage: String = "", val keyboardKey: String = "", val textEntryKey: Boolean = false, val visualKeyCandidate: Boolean = false, val terminal: TerminalEvidence? = null,
-    val visualKeyChildCount: Int = -1) {
+    val visualKeyChildCount: Int = -1, val keyboardCursorGeneration: Long? = null) {
     fun json() = buildJsonObject {
         put("terminal_input_supported", terminal != null)
         if (terminal != null) {
@@ -172,7 +172,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val rendered = mutableListOf<JsonElement>()
         var size = 0
         val candidates = frame.nodes.filter { filter.isEmpty() || it.text.contains(filter, true) ||
-            it.description.contains(filter, true) || it.resourceId.contains(filter, true) }
+            it.description.contains(filter, true) || it.resourceId.contains(filter, true) || it.keyboardKey.contains(filter, true) }
         val exposed = mutableListOf<ControlNode>()
         for (node in candidates.take(frame.outputLimit)) {
             val json = node.json()
@@ -202,6 +202,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     frame.inputTargetId == null -> "keyboard_input_target_unverified"
                     else -> "available"
                 })
+                put("selection_source", frame.inputTarget?.let { field -> when {
+                    field.keyboardCursorGeneration != null -> "bound_empty_editor"
+                    field.selectionStart in 0..field.text.length && field.selectionEnd in field.selectionStart..field.text.length -> "accessibility"
+                    else -> "unverified"
+                } } ?: "unverified")
                 put("semantic_keys_only", false); put("visual_keys_require_keyboard_image", true); put("input_target_verified", frame.inputTargetId != null)
                 frame.keyboardDiagnostics?.let { diagnostics -> put("scan", diagnostics) }
             }) }

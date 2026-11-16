@@ -6,7 +6,8 @@ internal object KeyboardTargetPolicy {
         live == null || !live.enabled || !live.focused || !live.focusable || !live.editable || live.password -> "keyboard_input_target_changed"
         expected.sourceWindowId != live.sourceWindowId || expected.sourcePackage != live.sourcePackage ||
             expected.resourceId != live.resourceId || expected.className != live.className || expected.bounds != live.bounds ||
-            expected.text != live.text || expected.selectionStart != live.selectionStart || expected.selectionEnd != live.selectionEnd -> "keyboard_input_target_changed"
+            expected.text != live.text || expected.selectionStart != live.selectionStart || expected.selectionEnd != live.selectionEnd ||
+            expected.keyboardCursorGeneration != live.keyboardCursorGeneration -> "keyboard_input_target_changed"
         InputPayloadPolicy.sensitive(live.text) -> "sensitive_input_refused"
         else -> null
     }

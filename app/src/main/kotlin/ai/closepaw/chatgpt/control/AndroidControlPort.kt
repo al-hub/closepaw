@@ -652,8 +652,19 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 packageAllowed = packageAllowed(pkg), isGeminiHost = pkg == AndroidGeminiDraftUi.GOOGLE_HOST,
                 verifiedGemini = geminiIdentityVerified, readable = nodes.isNotEmpty(),
             ) ?: reason(service)
-            val inputTarget = nodes.filter { it.keyboardKey.isEmpty() && it.sourceWindowId == selected.selection.target &&
+            val rawInputTarget = nodes.filter { it.keyboardKey.isEmpty() && it.sourceWindowId == selected.selection.target &&
                 it.sourcePackage == pkg && it.editable && it.enabled && it.focused && it.focusable && !it.password }.singleOrNull()
+            val keyboard = selected.keyboard
+            val epoch = session()?.epoch
+            val cursorGeneration = if (code == null && !truncated && rawInputTarget != null &&
+                keyboard?.readAllowed == true && keyboard.interactAllowed && packageAllowed(pkg, operation = "read") &&
+                session()?.state == ControlSession.State.ACTIVE) {
+                native.getOrNull(nodes.indexOf(rawInputTarget))?.let { KeyboardCursorBinding.prove(service, rawInputTarget, it) }
+                    ?.takeIf { session()?.epoch == epoch && reason(service) == null &&
+                        (runtime?.snapshot()?.revision ?: 0L) == revision }
+            } else null
+            val inputTarget = if (cursorGeneration == null) rawInputTarget else
+                rawInputTarget?.copy(selectionStart = 0, selectionEnd = 0, keyboardCursorGeneration = cursorGeneration)
             val frame = ControlFrame(pkg, window.id, fingerprint, nodes, code, truncated,
                 truncationReasons, visited, deepest, touchContext(service, window, windows), root.windowId,
                 selected.signature, selected.diagnostics, revision, outputLimit,
@@ -963,6 +974,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         return@tap "display_window_changed_since_observation"
                     // Reacquire the actual app input focus after the IME tree scan. Window/IME
                     // stability alone cannot prove that a user did not select a different field.
+                    val observedField = native.getOrNull(fresh.nodes.indexOfFirst { it.id == field.id })
                     val appWindow = service.windows.orEmpty()
                     var appRoot: AccessibilityNodeInfo? = null
                     var focused: AccessibilityNodeInfo? = null
@@ -970,17 +982,19 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         appRoot = appWindow.singleOrNull { it.id == field.sourceWindowId }?.root
                         focused = appRoot?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
                         val live = focused
-                        val focusRefusal = if (live == null || !live.refresh() || !live.isVisibleToUser ||
+                        val focusRefusal = if (live == null || observedField != live || !live.refresh() || !live.isVisibleToUser ||
                             (Build.VERSION.SDK_INT >= 34 && live.isAccessibilityDataSensitive)) "keyboard_input_target_changed"
                         else {
                             val liveBounds = Rect(); live.getBoundsInScreen(liveBounds)
-                            KeyboardTargetPolicy.refusal(field, field.copy(
+                            val liveField = field.copy(
                                 text = if (live.isShowingHintText) "" else live.text?.toString().orEmpty().take(2001),
+                                empty = live.isShowingHintText || live.text.isNullOrEmpty(), keyboardCursorGeneration = null,
                                 resourceId = live.viewIdResourceName.orEmpty().take(100), className = live.className?.toString().orEmpty(),
                                 bounds = liveBounds.flattenToString(), enabled = live.isEnabled, focused = live.isFocused,
                                 focusable = live.isFocusable, editable = live.isEditable, password = live.isPassword,
                                 sourceWindowId = live.windowId, sourcePackage = live.packageName?.toString().orEmpty(),
-                                selectionStart = live.textSelectionStart, selectionEnd = live.textSelectionEnd))
+                                selectionStart = live.textSelectionStart, selectionEnd = live.textSelectionEnd)
+                            KeyboardTargetPolicy.refusal(field, KeyboardCursorBinding.recheck(service, field, liveField))
                         }
                         if (focusRefusal != null) focusRefusal
                         else {
