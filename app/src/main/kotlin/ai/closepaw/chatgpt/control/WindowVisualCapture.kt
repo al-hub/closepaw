@@ -153,7 +153,8 @@ internal object WindowVisualCapture {
                     if (projected == null) ScreenImageSource.ACCESSIBILITY_SCREENSHOT else ScreenImageSource.MEDIA_PROJECTION),
                     hash,coordinates,context + (geometry?.let { "|ime=" + it.fingerprint } ?: ""),System.currentTimeMillis(),
                     scope=if (observationOnly) "screen_observe" else if (geometry != null) "keyboard" else "app",
-                    disclosedRegions=disclosed,sourceDisclosureAllowed=sourceAllowed,captureUptimeMs=captured?.timestamp ?: -1))
+                    disclosedRegions=disclosed,sourceDisclosureAllowed=sourceAllowed,
+                    captureUptimeMs=if (geometry != null) captured?.timestamp ?: -1 else -1))
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { failure("screenshot_conversion_failed") }
             finally { if (scaled !== bitmap) scaled?.recycle(); bitmap?.recycle() }

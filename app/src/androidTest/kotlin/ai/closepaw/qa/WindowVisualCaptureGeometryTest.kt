@@ -171,6 +171,7 @@ class WindowVisualCaptureGeometryTest {
             assertTrue(surface.buffer.isClosed)
             verify(exactly = 1) { service.takeScreenshotOfWindow(17, any(), any()) }
             verify(exactly = 0) { service.takeScreenshot(any(), any(), any()) }
+            verify(exactly = 0) { surface.screenshot.timestamp }
         }
     }
 
