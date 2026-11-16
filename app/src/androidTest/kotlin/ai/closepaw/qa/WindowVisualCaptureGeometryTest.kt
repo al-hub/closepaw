@@ -29,7 +29,6 @@ import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.provider.Settings
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.*
 import java.util.concurrent.Executor
 import kotlinx.coroutines.delay
