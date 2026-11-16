@@ -400,7 +400,7 @@ class GenericControlOperationsTest {
         var sharing = false
         ControlSessionOperations({ session }, { error("Hint must not invalidate control") },
             hintEnvironment = { if (unlocked) ControlSessionOperations.HintEnvironment(sharing, 1) else null },
-            hintDispatcher = Dispatchers.Unconfined,
+            hintDispatcher = { Dispatchers.Unconfined },
         ) { OperationReadiness() }.register(registry)
         val op = requireNotNull(registry.get(ControlSessionOperations.USER_ACTION))
         val admission = session.userActionEpoch

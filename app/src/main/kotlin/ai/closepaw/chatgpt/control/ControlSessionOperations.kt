@@ -10,7 +10,7 @@ internal class ControlSessionOperations(
     private val session: () -> ControlSession?,
     private val invalidate: () -> Unit,
     private val hintEnvironment: () -> HintEnvironment? = { null },
-    private val hintDispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
+    private val hintDispatcher: () -> CoroutineDispatcher = { Dispatchers.Main.immediate },
     private val readiness: () -> OperationReadiness,
 ) {
     data class HintEnvironment(val sharing: Boolean, val nowMs: Long)
@@ -92,7 +92,7 @@ internal class ControlSessionOperations(
             readOnly = false, permissions = listOf("accessibility", "generic_android_control"),
             effects = listOf("island_user_action_hint"), readiness = readiness,
         ), object : OperationHandler {
-            override suspend fun invoke(invocation: OperationInvocation): OperationResult = withContext(hintDispatcher) {
+            override suspend fun invoke(invocation: OperationInvocation): OperationResult = withContext(hintDispatcher()) {
                 if (!readiness().ready) return@withContext OperationResult(success = false, summary = "generic_control_unavailable")
                 val current = session() ?: return@withContext OperationResult(success = false, summary = "accessibility_permission_missing")
                 val epoch = invocation.admittedEpoch
