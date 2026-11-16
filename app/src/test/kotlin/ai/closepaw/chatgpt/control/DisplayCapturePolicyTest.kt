@@ -40,7 +40,12 @@ class DisplayCapturePolicyTest {
         assertNotNull(VisualKeyboardPolicy.proofOwnerRefusal(p.copy(sourceDisplayId=1),k))
         assertNotNull(VisualKeyboardPolicy.proofOwnerRefusal(p.copy(displayGeneration=-1),k))
         assertNotNull(VisualKeyboardPolicy.proofOwnerRefusal(p.copy(scope="app"),k))
-        assertNull(VisualKeyboardPolicy.proofOwnerRefusal(p.copy(scope="keyboard",sourceWindowId=6),k))
+        val nativeKeyboard = p.copy(scope="keyboard",sourceWindowId=6,
+            disclosedRegions=listOf(TapBounds(0,1600,1080,2400)))
+        assertNull(VisualKeyboardPolicy.proofOwnerRefusal(nativeKeyboard,k))
+        assertNotNull(VisualKeyboardPolicy.proofOwnerRefusal(nativeKeyboard.copy(disclosedRegions=emptyList()),k))
+        assertNotNull(VisualKeyboardPolicy.proofOwnerRefusal(nativeKeyboard.copy(sourceImeWindowId=7),k))
+        assertNull(VisualKeyboardPolicy.proofOwnerRefusal(p.copy(scope="keyboard",sourceWindowId=6,sourceDisplayId=-1),k))
     }
 
 }
