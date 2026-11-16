@@ -1,4 +1,4 @@
-import importlib.util
+import types
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -6,9 +6,9 @@ import struct
 
 
 path = Path(__file__).resolve().parents[2] / 'app/src/main/assets/control/ime_geometry.py'
-spec = importlib.util.spec_from_file_location('ime_geometry', path)
-geometry = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(geometry)
+# Compile in memory so running CI tests cannot add bytecode to packaged assets.
+geometry = types.ModuleType('ime_geometry')
+exec(compile(path.read_bytes(), str(path), 'exec'), geometry.__dict__)
 
 # Synthetic native-format fixtures: no live dumps or user data in the repository.
 A = '''A11yWindow[AccessibilityWindowInfo[displayId=0, id=2, type=TYPE_INPUT_METHOD, region=SkRegion((0,1798,1440,3120))]]
