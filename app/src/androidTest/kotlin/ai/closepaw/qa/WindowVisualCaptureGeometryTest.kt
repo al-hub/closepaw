@@ -129,12 +129,13 @@ class WindowVisualCaptureGeometryTest {
         }
     }
 
-    private class Surface(width: Int, height: Int) : AutoCloseable {
+    private class Surface(width: Int, height: Int, pixels: IntArray? = null) : AutoCloseable {
         private val hardware: Bitmap
         val buffer: android.hardware.HardwareBuffer
         val screenshot = mockk<AccessibilityService.ScreenshotResult>()
         init {
             val software = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            if (pixels != null) software.setPixels(pixels, 0, width, 0, 0, width, height)
             hardware = try { requireNotNull(software.copy(Bitmap.Config.HARDWARE, false)) }
                 finally { software.recycle() }
             buffer = hardware.hardwareBuffer
@@ -177,6 +178,56 @@ class WindowVisualCaptureGeometryTest {
 
     @Test fun portraitKeyboardMismatchReturnsNoProofAndNeverFallsBack() = runBlocking {
         keyboardRefusal(1440, 2993, TapBounds(0, 1798, 1440, 3120))
+    }
+
+    @Test fun nativeKeyboardDisplayUsesOnlyExactImePixelsAndPreservesDisplayCoordinates() = runBlocking {
+        val background = Color.BLACK
+        val ime = IntArray(60 * 90) { background or (it * 1201 and 0x00ffffff) }
+        val display = IntArray(60 * 100) { Color.RED }
+        ime.copyInto(display, 600)
+        display[52 * 60 + 6] = Color.TRANSPARENT
+        Surface(60,100,display).use { full ->
+            Surface(60,90,ime).use { isolated ->
+                every { full.screenshot.timestamp } answers { SystemClock.uptimeMillis() }
+                every { isolated.screenshot.timestamp } answers { SystemClock.uptimeMillis() }
+                val service = service(23,isolated)
+                every { service.takeScreenshot(0,any(),any()) } answers {
+                    thirdArg<AccessibilityService.TakeScreenshotCallback>().onSuccess(full.screenshot)
+                }
+                val screen = TapBounds(0,0,60,100)
+                val touch = TapBounds(0,50,60,100)
+                val pixels = TapBounds(3,52,57,98)
+                val result = WindowVisualCapture.capture(service,23,screen,"keyboard",
+                    display=true,visibleRegion=Region(3,52,57,98),
+                    surfaces=listOf(IsolatedVisualSurface(23,touch,listOf(pixels))),nativeKeyboardDisplay=true)
+                assertNull(result.reason)
+                val proof = requireNotNull(result.proof).copy(sourceDisplayId=0)
+                assertEquals("keyboard",proof.scope)
+                assertEquals(screen,proof.window)
+                assertEquals(TapBounds(20,68,30,78),proof.map(TapBounds(20,68,30,78)))
+                assertNull(proof.map(TapBounds(6,52,7,53)))
+                assertNull(proof.map(TapBounds(20,18,30,28)))
+                val decoded = BitmapFactory.decodeByteArray(proof.image.bytes,0,proof.image.bytes.size)
+                try { assertEquals(Color.BLACK,decoded.getPixel(30,15)) } finally { decoded.recycle() }
+                assertTrue(isolated.buffer.isClosed); assertTrue(full.buffer.isClosed)
+                verify(exactly=1) { service.takeScreenshot(0,any(),any()) }
+                verify(exactly=1) { service.takeScreenshotOfWindow(23,any(),any()) }
+            }
+        }
+    }
+
+    @Test fun nativeKeyboardDisplayCannotDiscloseAnUnrelatedOrSecondWindow() = runBlocking {
+        val service = mockk<AccessibilityService>()
+        val screen = TapBounds(0,0,60,100)
+        val touch = TapBounds(0,50,60,100)
+        for (ids in listOf(listOf(24),listOf(23,24),emptyList())) {
+            val result = WindowVisualCapture.capture(service,23,screen,"keyboard",
+                display=true,visibleRegion=Region(0,50,60,100),nativeKeyboardDisplay=true,
+                surfaces=ids.map { IsolatedVisualSurface(it,touch,listOf(touch)) })
+            assertNull(result.proof)
+            assertEquals("keyboard_display_surface_unverified",result.reason)
+        }
+        verify(exactly=0) { service.takeScreenshot(any(),any(),any()) }
     }
 
     @Test fun certifiedTranslationRetainsNativeBufferAndMasksOutsideTouchableRegion() = runBlocking {

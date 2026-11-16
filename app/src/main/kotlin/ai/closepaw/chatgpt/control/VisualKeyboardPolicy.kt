@@ -28,7 +28,9 @@ internal object VisualKeyboardPolicy {
 
     fun proofOwnerRefusal(proof: VisualTargetProof?, keyboard: ControlKeyboard): String? = when {
         proof == null -> "keyboard_visual_required"
-        proof.scope == "keyboard" && proof.sourceWindowId == keyboard.windowId -> null
+        proof.scope == "keyboard" && proof.sourceWindowId == keyboard.windowId &&
+            (proof.sourceDisplayId < 0 || (proof.sourceDisplayId == 0 && proof.sourceImeWindowId == keyboard.windowId &&
+                proof.displayGeneration >= 0 && proof.disclosedRegions.isNotEmpty())) -> null
         proof.scope == "display" && proof.sourceDisplayId == 0 && proof.sourceImeWindowId == keyboard.windowId &&
             proof.imeBounds.isNotEmpty() && proof.displayGeneration >= 0 -> null
         else -> "keyboard_visual_owner_unverified"

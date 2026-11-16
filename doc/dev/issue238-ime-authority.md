@@ -1,5 +1,25 @@
 # #238 isolated IME surface coordinates
 
+## Native default-display successor
+
+The Samsung physical spike confirmed one literal `a` on the default display
+from `AccessibilityService.takeScreenshot(DEFAULT_DISPLAY)`, without
+MediaProjection, ADB input or submission. This was a test-only app and is not
+production Release acceptance. See [physical evidence](https://github.com/al-hub/closepaw/issues/238#issuecomment-6919642393).
+
+The explicit production `keyboard` scope now takes its coordinate frame from
+that native display API. It still requires the existing local screen-share
+consent, an explicit active session, a verified focused editor, and separate
+permission to interact. The capture source is Accessibility, not Projection.
+There is no keyboard capture fallback. ADB is no longer on this runtime path.
+The isolated IME buffer must have exactly one full-fit, unit-scale translation
+covering the IME touch bounds. No origin is guessed or hardcoded. Only opaque
+pixels that match that independent source exactly and lie in the unoccluded
+IME region are disclosed. Window generation, transform, active key, covered
+pixels and focused editor are rechecked before dispatch. Other scopes are
+unchanged. Ambiguous shapes/keys and foreign pixels are not accepted. Chrome
+one-letter acceptance on the signed Release still needs a separate run.
+
 ## Evidence and scope
 
 The Galaxy API37 Chrome empty native input fixture has a 1440x2993 IME

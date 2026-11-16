@@ -36,10 +36,14 @@ internal object WindowVisualCapture {
         surfaces: List<IsolatedVisualSurface> = emptyList(), projection: ProjectionImageLease? = null,
         requestId: String? = null, observationOnly: Boolean = false,
         geometry: ImeSurfaceGeometry? = null, minimumScreenshotUptimeMs: Long = -1,
+        nativeKeyboardDisplay: Boolean = false,
         awaitSlot: suspend () -> Unit = {}): VisualCaptureResult {
         fun failure(code: String) = VisualCaptureResult(reason=code)
         if (observationOnly && (!display || projection?.screenObservationAllowed() != true))
             return failure("screen_observation_consent_required")
+        if (nativeKeyboardDisplay && (!display || observationOnly || projection != null || geometry != null ||
+                window.left != 0 || window.top != 0 || surfaces.size != 1 || surfaces.single().windowId != windowId))
+            return failure("keyboard_display_surface_unverified")
         if (geometry != null && (display || projection != null || geometry.windowId != windowId || geometry.touch != window ||
                 minimumScreenshotUptimeMs < 0)) return failure("ime_geometry_unverified")
         if (Build.VERSION.SDK_INT < 34 || !window.valid || (display && visibleRegion == null)) return failure("screenshot_geometry_unverified")
@@ -48,6 +52,7 @@ internal object WindowVisualCapture {
         if (projection != null && !display) return failure("projection_display_scope_required")
         val projected = if (projection != null) projection.capture(requestId)
             ?: return failure("projection_frame_unavailable") else null
+        val snapshotStart = if (nativeKeyboardDisplay) android.os.SystemClock.uptimeMillis() else -1L
         val captured = if (projected != null) null else withTimeoutOrNull(5_000) { withContext(Dispatchers.Main) {
             suspendCancellableCoroutine<AccessibilityService.ScreenshotResult?> { continuation ->
                 val callback = object : AccessibilityService.TakeScreenshotCallback {
@@ -72,6 +77,9 @@ internal object WindowVisualCapture {
             var bitmap: Bitmap? = null; var scaled: Bitmap? = null
             var disclosed: List<TapBounds> = emptyList()
             try {
+                if (nativeKeyboardDisplay && (captured == null ||
+                        captured.timestamp !in snapshotStart..android.os.SystemClock.uptimeMillis()))
+                    return@withContext failure("keyboard_display_timestamp_unverified")
                 if (projected != null) {
                     bitmap = projected.bitmap
                 } else {
@@ -115,10 +123,15 @@ internal object WindowVisualCapture {
                         for(surface in surfaces) {
                             awaitSlot()
                             // Window-isolated verification never uses a display fallback.
-                            val isolated=capturePixels(service,surface.windowId,surface.bounds)
+                            val isolated=capturePixels(service,surface.windowId,surface.bounds,
+                                minimumUptimeMs=if (nativeKeyboardDisplay) captured!!.timestamp else -1L)
                             val expected=isolated.pixels ?: return@withContext failure("display_isolated_"+isolated.reason)
-                            val runs=OwnedPixelPolicy.verifiedRegions(actual,source.width,expected,surface.bounds,surface.visible,
-                                limit = 4096 / surfaces.size)
+                            val coordinatesInDisplay = if (nativeKeyboardDisplay)
+                                KeyboardDisplayAlignment.locate(window,isolated.width,expected.size / isolated.width,surface.bounds)
+                                    ?: return@withContext failure("keyboard_display_alignment_unverified")
+                            else surface.bounds
+                            val runs=OwnedPixelPolicy.verifiedRegions(actual,source.width,expected,coordinatesInDisplay,surface.visible,
+                                limit = 4096 / surfaces.size, opaqueOnly = nativeKeyboardDisplay)
                                 ?: return@withContext failure("display_pixel_verification_fragmented")
                             runs.forEach { verified.op(Rect(it.left,it.top,it.right,it.bottom),Region.Op.UNION) }
                         }
@@ -152,7 +165,7 @@ internal object WindowVisualCapture {
                 VisualCaptureResult(VisualTargetProof(ScreenImage(image.width,image.height,"image/jpeg",bytes,
                     if (projected == null) ScreenImageSource.ACCESSIBILITY_SCREENSHOT else ScreenImageSource.MEDIA_PROJECTION),
                     hash,coordinates,context + (geometry?.let { "|ime=" + it.fingerprint } ?: ""),System.currentTimeMillis(),
-                    scope=if (observationOnly) "screen_observe" else if (geometry != null) "keyboard" else "app",
+                    scope=if (observationOnly) "screen_observe" else if (geometry != null || nativeKeyboardDisplay) "keyboard" else "app",
                     disclosedRegions=disclosed,sourceDisclosureAllowed=sourceAllowed,
                     captureUptimeMs=if (geometry != null) captured?.timestamp ?: -1 else -1))
             } catch (e: CancellationException) { throw e }
@@ -183,8 +196,9 @@ internal object WindowVisualCapture {
             }
         })
     }
-    private data class PixelResult(val pixels: IntArray? = null, val reason: String? = null)
-    private suspend fun capturePixels(service: AccessibilityService,id: Int,bounds: TapBounds): PixelResult {
+    private data class PixelResult(val pixels: IntArray? = null, val reason: String? = null, val width: Int = 0)
+    private suspend fun capturePixels(service: AccessibilityService,id: Int,bounds: TapBounds,
+        minimumUptimeMs: Long = -1L): PixelResult {
         if(Build.VERSION.SDK_INT<34 || !bounds.valid) return PixelResult(reason="screenshot_geometry_unverified")
         var failure="screenshot_timeout"
         val captured=withTimeoutOrNull(5_000) { withContext(Dispatchers.Main) {
@@ -200,19 +214,21 @@ internal object WindowVisualCapture {
             }
         } } ?: return PixelResult(reason=failure)
         try {
+            if (minimumUptimeMs >= 0 && captured.timestamp !in minimumUptimeMs..android.os.SystemClock.uptimeMillis())
+                return PixelResult(reason="keyboard_window_timestamp_unverified")
             val buffer=captured.hardwareBuffer
-            val width=bounds.right-bounds.left;val height=bounds.bottom-bounds.top
-            if(buffer.width!=width || buffer.height!=height) {
+            val width=buffer.width;val height=buffer.height
+            if(minimumUptimeMs < 0 && (width!=bounds.right-bounds.left || height!=bounds.bottom-bounds.top)) {
                 recordGeometryMismatch(service, "isolated_window", buffer.width, buffer.height, bounds)
                 return PixelResult(reason="screenshot_buffer_geometry_mismatch")
             }
-            if(width.toLong()*height>8_000_000) return PixelResult(reason="screenshot_pixel_limit")
+            if(width<=0 || height<=0 || width.toLong()*height>8_000_000) return PixelResult(reason="screenshot_pixel_limit")
             val hardware=Bitmap.wrapHardwareBuffer(buffer,captured.colorSpace) ?: return PixelResult(reason="screenshot_buffer_wrap_failed")
             val software=try { hardware.copy(Bitmap.Config.ARGB_8888,false) } finally {hardware.recycle()}
                 ?: return PixelResult(reason="screenshot_bitmap_copy_failed")
             try {
                 val pixels=IntArray(width*height);software.getPixels(pixels,0,width,0,0,width,height)
-                return PixelResult(pixels)
+                return PixelResult(pixels,width=width)
             } finally {software.recycle()}
         } catch(e:CancellationException) {throw e}
         catch(_:Exception) {return PixelResult(reason="screenshot_conversion_failed")}
