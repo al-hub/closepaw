@@ -85,6 +85,36 @@ class IslandOperationTest {
                 }
                 assertTrue(description, consecutive >= 2)
             }
+            // Isolated emulator: only tap ClosePaw's owned island, never the OS approve button.
+            // Opening the dialog is not a grant. Android Back must clear the exact request.
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                val local = service.remoteControlSession
+                val projection = ai.closepaw.platform.virtualdisplay.MediaProjectionCaptureService
+                withContext(Dispatchers.Main) {
+                    assertEquals(ControlSession.HintUpdate.SHOWN, local.updateUserAction(
+                        session, local.userActionEpoch, 1, ControlSession.UserAction.REQUEST_SCREEN_SHARE,
+                        sharing = false, nowMs = SystemClock.elapsedRealtime(),
+                    ))
+                    service.showRemoteControlActivity()
+                }
+                awaitCondition("the actionable island is attached") { port.observeIsland() != null }
+                val b = requireNotNull(port.observeIsland())
+                assertNull("an MCP request alone cannot start projection", projection.sharingRound.value)
+                assertEquals(ControlSession.ShareRequestState.AWAITING_TAP, local.shareRequestState)
+                shell("input tap ${b.x + b.width / 2} ${b.y + b.height / 2}")
+                awaitCondition("local tap must open Android consent") {
+                    local.shareRequestState == ControlSession.ShareRequestState.AWAITING_ANDROID &&
+                        projection.consentGate.state == ai.closepaw.platform.virtualdisplay.ProjectionConsentState.Requesting
+                }
+                assertNull("opening the dialog does not grant sharing", projection.sharingRound.value)
+                shell("input keyevent 4")
+                awaitCondition("Android Back cancels the pending request") {
+                    local.shareRequestState == ControlSession.ShareRequestState.CANCELLED
+                }
+                assertNull(projection.sharingRound.value)
+                assertEquals(epoch, local.epoch)
+                awaitCondition("the ordinary island returns after cancellation") { port.observeIsland() != null }
+            }
             repeat(10) {
                 shell("input keyevent 223")
                 awaitCondition("emulator must really enter non-interactive state") { !power.isInteractive }

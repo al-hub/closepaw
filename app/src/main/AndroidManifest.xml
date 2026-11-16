@@ -79,6 +79,12 @@
         </activity>
 
         <activity
+            android:name=".app.DirectScreenShareActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+
+        <activity
             android:name=".ui.viewer.VirtualDisplayViewerActivity"
             android:theme="@style/Theme.ClosePaw.FullScreen"
             android:exported="false"

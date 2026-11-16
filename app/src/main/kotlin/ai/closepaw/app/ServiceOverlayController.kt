@@ -145,6 +145,7 @@ class ServiceOverlayController(
     private var remoteStatusText: String? = null
     private var remoteDetail: String? = null
     private var remoteUserAction: String? = null
+    private var remoteShareRequest: ai.closepaw.chatgpt.control.ControlSession.ShareRequest? = null
     private var disposed = false
     private var modeObserver: kotlinx.coroutines.Job? = null
 
@@ -154,10 +155,14 @@ class ServiceOverlayController(
         holdMs: Long, moveMs: Long, permitted: () -> Boolean): Boolean =
         statusIslandManager?.dragOwnedWindow(before, dx, dy, holdMs, moveMs, permitted) ?: false
 
-    fun setRemoteStatus(text: String?, detail: String? = null, userAction: String? = null) {
+    internal fun setRemoteStatus(
+        text: String?, detail: String? = null, userAction: String? = null,
+        shareRequest: ai.closepaw.chatgpt.control.ControlSession.ShareRequest? = null,
+    ) {
         remoteDetail = detail
         remoteStatusText = text?.let { ai.closepaw.ui.overlay.RemoteStatusLabel.sanitize(it) }
         remoteUserAction = userAction
+        remoteShareRequest = shareRequest
         applyVisibility()
     }
 
@@ -260,8 +265,9 @@ class ServiceOverlayController(
             if (showRemoteIsland) remoteStatusText else null,
             if (showRemoteIsland) remoteDetail else null,
             remoteUserAction.takeIf { showRemoteIsland || activeSurfaces.showStatusIsland },
+            remoteShareRequest.takeIf { showRemoteIsland || activeSurfaces.showStatusIsland },
         )
-        statusIslandManager?.setReadOnly(showSingleX || showRemoteIsland)
+        statusIslandManager?.setReadOnly(showSingleX || showRemoteIsland || remoteShareRequest != null)
         if (activeSurfaces.showStatusIsland || showRemoteIsland) {
             statusIslandManager?.show()
         } else {

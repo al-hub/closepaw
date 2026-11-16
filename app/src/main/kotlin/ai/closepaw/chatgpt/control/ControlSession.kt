@@ -8,12 +8,15 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     enum class UserAction(val id: String, val label: String) {
         ALLOW_SCREEN_SHARE("allow_screen_share", "공유를 허용하세요"),
         STOP_SCREEN_SHARE("stop_screen_share", "공유를 중지하세요"),
+        REQUEST_SCREEN_SHARE("request_screen_share", "화면 공유 요청 · 눌러서 열기"),
 
         ;
 
-        fun satisfiedBy(sharing: Boolean) = sharing == (this == ALLOW_SCREEN_SHARE)
+        fun satisfiedBy(sharing: Boolean) = sharing == (this != STOP_SCREEN_SHARE)
     }
-    data class UserActionHint(val action: UserAction, val expiresAtMs: Long)
+    data class UserActionHint(val action: UserAction, val expiresAtMs: Long?, val shareRequest: ShareRequest? = null)
+    data class ShareRequest(val id: String = UUID.randomUUID().toString())
+    enum class ShareRequestState { AWAITING_TAP, AWAITING_ANDROID, STARTING, SHARING_STARTED, CANCELLED }
     enum class HintUpdate { SHOWN, UNCHANGED, NOT_NEEDED, CLEARED, STALE, REFUSED }
     @Volatile var userActionEpoch = 0L
         private set
@@ -21,6 +24,9 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         private set
     private var lastUserAction: UserAction? = null
     private var userActionHint: UserActionHint? = null
+    @Volatile var shareRequestState: ShareRequestState? = null
+        private set
+    private var requestedProjectionId: String? = null
     enum class VisualPhase { PREPARING, OBSERVING, EXECUTING, WAITING, COMPLETED, FAILED }
     @Volatile var visualPhase = VisualPhase.PREPARING
         private set
@@ -96,6 +102,7 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         if (state !in setOf(State.IDLE, State.ENDED)) return false
         id = UUID.randomUUID().toString(); explicit = true
         userActionRevision = 0; lastUserAction = null
+        shareRequestState = null
         transition(State.ACTIVE, "AI 제어 중")
         return true
     }
@@ -123,7 +130,8 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         transition(if (safe) State.ACTIVE else State.PAUSED, if (safe) "AI 제어 중 · 새 명령 대기" else "화면 확인 필요 · 일시정지")
     }
     @Synchronized fun waitForUser(action: UserAction? = null, expectedSessionId: String? = null): Boolean {
-        if (state != State.ACTIVE || (expectedSessionId != null && id != expectedSessionId)) return false
+        if (state != State.ACTIVE || action == UserAction.REQUEST_SCREEN_SHARE ||
+            (expectedSessionId != null && id != expectedSessionId)) return false
         transition(State.WAITING, action?.label ?: "사용자 응답 대기"); interrupt(); return true
     }
 
@@ -149,8 +157,14 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         val previous = userActionHint
         userActionHint = when {
             action == null || action.satisfiedBy(sharing) -> null
-            previous != null && previous.action == action && previous.expiresAtMs > nowMs -> previous
+            previous != null && previous.action == action && (previous.expiresAtMs ?: Long.MAX_VALUE) > nowMs -> previous
+            action == UserAction.REQUEST_SCREEN_SHARE -> UserActionHint(action, null, ShareRequest())
             else -> UserActionHint(action, nowMs + USER_ACTION_TTL_MS)
+        }
+        if (previous !== userActionHint) {
+            requestedProjectionId = null
+            if (previous?.shareRequest != null) shareRequestState = ShareRequestState.CANCELLED
+            if (userActionHint?.shareRequest != null) shareRequestState = ShareRequestState.AWAITING_TAP
         }
         if (previous !== userActionHint) changed()
         return when {
@@ -164,17 +178,65 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     /** Called with the current OS sharing state. Timeout and successful action only clear UI. */
     @Synchronized fun currentUserAction(sharing: Boolean, nowMs: Long): UserActionHint? {
         val hint = userActionHint ?: return null
-        if (hint.expiresAtMs <= nowMs || hint.action.satisfiedBy(sharing)) {
+        if ((hint.expiresAtMs ?: Long.MAX_VALUE) <= nowMs || hint.action.satisfiedBy(sharing)) {
+            if (hint.shareRequest != null) {
+                // Other local sharing can satisfy the user's goal without proving this dialog succeeded.
+                shareRequestState = ShareRequestState.CANCELLED
+            }
             userActionHint = null
+            requestedProjectionId = null
             return null
         }
         return hint
     }
 
+    /** Compare the exact displayed request so a gesture on a replaced island cannot launch consent. */
+    @Synchronized fun claimShareRequest(request: ShareRequest): Boolean {
+        if (state != State.ACTIVE || userActionHint?.shareRequest != request ||
+            shareRequestState != ShareRequestState.AWAITING_TAP) return false
+        shareRequestState = ShareRequestState.AWAITING_ANDROID
+        changed()
+        return true
+    }
+
+    @Synchronized fun ownsShareRequest(request: ShareRequest, phase: ShareRequestState): Boolean =
+        state == State.ACTIVE && userActionHint?.shareRequest == request && shareRequestState == phase
+
+    @Synchronized fun beginShareRequestStartup(request: ShareRequest, projectionId: String): Boolean {
+        if (!ownsShareRequest(request, ShareRequestState.AWAITING_ANDROID)) return false
+        requestedProjectionId = projectionId
+        shareRequestState = ShareRequestState.STARTING
+        changed()
+        return true
+    }
+
+    @Synchronized fun ownsShareStartup(request: ShareRequest, projectionId: String): Boolean =
+        ownsShareRequest(request, ShareRequestState.STARTING) && requestedProjectionId == projectionId
+
+    @Synchronized fun publishShareStartup(request: ShareRequest, projectionId: String, publish: () -> Unit): Boolean {
+        if (!ownsShareStartup(request, projectionId)) return false
+        publish()
+        userActionHint = null
+        requestedProjectionId = null
+        shareRequestState = ShareRequestState.SHARING_STARTED
+        changed()
+        return true
+    }
+
+    @Synchronized fun cancelShareRequest(request: ShareRequest) {
+        if (userActionHint?.shareRequest != request) return
+        shareRequestState = ShareRequestState.CANCELLED
+        userActionHint = null
+        requestedProjectionId = null
+        changed()
+    }
+
     @Synchronized fun dropUserActionForScreenOff() {
         userActionEpoch++
         if (userActionHint == null) return
+        if (userActionHint?.shareRequest != null) shareRequestState = ShareRequestState.CANCELLED
         userActionHint = null
+        requestedProjectionId = null
         changed()
     }
     @Synchronized fun userResponded(): Boolean {
@@ -196,7 +258,9 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     }
     private fun transition(next: State, text: String) {
         state = next; epoch++; label = text
+        if (userActionHint?.shareRequest != null) shareRequestState = ShareRequestState.CANCELLED
         userActionHint = null; userActionEpoch++
+        requestedProjectionId = null
         progressDetail = null
         if (next == State.ACTIVE) visualPhase = VisualPhase.PREPARING
         persist(next.name.lowercase()); changed()

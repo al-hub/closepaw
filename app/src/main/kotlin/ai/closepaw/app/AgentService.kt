@@ -10,6 +10,7 @@ import android.view.Display
 import android.view.SurfaceView
 import android.view.accessibility.AccessibilityEvent
 import ai.closepaw.debug.ActionDebugReceiver
+import ai.closepaw.chatgpt.control.ControlSession
 import ai.closepaw.platform.virtualdisplay.MediaProjectionCaptureService
 import ai.closepaw.protocol.Op
 import ai.closepaw.protocol.PlatformMode
@@ -203,21 +204,55 @@ class AgentService : AccessibilityService() {
         }
     }
 
-    internal fun showRemoteControlActivity() {
-        val unlocked = !getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
+    internal fun deviceReadyForShareRequest() =
+        !getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked &&
             getSystemService(android.os.PowerManager::class.java).isInteractive
+
+    private fun openDirectScreenShare(request: ControlSession.ShareRequest) {
+        if (Build.VERSION.SDK_INT < 34 || !deviceReadyForShareRequest() ||
+            MediaProjectionCaptureService.sharingRound.value != null ||
+            !remoteControlSession.claimShareRequest(request)) return
+        try {
+            startActivity(DirectScreenShareActivity.intent(this, request))
+        } catch (_: RuntimeException) {
+            remoteControlSession.cancelShareRequest(request)
+        }
+    }
+
+    internal fun watchDirectScreenShareStartup(request: ControlSession.ShareRequest) {
+        serviceScope.launch {
+            delay(12_000L)
+            if (remoteControlSession.ownsShareRequest(request, ControlSession.ShareRequestState.STARTING)) {
+                showRemoteControlActivity()
+                remoteControlSession.cancelShareRequest(request)
+            }
+        }
+    }
+
+    internal fun showRemoteControlActivity() {
+        val unlocked = deviceReadyForShareRequest()
         val active = remoteControlSession.state !in setOf(
             ai.closepaw.chatgpt.control.ControlSession.State.IDLE,
             ai.closepaw.chatgpt.control.ControlSession.State.ENDED)
+        val projectionId = MediaProjectionCaptureService.sharingRound.value
         val hint = if (unlocked && active) remoteControlSession.currentUserAction(
-            sharing = MediaProjectionCaptureService.sharingRound.value != null,
+            sharing = projectionId != null,
             nowMs = android.os.SystemClock.elapsedRealtime(),
         ) else null
         scheduleUserActionExpiry(hint?.expiresAtMs)
         overlayController?.setRemoteStatus(
             if (active) remoteControlSession.label else null,
             if (unlocked && active) remoteControlSession.progressDetail else null,
-            userAction = hint?.action?.label,
+            userAction = hint?.let { activeHint ->
+                when (remoteControlSession.shareRequestState.takeIf { activeHint.shareRequest != null }) {
+                    ControlSession.ShareRequestState.AWAITING_ANDROID -> "Android 공유 승인 대기"
+                    ControlSession.ShareRequestState.STARTING -> "화면 공유 연결 중"
+                    else -> activeHint.action.label
+                }
+            },
+            shareRequest = hint?.shareRequest?.takeIf {
+                remoteControlSession.ownsShareRequest(it, ControlSession.ShareRequestState.AWAITING_TAP)
+            },
         )
         if (!unlocked) { remoteControlIndicator.hide(); return }
         remoteControlIndicator.show(showEmergencyX = !modernEmergencyXVisible)
@@ -391,7 +426,8 @@ class AgentService : AccessibilityService() {
                                         onExpandCapsule = {
                                             // Tap island → expand Smart Capsule overlay, hide island
                                             overlayController?.onIslandTapped()
-                                        }
+                                        },
+                                        onShareRequestTap = ::openDirectScreenShare,
                                 )
                 )
         overlayController = controller

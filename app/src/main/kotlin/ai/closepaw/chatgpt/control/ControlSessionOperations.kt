@@ -13,7 +13,8 @@ internal class ControlSessionOperations(
     private val hintDispatcher: () -> CoroutineDispatcher = { Dispatchers.Main.immediate },
     private val readiness: () -> OperationReadiness,
 ) {
-    data class HintEnvironment(val sharing: Boolean, val nowMs: Long)
+    data class HintEnvironment(val sharing: Boolean, val nowMs: Long, val canRequestScreenShare: Boolean = false)
+    private val legacyActions = listOf(ControlSession.UserAction.ALLOW_SCREEN_SHARE, ControlSession.UserAction.STOP_SCREEN_SHARE)
 
     fun register(registry: OperationRegistry) {
         registerUserAction(registry)
@@ -22,7 +23,7 @@ internal class ControlSessionOperations(
                 put("session_id", buildJsonObject { put("type", "string"); put("maxLength", 128); put("minLength", 1) })
                 if (command == "wait") put("user_action", buildJsonObject {
                     put("type", "string")
-                    put("enum", JsonArray(ControlSession.UserAction.entries.map { JsonPrimitive(it.id) }))
+                    put("enum", JsonArray(legacyActions.map { JsonPrimitive(it.id) }))
                     put("description", "Optional on-device instruction only; does not grant, revoke or resume control.")
                 })
             } else buildJsonObject {}
@@ -47,7 +48,7 @@ internal class ControlSessionOperations(
                         "wait" -> {
                             val raw = invocation.input["user_action"]
                             val action = if (raw == null) null else {
-                                ControlSession.UserAction.entries.firstOrNull { raw == JsonPrimitive(it.id) }
+                                legacyActions.firstOrNull { raw == JsonPrimitive(it.id) }
                                     ?: return OperationResult(success = false, summary = "invalid_user_action")
                             }
                             value.waitForUser(action, invocation.input["session_id"]?.jsonPrimitive?.content)
@@ -60,6 +61,7 @@ internal class ControlSessionOperations(
                         data = buildJsonObject {
                             put("state", value.state.name.lowercase()); put("session_id", value.id); put("epoch", value.epoch)
                             put("user_action_revision", value.userActionRevision)
+                            value.shareRequestState?.let { put("screen_share_request", it.name.lowercase(java.util.Locale.ROOT)) }
                             put("physical_resume_required", value.state == ControlSession.State.PAUSED)
                             put("external_effects_undone", false)
                         })
@@ -74,8 +76,8 @@ internal class ControlSessionOperations(
             "Show, replace, or clear a one-line user-action prompt (and subtle wave) on the ClosePaw island. " +
                 "Use only when the user must physically allow or stop screen sharing. Requires the current explicit active session. " +
                 "Use a strictly increasing revision starting at 1 for each new request or clear; read session.status for the last revision. " +
-                "The same revision is idempotent. Repeating a pending action does not extend its 30s lifetime. " +
-                "The local sharing state clears the prompt automatically. This operation cannot change control, start or stop sharing, or grant consent.",
+                "The same revision is idempotent. Ordinary hints expire after 30s. On Android 14+, prefer request_screen_share to offer an on-device tap that opens the Android approval dialog. " +
+                "It remains until resolved, cancelled, replaced, screen lock or session end. It never launches from this operation or grants consent. Poll session.status and closepaw.self.status to verify actual sharing.",
             inputSchema = buildJsonObject {
                 put("type", "object")
                 put("properties", buildJsonObject {
@@ -109,6 +111,9 @@ internal class ControlSessionOperations(
                 }
                 val environment = hintEnvironment()
                     ?: return@withContext OperationResult(success = false, summary = "device_locked_or_unavailable")
+                if (action == ControlSession.UserAction.REQUEST_SCREEN_SHARE &&
+                    !environment.canRequestScreenShare)
+                    return@withContext OperationResult(success = false, summary = "island_screen_share_request_requires_android_14")
                 val result = current.updateUserAction(sessionId, epoch, revision, action, environment.sharing, environment.nowMs)
                 OperationResult(
                     success = result !in setOf(ControlSession.HintUpdate.STALE, ControlSession.HintUpdate.REFUSED),

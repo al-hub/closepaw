@@ -66,6 +66,7 @@ class MediaProjectionCaptureService : Service() {
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_RESULT_DATA = "extra_result_data"
         const val EXTRA_SESSION_ID = "extra_session_id"
+        private const val EXTRA_DIRECT_REQUEST_ID = "extra_direct_request_id"
 
         /** Shared gate for the whole app; MainActivity feeds the OS decision, this service feeds onStop. */
         val consentGate = MediaProjectionConsentGate()
@@ -77,11 +78,15 @@ class MediaProjectionCaptureService : Service() {
         }
 
         /** Launch the OS consent round from a user-visible Activity; never auto-started by the agent. */
-        fun startFromConsent(context: Context, resultCode: Int, resultData: Intent, sessionId: String) {
+        fun startFromConsent(
+            context: Context, resultCode: Int, resultData: Intent, sessionId: String,
+            directRequestId: String? = null,
+        ) {
             val intent = Intent(context, MediaProjectionCaptureService::class.java).apply {
                 putExtra(EXTRA_RESULT_CODE, resultCode)
                 putExtra(EXTRA_RESULT_DATA, resultData)
                 putExtra(EXTRA_SESSION_ID, sessionId)
+                directRequestId?.let { putExtra(EXTRA_DIRECT_REQUEST_ID, it) }
             }
             context.startForegroundService(intent)
         }
@@ -126,6 +131,18 @@ class MediaProjectionCaptureService : Service() {
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Int.MIN_VALUE) ?: Int.MIN_VALUE
         val resultData = intent?.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
         val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID)
+        val directRequest = intent?.getStringExtra(EXTRA_DIRECT_REQUEST_ID)?.let {
+            ai.closepaw.chatgpt.control.ControlSession.ShareRequest(it)
+        }
+        val agent = ai.closepaw.app.AgentService.instance
+        if (directRequest != null && sessionId != null && consentGate.usableSessionId() == sessionId &&
+            (agent == null || !agent.deviceReadyForShareRequest() ||
+                !agent.remoteControlSession.ownsShareStartup(directRequest, sessionId))) {
+            revokeImageConsent()
+            agent?.remoteControlSession?.cancelShareRequest(directRequest)
+            stopSelfSafely()
+            return START_NOT_STICKY
+        }
 
         // Fail closed: no valid single-use session id, no grant.
         val owner = synchronized(consentGate) {
@@ -159,13 +176,25 @@ class MediaProjectionCaptureService : Service() {
                 return START_NOT_STICKY
             }
             openMirrorScope(newProjection)
-            activeRound = sessionId
-            activeSharing.value = sessionId
+            if (directRequest != null) {
+                if (frameScope == null || agent?.remoteControlSession?.publishShareStartup(directRequest, sessionId) {
+                        activeRound = sessionId
+                        activeSharing.value = sessionId
+                    } != true) {
+                    agent?.remoteControlSession?.cancelShareRequest(directRequest)
+                    stopSelfSafely()
+                    return START_NOT_STICKY
+                }
+            } else {
+                activeRound = sessionId
+                activeSharing.value = sessionId
+            }
             startForegroundWithRequiredType(sessionId)
             Log.i(TAG, "MediaProjection consent round consumed; one-session mirror scope opened")
         } catch (e: Exception) {
             Log.w(TAG, "getMediaProjection failed; failing closed", e)
             owner.runIfCurrent(sessionOwner) { revokeImageConsent() }
+            directRequest?.let { agent?.remoteControlSession?.cancelShareRequest(it) }
             stopSelfSafely()
         }
         return START_NOT_STICKY
