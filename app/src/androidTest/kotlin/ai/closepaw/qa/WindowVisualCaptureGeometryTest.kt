@@ -1,29 +1,128 @@
 package ai.closepaw.qa
 
+import ai.closepaw.app.AgentService
+import ai.closepaw.chatgpt.control.AndroidControlPort
+import ai.closepaw.chatgpt.control.GenericControl
 import ai.closepaw.chatgpt.control.IsolatedVisualSurface
+import ai.closepaw.chatgpt.control.RuntimeControlSettings
+import ai.closepaw.chatgpt.control.VisualImageCache
 import ai.closepaw.chatgpt.control.TapBounds
 import ai.closepaw.chatgpt.control.WindowVisualCapture
 import ai.closepaw.platform.virtualdisplay.ProjectionBitmap
 import ai.closepaw.platform.virtualdisplay.ProjectionImageLease
 import android.accessibilityservice.AccessibilityService
+import android.app.UiAutomation
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.ColorSpace
 import android.graphics.Region
 import android.hardware.display.DisplayManager
+import android.os.ParcelFileDescriptor
+import android.os.SystemClock
+import android.provider.Settings
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.*
 import java.util.concurrent.Executor
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Synthetic buffers only: no live screen, accessibility connection or projection permission.
- * These are refusal regressions, NOT Samsung coordinate calibration or an OEM fix. */
+/** Synthetic buffer regressions plus a real OS secure-window probe of a disposable fixture.
+ * Neither stage grants MediaProjection or establishes Samsung physical-device acceptance. */
 @RunWith(AndroidJUnit4::class)
 class WindowVisualCaptureGeometryTest {
+    @Test fun realSecureWindowRefusesScreenObservationBeforeImageAcquisition() = runBlocking {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        val resolver = instrumentation.targetContext.contentResolver
+        val enabledServices = Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        val accessibilityEnabled = Settings.Secure.ACCESSIBILITY_ENABLED
+        val priorServices = Settings.Secure.getString(resolver, enabledServices)
+        val priorEnabled = Settings.Secure.getString(resolver, accessibilityEnabled)
+        fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
+            automation.executeShellCommand(command)).bufferedReader().use { it.readText() }
+        fun restore(key: String, value: String?) {
+            if (value == null) shell("settings delete secure $key")
+            else {
+                val quoted = "'" + value.replace("'", "'\"'\"'") + "'"
+                shell("settings put secure $key $quoted")
+            }
+        }
+        suspend fun await(description: String, condition: () -> Boolean) {
+            val deadline = SystemClock.elapsedRealtime() + 10_000
+            while (SystemClock.elapsedRealtime() < deadline) {
+                if (condition()) return
+                delay(100)
+            }
+            fail(description)
+        }
+        var endSession: (() -> Unit)? = null
+        try {
+            shell("settings put secure $enabledServices ai.closepaw/.app.AgentService")
+            shell("settings put secure $accessibilityEnabled 1")
+            await("ClosePaw accessibility service never connected") { AgentService.instance != null }
+            val service = requireNotNull(AgentService.instance)
+            val session = service.remoteControlSession
+            instrumentation.runOnMainSync { session.end(); assertTrue(session.start()) }
+            endSession = { instrumentation.runOnMainSync { session.end() } }
+            var record: String? = null
+            val runtime = RuntimeControlSettings({ record }, { record = it })
+            runtime.change(0, "apply", buildJsonObject {
+                put("node_budget", 4096)
+                put("output_limit", 50)
+                put("apps", buildJsonObject { put("com.termux", "read") })
+            })
+            val port = AndroidControlPort(service, runtime = runtime) { true }
+            val control = GenericControl(port, { true })
+
+            suspend fun open(protectedWindow: Boolean, label: String) {
+                val result = shell("am start -W -n com.termux/.ObservationWindowFixtureActivity " +
+                    "--ez protected_window $protectedWindow")
+                assertTrue(result, result.contains("Status: ok"))
+                await("The requested fixture never became the active window: $label") {
+                    var ready = false
+                    instrumentation.runOnMainSync {
+                        val root = service.rootInActiveWindow
+                        if (root != null) try {
+                            if (root.packageName?.toString() == "com.termux") {
+                                val nodes = root.findAccessibilityNodeInfosByText(label)
+                                try { ready = nodes.any { it.text?.toString() == label && it.isVisibleToUser } }
+                                finally { nodes.forEach { it.recycle() } }
+                            }
+                        } finally { root.recycle() }
+                    }
+                    ready
+                }
+            }
+
+            shell("am force-stop com.termux")
+            open(false, "Public observation fixture")
+            val public = control.observe()
+            assertTrue(public.toString(), public.success)
+            shell("am force-stop com.termux")
+            open(true, "Protected observation fixture")
+            val blocked = control.observe(includeImage = true, imageScope = "screen_observe")
+            assertFalse(blocked.toString(), blocked.success)
+            // This exact reason must come from Android's screenshot-of-window callback.
+            // No projection, other refusal, or empty result can count as a pass.
+            assertEquals(JsonPrimitive("secure_window"), blocked.data["reason_code"])
+            assertFalse(blocked.data.containsKey("visual"))
+            assertNull(VisualImageCache.imageFor(buildJsonObject { put("data", blocked.data) }))
+        } finally {
+            endSession?.invoke()
+            shell("am force-stop com.termux")
+            restore(enabledServices, priorServices)
+            restore(accessibilityEnabled, priorEnabled)
+        }
+    }
+
     private class Surface(width: Int, height: Int) : AutoCloseable {
         private val hardware: Bitmap
         val buffer: android.hardware.HardwareBuffer

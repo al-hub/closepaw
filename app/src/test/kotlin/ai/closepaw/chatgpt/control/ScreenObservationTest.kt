@@ -1,8 +1,20 @@
 package ai.closepaw.chatgpt.control
 
+import ai.closepaw.chatgpt.ClosePawStatusTool
+import ai.closepaw.chatgpt.McpHttpServer
+import ai.closepaw.chatgpt.McpJsonRpcHandler
+import ai.closepaw.chatgpt.McpOperationTools
+import ai.closepaw.chatgpt.McpResponseTransport
 import ai.closepaw.model.ScreenImage
 import ai.closepaw.model.ScreenImageSource
 import ai.closepaw.security.ImageRevocationAuthority
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
+import java.util.Base64
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import org.junit.After
@@ -100,6 +112,100 @@ class ScreenObservationTest {
             port.imageAvailable = false
             assertFalse(control.observe(includeImage = true, imageScope = "screen_observe").success)
             assertNull(VisualImageCache.imageFor(task))
+        }
+    }
+
+    @Test fun screenObservationRevokedWhileItsEncodedResponseIsWaitingToWrite() = runBlocking {
+        val port = Port()
+        val control = GenericControl(port, { true })
+        val observed = control.observe(includeImage = true, imageScope = "screen_observe")
+        assertTrue(observed.summary, observed.success)
+        val operationData = buildJsonObject {
+            put("status", "succeeded")
+            put("data", observed.data)
+        }
+        val image = requireNotNull(VisualImageCache.imageFor(operationData))
+        val expectedBase64 = Base64.getEncoder().encodeToString(image.bytes)
+        val handler = McpJsonRpcHandler(
+            ClosePawStatusTool("test", 1),
+            operationTools = McpOperationTools { name, args ->
+                assertEquals("query", name)
+                assertEquals("android.screen.observe", args.getValue("operation_id").jsonPrimitive.content)
+                operationData
+            },
+        )
+        val request = buildJsonObject {
+            put("jsonrpc", "2.0")
+            put("id", 1)
+            put("method", "tools/call")
+            put("params", buildJsonObject {
+                put("name", "query")
+                put("arguments", buildJsonObject {
+                    put("operation_id", "android.screen.observe")
+                    put("operation_version", 1)
+                    put("schema_hash", "test-envelope")
+                    put("input_json", buildJsonObject {
+                        put("include_image", true)
+                        put("image_scope", "screen_observe")
+                        put("session_id", port.active.id)
+                    }.toString())
+                })
+            })
+        }.toString()
+        fun content(body: String) = Json.parseToJsonElement(body).jsonObject
+            .getValue("result").jsonObject.getValue("content").jsonArray
+        val encoded = handler.handle(request)
+        assertEquals(200, encoded.statusCode)
+        assertEquals(ImageRevocationAuthority.currentEpoch, encoded.imageEpoch)
+        val imagePart = content(requireNotNull(encoded.body)).single {
+            it.jsonObject.getValue("type").jsonPrimitive.content == "image"
+        }.jsonObject
+        assertEquals(expectedBase64, imagePart.getValue("data").jsonPrimitive.content)
+
+        val waiting = CountDownLatch(1)
+        val resumeWrite = CountDownLatch(1)
+        val raw = ByteArrayOutputStream()
+        var writes = 0
+        var closed = false
+        val transport = object : McpResponseTransport {
+            override fun write(bytes: ByteBuffer): Int {
+                if (++writes == 2) return 0 // First body write sees deterministic backpressure.
+                val chunk = ByteArray(bytes.remaining())
+                bytes.get(chunk)
+                raw.write(chunk)
+                return chunk.size
+            }
+            override fun awaitWritable(timeoutMillis: Long) {
+                assertFalse(Thread.holdsLock(ImageRevocationAuthority))
+                waiting.countDown()
+                check(resumeWrite.await(4, TimeUnit.SECONDS))
+            }
+            override fun close() { closed = true }
+        }
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            val writer = executor.submit { McpHttpServer(0, handler).writeResponse(transport, encoded) }
+            assertTrue("Poised to send an already encoded image", waiting.await(3, TimeUnit.SECONDS))
+            ImageRevocationAuthority.revokeConsent()
+            // Re-approval must not reauthorize that cache entry or the stalled response.
+            ImageRevocationAuthority.grantConsent()
+            assertNull(VisualImageCache.imageFor(operationData))
+            val replay = handler.handle(request)
+            assertNull(replay.imageEpoch)
+            assertEquals(listOf("text"), content(requireNotNull(replay.body)).map {
+                it.jsonObject.getValue("type").jsonPrimitive.content
+            })
+            resumeWrite.countDown()
+            writer.get(3, TimeUnit.SECONDS)
+            assertTrue(closed)
+            assertEquals("No retry of the stale body", 2, writes)
+            val transmitted = raw.toString(StandardCharsets.UTF_8.name())
+            assertTrue(transmitted.startsWith("HTTP/1.1 200 OK\r\n"))
+            assertTrue(transmitted.contains("\r\n\r\n"))
+            assertEquals("", transmitted.substringAfter("\r\n\r\n"))
+        } finally {
+            resumeWrite.countDown()
+            executor.shutdownNow()
         }
     }
 }
