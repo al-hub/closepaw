@@ -17,4 +17,10 @@ class RemoteStatusLabelTest {
         assertEquals("AI 제어 중 - 응답 대기", RemoteStatusLabel.sanitize("응답 대기 중"))
         assertEquals("AI 제어 중 - 단계 완료", RemoteStatusLabel.sanitize("실행 단계 확인 완료"))
     }
+
+    @Test fun onlyExactSharingInstructionsReachTheIsland() {
+        assertEquals("공유를 허용하세요", RemoteStatusLabel.sanitize("공유를 허용하세요"))
+        assertEquals("공유를 중지하세요", RemoteStatusLabel.sanitize("공유를 중지하세요"))
+        assertEquals("AI 제어 중 - 실행", RemoteStatusLabel.sanitize("공유를 허용하세요: private data"))
+    }
 }

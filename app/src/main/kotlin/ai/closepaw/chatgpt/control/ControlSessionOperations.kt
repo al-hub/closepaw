@@ -9,11 +9,16 @@ internal class ControlSessionOperations(private val session: () -> ControlSessio
         for (command in listOf("status", "start", "wait", "end")) {
             val properties = if (command in setOf("wait", "end")) buildJsonObject {
                 put("session_id", buildJsonObject { put("type", "string"); put("maxLength", 128); put("minLength", 1) })
+                if (command == "wait") put("user_action", buildJsonObject {
+                    put("type", "string")
+                    put("enum", JsonArray(ControlSession.UserAction.entries.map { JsonPrimitive(it.id) }))
+                    put("description", "Optional on-device instruction only; does not grant, revoke or resume control.")
+                })
             } else buildJsonObject {}
             registry.register(OperationDescriptor("android.control.session.$command",
                 when (command) {
                     "start" -> "Explicitly start a NEW user-authorized UI control session from idle/ended. Never use to override a user pause or emergency stop. Returns session_id required on subsequent UI operations."
-                    "wait" -> "Hand control to the user after asking for a physical selection/confirmation. Shows breathing border; AI actions stay blocked until the user confirms on-device."
+                    "wait" -> "Hand control to the user after asking for a physical selection/confirmation. Optionally show a fixed one-line instruction for screen sharing. Does not change the existing handoff or resume policy."
                     "end" -> "End this UI control session and cancel cancellable work. Completed external effects are not undone. No resume; a new explicitly authorized session is required."
                     else -> "Read control session state and identity. Paused control can only resume through the physical on-device play button."
                 }, inputSchema = buildJsonObject {
@@ -28,7 +33,14 @@ internal class ControlSessionOperations(private val session: () -> ControlSessio
                         return OperationResult(success = false, summary = "control_session_id_required")
                     val changed = when (command) {
                         "start" -> value.start()
-                        "wait" -> value.waitForUser()
+                        "wait" -> {
+                            val raw = invocation.input["user_action"]
+                            val action = if (raw == null) null else {
+                                ControlSession.UserAction.entries.firstOrNull { raw == JsonPrimitive(it.id) }
+                                    ?: return OperationResult(success = false, summary = "invalid_user_action")
+                            }
+                            value.waitForUser(action, invocation.input["session_id"]?.jsonPrimitive?.content)
+                        }
                         "end" -> { value.end(); true }
                         else -> true
                     }

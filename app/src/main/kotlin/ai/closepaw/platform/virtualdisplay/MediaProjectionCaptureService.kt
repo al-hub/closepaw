@@ -3,6 +3,7 @@ package ai.closepaw.platform.virtualdisplay
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -15,6 +16,8 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import ai.closepaw.security.ImageRevocationAuthority
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Foreground service (`mediaProjection` FGS type) holding the OS-approved MediaProjection
@@ -46,6 +49,19 @@ class MediaProjectionCaptureService : Service() {
         private const val TAG = "MediaProjectionCapture"
         private const val CHANNEL_ID = "media_projection_capture"
         private const val NOTIFICATION_ID = 0xF165
+        private const val ACTION_STOP_SHARING = "ai.closepaw.action.STOP_SCREEN_SHARING"
+        private val activeSharing = MutableStateFlow<String?>(null)
+        internal val sharingRound = activeSharing.asStateFlow()
+
+        private fun stopIntent(context: Context, round: String) =
+            Intent(context, MediaProjectionCaptureService::class.java)
+                .setAction(ACTION_STOP_SHARING)
+                .setIdentifier(round) // Distinct immutable notification action per OS consent round.
+
+        /** Local UI only; the service admits the request against its current OS round. */
+        internal fun requestStopSharing(context: Context, round: String) {
+            if (sharingRound.value == round) context.startService(stopIntent(context, round))
+        }
 
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_RESULT_DATA = "extra_result_data"
@@ -74,6 +90,7 @@ class MediaProjectionCaptureService : Service() {
     private lateinit var projectionManager: MediaProjectionManager
     private var projection: MediaProjection? = null
     private var sessionOwner: MediaProjectionSessionOwner? = null
+    private var activeRound: String? = null
     @Volatile private var framePolicy: MediaProjectionFramePolicy? = null
     @Volatile private var frameScope: MediaProjectionFrameScope? = null
     private var imageLease: ProjectionImageLease? = null
@@ -84,10 +101,22 @@ class MediaProjectionCaptureService : Service() {
     override fun onCreate() {
         super.onCreate()
         projectionManager = getSystemService(MediaProjectionManager::class.java)
-        startForegroundWithRequiredType()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP_SHARING) {
+            val owner = sessionOwner
+            if (owner != null) {
+                owner.stopSharingIfCurrent(sessionOwner, activeRound, intent.identifier) {
+                    teardownCaptureAndService()
+                }
+            } else if (projection == null) {
+                // A stale notification started an otherwise idle service. Do not
+                // touch consent, including an approval whose start is still queued.
+                if (stopSelfResult(startId)) stopForeground(STOP_FOREGROUND_REMOVE)
+            }
+            return START_NOT_STICKY
+        }
         // A duplicate/stale start intent must never tear down an already active,
         // independently user-approved session or reuse its one-shot OS token.
         if (projection != null) {
@@ -113,6 +142,7 @@ class MediaProjectionCaptureService : Service() {
         sessionOwner = owner
         val imageEpoch = ImageRevocationAuthority.currentEpoch
         try {
+            startForegroundWithRequiredType()
             val newProjection = projectionManager.getMediaProjection(resultCode, requireNotNull(resultData))
             if (newProjection == null) {
                 Log.w(TAG, "onStartCommand: OS returned no projection; revoking")
@@ -129,6 +159,9 @@ class MediaProjectionCaptureService : Service() {
                 return START_NOT_STICKY
             }
             openMirrorScope(newProjection)
+            activeRound = sessionId
+            activeSharing.value = sessionId
+            startForegroundWithRequiredType(sessionId)
             Log.i(TAG, "MediaProjection consent round consumed; one-session mirror scope opened")
         } catch (e: Exception) {
             Log.w(TAG, "getMediaProjection failed; failing closed", e)
@@ -202,6 +235,8 @@ class MediaProjectionCaptureService : Service() {
         sessionOwner?.runIfCurrent(sessionOwner) { revokeImageConsent() }
         // Detach before stop(): its callback can be delivered after a newer session starts.
         sessionOwner = null
+        activeRound?.let { activeSharing.compareAndSet(it, null) }
+        activeRound = null
         // Invalidate first so any in-flight acquire loses the race and fails closed.
         framePolicy?.invalidate()
         ProjectionImageTransport.remove(imageLease)
@@ -214,7 +249,7 @@ class MediaProjectionCaptureService : Service() {
         runCatching { previousProjection?.stop() }
     }
 
-    private fun startForegroundWithRequiredType() {
+    private fun startForegroundWithRequiredType(round: String? = null) {
         val manager = getSystemService(NotificationManager::class.java)
         if (manager.getNotificationChannel(CHANNEL_ID) == null) {
             manager.createNotificationChannel(
@@ -225,12 +260,17 @@ class MediaProjectionCaptureService : Service() {
                 )
             )
         }
-        val notification: Notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("ClosePaw screen capture active")
-            .setContentText("Use Android screen-sharing controls to stop sharing.")
+        val builder = Notification.Builder(this, CHANNEL_ID)
+            .setContentTitle(if (round == null) "화면 공유 준비 중" else "화면 공유 중")
             .setSmallIcon(android.R.drawable.ic_menu_close_clear_cancel)
             .setOngoing(true)
-            .build()
+        if (round != null) {
+            val stop = PendingIntent.getService(this, 0, stopIntent(this, round), PendingIntent.FLAG_IMMUTABLE)
+            builder.addAction(Notification.Action.Builder(
+                android.R.drawable.ic_menu_close_clear_cancel, "화면 공유 중지", stop
+            ).build())
+        }
+        val notification = builder.build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
