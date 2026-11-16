@@ -10,7 +10,7 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
     val context: String, val at: Long, val id: String = UUID.randomUUID().toString(), val scope: String = "app", val sourceWindowId: Int = -1,
     val sourceDisplayId: Int = -1, val rotation: Int = -1, val applicationBounds: String = "", val imeBounds: String = "",
     val sourceImeWindowId: Int = -1, val displayGeneration: Long = -1, val disclosedRegions: List<TapBounds> = emptyList(), val editorPrivacyGeneration: Long = -1,
-    val sourceDisclosureAllowed: () -> Boolean = { true }) {
+    val sourceDisclosureAllowed: () -> Boolean = { true }, val captureUptimeMs: Long = -1) {
     fun metadata() = buildJsonObject {
         val observationOnly = scope == "screen_observe"
         put("observation_only", observationOnly)
@@ -36,7 +36,8 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
         val w = window.right - window.left; val h = window.bottom - window.top
         fun x(v: Int) = window.left + (v.toLong() * w / image.width).toInt()
         fun y(v: Int) = window.top + (v.toLong() * h / image.height).toInt()
-        return TapBounds(x(rect.left), y(rect.top), x(rect.right), y(rect.bottom)).takeIf { window.contains(it) && (scope != "display" || OwnedPixelPolicy.contains(disclosedRegions,it)) }
+        return TapBounds(x(rect.left), y(rect.top), x(rect.right), y(rect.bottom)).takeIf { window.contains(it) &&
+            (scope !in setOf("display", "keyboard") || (scope == "keyboard" && disclosedRegions.isEmpty()) || OwnedPixelPolicy.contains(disclosedRegions,it)) }
     }
 }
 /** At most two private screenshots, memory only. Retrieval rechecks live consent/

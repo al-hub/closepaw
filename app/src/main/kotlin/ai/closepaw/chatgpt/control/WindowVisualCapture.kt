@@ -35,10 +35,13 @@ internal object WindowVisualCapture {
         display: Boolean = false, visibleRegion: Region? = null,
         surfaces: List<IsolatedVisualSurface> = emptyList(), projection: ProjectionImageLease? = null,
         requestId: String? = null, observationOnly: Boolean = false,
+        geometry: ImeSurfaceGeometry? = null, minimumScreenshotUptimeMs: Long = -1,
         awaitSlot: suspend () -> Unit = {}): VisualCaptureResult {
         fun failure(code: String) = VisualCaptureResult(reason=code)
         if (observationOnly && (!display || projection?.screenObservationAllowed() != true))
             return failure("screen_observation_consent_required")
+        if (geometry != null && (display || projection != null || geometry.windowId != windowId || geometry.touch != window ||
+                minimumScreenshotUptimeMs < 0)) return failure("ime_geometry_unverified")
         if (Build.VERSION.SDK_INT < 34 || !window.valid || (display && visibleRegion == null)) return failure("screenshot_geometry_unverified")
         var nativeReason = "screenshot_timeout"
         // Projection is an explicit display-only source, never an ownership proof.
@@ -75,14 +78,28 @@ internal object WindowVisualCapture {
                     val buffer = captured!!.hardwareBuffer
                     if (buffer.width.toLong()*buffer.height > 8_000_000) return@withContext failure("screenshot_pixel_limit")
                     val hardware = Bitmap.wrapHardwareBuffer(buffer, captured.colorSpace) ?: return@withContext failure("screenshot_buffer_wrap_failed")
-                    bitmap = try { hardware.copy(Bitmap.Config.ARGB_8888, display) } finally { hardware.recycle() }
+                    bitmap = try { hardware.copy(Bitmap.Config.ARGB_8888, display || geometry != null) } finally { hardware.recycle() }
                 }
                 val source = bitmap ?: return@withContext failure("screenshot_bitmap_copy_failed")
-                if (source.width != window.right-window.left || source.height != window.bottom-window.top) {
+                val coordinates = geometry?.frame ?: window
+                if (source.width != coordinates.right-coordinates.left || source.height != coordinates.bottom-coordinates.top) {
                     recordGeometryMismatch(service, if (display) "display" else "window", source.width, source.height, window)
                     return@withContext failure("screenshot_buffer_geometry_mismatch")
                 }
                 if (source.width.toLong()*source.height > 8_000_000) return@withContext failure("screenshot_pixel_limit")
+                if (geometry != null) {
+                    if (captured == null || captured.timestamp < minimumScreenshotUptimeMs ||
+                        captured.timestamp > android.os.SystemClock.uptimeMillis()) return@withContext failure("ime_capture_timestamp_unverified")
+                    // Keep the native buffer intact; only mask outside the certified touch region.
+                    val hidden = Region(0,0,source.width,source.height).apply {
+                        op(Rect(window.left-coordinates.left,window.top-coordinates.top,
+                            window.right-coordinates.left,window.bottom-coordinates.top),Region.Op.DIFFERENCE)
+                    }
+                    val iterator = RegionIterator(hidden); val rect = Rect(); val canvas = Canvas(source)
+                    val paint = Paint().apply { color=Color.BLACK }
+                    while (iterator.next(rect)) canvas.drawRect(rect,paint)
+                    disclosed = listOf(window)
+                }
                 if (display) {
                     val verified=Region()
                     if (observationOnly) {
@@ -134,8 +151,9 @@ internal object WindowVisualCapture {
                 if (!sourceAllowed()) return@withContext failure("projection_session_expired")
                 VisualCaptureResult(VisualTargetProof(ScreenImage(image.width,image.height,"image/jpeg",bytes,
                     if (projected == null) ScreenImageSource.ACCESSIBILITY_SCREENSHOT else ScreenImageSource.MEDIA_PROJECTION),
-                    hash,window,context,System.currentTimeMillis(),scope=if (observationOnly) "screen_observe" else "app",
-                    disclosedRegions=disclosed,sourceDisclosureAllowed=sourceAllowed))
+                    hash,coordinates,context + (geometry?.let { "|ime=" + it.fingerprint } ?: ""),System.currentTimeMillis(),
+                    scope=if (observationOnly) "screen_observe" else if (geometry != null) "keyboard" else "app",
+                    disclosedRegions=disclosed,sourceDisclosureAllowed=sourceAllowed,captureUptimeMs=captured?.timestamp ?: -1))
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { failure("screenshot_conversion_failed") }
             finally { if (scaled !== bitmap) scaled?.recycle(); bitmap?.recycle() }

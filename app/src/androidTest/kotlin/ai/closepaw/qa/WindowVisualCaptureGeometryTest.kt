@@ -8,6 +8,13 @@ import ai.closepaw.chatgpt.control.RuntimeControlSettings
 import ai.closepaw.chatgpt.control.VisualImageCache
 import ai.closepaw.chatgpt.control.TapBounds
 import ai.closepaw.chatgpt.control.WindowVisualCapture
+import ai.closepaw.chatgpt.control.ImeSurfaceGeometry
+import ai.closepaw.chatgpt.control.TermuxAdbImeGeometryAuthority
+import ai.closepaw.bridge.TermuxJobClient
+import ai.closepaw.bridge.TermuxJobReply
+import ai.closepaw.bridge.TermuxJobSnapshot
+import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
 import ai.closepaw.platform.virtualdisplay.ProjectionBitmap
 import ai.closepaw.platform.virtualdisplay.ProjectionImageLease
 import android.accessibilityservice.AccessibilityService
@@ -170,6 +177,66 @@ class WindowVisualCaptureGeometryTest {
 
     @Test fun portraitKeyboardMismatchReturnsNoProofAndNeverFallsBack() = runBlocking {
         keyboardRefusal(1440, 2993, TapBounds(0, 1798, 1440, 3120))
+    }
+
+    @Test fun certifiedTranslationRetainsNativeBufferAndMasksOutsideTouchableRegion() = runBlocking {
+        Surface(200,300).use { surface ->
+            val timestamp = android.os.SystemClock.uptimeMillis()
+            every { surface.screenshot.timestamp } returns timestamp
+            val touch = TapBounds(0,100,200,327)
+            val geometry = ImeSurfaceGeometry(23,"android.os.BinderProxy@abc","VRI-InputMethod\$_123#456",
+                TapBounds(0,27,200,327),touch,200,300,"fixture","a".repeat(64))
+            val service = service(23,surface)
+            val result = WindowVisualCapture.capture(service,23,touch,"native",
+                geometry=geometry,minimumScreenshotUptimeMs=timestamp)
+            assertNull(result.reason)
+            val proof = requireNotNull(result.proof)
+            assertEquals(200,proof.image.width); assertEquals(300,proof.image.height)
+            assertEquals(geometry.frame,proof.window)
+            assertEquals(listOf(touch),proof.disclosedRegions)
+            assertEquals(TapBounds(20,107,40,127),proof.map(TapBounds(20,80,40,100)))
+            assertNull(proof.map(TapBounds(20,20,40,40)))
+            val decoded = BitmapFactory.decodeByteArray(proof.image.bytes,0,proof.image.bytes.size)
+            try { assertEquals(Color.BLACK,decoded.getPixel(100,10)) } finally { decoded.recycle() }
+            assertTrue(surface.buffer.isClosed)
+            verify(exactly=0) { service.takeScreenshot(any(),any(),any()) }
+        }
+    }
+
+    @Test fun certifiedSurfaceRejectsStaleScreenshotBeforeReturningAnyProof() = runBlocking {
+        Surface(200,300).use { surface ->
+            val timestamp = android.os.SystemClock.uptimeMillis()
+            every { surface.screenshot.timestamp } returns timestamp - 1
+            val touch = TapBounds(0,100,200,327)
+            val geometry = ImeSurfaceGeometry(23,"android.os.BinderProxy@abc","VRI-InputMethod\$_123#456",
+                TapBounds(0,27,200,327),touch,200,300,"fixture","a".repeat(64))
+            val result = WindowVisualCapture.capture(service(23,surface),23,touch,"native",
+                geometry=geometry,minimumScreenshotUptimeMs=timestamp)
+            assertNull(result.proof); assertEquals("ime_capture_timestamp_unverified",result.reason)
+            assertTrue(surface.buffer.isClosed)
+        }
+    }
+
+    @Test fun adbAuthorityCannotReadAnotherDeviceOrReplayAnUnknownJob() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val dir = File(requireNotNull(context.getExternalFilesDir(null)),"ime-geometry")
+        fun files() = dir.listFiles()?.map { it.name }?.toSet().orEmpty()
+        val baseline = files()
+        val client = mockk<TermuxJobClient>()
+        coEvery { client.start(any(),any()) } returns TermuxJobReply.Success(
+            TermuxJobSnapshot("fixture","interrupted",outcomeUnknown=true))
+        val authority = TermuxAdbImeGeometryAuthority(context,client) { true }
+        val lease = requireNotNull(authority.lease(2,TapBounds(0,100,200,327),"ime/.Keyboard") { true })
+        try {
+            assertEquals(1,(files()-baseline).size)
+            assertNull(lease.sample())
+            coVerify(exactly=1) { client.start(any(),any()) }
+            coVerify(exactly=0) { client.poll(any(),any(),any(),any()) }
+        } finally { lease.close() }
+        assertEquals(baseline,files())
+        val disabled = TermuxAdbImeGeometryAuthority(context,client) { false }
+        assertNull(disabled.lease(2,TapBounds(0,100,200,327),"ime/.Keyboard") { true })
+        coVerify(exactly=1) { client.start(any(),any()) }
     }
 
     @Test fun landscapeKeyboardMismatchDoesNotReusePortraitInset() = runBlocking {

@@ -46,7 +46,8 @@ import kotlin.coroutines.resume
 
 /** Native adapter: semantic targets only; explicit guarded node tap, never automatic gesture fallback. */
 internal class AndroidControlPort(context: Context, private val mutationBlock: (String) -> String? = { null },
-    private val runtime: RuntimeControlSettings? = null, private val localAuthority: LocalInputAuthority? = null, private val allowed: () -> Boolean) : ControlPort {
+    private val runtime: RuntimeControlSettings? = null, private val localAuthority: LocalInputAuthority? = null,
+    private val geometryAuthority: TermuxAdbImeGeometryAuthority? = null, private val allowed: () -> Boolean) : ControlPort {
     override val validatesAtNativeBoundary = true
     override fun islandRefusal(sessionId: String): String? {
         val service = AgentService.instance ?: return "accessibility_permission_missing"
@@ -377,13 +378,21 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         if (displayCapture && projection == null) return fail("screen_share_not_active")
         if (observationOnly && projection?.screenObservationAllowed() != true) return fail("screen_observation_consent_required")
         val projectionRequestId = if (projection != null) java.util.UUID.randomUUID().toString().replace("-", "") else null
+        suspend fun captureOnce(): VisualCaptureResult = if (scope == "keyboard") {
+            captureKeyboardSurface(service,frame,captureId,bounds) {
+                allowed() && ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageConsentEpoch) &&
+                    admittedSession.id == admittedSessionId && admittedSession.epoch == admittedSessionEpoch &&
+                    admittedSession.state == ControlSession.State.ACTIVE
+            }
+        } else WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,displayCapture,plan?.region,
+            plan?.surfaces.orEmpty(),projection=projection,requestId=projectionRequestId,observationOnly=observationOnly) { probeThrottle.awaitSlot() }
         probeThrottle.awaitSlot()
-        var captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,displayCapture,plan?.region,plan?.surfaces.orEmpty(), projection = projection, requestId = projectionRequestId, observationOnly = observationOnly) { probeThrottle.awaitSlot() }
+        var captured = captureOnce()
         // Retry only an explicit OS screenshot rate refusal, before any action.
         // Never retry a denied/masked/changed screen or replay a gesture.
         if (captured.proof == null && captured.reason == "screenshot_throttled") {
             probeThrottle.awaitSlot()
-            captured = WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,displayCapture,plan?.region,plan?.surfaces.orEmpty(), projection = projection, requestId = projectionRequestId, observationOnly = observationOnly) { probeThrottle.awaitSlot() }
+            captured = captureOnce()
         }
         if (projectionRequestId != null) ControlDiagnostics.record("projection_observe_result",
             captured.reason ?: if (captured.proof != null) "acquired" else "visual_observation_unavailable",
@@ -419,6 +428,29 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             sourceDisplayId=if(plan!=null) 0 else -1,rotation=plan?.rotation ?: -1,
             applicationBounds=plan?.appBounds.orEmpty(),imeBounds=plan?.imeBounds.orEmpty(),
             sourceImeWindowId=if(plan!=null) keyboard?.windowId ?: -1 else -1,displayGeneration=if(plan!=null) displayGeneration else -1,editorPrivacyGeneration=admittedEditorGeneration)
+    }
+
+    private suspend fun captureKeyboardSurface(service: AgentService, frame: ControlFrame, id: Int,
+        touch: TapBounds, guard: () -> Boolean): VisualCaptureResult {
+        val generation = service.remoteDisplayChanges.version()
+        fun valid() = guard() && service.remoteDisplayChanges.version() == generation
+        val lease = geometryAuthority?.lease(id,touch,frame.keyboard?.inputMethodId.orEmpty(),::valid)
+        try {
+            val before = lease?.sample()
+            if (!valid()) return VisualCaptureResult(reason="ime_window_changed")
+            val minimum = lease?.sampledAtUptimeMs ?: -1
+            val captured = WindowVisualCapture.capture(service,id,touch,frame.touchContext,
+                geometry=before,minimumScreenshotUptimeMs=minimum)
+            if (before == null || captured.proof == null) return captured
+            val captureEnd = SystemClock.uptimeMillis()
+            val after = lease?.sample()
+            if (!valid() || before != after || captured.proof.captureUptimeMs !in minimum..captureEnd)
+                return VisualCaptureResult(reason="ime_geometry_changed_during_capture")
+            val sourceAllowed = captured.proof.sourceDisclosureAllowed
+            return captured.copy(proof=captured.proof.copy(sourceDisclosureAllowed={ sourceAllowed() && valid() }))
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { return VisualCaptureResult(reason="ime_geometry_authority_unavailable") }
+        finally { lease?.close() }
     }
 
     private suspend fun secureWindow(service: AgentService): String? = controlSpan("security_probe") { secureWindowChecked(service) }

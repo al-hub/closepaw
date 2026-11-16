@@ -8,6 +8,22 @@ import org.json.JSONObject
 import org.junit.Test
 
 class TermuxJobClientTest {
+    @Test fun `metadata client bounds stalled HTTP calls without replaying the request`() = runTest {
+        withServer { server ->
+            val bounded = TermuxJobClient(TOKEN,server.url("/").toString(),requestTimeoutMs=200)
+            server.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE))
+            val begin = System.nanoTime()
+            assertThat(bounded.start("no-replay",ExecutionRequest(ExecutionCapability.LINUX_SHELL,"printf safe")))
+                .isInstanceOf(TermuxJobReply.Failure::class.java)
+            assertThat((System.nanoTime()-begin)/1_000_000).isLessThan(2_000L)
+            assertThat(server.requestCount).isEqualTo(1)
+            server.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE))
+            val pollBegin = System.nanoTime()
+            assertThat(bounded.poll("job-1")).isInstanceOf(TermuxJobReply.Failure::class.java)
+            assertThat((System.nanoTime()-pollBegin)/1_000_000).isLessThan(2_000L)
+            assertThat(server.requestCount).isEqualTo(2)
+        }
+    }
     @Test fun `bounded HTTP refusal reason is exposed without response body`() = runTest {
         withServer { server ->
             server.enqueue(MockResponse().setResponseCode(429).setBody("""{"error":"job_archive_full","token":"secret"}"""))
