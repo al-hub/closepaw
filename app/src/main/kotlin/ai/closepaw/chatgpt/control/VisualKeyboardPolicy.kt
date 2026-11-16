@@ -24,9 +24,8 @@ internal object VisualKeyboardPolicy {
      * Admit it only as a visual layout candidate of the selected IME. */
     fun identifyImeKey(keyboard: ControlKeyboard?, sourcePackage: String, text: String, description: String,
         className: String, childCount: Int): KeyboardKeyPolicy.Key? {
-        if (keyboard?.packageName == "com.samsung.android.honeyboard" &&
-            keyboard.inputMethodId == "com.samsung.android.honeyboard/.service.HoneyBoardService" &&
-            sourcePackage == keyboard.packageName && text.isEmpty() && description == "영어(미국)로 변경" &&
+        if (KeyboardImageFallbackPolicy.trustedIme(keyboard, sourcePackage) &&
+            text.isEmpty() && description == "영어(미국)로 변경" &&
             className == "android.view.ViewGroup" && childCount == 1) {
             return KeyboardKeyPolicy.Key("한/영", KeyboardKeyPolicy.Kind.LAYOUT)
         }
@@ -52,7 +51,7 @@ internal object VisualKeyboardPolicy {
         else -> "keyboard_visual_owner_unverified"
     }
 
-    fun refusal(frame: ControlFrame, node: ControlNode?, scope: String): String? {
+    fun refusal(frame: ControlFrame, node: ControlNode?, scope: String, imageLabel: String? = null): String? {
         if (scope !in setOf("keyboard", "display")) return "keyboard_visual_required"
         val keyboard = frame.keyboard ?: return "keyboard_target_unverified"
         if (!keyboard.readAllowed || !keyboard.interactAllowed) return "keyboard_interaction_not_authorized"
@@ -61,9 +60,16 @@ internal object VisualKeyboardPolicy {
             field.sourceWindowId != frame.windowId || field.sourcePackage != frame.packageName ||
             !field.enabled || !field.editable || !field.focused || !field.focusable || field.password ||
             field.text.length > 2000 || InputPayloadPolicy.sensitive(field.text)) return "keyboard_input_target_unverified"
-        if (node == null || !node.visualKeyCandidate || !node.enabled || node.password ||
+        if (node == null || !node.enabled || node.password ||
             node.sourceWindowId != keyboard.windowId || node.sourcePackage != keyboard.packageName)
             return "keyboard_visual_candidate_unverified"
+        if (node.keyboardImageCandidate) {
+            if (scope != "keyboard") return "keyboard_image_requires_keyboard_scope"
+            KeyboardImageFallbackPolicy.refusal(frame, node, imageLabel)?.let { return it }
+            val literal = KeyboardImageFallbackPolicy.key(imageLabel) ?: return "keyboard_image_label_unverified"
+            return if (KeyboardKeyPolicy.expectedText(field, literal) == null) "keyboard_literal_unverified" else null
+        }
+        if (!node.visualKeyCandidate || imageLabel != null) return "keyboard_visual_candidate_unverified"
         val key = identifyCandidate(node, keyboard) ?: return "keyboard_key_unrecognized"
         if (key.label != node.keyboardKey || (key.kind != KeyboardKeyPolicy.Kind.LAYOUT && KeyboardKeyPolicy.expectedText(field,key) == null))
             return "keyboard_literal_unverified"
