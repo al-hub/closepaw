@@ -17,10 +17,12 @@ class TermuxJobClient(
     private val authToken: String,
     private val baseUrl: String = TermuxLocalBridgeExecutionAdapter.DEFAULT_BASE_URL,
     client: OkHttpClient = OkHttpClient(),
+    requestTimeoutMs: Long = 15_000,
 ) {
+    init { require(requestTimeoutMs in 100..15_000) }
     private val http = client.newBuilder()
-        .callTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        .callTimeout(requestTimeoutMs, TimeUnit.MILLISECONDS)
+        .readTimeout(requestTimeoutMs, TimeUnit.MILLISECONDS)
         .build()
 
     /** Checks authentication and asynchronous API support without starting any process. */
