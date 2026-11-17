@@ -959,7 +959,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         (it.keyboardKey.isNotEmpty() || it.keyboardImageCandidate) }
                     val role = VisualKeyboardPolicy.identifyCandidate(candidate, ime)
                     val neighbors = owned.filter { other ->
-                        other.id != candidate.id &&
+                        other.id != candidate.id && !KeyboardImageFallbackPolicy.isRowBackdrop(fresh, other) &&
                             !(role != null && VisualKeyboardPolicy.identifyCandidate(other, ime) == role &&
                                 (other.bounds == candidate.bounds || other.parent == candidate.id || candidate.parent == other.id))
                     }.mapNotNull { KeyboardImageFallbackPolicy.bounds(it.bounds) }.distinct()

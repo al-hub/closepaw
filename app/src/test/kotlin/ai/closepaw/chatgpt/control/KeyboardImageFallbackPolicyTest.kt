@@ -113,6 +113,76 @@ class KeyboardImageFallbackPolicyTest {
         assertFalse(KeyboardImageFallbackPolicy.canPropose(arranged.copy(nodes = arranged.nodes - characters.last()), space))
     }
 
+    @Test fun observedSamsungSpaceDescriptionOnlyEnablesImageProposal() {
+        fun wrapper(id: Int, desc: String, rect: String, label: String = "") = target.copy(
+            id = id, description = desc, bounds = rect, keyboardKey = label,
+            clickable = false, textEntryKey = false, visualKeyCandidate = label.isNotEmpty(),
+            keyboardImageCandidate = label.isEmpty(), visualKeyChildCount = 1, className = "android.view.ViewGroup")
+        val space = wrapper(20, "스페이스 키", "503 2754 1059 2909")
+        val nodes = listOf(field, space, wrapper(21, ",", "363 2754 481 2909", ","),
+            wrapper(22, ".", "1081 2754 1199 2909", "."),
+            wrapper(23, "ㅁ", "521 2554 639 2709", "ㅁ"),
+            wrapper(24, "ㄴ", "661 2554 779 2709", "ㄴ"),
+            wrapper(25, "ㅇ", "801 2554 919 2709", "ㅇ"))
+        val observed = frame.copy(nodes = nodes)
+        assertNull(KeyboardKeyPolicy.identifyLabel("", "스페이스 키"))
+        assertTrue(KeyboardImageFallbackPolicy.canPropose(observed, space))
+        assertNull(VisualKeyboardPolicy.refusal(observed, space, "keyboard", "Space"))
+        assertNotNull(VisualKeyboardPolicy.refusal(observed, space, "keyboard", "검색"))
+        assertFalse(KeyboardImageFallbackPolicy.canPropose(observed.copy(nodes = nodes - nodes[2]), space))
+        for (wrong in listOf("검색", "Enter", "스페이스 키 전송", "한/영")) {
+            assertFalse(KeyboardImageFallbackPolicy.spaceBoundary("", wrong, space.className, 1))
+            val wrongNode = space.copy(description = wrong)
+            assertFalse(KeyboardImageFallbackPolicy.canPropose(observed.copy(nodes = nodes - space + wrongNode), wrongNode))
+        }
+    }
+
+    @Test fun observedBlankRowDoesNotBlockKeysButActionAndUnprovenRowsDo() {
+        fun role(id: Int, desc: String, rect: String, label: String) = target.copy(
+            id = id, description = desc, bounds = rect, keyboardKey = label,
+            clickable = false, textEntryKey = false, visualKeyCandidate = true,
+            keyboardImageCandidate = false, visualKeyChildCount = 1, className = "android.view.ViewGroup")
+        val row = target.copy(id = 20, bounds = "31 2754 1409 2909", clickable = false, textEntryKey = false,
+            className = "android.view.ViewGroup")
+        val layout = role(21, "영어(미국)로 변경", "223 2754 341 2909", "한/영")
+        val punctuation = role(22, ",", "363 2754 481 2909", ",")
+        val search = role(23, "검색", "1221 2754 1409 2909", "검색")
+        val layoutRect = TapBounds(223, 2754, 341, 2909)
+        val searchRect = TapBounds(1221, 2754, 1409, 2909)
+        val imeRect = TapBounds(0, 1798, 1440, 3120)
+        val display = TapBounds(0, 0, 1440, 3120)
+        val transform = KeyboardTouchGeometry.Transform(display, 0, 0, 443, 960)
+        val owner = KeyboardTouchGeometry.Owner("session", 1, 1, 1, "context", ime)
+        val certificate = listOf(TapBounds(140, 1798, 1300, 2950))
+        val observed = frame.copy(nodes = listOf(field, row, layout, punctuation, search))
+        val backdropBounds = checkNotNull(KeyboardImageFallbackPolicy.bounds(row.bounds))
+        assertTrue(KeyboardImageFallbackPolicy.isRowBackdrop(observed, row))
+        assertFalse(KeyboardImageFallbackPolicy.isRowBackdrop(observed, row.copy(clickable = true)))
+        assertFalse(KeyboardImageFallbackPolicy.isRowBackdrop(observed, row.copy(focusable = true)))
+        assertFalse(KeyboardImageFallbackPolicy.isRowBackdrop(observed, row.copy(visualKeyChildCount = 1)))
+        assertFalse(KeyboardImageFallbackPolicy.isRowBackdrop(observed.copy(nodes = observed.nodes - punctuation), row))
+        assertFalse(KeyboardImageFallbackPolicy.isRowBackdrop(observed.copy(nodes = observed.nodes - punctuation +
+            punctuation.copy(parent = 41)), row))
+        assertFalse(KeyboardImageFallbackPolicy.isRowBackdrop(observed.copy(nodes = observed.nodes - punctuation +
+            punctuation.copy(bounds = layout.bounds)), row))
+        assertFalse(KeyboardImageFallbackPolicy.isRowBackdrop(observed.copy(nodes = observed.nodes - punctuation +
+            punctuation.copy(sourceWindowId = 9)), row))
+
+        for ((key, image) in listOf(layoutRect to TapBounds(76, 853, 99, 887),
+            searchRect to TapBounds(378, 849, 399, 890))) {
+            val original = KeyboardTouchGeometry.Entry(key, image, imeRect, listOf(backdropBounds), "", transform)
+            assertNull(KeyboardTouchGeometry().select(owner, "same", original, certificate))
+            val checked = original.copy(neighbors = listOf(row).filterNot {
+                KeyboardImageFallbackPolicy.isRowBackdrop(observed, it)
+            }.map { checkNotNull(KeyboardImageFallbackPolicy.bounds(it.bounds)) })
+            val selection = checkNotNull(KeyboardTouchGeometry().select(owner, "same", checked, certificate))
+            assertTrue(key.contains(selection.patch))
+            assertTrue(certificate.single().contains(selection.patch))
+            assertNull(KeyboardTouchGeometry().select(owner, "same", checked,
+                listOf(TapBounds(140, 1798, key.left, 2950))))
+        }
+    }
+
     @Test fun cropRefusesAnyMaskedOrUncertifiedInteriorPixels() {
         val screen = TapBounds(100, 400, 200, 500)
         val proof = VisualTargetProof(

@@ -17,9 +17,11 @@ internal object KeyboardImageFallbackPolicy {
                 className in setOf("android.widget.Button", "android.view.ViewGroup")))
 
     // These bounds are proposals only. A blank native leaf/wrapper does not
-    // establish a key, much less the space role.
+    // establish a key, much less the space role. A localized advisory
+    // description is not promoted to a native key or independent pixel proof.
     fun spaceBoundary(text: String, description: String, className: String, childCount: Int): Boolean =
-        text.isEmpty() && description.isEmpty() && childCount in 0..1 &&
+        text.isEmpty() && (description.isEmpty() || description.trim().lowercase() in setOf("스페이스 키", "space key")) &&
+            childCount in 0..1 &&
             className in setOf("android.view.View", "android.view.ViewGroup", "android.widget.Button")
 
     fun key(label: String?): KeyboardKeyPolicy.Key? {
@@ -53,6 +55,37 @@ internal object KeyboardImageFallbackPolicy {
     private fun legacyShape(ime: ControlKeyboard?, node: ControlNode): Boolean =
         nodeShape(node.text, node.description, node.className, node.clickable, node.textEntryKey, node.visualKeyChildCount) &&
             (node.clickable && node.textEntryKey || trustedIme(ime, node.sourcePackage))
+
+    /** A blank, inert leaf can cover the entire key row. Treat it as row
+     * decoration only when several disjoint, owned sibling keys prove that
+     * geometry. Reported actions and actual competing keys still block touch. */
+    fun isRowBackdrop(frame: ControlFrame, node: ControlNode): Boolean {
+        if (!nativeShape(frame, node) || node.visualKeyChildCount != 0 ||
+            node.text.isNotEmpty() || node.description.isNotEmpty() || node.clickable ||
+            node.longClickable || node.textEntryKey || node.focusable || node.editable ||
+            node.scrollable || node.checkable || node.expandable || node.collapsible) return false
+        val row = bounds(node.bounds) ?: return false
+        val h = row.bottom - row.top
+        if (row.right.toLong() - row.left < h.toLong() * 4) return false
+        val ime = frame.keyboard ?: return false
+        val siblings = frame.nodes.asSequence().filter {
+            it.id != node.id && it.parent == node.parent && it.enabled && !it.password &&
+                it.sourcePackage == ime.packageName && it.sourceWindowId == ime.windowId &&
+                (KeyboardKeyPolicy.identify(it.text, it.description, it.className, it.clickable, it.textEntryKey) != null ||
+                    it.visualKeyCandidate && VisualKeyboardPolicy.identifyCandidate(it, ime) != null)
+        }.mapNotNull { bounds(it.bounds) }.filter {
+            row.contains(it) && it != row && it.bottom - it.top >= h * 3 / 4 &&
+                kotlin.math.abs(it.center.second - row.center.second) <= h / 6
+        }.distinct().sortedBy { it.right }
+        var right = row.left
+        var count = 0
+        for (key in siblings) {
+            if (key.left < right) continue
+            right = key.right
+            if (++count == 3) return true
+        }
+        return false
+    }
 
     private data class OwnedKey(val rect: TapBounds, val key: KeyboardKeyPolicy.Key)
 
