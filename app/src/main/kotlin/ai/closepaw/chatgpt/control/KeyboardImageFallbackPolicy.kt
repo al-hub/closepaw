@@ -1,7 +1,6 @@
 package ai.closepaw.chatgpt.control
 
-/** Restricted initial image fallback for one unlabeled key in a verified
- * literal row. More IMEs and key roles need their own native structure proof. */
+/** Native structure narrows an image proposal. It never proves pixels or dispatch. */
 internal object KeyboardImageFallbackPolicy {
     fun trustedIme(keyboard: ControlKeyboard?, sourcePackage: String): Boolean =
         keyboard?.packageName == "com.samsung.android.honeyboard" &&
@@ -18,10 +17,88 @@ internal object KeyboardImageFallbackPolicy {
                 className in setOf("android.widget.Button", "android.view.ViewGroup")))
 
     fun key(label: String?): KeyboardKeyPolicy.Key? {
-        val ch = label?.singleOrNull() ?: return null
-        return if (ch in 'a'..'z' || ch in 'A'..'Z' || ch in '0'..'9')
-            KeyboardKeyPolicy.Key(ch.toString(), KeyboardKeyPolicy.Kind.CHARACTER) else null
+        if (label == null) return null
+        return when (label) {
+            "Space" -> KeyboardKeyPolicy.Key(label, KeyboardKeyPolicy.Kind.SPACE)
+            "⌫" -> KeyboardKeyPolicy.Key(label, KeyboardKeyPolicy.Kind.BACKSPACE)
+            "한/영" -> KeyboardKeyPolicy.Key(label, KeyboardKeyPolicy.Kind.LAYOUT)
+            else -> {
+                // Function glyphs, invisible format characters and arbitrary
+                // strings are not character evidence. The key taxonomy also
+                // excludes all known visual submission controls.
+                if (label.codePointCount(0, label.length) != 1) return null
+                KeyboardKeyPolicy.identifyLabel(label, "")?.takeIf { it.kind == KeyboardKeyPolicy.Kind.CHARACTER }
+                    ?: label.codePointAt(0).takeIf { cp ->
+                        cp > 127 && (Character.isLetter(cp) || Character.isDigit(cp))
+                    }?.let { KeyboardKeyPolicy.Key(label, KeyboardKeyPolicy.Kind.CHARACTER) }
+            }
+        }
     }
+
+    fun nativeShape(frame: ControlFrame, node: ControlNode): Boolean =
+        frame.keyboard?.let { ime ->
+            ime.inputMethodId.contains('/') && ime.inputMethodId.substringBefore('/') == ime.packageName &&
+                node.keyboardImageCandidate && node.enabled && !node.password && node.parent >= 0 &&
+                node.sourceWindowId == ime.windowId && node.sourcePackage == ime.packageName &&
+                node.keyboardKey.isEmpty() && nodeShape(node.text, node.description, node.className,
+                    node.clickable, node.textEntryKey, node.visualKeyChildCount) &&
+                (node.clickable && node.textEntryKey || trustedIme(ime, node.sourcePackage))
+        } == true
+
+    private data class OwnedKey(val rect: TapBounds, val key: KeyboardKeyPolicy.Key)
+
+    private fun anchors(frame: ControlFrame, node: ControlNode): List<OwnedKey> {
+        val ime = frame.keyboard ?: return emptyList()
+        return frame.nodes.mapNotNull {
+            if (!it.enabled || it.password || it.id == node.id ||
+                it.sourcePackage != ime.packageName || it.sourceWindowId != ime.windowId) return@mapNotNull null
+            val role = KeyboardKeyPolicy.identify(it.text, it.description, it.className, it.clickable, it.textEntryKey)
+                ?: VisualKeyboardPolicy.identifyCandidate(it, ime)?.takeIf { _ -> it.visualKeyCandidate }
+                ?: return@mapNotNull null
+            val rect = bounds(it.bounds) ?: return@mapNotNull null
+            OwnedKey(rect, role)
+        }.distinct()
+    }
+
+    private fun overlaps(a: TapBounds, b: TapBounds): Boolean =
+        maxOf(a.left, b.left) < minOf(a.right, b.right) && maxOf(a.top, b.top) < minOf(a.bottom, b.bottom)
+
+    private fun structure(frame: ControlFrame, node: ControlNode, wanted: KeyboardKeyPolicy.Key?): Boolean {
+        if (!nativeShape(frame, node)) return false
+        val target = bounds(node.bounds) ?: return false
+        val w = target.right - target.left
+        val h = target.bottom - target.top
+        val anchors = anchors(frame, node)
+        if (anchors.any { overlaps(it.rect, target) }) return false
+        val row = anchors.filter {
+            kotlin.math.abs(it.rect.center.second - target.center.second) <= h / 6 &&
+                it.rect.bottom - it.rect.top in (h * 3 / 4)..(h * 5 / 4)
+        }
+        val left = row.filter { target.left - it.rect.right in 0..(h / 2) }.maxByOrNull { it.rect.right }
+        val right = row.filter { it.rect.left - target.right in 0..(h / 2) }.minByOrNull { it.rect.left }
+        val above = anchors.filter { it.key.kind == KeyboardKeyPolicy.Kind.CHARACTER &&
+            target.top - it.rect.bottom in 0..(h * 2) && it.rect.bottom - it.rect.top in (h * 3 / 4)..(h * 5 / 4) }
+        val narrowKeysAbove = above.map { it.rect }.filter {
+            it.center.first in target.left until target.right && (it.right - it.left).toLong() * 2 < w
+        }
+        val disjointAbove = narrowKeysAbove.isNotEmpty() &&
+            narrowKeysAbove.maxOf { it.left } >= narrowKeysAbove.minOf { it.right }
+        val wideBottomSlot = left != null && right != null && disjointAbove &&
+            anchors.none { it.key.kind == KeyboardKeyPolicy.Kind.CHARACTER && it.rect.top >= target.bottom }
+        val literalRow = node.clickable && node.textEntryKey && left != null && right != null &&
+            left.key.kind == KeyboardKeyPolicy.Kind.CHARACTER && right.key.kind == KeyboardKeyPolicy.Kind.CHARACTER
+        val edgeControl = node.clickable && node.textEntryKey &&
+            (left?.key?.kind == KeyboardKeyPolicy.Kind.CHARACTER || right?.key?.kind == KeyboardKeyPolicy.Kind.CHARACTER)
+        return when (wanted?.kind) {
+            KeyboardKeyPolicy.Kind.SPACE -> wideBottomSlot
+            KeyboardKeyPolicy.Kind.CHARACTER -> literalRow || slotLabel(frame, node) == wanted.label
+            KeyboardKeyPolicy.Kind.BACKSPACE, KeyboardKeyPolicy.Kind.LAYOUT -> edgeControl
+            KeyboardKeyPolicy.Kind.SUBMIT -> false
+            null -> wideBottomSlot || literalRow || edgeControl || slotLabel(frame, node) != null
+        }
+    }
+
+    fun canPropose(frame: ControlFrame, node: ControlNode): Boolean = structure(frame, node, null)
 
     fun bounds(raw: String): TapBounds? {
         val parts = raw.split(' ').map { it.toIntOrNull() ?: return null }
@@ -35,10 +112,7 @@ internal object KeyboardImageFallbackPolicy {
      * literal sequence. This is role evidence and cannot authorize any gesture. */
     fun slotLabel(frame: ControlFrame, node: ControlNode): String? {
         val ime = frame.keyboard ?: return null
-        if (!node.keyboardImageCandidate || !node.enabled || node.password ||
-            node.sourceWindowId != ime.windowId || !trustedIme(ime, node.sourcePackage) ||
-            node.parent < 0 || node.keyboardKey.isNotEmpty() ||
-            !nodeShape(node.text, node.description, node.className, node.clickable, node.textEntryKey, node.visualKeyChildCount)) return null
+        if (!nativeShape(frame, node) || !trustedIme(ime, node.sourcePackage)) return null
         val target = bounds(node.bounds) ?: return null
         val w = target.right - target.left
         val h = target.bottom - target.top
@@ -77,16 +151,19 @@ internal object KeyboardImageFallbackPolicy {
         val ime = frame.keyboard ?: return "keyboard_target_unverified"
         // Do not fall back when the requested key already has native evidence.
         if (frame.nodes.any { it.sourceWindowId == ime.windowId && it.sourcePackage == ime.packageName &&
-                KeyboardKeyPolicy.identifyLabel(it.text, it.description) == desired })
+                it.enabled && !it.password && (it.visualKeyCandidate || it.textEntryKey) &&
+                (VisualKeyboardPolicy.identifyCandidate(it, ime) ?: KeyboardKeyPolicy.identifyLabel(it.text, it.description))
+                    ?.let { native -> native == desired || (native.kind == desired.kind &&
+                        desired.kind in setOf(KeyboardKeyPolicy.Kind.SPACE, KeyboardKeyPolicy.Kind.BACKSPACE)) } == true })
             return "keyboard_image_use_native_label"
-        if (slotLabel(frame, node) != desired.label) return "keyboard_image_row_unverified"
-        if (frame.nodes.count { slotLabel(frame, it) == desired.label } != 1) return "keyboard_image_candidate_ambiguous"
+        if (!structure(frame, node, desired)) return "keyboard_image_row_unverified"
+        if (frame.nodes.count { structure(frame, it, desired) } != 1) return "keyboard_image_candidate_ambiguous"
         return null
     }
 
     fun crop(proof: VisualTargetProof, screen: TapBounds): TapBounds? {
         if (proof.scope != "keyboard" || proof.sourceDisplayId != 0 ||
-            !proof.window.contains(screen) || !OwnedPixelPolicy.contains(proof.disclosedRegions, screen)) return null
+            !proof.window.contains(screen)) return null
         val w = proof.window.right - proof.window.left
         val h = proof.window.bottom - proof.window.top
         if (w <= 0 || h <= 0 || proof.image.width !in 1..960 || proof.image.height !in 1..960) return null
@@ -98,6 +175,13 @@ internal object KeyboardImageFallbackPolicy {
         return inner.takeIf { ix >= 2 && iy >= 2 && proof.map(it)?.let { mapped -> screen.contains(mapped) } == true }
     }
 
-    fun matchesRead(expected: String, glyph: String, confidence: Float): Boolean =
-        key(expected) != null && expected == glyph && confidence.isFinite() && confidence in 0.92f..1f
+    fun matchesRead(expected: String, glyph: String, confidence: Float): Boolean {
+        val wanted = key(expected) ?: return false
+        if (!confidence.isFinite() || confidence !in 0.92f..1f) return false
+        // A language caption can also occur on a language switch. Only
+        // structure's unique, wide bottom-row slot can use it as space.
+        return if (wanted.kind == KeyboardKeyPolicy.Kind.SPACE)
+            glyph in setOf("Space", "Spacebar", "스페이스", "공백", "한국어", "English (US)")
+        else expected == glyph
+    }
 }

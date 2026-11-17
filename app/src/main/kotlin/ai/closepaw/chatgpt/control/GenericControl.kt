@@ -183,7 +183,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 node.sourcePackage == ime.packageName && node.keyboardKey == keyboardKeyExact }
         } else if (filter == "keyboard_image_candidate") {
             frame.nodes.filter { node -> node.keyboardImageCandidate &&
-                KeyboardImageFallbackPolicy.slotLabel(frame, node) != null }
+                frame.visual?.scope == "keyboard" && KeyboardImageFallbackPolicy.canPropose(frame, node) }
         } else frame.nodes.filter { filter.isEmpty() || it.text.contains(filter, true) ||
             it.description.contains(filter, true) || it.resourceId.contains(filter, true) || it.keyboardKey.contains(filter, true) }
         val exposed = mutableListOf<ControlNode>()

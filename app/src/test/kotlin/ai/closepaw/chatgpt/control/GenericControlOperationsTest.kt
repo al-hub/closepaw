@@ -70,6 +70,19 @@ class GenericControlOperationsTest {
             OperationSchemaValidator.checkSchema(registry.get("android.control.session.$command")!!.descriptor.inputSchema)
         assertNull(registry.get("android.control.session.resume"))
     }
+    @Test fun visualKeySchemaAcceptsLiteralAndImageRolesAtTheDispatchBoundary() {
+        val schema = registry(Port()).get(GenericControlOperations.ACTION)!!.descriptor.inputSchema
+        OperationSchemaValidator.checkSchema(schema)
+        fun checkLabel(label: String) = OperationSchemaValidator.validate(schema, buildJsonObject {
+            put("observation_id", "test-observation"); put("action", "visual_key")
+            put("node_id", 1); put("visual_id", "test-image"); put("visual_target_confirmed", true)
+            put("image_rect", JsonArray(listOf(2, 3, 8, 9).map(::JsonPrimitive)))
+            put("image_key_label", label)
+        })
+        listOf("a", "ㅎ", "%", "Space", "한/영", "⌫").forEach { assertNull(it, checkLabel(it)) }
+        assertNotNull(checkLabel(""))
+        assertNotNull(checkLabel("a".repeat(33)))
+    }
     @Test fun remoteObservationShowsActivityOnlyUntilTheOperationEnds() = runBlocking {
         val port = Port(); val registry = registry(port)
         assertTrue(registry.get(GenericControlOperations.OBSERVE)!!.handler.invoke(

@@ -183,7 +183,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             // here. Native window-event generation invalidates the whole proof.
             proof.displayGeneration == service.remoteDisplayChanges.version()
         } == true)
-    override fun invalidate() { probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null }
+    private val keyboardTouchGeometry = KeyboardTouchGeometry()
+    private val keyboardImageRecognition = KeyboardImageFallbackOcr()
+    override fun invalidate() {
+        probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null
+        keyboardTouchGeometry.clear()
+        keyboardImageRecognition.clear()
+    }
     private fun reason(service: AgentService?): String? = when {
         localAuthority?.refusal() != null -> localAuthority?.refusal()
         !allowed() -> "generic_control_disabled"
@@ -550,7 +556,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         text, description, node.className?.toString().orEmpty(), node.childCount) else null
                 val labelEvidence = if (keyboard) KeyboardKeyPolicy.identifyLabel(text, description) ?: visualKey else null
                 val imageCandidate = keyboard && labelEvidence == null &&
-                    KeyboardImageFallbackPolicy.trustedIme(selected.keyboard, node.packageName?.toString().orEmpty()) &&
+                    (KeyboardImageFallbackPolicy.trustedIme(selected.keyboard, node.packageName?.toString().orEmpty()) ||
+                        (node.isTextEntryKey && selected.keyboard?.packageName == node.packageName?.toString())) &&
                     !node.isPassword && (Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive) &&
                     KeyboardImageFallbackPolicy.nodeShape(text, description, node.className?.toString().orEmpty(),
                         node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
@@ -723,7 +730,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         }
         return operationHash(geometry.toString())
     }
-    private suspend fun tap(service: AgentService, frame: ControlFrame, targetBounds: Rect, targetWindowId: Int = frame.windowId, endBounds: Rect? = null, durationMs: Long = 50, finalGuard: () -> String? = { null }): ControlEffect {
+    private suspend fun tap(service: AgentService, frame: ControlFrame, targetBounds: Rect, targetWindowId: Int = frame.windowId, endBounds: Rect? = null, durationMs: Long = 50, requireWholePatch: Boolean = false, finalGuard: () -> String? = { null }): ControlEffect {
         // Reacquire windows immediately before dispatch, while still on Main. No suspension between
         // these checks and dispatchGesture; the gesture has no caller-controlled coordinates.
         val expectedEpoch = sessionFor(service).epoch
@@ -747,6 +754,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 ?: return ControlEffect(false, false, "touch_target_clipped_or_covered")
             val region = Region(); window.getRegionInScreen(region)
             if (!region.contains(point.first, point.second)) return ControlEffect(false, false, "touch_target_outside_region")
+            if (requireWholePatch && (covering.any { Rect.intersects(targetBounds, Rect(it.left, it.top, it.right, it.bottom)) } ||
+                    Region(targetBounds).apply { op(region, Region.Op.DIFFERENCE) }.isEmpty.not()))
+                return ControlEffect(false, false, "touch_target_clipped_or_covered")
             if (service.remoteControlCovers(Rect(point.first, point.second, point.first + 1, point.second + 1))) return ControlEffect(false, false, "control_button_covers_target")
             session()?.refusal(session()?.id, mutation = true)?.let { return ControlEffect(false, false, it) }
             reason(service)?.let { return ControlEffect(false, false, it) }
@@ -885,29 +895,40 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (action == "visual_key") VisualKeyboardPolicy.refusal(fresh, freshKey, proof.scope, imageLabel)?.let {
                     return@withTree ControlEffect(false,false,it)
                 }
-                fun rect(prefix: String): Rect? {
+                fun imageRect(prefix: String): TapBounds? {
                     val a = input[prefix]?.jsonArray ?: return null
                     if (a.size != 4) return null
-                    val numbers = a.map { it.jsonPrimitive.intOrNull ?: return null }
-                    val mapped = VisualActionPolicy.target(proof,action,TapBounds(numbers[0],numbers[1],numbers[2],numbers[3])) ?: return null
-                    return Rect(mapped.left,mapped.top,mapped.right,mapped.bottom)
+                    val n = a.map { it.jsonPrimitive.intOrNull ?: return null }
+                    return TapBounds(n[0], n[1], n[2], n[3]).takeIf { it.valid }
                 }
-                val start = rect("image_rect") ?: return@withTree ControlEffect(false,false,"visual_target_bounds_invalid")
-                val end = if (action in setOf("visual_drag","visual_scroll")) rect("image_end_rect")
+                val proposal = imageRect("image_rect") ?: return@withTree ControlEffect(false,false,"visual_target_bounds_invalid")
+                fun screenRect(raw: TapBounds): Rect? {
+                    val mapped = VisualActionPolicy.target(proof, action, raw) ?: return null
+                    return Rect(mapped.left, mapped.top, mapped.right, mapped.bottom)
+                }
+                val start = if (action == "visual_key") null else (screenRect(proposal)
+                    ?: return@withTree ControlEffect(false,false,"visual_target_bounds_invalid"))
+                val end = if (action in setOf("visual_drag","visual_scroll")) imageRect("image_end_rect")?.let(::screenRect)
                     ?: return@withTree ControlEffect(false,false,"visual_end_bounds_required") else null
-                if (!VisualActionPolicy.pathAllowed(proof,bounds(start),end?.let { bounds(it) }))
+                if (start != null && !VisualActionPolicy.pathAllowed(proof,bounds(start),end?.let { bounds(it) }))
                     return@withTree ControlEffect(false,false,"visual_path_pixels_unverified")
+                val keyIme = fresh.keyboard
+                val keyOwner = if (action == "visual_key" && keyIme != null) {
+                    val live = sessionFor(service)
+                    KeyboardTouchGeometry.Owner(live.id, live.epoch,
+                        ai.closepaw.security.ImageRevocationAuthority.currentEpoch, fresh.configurationRevision, fresh.windowContext, keyIme)
+                } else null
                 if (imageOnlyKey) {
-                    val ime = fresh.keyboard ?: return@withTree ControlEffect(false, false, "keyboard_target_unverified")
+                    val ime = keyIme ?: return@withTree ControlEffect(false, false, "keyboard_target_unverified")
+                    val owner = keyOwner ?: return@withTree ControlEffect(false, false, "keyboard_target_unverified")
                     val keyBounds = freshKey?.let { KeyboardImageFallbackPolicy.bounds(it.bounds) }
                         ?: return@withTree ControlEffect(false, false, "keyboard_visual_bounds_invalid")
-                    val (x, y) = keyBounds.center
                     if (VisualKeyboardPolicy.proofOwnerRefusal(proof, ime) != null ||
-                        !keyBounds.contains(bounds(start)) || !start.contains(x, y))
+                        proof.mapGeometry(proposal)?.let(keyBounds::contains) != true)
                         return@withTree ControlEffect(false, false, "keyboard_visual_bounds_invalid")
                     val crop = KeyboardImageFallbackPolicy.crop(proof, keyBounds)
                         ?: return@withTree ControlEffect(false, false, "keyboard_image_crop_unverified")
-                    if (!KeyboardImageFallbackOcr.confirms(proof, crop, imageLabel.orEmpty()))
+                    if (!controlSpan("keyboard_role_image") { keyboardImageRecognition.confirms(owner, proof, crop, imageLabel.orEmpty()) })
                         return@withTree ControlEffect(false, false, "keyboard_image_label_unverified")
                 }
                 val latest = (if (proof.scope == "display") visualDisplay(fresh) else if (action == "visual_key") visualKeyboard(fresh) else visual(fresh)) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
@@ -917,8 +938,41 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 }
                 if (proof.sourceDisplayId == 0 && proof.displayGeneration != service.remoteDisplayChanges.version())
                     return@withTree ControlEffect(false,false,"display_window_changed_since_observation")
-                if (action == "visual_key") visualKeyRect = start
-                else return@withTree tap(service, fresh, start, endBounds = end,
+                if (action == "visual_key") {
+                    val ime = fresh.keyboard ?: return@withTree ControlEffect(false, false, "keyboard_target_unverified")
+                    val candidate = freshKey ?: return@withTree ControlEffect(false, false, "keyboard_visual_candidate_unverified")
+                    if (VisualKeyboardPolicy.proofOwnerRefusal(latest, ime) != null ||
+                        latest.sourceDisplayId != 0 || !latest.sourceDisclosureAllowed())
+                        return@withTree ControlEffect(false, false, "keyboard_visual_owner_unverified")
+                    val key = KeyboardImageFallbackPolicy.bounds(candidate.bounds)
+                        ?: return@withTree ControlEffect(false, false, "keyboard_visual_bounds_invalid")
+                    val imeBounds = KeyboardImageFallbackPolicy.bounds(latest.imeBounds)
+                        ?: return@withTree ControlEffect(false, false, "keyboard_visual_bounds_invalid")
+                    val owned = fresh.nodes.filter { it.sourceWindowId == ime.windowId && it.sourcePackage == ime.packageName &&
+                        (it.keyboardKey.isNotEmpty() || it.keyboardImageCandidate) }
+                    val role = VisualKeyboardPolicy.identifyCandidate(candidate, ime)
+                    val neighbors = owned.filter { other ->
+                        other.id != candidate.id &&
+                            !(role != null && VisualKeyboardPolicy.identifyCandidate(other, ime) == role &&
+                                (other.bounds == candidate.bounds || other.parent == candidate.id || candidate.parent == other.id))
+                    }.mapNotNull { KeyboardImageFallbackPolicy.bounds(it.bounds) }.distinct()
+                        .filter { it.left < key.right && key.left < it.right && it.top < key.bottom && key.top < it.bottom }
+                    val layout = KeyboardTouchLayout.fingerprint(owned, imeBounds, ime)
+                    val owner = keyOwner ?: return@withTree ControlEffect(false, false, "keyboard_target_unverified")
+                    val transform = KeyboardTouchGeometry.Transform(latest.window, latest.rotation, latest.sourceDisplayId,
+                        latest.image.width, latest.image.height)
+                    val checked = KeyboardTouchGeometry.Entry(key, proposal, imeBounds, neighbors,
+                        imageLabel ?: role?.label.orEmpty(), transform)
+                    val selection = controlSpan("keyboard_touch_geometry") {
+                        keyboardTouchGeometry.select(owner, layout, checked, latest.disclosedRegions)
+                    }
+                        ?: return@withTree ControlEffect(false, false, "keyboard_touch_pixels_unverified")
+                    val patch = selection.patch
+                    if (!OwnedPixelPolicy.contains(proof.disclosedRegions, patch))
+                        return@withTree ControlEffect(false, false, "keyboard_touch_pixels_unverified")
+                    ControlDiagnostics.record("keyboard_touch_geometry", if (selection.reused) "reused" else "computed")
+                    visualKeyRect = Rect(patch.left, patch.top, patch.right, patch.bottom)
+                } else return@withTree tap(service, fresh, checkNotNull(start), endBounds = end,
                     durationMs = if (action == "visual_long_press") 650 else if (end != null) 450 else 50) {
                         if (!proof.sourceDisclosureAllowed()) "visual_source_revoked_or_expired"
                         else if (proof.scope=="display" && proof.displayGeneration!=service.remoteDisplayChanges.version()) "display_window_changed_since_observation"
@@ -994,10 +1048,15 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (field.text.length > 2000 || InputPayloadPolicy.sensitive(field.text) || (field.editable && key.kind in setOf(
                     KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE, KeyboardKeyPolicy.Kind.BACKSPACE) &&
                     KeyboardKeyPolicy.expectedText(field, key) == null)) return@withTree ControlEffect(false, false, "sensitive_input_refused")
-                val tapRect = rect
-                if (action == "visual_key" && (visualKeyRect == null || !rect.contains(visualKeyRect) || !visualKeyRect.contains(rect.centerX(), rect.centerY()) || VisualKeyboardPolicy.proofOwnerRefusal(frame.visual,fresh.keyboard) != null))
-                    return@withTree ControlEffect(false,false,"keyboard_visual_bounds_invalid")
-                return@withTree tap(service, fresh, tapRect, fresh.keyboard.windowId) {
+                val tapRect = if (action == "visual_key") {
+                    val verified = visualKeyRect ?: return@withTree ControlEffect(false, false, "keyboard_visual_bounds_invalid")
+                    if (!rect.contains(verified) || VisualKeyboardPolicy.proofOwnerRefusal(frame.visual, fresh.keyboard) != null)
+                        return@withTree ControlEffect(false, false, "keyboard_visual_bounds_invalid")
+                    verified
+                } else rect
+                return@withTree tap(service, fresh, tapRect, fresh.keyboard.windowId, requireWholePatch = action == "visual_key") {
+                    if (action == "visual_key" && service.remoteControlCovers(tapRect))
+                        return@tap "control_button_covers_target"
                     if (action=="visual_key" && frame.visual?.sourceDisclosureAllowed() != true)
                         return@tap "visual_source_revoked_or_expired"
                     if(action=="visual_key" && (!editorGenerationMatches(frame.visual,service) || editorImageRefusal(service,frame.packageName)!=null))

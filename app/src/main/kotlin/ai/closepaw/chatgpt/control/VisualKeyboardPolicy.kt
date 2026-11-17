@@ -25,7 +25,7 @@ internal object VisualKeyboardPolicy {
     fun identifyImeKey(keyboard: ControlKeyboard?, sourcePackage: String, text: String, description: String,
         className: String, childCount: Int): KeyboardKeyPolicy.Key? {
         if (KeyboardImageFallbackPolicy.trustedIme(keyboard, sourcePackage) &&
-            text.isEmpty() && description == "영어(미국)로 변경" &&
+            text.isEmpty() && description in setOf("영어(미국)로 변경", "한국어로 변경") &&
             className == "android.view.ViewGroup" && childCount == 1) {
             return KeyboardKeyPolicy.Key("한/영", KeyboardKeyPolicy.Kind.LAYOUT)
         }
@@ -67,7 +67,10 @@ internal object VisualKeyboardPolicy {
             if (scope != "keyboard") return "keyboard_image_requires_keyboard_scope"
             KeyboardImageFallbackPolicy.refusal(frame, node, imageLabel)?.let { return it }
             val literal = KeyboardImageFallbackPolicy.key(imageLabel) ?: return "keyboard_image_label_unverified"
-            return if (KeyboardKeyPolicy.expectedText(field, literal) == null) "keyboard_literal_unverified" else null
+            return if (literal.kind == KeyboardKeyPolicy.Kind.LAYOUT) {
+                if (field.selectionStart !in 0..field.text.length ||
+                    field.selectionEnd !in field.selectionStart..field.text.length) "keyboard_selection_unverified" else null
+            } else if (KeyboardKeyPolicy.expectedText(field, literal) == null) "keyboard_literal_unverified" else null
         }
         if (!node.visualKeyCandidate || imageLabel != null) return "keyboard_visual_candidate_unverified"
         val key = identifyCandidate(node, keyboard) ?: return "keyboard_key_unrecognized"
@@ -94,7 +97,8 @@ internal object VisualKeyboardPolicy {
     /** Layout widgets/suggestion words alone do not establish a keyboard change.
      * Require two disjoint existing character-key locations to change labels;
      * overlapping parent/child bounds cannot count as separate physical keys. */
-    fun literalLayoutChanged(before: ControlFrame, after: ControlFrame): Boolean {
+    fun literalLayoutChanged(before: ControlFrame, after: ControlFrame, languageSwitch: Boolean = false,
+        destination: Character.UnicodeScript? = null): Boolean {
         fun labels(frame: ControlFrame): Map<TapBounds,String> {
             val keyboard = frame.keyboard ?: return emptyMap()
             return frame.nodes.filter { it.enabled && !it.password && it.sourceWindowId == keyboard.windowId &&
@@ -109,7 +113,19 @@ internal object VisualKeyboardPolicy {
                 }.toMap()
         }
         val old = labels(before); val fresh = labels(after)
-        val changed = old.filter { (rect,label) -> fresh[rect]?.let { it != label } == true }.keys
+        fun script(label: String): Character.UnicodeScript =
+            Character.UnicodeScript.of(label.codePointAt(0))
+        val changedPairs = old.entries.mapNotNull { (rect, label) ->
+            fresh[rect]?.takeIf { it != label }?.let { rect to (script(label) to script(it)) }
+        }
+        val changed = if (!languageSwitch) changedPairs.map { it.first } else {
+            // Shift/caps and symbol pages are not a completed Korean/English switch.
+            val pair = changedPairs.map { it.second }.distinct().singleOrNull { (from, to) ->
+                (destination == null || to == destination) &&
+                    setOf(from, to) == setOf(Character.UnicodeScript.LATIN, Character.UnicodeScript.HANGUL)
+            } ?: return false
+            changedPairs.filter { it.second == pair }.map { it.first }
+        }
         if (changed.size < 2) return false
         // A disjoint pair exists iff an interval starts at/after another ends on
         // either axis. Valid rectangles ensure the extrema cannot be one rect.

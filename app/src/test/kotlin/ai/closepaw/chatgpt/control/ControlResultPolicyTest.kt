@@ -63,6 +63,14 @@ class ControlResultPolicyTest {
         assertTrue(verify(old.copy(nodes = listOf(field, q, w))))
         assertFalse(verify(old.copy(nodes = listOf(field, q, second))))
         assertFalse(verify(old.copy(nodes = listOf(field, q, w), inputTarget = field.copy(selectionEnd = -1))))
+        val english = old.copy(nodes = listOf(field, q, w))
+        val reverse = alias.copy(description = "한국어로 변경")
+        fun reverseVerdict(post: ControlFrame) = ControlResultPolicy.verify("visual_key", english, post, reverse, buildJsonObject {}).confirmed
+        assertTrue(reverseVerdict(old))
+        assertFalse(ControlResultPolicy.verify("visual_key", old, english, reverse, buildJsonObject {}).confirmed)
+        assertFalse(ControlResultPolicy.verify("visual_key", english, old, alias, buildJsonObject {}).confirmed)
+        assertFalse(reverseVerdict(english.copy(nodes = listOf(field, q.copy(text = "Q"), w.copy(text = "W")))))
+        assertFalse(reverseVerdict(english.copy(nodes = listOf(field, q.copy(text = "1"), w.copy(text = "2")))))
     }
 
     @Test fun visualKeyRequiresExactTextCaretAndSameUniqueFieldThenBackspaceRestoresIt() {
@@ -81,6 +89,11 @@ class ControlResultPolicyTest {
         }
         assertFalse(ControlResultPolicy.verify("visual_key", old, next.copy(nodes = listOf(a, a.copy(id = 9))), imageKey, input).confirmed)
         assertFalse(ControlResultPolicy.verify("visual_key", old, next, imageKey, buildJsonObject { put("image_key_label", "↵") }).confirmed)
+        val withSpace = a.copy(text = "a ", selectionStart = 2, selectionEnd = 2)
+        val autoCompleted = a.copy(text = "a suggested.com", selectionStart = 2, selectionEnd = 15)
+        val space = buildJsonObject { put("image_key_label", "Space") }
+        assertTrue(ControlResultPolicy.verify("visual_key", next, old.copy(nodes = listOf(withSpace), inputTarget = withSpace), imageKey, space).confirmed)
+        assertFalse(ControlResultPolicy.verify("visual_key", next, old.copy(nodes = listOf(autoCompleted), inputTarget = autoCompleted), imageKey, space).confirmed)
         val backspace = ControlNode(9, text = "Backspace", keyboardKey = "Backspace")
         assertTrue(ControlResultPolicy.verify("visual_key", next, old, backspace, buildJsonObject {}).confirmed)
     }
