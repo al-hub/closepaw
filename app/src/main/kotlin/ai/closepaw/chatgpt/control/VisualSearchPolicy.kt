@@ -24,7 +24,11 @@ internal object VisualSearchPolicy {
         }.getOrNull() ?: return false
         return url.scheme == "https" && url.rawUserInfo == null && url.port == -1 &&
             url.host in setOf("google.com", "www.google.com") &&
-            url.rawPath in setOf("", "/", "/webhp") && url.rawFragment == null
+            url.rawPath in setOf("", "/", "/webhp") &&
+            // Google mobile adds this exact same-document marker when the
+            // web search field gets focus. Do not admit a non-empty pi
+            // value, encoded variant, or arbitrary fragment parameters.
+            (url.rawFragment == null || url.rawFragment == "sbfbu=1&pi=")
     }
 
     fun address(frame: ControlFrame): ControlNode? = frame.nodes.singleOrNull {

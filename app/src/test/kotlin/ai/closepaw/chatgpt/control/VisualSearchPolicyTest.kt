@@ -54,6 +54,22 @@ class VisualSearchPolicyTest {
             key.copy(id = 4, bounds = "70 150 90 200")), key, "keyboard", input = approval()))
     }
 
+    @Test fun exactGoogleFocusedFormMarkerDoesNotRelaxTheSearchGate() {
+        fun withAddress(address: String) = frame.copy(nodes = listOf(editor, bar.copy(text = address), key) + letterKeys)
+        val focused = withAddress("www.google.com/#sbfbu=1&pi=")
+        assertNull(VisualKeyboardPolicy.refusal(focused, key, "keyboard", input = approval()))
+        assertEquals("submission_authorization_required", VisualKeyboardPolicy.refusal(focused, key, "keyboard"))
+        assertEquals("keyboard_search_query_unverified",
+            VisualKeyboardPolicy.refusal(focused, key, "keyboard", input = approval("sample전망")))
+        for (address in listOf("www.google.com/#unknown", "www.google.com/#sbfbu=1&pi=other",
+            "www.google.com/#sbfbu=1&pi=&next=", "www.google.com/#sbfbu=1&%70i=",
+            "www.google.com/search#sbfbu=1&pi=", "www.google.com.example/#sbfbu=1&pi=",
+            "http://www.google.com/#sbfbu=1&pi=")) {
+            assertEquals(address, "keyboard_search_target_unverified",
+                VisualKeyboardPolicy.refusal(withAddress(address), key, "keyboard", input = approval()))
+        }
+    }
+
     @Test fun partialPixelsNeedOneSafeInteriorPatchAndNeverOverlapOtherKeys() {
         val key = TapBounds(80, 160, 100, 200)
         val viewport = TapBounds(0, 100, 100, 200)
