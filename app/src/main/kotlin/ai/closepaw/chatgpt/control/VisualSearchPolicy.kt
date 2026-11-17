@@ -73,17 +73,3 @@ internal object VisualSearchPolicy {
             "keyboard_search_query_unverified" else null
     }
 }
-
-/** In the serialized UI executor, reserve before native dispatch. Cancellation
- * or an exception is not proof of no effect. Do not persist query text. */
-internal class VisualSearchOnce {
-    private var session: String? = null
-    fun reserve(id: String): Boolean {
-        if (session == id) return false
-        session = id
-        return true
-    }
-    fun releaseIfNoEffect(id: String, attempted: Boolean) {
-        if (!attempted && session == id) session = null
-    }
-}

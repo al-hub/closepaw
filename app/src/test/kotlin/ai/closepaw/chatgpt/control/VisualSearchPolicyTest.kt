@@ -83,7 +83,7 @@ class VisualSearchPolicyTest {
                 if (attempts++ == 0) ControlEffect(false, false, "visual_pixels_or_geometry_changed")
                 else ControlEffect(true, true, "gesture_completed")
         }
-        val control = GenericControl(port, { true })
+        var control = GenericControl(port, { true })
         suspend fun request(): JsonObject {
             val seen = control.observe(includeImage = true, imageScope = "keyboard", keyboardKeyExact = "검색")
             return buildJsonObject {
@@ -105,7 +105,13 @@ class VisualSearchPolicyTest {
         assertEquals(JsonPrimitive(true), pending.data["outcome_unknown"])
         assertEquals(JsonPrimitive(false), pending.data["app_result_verified"])
         control.invalidate()
+        // A replacement MCP executor attaches to the same accessibility session.
+        control = GenericControl(port, { true })
         assertEquals("keyboard_search_replay_refused", control.action(request()).summary)
         assertEquals(2, attempts)
+        session.end()
+        assertTrue(session.start())
+        assertEquals(JsonPrimitive(true), control.action(request()).data["action_attempted"])
+        assertEquals(3, attempts)
     }
 }

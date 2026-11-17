@@ -136,7 +136,6 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     private var current: Observation? = null
     private data class PendingTerminal(val proof: TerminalSubmission, val frame: ControlFrame, val node: ControlNode, val epoch: Long, val at: Long)
     private var pendingTerminal: PendingTerminal? = null
-    private val visualSearchOnce = VisualSearchOnce()
     private var chainStarted = 0L
     private var chainActions = 0
     private var noProgress = 0
@@ -377,14 +376,16 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val visualEpoch = port.session()?.epoch
         port.presentation(ControlSession.VisualPhase.EXECUTING, visualEpoch)
         val searchSession = if (visualSearch) {
-            val active = port.session()?.takeIf { it.explicit && it.state == ControlSession.State.ACTIVE &&
-                input["session_id"]?.jsonPrimitive?.content == it.id && it.epoch == observation.epoch }
+            val requestedSession = input["session_id"]?.jsonPrimitive?.content
                 ?: return failure("explicit_active_session_required")
-            if (!visualSearchOnce.reserve(active.id)) return failure("keyboard_search_replay_refused")
-            active.id
+            val active = port.session()?.takeIf { it.explicit && it.state == ControlSession.State.ACTIVE &&
+                requestedSession == it.id && it.epoch == observation.epoch }
+                ?: return failure("explicit_active_session_required")
+            if (!active.reserveVisualSearch(requestedSession, observation.epoch)) return failure("keyboard_search_replay_refused")
+            active to requestedSession
         } else null
         val effect = controlSpan("native_action") { port.perform(frame, input, node) }
-        if (searchSession != null) visualSearchOnce.releaseIfNoEffect(searchSession, effect.attempted)
+        searchSession?.let { (session, id) -> session.releaseVisualSearchIfNotAttempted(id, effect.attempted) }
         val performedAtNs = System.nanoTime()
         // After an attempted action even a negative native acknowledgement is not proof of no effect.
         val post = if (effect.attempted) controlSpan("post_observation") { port.captureAfter(frame, input).copy(visual = null) } else null
