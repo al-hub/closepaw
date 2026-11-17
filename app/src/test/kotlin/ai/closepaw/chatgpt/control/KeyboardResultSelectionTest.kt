@@ -37,4 +37,30 @@ class KeyboardResultSelectionTest {
             assertFalse(verify(action, "ㄱ", 1, 1, "ㅏ", "가", 0, 0))
         }
     }
+
+    @Test fun firstVisualCharacterToleratesOnlyUniqueOwnedWebEditorResizing() {
+        val pkg = "com.android.chrome"
+        val ime = ControlKeyboard(2, "ime", "ime/.Ime")
+        val field = ControlNode(6, parent = 5, className = "android.widget.EditText",
+            bounds = "10 100 300 150", sourceWindowId = 1, sourcePackage = pkg, editable = true,
+            focused = true, focusable = true, selectionStart = 0, selectionEnd = 0, webEditorContainer = 2)
+        val key = ControlNode(9, text = "n", keyboardKey = "n", visualKeyCandidate = true,
+            sourceWindowId = ime.windowId, sourcePackage = ime.packageName)
+        val before = ControlFrame(pkg, 1, "before", listOf(field, key), windowContext = "same",
+            keyboard = ime, inputTarget = field, inputTargetId = field.id)
+        val resized = field.copy(bounds = "10 100 245 150", text = "n", selectionStart = 1, selectionEnd = 1)
+        fun verify(next: ControlNode, additional: List<ControlNode> = emptyList(), win: String = "same"): Boolean {
+            val after = before.copy(fingerprint = "after", nodes = listOf(next, key) + additional,
+                inputTarget = next, inputTargetId = next.id, windowContext = win)
+            return ControlResultPolicy.verify("visual_key", before, after, key, buildJsonObject {}).confirmed
+        }
+        assertTrue(verify(resized))
+        assertFalse(verify(resized.copy(parent = 16)))
+        assertFalse(verify(resized.copy(webEditorContainer = 22)))
+        assertFalse(verify(resized.copy(bounds = "10 160 245 200")))
+        assertFalse(verify(resized.copy(text = "nv")))
+        assertFalse(verify(resized.copy(selectionStart = 0)))
+        assertFalse(verify(resized, listOf(resized.copy(id = 22))))
+        assertFalse(verify(resized, win = "other"))
+    }
 }

@@ -48,6 +48,21 @@ internal class KeyboardImageFallbackOcr {
             ControlDiagnostics.record("keyboard_role_image", "reused")
             return@withContext proof.sourceDisclosureAllowed()
         }
+        if (expected == "Space") {
+            val pixels = IntArray(bitmap.width * bitmap.height)
+            bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+            for (i in pixels.indices) {
+                val p = pixels[i]
+                pixels[i] = (77 * (p shr 16 and 255) + 150 * (p shr 8 and 255) + 29 * (p and 255)) shr 8
+            }
+            if (SpaceBarGlyphPolicy.matches(bitmap.width, bitmap.height, pixels)) {
+                bitmap.recycle()
+                if (!proof.sourceDisclosureAllowed()) return@withContext false
+                remember(current, digest)
+                ControlDiagnostics.record("keyboard_role_image", "space_glyph")
+                return@withContext true
+            }
+        }
         val client = try { TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build()) }
             catch (_: RuntimeException) { bitmap.recycle(); return@withContext false }
         // ML Kit owns the bitmap until completion, including cancellation/timeout.

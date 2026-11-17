@@ -536,7 +536,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             var visited = 0
             var deepest = 0
             val truncationReasons = linkedSetOf<String>()
-            fun visit(node: AccessibilityNodeInfo, depth: Int, parent: Int, expose: Boolean, keyboard: Boolean = false) {
+            fun visit(node: AccessibilityNodeInfo, depth: Int, parent: Int, expose: Boolean, keyboard: Boolean = false,
+                webEditorContainer: Int = -1) {
                 deepest = maxOf(deepest, depth)
                 if (depth > 64 || visited >= nodeBudget || SystemClock.elapsedRealtime() - scanStarted > 2500) {
                     truncated = true
@@ -555,13 +556,19 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     VisualKeyboardPolicy.identifyImeKey(selected.keyboard, node.packageName?.toString().orEmpty(),
                         text, description, node.className?.toString().orEmpty(), node.childCount) else null
                 val labelEvidence = if (keyboard) KeyboardKeyPolicy.identifyLabel(text, description) ?: visualKey else null
-                val imageCandidate = keyboard && labelEvidence == null &&
-                    (KeyboardImageFallbackPolicy.trustedIme(selected.keyboard, node.packageName?.toString().orEmpty()) ||
-                        (node.isTextEntryKey && selected.keyboard?.packageName == node.packageName?.toString())) &&
+                val className = node.className?.toString().orEmpty()
+                val ownKeyboardNode = selected.keyboard?.packageName == node.packageName?.toString() &&
+                    selected.keyboard?.windowId == node.windowId
+                val imageCandidate = keyboard && labelEvidence == null && ownKeyboardNode &&
                     !node.isPassword && (Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive) &&
-                    KeyboardImageFallbackPolicy.nodeShape(text, description, node.className?.toString().orEmpty(),
+                    ((rect.width().toLong() * 2 >= rect.height().toLong() * 3 &&
+                        KeyboardImageFallbackPolicy.spaceBoundary(text, description, className, node.childCount)) ||
+                    ((node.isTextEntryKey || KeyboardImageFallbackPolicy.trustedIme(selected.keyboard, node.packageName?.toString().orEmpty())) &&
+                    KeyboardImageFallbackPolicy.nodeShape(text, description, className,
                         node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
-                        node.isTextEntryKey, node.childCount)
+                        node.isTextEntryKey, node.childCount)))
+                val webContainer = if (!keyboard && node.packageName?.toString() == pkg &&
+                    node.windowId == selected.selection.target && className == "android.webkit.WebView") index else webEditorContainer
                 if (keyboard) keyboardScan.record(text, description, node.className?.toString().orEmpty(),
                     node.isVisibleToUser, node.isEnabled, node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
                     node.isTextEntryKey, key != null)
@@ -605,7 +612,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                             visualKeyCandidate = visualKey != null,
                             terminal = terminalBinding?.evidence(node),
                             visualKeyChildCount = if (visualKey != null || imageCandidate) node.childCount else -1,
-                            keyboardImageCandidate = imageCandidate))
+                            keyboardImageCandidate = imageCandidate, webEditorContainer = webContainer))
                         native.add(node)
                     }
                 }
@@ -616,7 +623,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     }
                     val child = node.getChild(i)
                     if (child == null) { truncated = true; truncationReasons.add("child_unavailable"); continue }
-                    owned.add(child); visit(child, depth + 1, index, expose, keyboard)
+                    owned.add(child); visit(child, depth + 1, index, expose, keyboard, webContainer)
                 }
             }
             var traversalFailure: String? = null
@@ -892,7 +899,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     System.currentTimeMillis()-proof.at !in 0L..60_000L) return@withTree ControlEffect(false,false,"visual_proof_invalid_or_expired")
                 if (!VisualActionPolicy.scopeAllowed(action,proof.scope)) return@withTree ControlEffect(false,false,"visual_scope_mismatch")
                 val freshKey = fresh.nodes.singleOrNull { it.id == node?.id }
-                if (action == "visual_key") VisualKeyboardPolicy.refusal(fresh, freshKey, proof.scope, imageLabel)?.let {
+                if (action == "visual_key") VisualKeyboardPolicy.refusal(fresh, freshKey, proof.scope, imageLabel, input)?.let {
                     return@withTree ControlEffect(false,false,it)
                 }
                 fun imageRect(prefix: String): TapBounds? {
@@ -1100,7 +1107,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                                     target.packageName?.toString() != expectedPackage || keyBounds != rect ||
                                     target.text?.toString().orEmpty() != expected.text ||
                                     target.contentDescription?.toString().orEmpty().take(100) != expected.description ||
-                                    (imageOnlyKey && !KeyboardImageFallbackPolicy.nodeShape(target.text?.toString().orEmpty(),
+                                    (imageOnlyKey && !(imageLabel == "Space" && KeyboardImageFallbackPolicy.spaceBoundary(
+                                        target.text?.toString().orEmpty(), target.contentDescription?.toString().orEmpty(),
+                                        target.className?.toString().orEmpty(), target.childCount)) &&
+                                        !KeyboardImageFallbackPolicy.nodeShape(target.text?.toString().orEmpty(),
                                         target.contentDescription?.toString().orEmpty(), target.className?.toString().orEmpty(),
                                         target.isClickable || target.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
                                         target.isTextEntryKey, target.childCount)) ||

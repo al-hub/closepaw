@@ -54,7 +54,7 @@ internal data class ControlNode(val id: Int, val text: String = "", val descript
     val scrollDirections: Set<String> = emptySet(), val sourceWindowId: Int = -1,
     val sourcePackage: String = "", val keyboardKey: String = "", val textEntryKey: Boolean = false, val visualKeyCandidate: Boolean = false, val terminal: TerminalEvidence? = null,
     val visualKeyChildCount: Int = -1, val keyboardCursorGeneration: Long? = null,
-    val keyboardImageCandidate: Boolean = false) {
+    val keyboardImageCandidate: Boolean = false, val webEditorContainer: Int = -1) {
     fun json() = buildJsonObject {
         put("terminal_input_supported", terminal != null)
         if (terminal != null) {
@@ -136,6 +136,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     private var current: Observation? = null
     private data class PendingTerminal(val proof: TerminalSubmission, val frame: ControlFrame, val node: ControlNode, val epoch: Long, val at: Long)
     private var pendingTerminal: PendingTerminal? = null
+    private val visualSearchOnce = VisualSearchOnce()
     private var chainStarted = 0L
     private var chainActions = 0
     private var noProgress = 0
@@ -320,6 +321,10 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
         val node = frame.nodes.singleOrNull { it.id == id }
+        val visualSearch = action == "visual_key" && node?.let {
+            VisualSearchPolicy.isSearch(VisualKeyboardPolicy.identifyCandidate(it, frame.keyboard))
+        } == true
+        if ("expected_search_query" in input && !visualSearch) return failure("keyboard_search_query_unexpected")
         if (action in setOf("click", "tap", "long_press", "type", "input", "terminal_input", "terminal_submit", "focus", "key", "visual_key", "scroll", "expand", "collapse")) {
             if (id == null) return failure("node_id_required")
             if (node == null) return failure("target_not_in_observation")
@@ -330,7 +335,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             if ((node.keyboardKey.isNotEmpty() || node.keyboardImageCandidate) && action !in setOf("key", "visual_key"))
                 return failure("keyboard_key_action_required")
             if (action == "visual_key") {
-                VisualKeyboardPolicy.refusal(observation.verificationFrame, node, frame.visual?.scope.orEmpty(), imageLabel)
+                VisualKeyboardPolicy.refusal(observation.verificationFrame, node, frame.visual?.scope.orEmpty(), imageLabel, input)
                     ?.let { return failure(it) }
             }
             if (action == "key") {
@@ -371,7 +376,15 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val validatedAtNs = System.nanoTime()
         val visualEpoch = port.session()?.epoch
         port.presentation(ControlSession.VisualPhase.EXECUTING, visualEpoch)
+        val searchSession = if (visualSearch) {
+            val active = port.session()?.takeIf { it.explicit && it.state == ControlSession.State.ACTIVE &&
+                input["session_id"]?.jsonPrimitive?.content == it.id && it.epoch == observation.epoch }
+                ?: return failure("explicit_active_session_required")
+            if (!visualSearchOnce.reserve(active.id)) return failure("keyboard_search_replay_refused")
+            active.id
+        } else null
         val effect = controlSpan("native_action") { port.perform(frame, input, node) }
+        if (searchSession != null) visualSearchOnce.releaseIfNoEffect(searchSession, effect.attempted)
         val performedAtNs = System.nanoTime()
         // After an attempted action even a negative native acknowledgement is not proof of no effect.
         val post = if (effect.attempted) controlSpan("post_observation") { port.captureAfter(frame, input).copy(visual = null) } else null

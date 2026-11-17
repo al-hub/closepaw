@@ -1,9 +1,11 @@
 package ai.closepaw.chatgpt.control
 
+import kotlinx.serialization.json.JsonObject
+
 /** A native label is corroborating evidence, never a substitute for reading the
  * separate OS-selected IME image. Named layout controls require a preserved
- * focused field and changed literal keys. Submission and IME picker controls
- * are excluded. This does not relax semantic-key admission. */
+ * focused field and changed literal keys. Only an explicit Search role can
+ * reach the separate visual search policy. This does not relax semantic-key admission. */
 internal object VisualKeyboardPolicy {
     /** Reading a verified IME surface does not grant permission to press keys. */
     fun imageReadRefusal(keyboard: ControlKeyboard?, runtimeReadAllowed: Boolean, requiresTarget: Boolean, targetPresent: Boolean): String? =
@@ -29,7 +31,8 @@ internal object VisualKeyboardPolicy {
             className == "android.view.ViewGroup" && childCount == 1) {
             return KeyboardKeyPolicy.Key("한/영", KeyboardKeyPolicy.Kind.LAYOUT)
         }
-        return identify(text, description)
+        return identify(text, description) ?: if (keyboard?.packageName == sourcePackage)
+            VisualSearchPolicy.role(text, description, className, childCount) else null
     }
 
     fun identifyCandidate(node: ControlNode, keyboard: ControlKeyboard?): KeyboardKeyPolicy.Key? =
@@ -51,7 +54,8 @@ internal object VisualKeyboardPolicy {
         else -> "keyboard_visual_owner_unverified"
     }
 
-    fun refusal(frame: ControlFrame, node: ControlNode?, scope: String, imageLabel: String? = null): String? {
+    fun refusal(frame: ControlFrame, node: ControlNode?, scope: String, imageLabel: String? = null,
+        input: JsonObject? = null): String? {
         if (scope !in setOf("keyboard", "display")) return "keyboard_visual_required"
         val keyboard = frame.keyboard ?: return "keyboard_target_unverified"
         if (!keyboard.readAllowed || !keyboard.interactAllowed) return "keyboard_interaction_not_authorized"
@@ -74,10 +78,18 @@ internal object VisualKeyboardPolicy {
         }
         if (!node.visualKeyCandidate || imageLabel != null) return "keyboard_visual_candidate_unverified"
         val key = identifyCandidate(node, keyboard) ?: return "keyboard_key_unrecognized"
-        if (key.label != node.keyboardKey || (key.kind != KeyboardKeyPolicy.Kind.LAYOUT && KeyboardKeyPolicy.expectedText(field,key) == null))
+        if (key.label != node.keyboardKey)
+            return "keyboard_literal_unverified"
+        if (VisualSearchPolicy.isSearch(key)) VisualSearchPolicy.refusal(frame, scope, input)?.let { return it }
+        else if (key.kind != KeyboardKeyPolicy.Kind.LAYOUT && KeyboardKeyPolicy.expectedText(field,key) == null)
             return "keyboard_literal_unverified"
         val target = bounds(node.bounds) ?: return "keyboard_visual_bounds_invalid"
         val (x,y) = target.center
+        if (VisualSearchPolicy.isSearch(key) && frame.nodes.any {
+                it.id != node.id && it.enabled && !it.password &&
+                    it.sourceWindowId == keyboard.windowId && it.sourcePackage == keyboard.packageName &&
+                    VisualSearchPolicy.isSearch(identifyCandidate(it, keyboard)) && bounds(it.bounds) != target
+            }) return "keyboard_search_ambiguous"
         if (key.kind == KeyboardKeyPolicy.Kind.LAYOUT) {
             if (field.selectionStart !in 0..field.text.length || field.selectionEnd !in field.selectionStart..field.text.length)
                 return "keyboard_selection_unverified"
