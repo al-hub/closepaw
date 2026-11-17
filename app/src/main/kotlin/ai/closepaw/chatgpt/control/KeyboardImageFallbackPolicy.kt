@@ -16,6 +16,12 @@ internal object KeyboardImageFallbackPolicy {
             (clickable && textEntryKey && childCount in 0..1 &&
                 className in setOf("android.widget.Button", "android.view.ViewGroup")))
 
+    // These bounds are proposals only. A blank native leaf/wrapper does not
+    // establish a key, much less the space role.
+    fun spaceBoundary(text: String, description: String, className: String, childCount: Int): Boolean =
+        text.isEmpty() && description.isEmpty() && childCount in 0..1 &&
+            className in setOf("android.view.View", "android.view.ViewGroup", "android.widget.Button")
+
     fun key(label: String?): KeyboardKeyPolicy.Key? {
         if (label == null) return null
         return when (label) {
@@ -40,10 +46,13 @@ internal object KeyboardImageFallbackPolicy {
             ime.inputMethodId.contains('/') && ime.inputMethodId.substringBefore('/') == ime.packageName &&
                 node.keyboardImageCandidate && node.enabled && !node.password && node.parent >= 0 &&
                 node.sourceWindowId == ime.windowId && node.sourcePackage == ime.packageName &&
-                node.keyboardKey.isEmpty() && nodeShape(node.text, node.description, node.className,
-                    node.clickable, node.textEntryKey, node.visualKeyChildCount) &&
-                (node.clickable && node.textEntryKey || trustedIme(ime, node.sourcePackage))
+                node.keyboardKey.isEmpty() && (spaceBoundary(node.text, node.description, node.className, node.visualKeyChildCount) ||
+                    legacyShape(ime, node))
         } == true
+
+    private fun legacyShape(ime: ControlKeyboard?, node: ControlNode): Boolean =
+        nodeShape(node.text, node.description, node.className, node.clickable, node.textEntryKey, node.visualKeyChildCount) &&
+            (node.clickable && node.textEntryKey || trustedIme(ime, node.sourcePackage))
 
     private data class OwnedKey(val rect: TapBounds, val key: KeyboardKeyPolicy.Key)
 
@@ -83,11 +92,25 @@ internal object KeyboardImageFallbackPolicy {
         }
         val disjointAbove = narrowKeysAbove.isNotEmpty() &&
             narrowKeysAbove.maxOf { it.left } >= narrowKeysAbove.minOf { it.right }
-        val wideBottomSlot = left != null && right != null && disjointAbove &&
+        // Neighboring controls can themselves lack labels. Require verified
+        // native boundaries on both sides, at least one known same-row role,
+        // and two disjoint narrower alphabet/number keys in the row above.
+        val ime = frame.keyboard ?: return false
+        val sideBounds = row.map { it.rect } + frame.nodes.mapNotNull { other ->
+            if (other.id == node.id || other.parent != node.parent || !nativeShape(frame, other)) return@mapNotNull null
+            bounds(other.bounds)?.takeIf {
+                kotlin.math.abs(it.center.second - target.center.second) <= h / 6 &&
+                    it.bottom - it.top in (h * 3 / 4)..(h * 5 / 4) &&
+                    (it.right - it.left).toLong() * 2 < w
+            }
+        }
+        val wideBottomSlot = (left != null || right != null) && disjointAbove &&
+            sideBounds.any { target.left - it.right in 0..h } &&
+            sideBounds.any { it.left - target.right in 0..h } &&
             anchors.none { it.key.kind == KeyboardKeyPolicy.Kind.CHARACTER && it.rect.top >= target.bottom }
-        val literalRow = node.clickable && node.textEntryKey && left != null && right != null &&
+        val literalRow = legacyShape(ime, node) && node.clickable && node.textEntryKey && left != null && right != null &&
             left.key.kind == KeyboardKeyPolicy.Kind.CHARACTER && right.key.kind == KeyboardKeyPolicy.Kind.CHARACTER
-        val edgeControl = node.clickable && node.textEntryKey &&
+        val edgeControl = legacyShape(ime, node) && node.clickable && node.textEntryKey &&
             (left?.key?.kind == KeyboardKeyPolicy.Kind.CHARACTER || right?.key?.kind == KeyboardKeyPolicy.Kind.CHARACTER)
         return when (wanted?.kind) {
             KeyboardKeyPolicy.Kind.SPACE -> wideBottomSlot
@@ -112,7 +135,7 @@ internal object KeyboardImageFallbackPolicy {
      * literal sequence. This is role evidence and cannot authorize any gesture. */
     fun slotLabel(frame: ControlFrame, node: ControlNode): String? {
         val ime = frame.keyboard ?: return null
-        if (!nativeShape(frame, node) || !trustedIme(ime, node.sourcePackage)) return null
+        if (!nativeShape(frame, node) || !legacyShape(ime, node) || !trustedIme(ime, node.sourcePackage)) return null
         val target = bounds(node.bounds) ?: return null
         val w = target.right - target.left
         val h = target.bottom - target.top

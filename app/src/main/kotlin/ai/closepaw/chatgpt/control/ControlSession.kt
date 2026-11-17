@@ -98,11 +98,24 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
     var interrupt: () -> Unit = {}
     var label: String = if (state == State.PAUSED) "사용자 제어 중 · 일시정지" else "AI 제어 준비"
         private set
+    // The Android accessibility session can survive MCP runtime replacement.
+    // Keep the no-replay latch here, never in a per-runtime executor.
+    private var visualSearchReserved = false
+    @Synchronized fun reserveVisualSearch(expectedId: String, expectedEpoch: Long): Boolean {
+        if (!explicit || state != State.ACTIVE || id != expectedId ||
+            epoch != expectedEpoch || visualSearchReserved) return false
+        visualSearchReserved = true
+        return true
+    }
+    @Synchronized fun releaseVisualSearchIfNotAttempted(expectedId: String, attempted: Boolean) {
+        if (id == expectedId && !attempted) visualSearchReserved = false
+    }
     @Synchronized fun start(): Boolean {
         if (state !in setOf(State.IDLE, State.ENDED)) return false
         id = UUID.randomUUID().toString(); explicit = true
         userActionRevision = 0; lastUserAction = null
         shareRequestState = null
+        visualSearchReserved = false
         transition(State.ACTIVE, "AI 제어 중")
         return true
     }

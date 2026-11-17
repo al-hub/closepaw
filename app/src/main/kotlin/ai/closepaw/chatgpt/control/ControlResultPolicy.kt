@@ -6,6 +6,9 @@ import kotlinx.serialization.json.*
 internal object ControlResultPolicy {
     data class Verdict(val confirmed: Boolean, val reason: String, val goalVerified: Boolean = false)
     fun verify(action: String, before: ControlFrame, after: ControlFrame?, node: ControlNode?, input: JsonObject): Verdict {
+        if (action == "visual_key" && node != null &&
+            VisualSearchPolicy.isSearch(VisualKeyboardPolicy.identifyCandidate(node, before.keyboard)))
+            return Verdict(false, "keyboard_search_results_require_readonly_verification")
         if (after == null || after.reason != null) return Verdict(false, "post_observation_unavailable")
         if (action == "open_app") return Verdict(after.matchesApplication(input["package_name"]?.jsonPrimitive?.content),
             "target_app_not_observed", true)
@@ -25,10 +28,13 @@ internal object ControlResultPolicy {
                 other.sourceWindowId == field.sourceWindowId && other.sourcePackage == field.sourcePackage
             // A clear affordance can resize an editor after a literal changes its
             // text. Document the same target by unique owned native resource in
-            // both complete frames. Anonymous fields still require exact bounds.
+            // both complete frames. A first character may shrink a web input
+            // horizontally when a clear button appears. That read-only
+            // exception does not change the native pre-dispatch identity.
             val sameField = candidate != null && sameIdentity(candidate) && if (field.resourceId.isNotEmpty()) {
                 before.nodes.count(::sameIdentity) == 1 && after.nodes.count(::sameIdentity) == 1
-            } else candidate.bounds == field.bounds
+            } else candidate.bounds == field.bounds || (action == "visual_key" && key.kind == KeyboardKeyPolicy.Kind.CHARACTER &&
+                anonymousWebFirstKey(before, after, field, candidate))
             if (key.kind == KeyboardKeyPolicy.Kind.LAYOUT) {
                 val beforeKeys = before.nodes.filter { it.sourceWindowId == before.keyboard.windowId &&
                     KeyboardKeyPolicy.identify(it.text,it.description,it.className,it.clickable,it.textEntryKey) != null }.map { it.keyboardKey }.filter { it.isNotEmpty() }.sorted()
@@ -98,6 +104,23 @@ internal object ControlResultPolicy {
             "checked_state_unconfirmed", true)
         val changed = before.packageName != after.packageName || before.windowId != after.windowId || before.fingerprint != after.fingerprint
         return Verdict(changed, "no_visible_change")
+    }
+
+    private fun anonymousWebFirstKey(before: ControlFrame, after: ControlFrame, old: ControlNode, fresh: ControlNode): Boolean {
+        if (before.packageName != "com.android.chrome" || before.foregroundWindowId != after.foregroundWindowId ||
+            before.windowContext != after.windowContext || old.sourcePackage != before.packageName || old.sourceWindowId != before.windowId ||
+            old.text.isNotEmpty() || old.selectionStart != 0 || old.selectionEnd != 0 ||
+            old.webEditorContainer < 0 || fresh.webEditorContainer != old.webEditorContainer ||
+            old.parent < 0 || old.parent != fresh.parent || fresh.resourceId.isNotEmpty()) return false
+        fun sole(frame: ControlFrame, node: ControlNode) = frame.nodes.singleOrNull {
+            it.sourcePackage == frame.packageName && it.sourceWindowId == frame.windowId && it.focused &&
+                it.focusable && it.editable && it.enabled && !it.password
+        }?.id == node.id
+        val a = KeyboardImageFallbackPolicy.bounds(old.bounds) ?: return false
+        val b = KeyboardImageFallbackPolicy.bounds(fresh.bounds) ?: return false
+        return sole(before, old) && sole(after, fresh) && a.top == b.top && a.bottom == b.bottom &&
+            (a.left == b.left || a.right == b.right) &&
+            2L * (minOf(a.right, b.right) - maxOf(a.left, b.left)) >= maxOf(a.right - a.left, b.right - b.left)
     }
 }
 

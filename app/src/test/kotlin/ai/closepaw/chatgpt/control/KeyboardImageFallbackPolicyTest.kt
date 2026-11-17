@@ -99,6 +99,20 @@ class KeyboardImageFallbackPolicyTest {
             candidate, "keyboard", "ㅎ"))
     }
 
+    @Test fun labelFreeSpaceBoundaryIsProposedBeforePixelRoleVerification() {
+        val space = target.copy(bounds = "50 165 140 205", clickable = false, textEntryKey = false,
+            className = "android.view.View", visualKeyChildCount = 0)
+        val blankNeighbor = space.copy(id = 10, bounds = "26 165 49 205")
+        val characters = listOf(label(5, ".", "145 165 170 205"), label(6, "ㅁ", "54 118 77 158"),
+            label(7, "ㄴ", "79 118 102 158"))
+        val arranged = frame.copy(nodes = listOf(field, space, blankNeighbor) + characters)
+        assertTrue(KeyboardImageFallbackPolicy.canPropose(arranged, space))
+        assertNull(VisualKeyboardPolicy.refusal(arranged, space, "keyboard", "Space"))
+        assertNotNull(VisualKeyboardPolicy.refusal(arranged, space, "keyboard", "검색"))
+        assertFalse(KeyboardImageFallbackPolicy.canPropose(arranged.copy(nodes = arranged.nodes - blankNeighbor), space))
+        assertFalse(KeyboardImageFallbackPolicy.canPropose(arranged.copy(nodes = arranged.nodes - characters.last()), space))
+    }
+
     @Test fun cropRefusesAnyMaskedOrUncertifiedInteriorPixels() {
         val screen = TapBounds(100, 400, 200, 500)
         val proof = VisualTargetProof(
