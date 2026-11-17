@@ -73,11 +73,13 @@ class VisualKeyboardPolicyTest {
             samsungFrame.copy(inputTarget = field.copy(selectionStart = -1, selectionEnd = -1)), alias, "keyboard"))
         for (wrong in listOf(alias.copy(visualKeyChildCount = 0), alias.copy(className = "android.widget.Button"),
             alias.copy(sourcePackage = "another.ime"), alias.copy(text = "a"),
-            alias.copy(description = "한국어로 변경"), alias.copy(description = "영어(미국)로 변경!"))) {
+            alias.copy(description = "한국어로 변경!"), alias.copy(description = "영어(미국)로 변경!"))) {
             assertNull(VisualKeyboardPolicy.identifyCandidate(wrong, samsung))
         }
         assertNull(VisualKeyboardPolicy.identifyCandidate(alias, samsung.copy(inputMethodId = "com.samsung.android.honeyboard/.Other")))
         assertNull(VisualKeyboardPolicy.identifyCandidate(alias, keyboard))
+        assertEquals(KeyboardKeyPolicy.Key("한/영", KeyboardKeyPolicy.Kind.LAYOUT),
+            VisualKeyboardPolicy.identifyCandidate(alias.copy(description = "한국어로 변경"), samsung))
     }
     @Test fun duplicateAncestorLabelsCanOnlyCorroborateTheSamePurpose() {
         assertNull(VisualKeyboardPolicy.refusal(frame.copy(nodes=frame.nodes+key.copy(id=3,parent=2)),key,"keyboard"))

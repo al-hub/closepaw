@@ -31,14 +31,18 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
         put("window_bounds", "${window.left} ${window.top} ${window.right} ${window.bottom}")
         put("coordinate_space", "snapshot_image_pixels"); put("expires_in_ms", if (image.source == ai.closepaw.model.ScreenImageSource.MEDIA_PROJECTION) 10_000 else 60_000)
     }
-    fun map(rect: TapBounds): TapBounds? {
+    fun mapGeometry(rect: TapBounds): TapBounds? {
         if (scope == "screen_observe") return null
         if (image.width <= 0 || image.height <= 0 || !TapBounds(0, 0, image.width, image.height).contains(rect)) return null
         val w = window.right - window.left; val h = window.bottom - window.top
         fun x(v: Int) = window.left + (v.toLong() * w / image.width).toInt()
         fun y(v: Int) = window.top + (v.toLong() * h / image.height).toInt()
-        return TapBounds(x(rect.left), y(rect.top), x(rect.right), y(rect.bottom)).takeIf { window.contains(it) &&
-            (scope !in setOf("display", "keyboard") || (scope == "keyboard" && sourceDisplayId < 0 && disclosedRegions.isEmpty()) || OwnedPixelPolicy.contains(disclosedRegions,it)) }
+        return TapBounds(x(rect.left), y(rect.top), x(rect.right), y(rect.bottom)).takeIf(window::contains)
+    }
+    fun map(rect: TapBounds): TapBounds? = mapGeometry(rect)?.takeIf {
+        scope !in setOf("display", "keyboard") ||
+            (scope == "keyboard" && sourceDisplayId < 0 && disclosedRegions.isEmpty()) ||
+            OwnedPixelPolicy.contains(disclosedRegions, it)
     }
 }
 /** At most two private screenshots, memory only. Retrieval rechecks live consent/

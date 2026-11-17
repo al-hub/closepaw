@@ -55,23 +55,59 @@ class KeyboardImageFallbackPolicyTest {
             leftNative.copy(id = 17)), unknown, "keyboard", "g"))
     }
 
-    @Test fun localRecognitionIsExactAndRestrictedToLiteralCharactersAndDigits() {
-        for (text in listOf("g", "G", "4")) assertTrue(KeyboardImageFallbackPolicy.matchesRead(text, text, 0.99f))
-        for (text in listOf("enter", "↵", " ", "", "한/영", "⌫", "g!", "?"))
+    @Test fun localRecognitionIsExactAndRejectsSubmissionAndAmbiguousLabels() {
+        for (text in listOf("g", "G", "4", "ㅎ", "é", "⌫", "한/영", "?")) assertTrue(KeyboardImageFallbackPolicy.matchesRead(text, text, 0.99f))
+        for (text in listOf("enter", "↵", " ", "", "g!", "✓", "🌐"))
             assertFalse(KeyboardImageFallbackPolicy.matchesRead(text, text, 0.99f))
         assertFalse(KeyboardImageFallbackPolicy.matchesRead("g", "G", 0.99f))
         assertFalse(KeyboardImageFallbackPolicy.matchesRead("g", "g", 0.80f))
         assertFalse(KeyboardImageFallbackPolicy.matchesRead("g", "g", Float.NaN))
     }
 
-    @Test fun cropRefusesAnyMaskedOrUncertifiedKeyPixels() {
+    @Test fun wideBottomSpaceNeedsUniqueOwnedStructureAndCorroboratingImageCaption() {
+        val space = target.copy(bounds = "50 165 140 205")
+        val group = listOf(label(5, ",", "26 165 49 205"), label(6, ".", "141 165 165 205"),
+            label(7, "ㅁ", "54 118 77 158"), label(8, "ㄴ", "79 118 102 158"),
+            label(9, "ㅇ", "104 118 127 158"))
+        val bottom = frame.copy(nodes = listOf(field, space) + group)
+        assertTrue(KeyboardImageFallbackPolicy.canPropose(bottom, space))
+        assertNull(VisualKeyboardPolicy.refusal(bottom, space, "keyboard", "Space"))
+        assertTrue(KeyboardImageFallbackPolicy.matchesRead("Space", "English (US)", 0.96f))
+        assertTrue(KeyboardImageFallbackPolicy.matchesRead("Space", "한국어", 0.96f))
+        assertFalse(KeyboardImageFallbackPolicy.matchesRead("Space", "한/영", 0.96f))
+        assertFalse(KeyboardImageFallbackPolicy.matchesRead("Space", "", 0.96f))
+        assertNotNull(VisualKeyboardPolicy.refusal(bottom.copy(nodes = bottom.nodes - group.first()), space, "keyboard", "Space"))
+        assertEquals("keyboard_image_candidate_ambiguous", VisualKeyboardPolicy.refusal(
+            bottom.copy(nodes = bottom.nodes + space.copy(id = 10)), space, "keyboard", "Space"))
+        assertNotNull(VisualKeyboardPolicy.refusal(bottom, space.copy(sourceWindowId = 8), "keyboard", "Space"))
+        assertNotNull(VisualKeyboardPolicy.refusal(bottom, space, "keyboard", "Enter"))
+        val nativeSpace = label(11, "Space", "21 165 44 205")
+        assertEquals("keyboard_image_use_native_label", VisualKeyboardPolicy.refusal(
+            bottom.copy(nodes = bottom.nodes + nativeSpace), space, "keyboard", "Space"))
+    }
+
+    @Test fun anotherSelectedImeUsesNativeTextKeyStructureWithoutQwerty() {
+        val alternate = ControlKeyboard(6, "other.ime", "other.ime/.Keyboard")
+        fun own(node: ControlNode) = node.copy(sourcePackage = alternate.packageName, sourceWindowId = alternate.windowId)
+        val candidate = own(target)
+        val observed = frame.copy(keyboard = alternate, nodes = listOf(field, candidate,
+            own(left.copy(text = "ㅁ", keyboardKey = "ㅁ")), own(right.copy(text = "ㅂ", keyboardKey = "ㅂ"))))
+        assertNull(VisualKeyboardPolicy.refusal(observed, candidate, "keyboard", "ㅎ"))
+        assertNull(VisualKeyboardPolicy.refusal(observed, candidate, "keyboard", "%"))
+        assertNotNull(VisualKeyboardPolicy.refusal(observed, candidate.copy(textEntryKey = false), "keyboard", "ㅎ"))
+        assertNotNull(VisualKeyboardPolicy.refusal(observed.copy(nodes = observed.nodes + candidate.copy(id = 9)),
+            candidate, "keyboard", "ㅎ"))
+    }
+
+    @Test fun cropRefusesAnyMaskedOrUncertifiedInteriorPixels() {
         val screen = TapBounds(100, 400, 200, 500)
         val proof = VisualTargetProof(
             ScreenImage(200, 500, "image/jpeg", byteArrayOf(1), ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
             "hash", TapBounds(0, 0, 400, 1000), "geometry", 2L, scope = "keyboard", sourceDisplayId = 0,
             disclosedRegions = listOf(screen))
         assertEquals(TapBounds(56, 206, 94, 244), KeyboardImageFallbackPolicy.crop(proof, screen))
-        assertNull(KeyboardImageFallbackPolicy.crop(proof.copy(disclosedRegions = listOf(screen.copy(right = 199))), screen))
+        assertNotNull(KeyboardImageFallbackPolicy.crop(proof.copy(disclosedRegions = listOf(screen.copy(right = 199))), screen))
+        assertNull(KeyboardImageFallbackPolicy.crop(proof.copy(disclosedRegions = listOf(screen.copy(right = 150))), screen))
         assertNull(KeyboardImageFallbackPolicy.crop(proof.copy(sourceDisplayId = -1), screen))
         assertNull(KeyboardImageFallbackPolicy.crop(proof.copy(scope = "display"), screen))
         assertNotNull(GenericControlActionPolicy.refusal(frame, frame.copy(touchContext = "stale"), "visual_key"))

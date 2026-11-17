@@ -34,7 +34,7 @@ internal object ControlResultPolicy {
                     KeyboardKeyPolicy.identify(it.text,it.description,it.className,it.clickable,it.textEntryKey) != null }.map { it.keyboardKey }.filter { it.isNotEmpty() }.sorted()
                 val afterKeys = after.nodes.filter { it.sourceWindowId == after.keyboard?.windowId &&
                     KeyboardKeyPolicy.identify(it.text,it.description,it.className,it.clickable,it.textEntryKey) != null }.map { it.keyboardKey }.filter { it.isNotEmpty() }.sorted()
-                val layoutChanged = if (action == "visual_key") VisualKeyboardPolicy.literalLayoutChanged(before,after)
+                val layoutChanged = if (action == "visual_key") VisualKeyboardPolicy.literalLayoutChanged(before, after, key.label in setOf("한/영", "한영"))
                     else beforeKeys != afterKeys && afterKeys.isNotEmpty()
                 return Verdict(sameField && candidate?.focused == true && candidate.editable && candidate.enabled && !candidate.password && candidate.text == field.text &&
                     candidate.selectionStart == field.selectionStart && candidate.selectionEnd == field.selectionEnd &&
