@@ -1052,6 +1052,12 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 if (key.kind == KeyboardKeyPolicy.Kind.SUBMIT && input["submit_authorized"]?.jsonPrimitive?.booleanOrNull != true)
                     return@withTree ControlEffect(false, false, "submission_authorization_required")
                 val field = fresh.inputTarget ?: return@withTree ControlEffect(false, false, "keyboard_target_unverified")
+                val searchAddress = if (action == "visual_key" && VisualSearchPolicy.isSearch(key)) {
+                    val bar = VisualSearchPolicy.address(fresh)
+                        ?: return@withTree ControlEffect(false, false, "keyboard_search_target_unverified")
+                    bar to (native.getOrNull(fresh.nodes.indexOf(bar))
+                        ?: return@withTree ControlEffect(false, false, "keyboard_search_target_unverified"))
+                } else null
                 if (field.text.length > 2000 || InputPayloadPolicy.sensitive(field.text) || (field.editable && key.kind in setOf(
                     KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE, KeyboardKeyPolicy.Kind.BACKSPACE) &&
                     KeyboardKeyPolicy.expectedText(field, key) == null)) return@withTree ControlEffect(false, false, "sensitive_input_refused")
@@ -1070,6 +1076,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         return@tap "visual_editor_privacy_changed"
                     if (action == "visual_key" && frame.visual?.sourceDisplayId == 0 && frame.visual.displayGeneration != service.remoteDisplayChanges.version())
                         return@tap "display_window_changed_since_observation"
+                    if (searchAddress != null) {
+                        val (bar, live) = searchAddress
+                        if (!live.refresh() || !live.isVisibleToUser || live.isFocused || live.isPassword ||
+                            (Build.VERSION.SDK_INT >= 34 && live.isAccessibilityDataSensitive) ||
+                            live.windowId != bar.sourceWindowId || live.packageName?.toString() != bar.sourcePackage ||
+                            live.viewIdResourceName != bar.resourceId || live.text?.toString() != bar.text)
+                            return@tap "keyboard_search_target_changed"
+                    }
                     // Reacquire the actual app input focus after the IME tree scan. Window/IME
                     // stability alone cannot prove that a user did not select a different field.
                     val observedField = native.getOrNull(fresh.nodes.indexOfFirst { it.id == field.id })

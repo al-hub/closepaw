@@ -80,7 +80,7 @@ internal object VisualKeyboardPolicy {
         val key = identifyCandidate(node, keyboard) ?: return "keyboard_key_unrecognized"
         if (key.label != node.keyboardKey)
             return "keyboard_literal_unverified"
-        if (VisualSearchPolicy.isSearch(key)) VisualSearchPolicy.refusal(frame, scope, input)?.let { return it }
+        if (VisualSearchPolicy.isSearch(key)) VisualSearchPolicy.refusal(frame, node, scope, input)?.let { return it }
         else if (key.kind != KeyboardKeyPolicy.Kind.LAYOUT && KeyboardKeyPolicy.expectedText(field,key) == null)
             return "keyboard_literal_unverified"
         val target = bounds(node.bounds) ?: return "keyboard_visual_bounds_invalid"

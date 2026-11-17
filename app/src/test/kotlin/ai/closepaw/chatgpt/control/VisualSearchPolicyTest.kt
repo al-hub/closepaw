@@ -19,7 +19,11 @@ class VisualSearchPolicyTest {
     private val key = ControlNode(3, description = "검색", keyboardKey = "검색", className = "android.view.ViewGroup",
         bounds = "80 160 100 200", visualKeyChildCount = 1, visualKeyCandidate = true,
         sourceWindowId = 2, sourcePackage = ime.packageName)
-    private val frame = ControlFrame(app, 1, "before", listOf(editor, bar, key), touchContext = "geometry",
+    private val letterKeys = listOf(
+        key.copy(id = 10, text = "x", description = "", keyboardKey = "x", bounds = "30 115 50 155"),
+        key.copy(id = 11, text = "ㅊ", description = "", keyboardKey = "ㅊ", bounds = "52 115 73 155"),
+    )
+    private val frame = ControlFrame(app, 1, "before", listOf(editor, bar, key) + letterKeys, touchContext = "geometry",
         keyboard = ime, inputTarget = editor, inputTargetId = editor.id)
     private fun approval(value: String = query) = buildJsonObject {
         put("submit_authorized", true); put("expected_search_query", value)
@@ -34,7 +38,7 @@ class VisualSearchPolicyTest {
             assertNull(other, VisualSearchPolicy.role("", other, key.className, 1))
         for (origin in listOf("http://www.google.com/", "https://www.google.com.evil.example/", "www.google.com/search?q=old",
             "https://fake@www.google.com/")) {
-            val replaced = frame.copy(nodes = listOf(editor, bar.copy(text = origin), key))
+            val replaced = frame.copy(nodes = listOf(editor, bar.copy(text = origin), key) + letterKeys)
             assertNotNull(origin, VisualKeyboardPolicy.refusal(replaced, key, "keyboard", input = approval()))
         }
         assertNotNull(VisualKeyboardPolicy.refusal(frame.copy(inputTarget = editor.copy(webEditorContainer = -1)), key,
@@ -43,6 +47,9 @@ class VisualSearchPolicyTest {
             "keyboard", input = approval()))
         assertNotNull(VisualKeyboardPolicy.refusal(frame.copy(inputTarget = editor.copy(selectionStart = 0)), key,
             "keyboard", input = approval()))
+        val toolbar = key.copy(bounds = "82 65 100 105")
+        assertEquals("keyboard_search_action_row_unverified",
+            VisualKeyboardPolicy.refusal(frame.copy(nodes = frame.nodes - key + toolbar), toolbar, "keyboard", input = approval()))
         assertEquals("keyboard_search_ambiguous", VisualKeyboardPolicy.refusal(frame.copy(nodes = frame.nodes +
             key.copy(id = 4, bounds = "70 150 90 200")), key, "keyboard", input = approval()))
     }
