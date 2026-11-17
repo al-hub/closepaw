@@ -205,7 +205,7 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                 "method" to buildJsonObject { put("type", "string"); put("enum", JsonArray(listOf("auto", "direct", "clipboard", "keyboard").map { JsonPrimitive(it) })) },
                 "mode" to buildJsonObject { put("type", "string"); put("enum", JsonArray(listOf("empty", "insert").map { JsonPrimitive(it) })) },
                 "submit_authorized" to buildJsonObject { put("type", "boolean") },
-                "image_key_label" to str(1,32),
+                "image_key_label" to str(max = 32, min = 1),
                 "visual_id" to str(128,1), "visual_target_confirmed" to buildJsonObject { put("type", "boolean") },
                 "image_rect" to buildJsonObject { put("type","array"); put("minItems",4); put("maxItems",4); put("items", buildJsonObject { put("type","integer"); put("minimum",0); put("maximum",8192) }) },
                 "image_end_rect" to buildJsonObject { put("type","array"); put("minItems",4); put("maxItems",4); put("items", buildJsonObject { put("type","integer"); put("minimum",0); put("maximum",8192) }) },

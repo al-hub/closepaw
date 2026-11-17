@@ -67,6 +67,8 @@ class ControlResultPolicyTest {
         val reverse = alias.copy(description = "한국어로 변경")
         fun reverseVerdict(post: ControlFrame) = ControlResultPolicy.verify("visual_key", english, post, reverse, buildJsonObject {}).confirmed
         assertTrue(reverseVerdict(old))
+        assertFalse(ControlResultPolicy.verify("visual_key", old, english, reverse, buildJsonObject {}).confirmed)
+        assertFalse(ControlResultPolicy.verify("visual_key", english, old, alias, buildJsonObject {}).confirmed)
         assertFalse(reverseVerdict(english.copy(nodes = listOf(field, q.copy(text = "Q"), w.copy(text = "W")))))
         assertFalse(reverseVerdict(english.copy(nodes = listOf(field, q.copy(text = "1"), w.copy(text = "2")))))
     }

@@ -97,7 +97,8 @@ internal object VisualKeyboardPolicy {
     /** Layout widgets/suggestion words alone do not establish a keyboard change.
      * Require two disjoint existing character-key locations to change labels;
      * overlapping parent/child bounds cannot count as separate physical keys. */
-    fun literalLayoutChanged(before: ControlFrame, after: ControlFrame, languageSwitch: Boolean = false): Boolean {
+    fun literalLayoutChanged(before: ControlFrame, after: ControlFrame, languageSwitch: Boolean = false,
+        destination: Character.UnicodeScript? = null): Boolean {
         fun labels(frame: ControlFrame): Map<TapBounds,String> {
             val keyboard = frame.keyboard ?: return emptyMap()
             return frame.nodes.filter { it.enabled && !it.password && it.sourceWindowId == keyboard.windowId &&
@@ -120,7 +121,8 @@ internal object VisualKeyboardPolicy {
         val changed = if (!languageSwitch) changedPairs.map { it.first } else {
             // Shift/caps and symbol pages are not a completed Korean/English switch.
             val pair = changedPairs.map { it.second }.distinct().singleOrNull { (from, to) ->
-                setOf(from, to) == setOf(Character.UnicodeScript.LATIN, Character.UnicodeScript.HANGUL)
+                (destination == null || to == destination) &&
+                    setOf(from, to) == setOf(Character.UnicodeScript.LATIN, Character.UnicodeScript.HANGUL)
             } ?: return false
             changedPairs.filter { it.second == pair }.map { it.first }
         }
