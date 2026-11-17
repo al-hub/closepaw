@@ -35,6 +35,26 @@ class KeyboardImageFallbackPolicyTest {
             VisualKeyboardPolicy.refusal(frame.copy(nodes = frame.nodes + overlap), target, "keyboard", "g"))
     }
 
+    @Test fun samsungRowsWithoutNativeTextEntryFlagsStillRequireOneExactLiteralSlot() {
+        fun wrapper(n: ControlNode) = n.copy(className = "android.view.ViewGroup",
+            clickable = false, textEntryKey = false, visualKeyChildCount = 1,
+            visualKeyCandidate = !n.keyboardImageCandidate)
+        val unknown = wrapper(target)
+        val leftNative = wrapper(left)
+        val rightNative = wrapper(right)
+        val nativeFrame = frame.copy(nodes = listOf(field, unknown, leftNative, rightNative))
+        assertEquals("g", KeyboardImageFallbackPolicy.slotLabel(nativeFrame, unknown))
+        assertNull(VisualKeyboardPolicy.refusal(nativeFrame, unknown, "keyboard", "g"))
+        assertNotNull(VisualKeyboardPolicy.refusal(nativeFrame, unknown, "keyboard", "G"))
+        assertNotNull(VisualKeyboardPolicy.refusal(nativeFrame, unknown, "keyboard", "1"))
+        assertNotNull(VisualKeyboardPolicy.refusal(nativeFrame.copy(nodes = nativeFrame.nodes - leftNative +
+            leftNative.copy(keyboardKey = "d", text = "d")), unknown, "keyboard", "g"))
+        assertNotNull(VisualKeyboardPolicy.refusal(nativeFrame.copy(nodes = nativeFrame.nodes - rightNative +
+            rightNative.copy(parent = 28)), unknown, "keyboard", "g"))
+        assertNotNull(VisualKeyboardPolicy.refusal(nativeFrame.copy(nodes = nativeFrame.nodes +
+            leftNative.copy(id = 17)), unknown, "keyboard", "g"))
+    }
+
     @Test fun localRecognitionIsExactAndRestrictedToLiteralCharactersAndDigits() {
         for (text in listOf("g", "G", "4")) assertTrue(KeyboardImageFallbackPolicy.matchesRead(text, text, 0.99f))
         for (text in listOf("enter", "↵", " ", "", "한/영", "⌫", "g!", "?"))

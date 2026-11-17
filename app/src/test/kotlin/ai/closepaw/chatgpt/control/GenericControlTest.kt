@@ -33,6 +33,27 @@ class GenericControlTest {
         assertTrue(observed.data.getValue("node_actions_allowed").jsonPrimitive.boolean)
         assertTrue(control.action(input(observed.data.getValue("observation_id").jsonPrimitive.content)).success)
     }
+    @Test fun exactKeyboardLookupIsNotCrowdedOutAndCannotExposeForeignOrOtherCaseKeys() = runBlocking {
+        val port = Port()
+        val ime = ControlKeyboard(4, "ime", "ime/.Keyboard")
+        val clutter = (1..60).map { ControlNode(it, "generic app match a", resourceId = "app:id/a$it") }
+        val key = ControlNode(61, text = "a", keyboardKey = "a", sourceWindowId = 4, sourcePackage = "ime")
+        val rejected = listOf(key.copy(id = 62, text = "A", keyboardKey = "A"),
+            key.copy(id = 63, sourcePackage = "foreign"), key.copy(id = 64, sourceWindowId = 8))
+        port.frame = port.frame.copy(nodes = clutter + key + rejected, outputLimit = 100, keyboard = ime)
+        val control = GenericControl(port, { true })
+        val old = control.observe(filter = "a")
+        assertTrue(old.data.getValue("output_truncated").jsonPrimitive.boolean)
+        assertFalse(old.data.getValue("nodes").jsonArray.any { it.jsonObject["node_id"]?.jsonPrimitive?.intOrNull == 61 })
+        val exact = control.observe(keyboardKeyExact = "a")
+        assertEquals(listOf(61), exact.data.getValue("nodes").jsonArray.map { it.jsonObject.getValue("node_id").jsonPrimitive.int })
+        assertTrue(exact.data.getValue("node_actions_allowed").jsonPrimitive.boolean)
+        assertFalse(control.observe(filter = "a", keyboardKeyExact = "a").success)
+        port.frame = port.frame.copy(keyboard = ime.copy(readAllowed = false))
+        assertTrue(control.observe(keyboardKeyExact = "a").data.getValue("nodes").jsonArray.isEmpty())
+        assertEquals(0, port.writes)
+    }
+
     @Test fun unverifiedPopupReturnsBoundedDiagnosticsWithoutUnderlyingTargets() = runBlocking {
         val port = Port(); val diagnostics = buildJsonObject { put("window_count", 3); put("selection_reason", "unlinked_application_window") }
         port.frame = port.frame.copy(reason = "unlinked_application_window", windowDiagnostics = diagnostics)

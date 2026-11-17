@@ -575,7 +575,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 }
                 identity.append(json.toString()).append('\n')
                 if (expose && (!keyboard || key != null || labelEvidence != null || imageCandidate) && node.isVisibleToUser && !rect.isEmpty &&
-                    (text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable || node.isFocusable ||
+                    (imageCandidate || text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable || node.isFocusable ||
                         node.actionList.any { it.id in setOf(AccessibilityNodeInfo.ACTION_CLICK, AccessibilityNodeInfo.ACTION_EXPAND, AccessibilityNodeInfo.ACTION_COLLAPSE) })) {
                     run {
                         nodes.add(ControlNode(index, if (node.isShowingHintText) "" else text.take(2001), description.take(100), resource.take(100),
