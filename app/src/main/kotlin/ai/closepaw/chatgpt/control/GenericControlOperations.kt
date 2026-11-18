@@ -41,7 +41,7 @@ internal class GenericControlOperations(private val control: GenericControl, pri
             }
             override suspend fun invoke(invocation: OperationInvocation): OperationResult {
                 val session = session()
-                if ((operation == OBSERVE && invocation.input["include_image"]?.jsonPrimitive?.booleanOrNull == true) || operation == ACTION && invocation.input["action"]?.jsonPrimitive?.content in setOf("input", "terminal_input", "terminal_submit", "focus", "key", "visual_tap", "visual_long_press", "visual_drag", "visual_scroll", "visual_key")) {
+                if ((operation == OBSERVE && invocation.input["include_image"]?.jsonPrimitive?.booleanOrNull == true) || operation == VISUAL_KEY_SEQUENCE || operation == ACTION && invocation.input["action"]?.jsonPrimitive?.content in setOf("input", "terminal_input", "terminal_submit", "focus", "key", "visual_tap", "visual_long_press", "visual_drag", "visual_scroll", "visual_key")) {
                     if (session == null || !session.explicit || session.state != ControlSession.State.ACTIVE)
                         return appFailure("explicit_active_session_required")
                     if (invocation.input["session_id"]?.jsonPrimitive?.content != session.id)
@@ -60,12 +60,12 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                             put("inter_operation_idle_ms", ((started - it) / 1_000_000L).coerceAtLeast(0L))
                         }
                     })
-                return try { withTimeout(if (operation == ACTION && invocation.input["action"]?.jsonPrimitive?.content == "input") 120_000L else if (operation == ACTION && (invocation.input["action"]?.jsonPrimitive?.content?.startsWith("visual_") == true || invocation.input["action"]?.jsonPrimitive?.content in setOf("terminal_input","terminal_submit"))) 30_000L else if (operation == SEQUENCE) 25_000L else 10_000L) {
+                return try { withTimeout(if (operation == VISUAL_KEY_SEQUENCE || operation == ACTION && invocation.input["action"]?.jsonPrimitive?.content == "input") 120_000L else if (operation == ACTION && (invocation.input["action"]?.jsonPrimitive?.content?.startsWith("visual_") == true || invocation.input["action"]?.jsonPrimitive?.content in setOf("terminal_input","terminal_submit"))) 30_000L else if (operation == SEQUENCE) 25_000L else 10_000L) {
                     if (showActivity) {
                         // A batch must never implicitly activate an idle control session.
                         // Only explicit android.control.session.start may authorize it.
                         if (!(operation == OBSERVE && invocation.input["include_image"]?.jsonPrimitive?.booleanOrNull == true) &&
-                            operation !in setOf(SEQUENCE, ISLAND_OBSERVE, ISLAND_DRAG) &&
+                            operation !in setOf(SEQUENCE, VISUAL_KEY_SEQUENCE, ISLAND_OBSERVE, ISLAND_DRAG) &&
                             !(operation == ACTION && invocation.input["action"]?.jsonPrimitive?.content in setOf("input", "terminal_input", "terminal_submit", "focus", "key", "visual_tap", "visual_long_press", "visual_drag", "visual_scroll", "visual_key"))) session?.activateLegacy()
                         val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
                         session?.interrupt = { job?.cancel(kotlinx.coroutines.CancellationException("user_control_interrupt")) }
@@ -181,6 +181,36 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                 } catch (e: IllegalArgumentException) { appFailure(if (e.message == "configuration_revision_changed") e.message!! else "configuration_invalid")
                 } catch (_: Exception) { appFailure("configuration_update_failed") }
             })
+
+        registry.register(OperationDescriptor(VISUAL_KEY_SEQUENCE,
+            "Run 2..6 previously identified character/space keys from ONE freshly user-confirmed keyboard-only image, in one explicit session. Every next key reacquires a new keyboard image, rechecks the identical IME layout, window, crop, current focused editor, consent, certified pixels, and exact postcondition via visual_key native dispatch. No implicit layout switch, Enter/Search/Send, Backspace, clipboard, coordinates inferred by the app, stale-source replay, or fallback. If any effect is unknown, stop immediately; completed prefix may remain in the focused field. Exposes no typed text in result or diagnostics. Use only after an actual keyboard screenshot has been read and all steps' image rectangles, labels and node IDs have been visually confirmed. A screenshot or consent alone is not touch permission.",
+            inputSchema = obj(
+                "observation_id" to str(128,1),
+                "visual_id" to str(128,1),
+                "text" to str(2000,1),
+                "visual_target_confirmed" to buildJsonObject { put("type","boolean") },
+                "steps" to buildJsonObject {
+                    put("type","array"); put("minItems",2); put("maxItems",6)
+                    put("items", buildJsonObject {
+                        put("type","object"); put("additionalProperties",false)
+                        put("required", JsonArray(listOf("node_id", "label", "image_rect").map { JsonPrimitive(it) }))
+                        put("properties", buildJsonObject {
+                            put("node_id", buildJsonObject { put("type","integer"); put("minimum",0); put("maximum",8191) })
+                            put("label", str(32,1))
+                            put("image_rect", buildJsonObject {
+                                put("type","array"); put("minItems",4); put("maxItems",4)
+                                put("items", buildJsonObject { put("type","integer"); put("minimum",0); put("maximum",8192) })
+                            })
+                        })
+                    })
+                },
+                required = listOf("session_id","observation_id","visual_id","text","visual_target_confirmed","steps")),
+            readOnly = false, permissions = listOf("accessibility", "generic_android_control"),
+            effects = listOf("bounded_foreground_visual_key_sequence"), readiness = readiness),
+            handler(VISUAL_KEY_SEQUENCE, showActivity = true) { invocation ->
+                control.visualKeySequence(invocation.input)
+            })
+
         registry.register(OperationDescriptor(SEQUENCE,
             "Run 2 to 9 calculator digit clicks (0-9) in a single local request. Only known Samsung/Google/AOSP calculator package identities are accepted, and an explicit started control session and session_id are required. Each step verifies fresh semantic node identity, consent, epoch, app/window and observation. No coordinates, no automatic retries, and no arbitrary app interactions. X stop cancels remaining work. This reports guarded clicks, not verification of the displayed calculation.",
             inputSchema = obj("labels" to buildJsonObject {
@@ -232,6 +262,7 @@ internal class GenericControlOperations(private val control: GenericControl, pri
         const val CONFIGURE = "android.control.configure"
         const val ACTION = "android.ui.action"
         const val SEQUENCE = "android.ui.sequence"
+        const val VISUAL_KEY_SEQUENCE = "android.ui.visual_key_sequence"
         const val FEEDBACK_TEST = "android.control.feedback_test"
         private fun str(max: Int, min: Int = 0) = buildJsonObject { put("type", "string"); put("minLength", min); put("maxLength", max) }
         private fun obj(vararg fields: Pair<String, JsonObject>, required: List<String> = emptyList()) = buildJsonObject {
