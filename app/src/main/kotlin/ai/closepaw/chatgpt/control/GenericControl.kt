@@ -382,6 +382,10 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         val initialLayout = layout(original.verificationFrame)
         if (initialLayout.isEmpty()) return stop("keyboard_sequence_layout_unverified")
+        // The verified post-state, not the original empty editor, owns the next step.
+        // This permits an independently confirmed clear-button resize but rejects
+        // any intervening user/IME text or caret change before another touch.
+        var lastVerifiedEditor = editor
         for ((index, step) in planned.withIndex()) {
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             if (!allowed() || port.session() !== session ||
@@ -399,10 +403,16 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 active.frame.windowId != original.frame.windowId || active.frame.keyboard != ime ||
                 active.frame.touchContext != original.frame.touchContext ||
                 active.frame.configurationRevision != original.frame.configurationRevision ||
-                liveEditor.resourceId != editor.resourceId || liveEditor.className != editor.className ||
-                liveEditor.sourceWindowId != editor.sourceWindowId ||
-                liveEditor.sourcePackage != editor.sourcePackage ||
-                liveEditor.bounds != editor.bounds || !liveEditor.focused ||
+                liveEditor.resourceId != lastVerifiedEditor.resourceId ||
+                liveEditor.className != lastVerifiedEditor.className ||
+                liveEditor.sourceWindowId != lastVerifiedEditor.sourceWindowId ||
+                liveEditor.sourcePackage != lastVerifiedEditor.sourcePackage ||
+                liveEditor.bounds != lastVerifiedEditor.bounds ||
+                liveEditor.text != lastVerifiedEditor.text ||
+                liveEditor.selectionStart != lastVerifiedEditor.selectionStart ||
+                liveEditor.selectionEnd != lastVerifiedEditor.selectionEnd ||
+                !liveEditor.focused || !liveEditor.enabled || !liveEditor.editable ||
+                !liveEditor.focusable || liveEditor.password ||
                 proof.scope != "keyboard" || proof.sourceDisplayId != firstProof.sourceDisplayId ||
                 proof.sourceImeWindowId != firstProof.sourceImeWindowId ||
                 proof.window != firstProof.window || proof.rotation != firstProof.rotation ||
@@ -434,6 +444,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             if (!result.success || result.data["app_result_verified"]?.jsonPrimitive?.booleanOrNull != true)
                 return stop(result.data["reason_code"]?.jsonPrimitive?.content ?: "keyboard_input_unconfirmed",
                     unknown = tried)
+            lastVerifiedEditor = current?.frame?.inputTarget
+                ?: return stop("keyboard_postcondition_unavailable", unknown = tried)
             confirmed++
         }
         val result = current?.frame?.inputTarget
