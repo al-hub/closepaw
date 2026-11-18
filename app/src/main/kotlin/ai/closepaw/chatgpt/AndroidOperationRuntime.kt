@@ -327,17 +327,16 @@ internal class AndroidOperationRuntime(
                 when {
                     id == ControlSessionOperations.USER_ACTION -> if (canShowUserAction())
                         AgentService.instance?.remoteControlSession?.userActionEpoch ?: -1L else -1L
-                    ProjectionTuningProtocol.requiresSessionEpoch(id) || id in setOf("android.ui.action", "android.ui.sequence", "android.control.island.drag", "android.control.feedback_test",
-                        "app.screen.read", "gemini.draft.insert", "gemini.question.ask") ->
+                    ProjectionTuningProtocol.requiresSessionEpoch(id) || GenericControlOperations.requiresExecutionEpoch(id) ||
+                        id in setOf("app.screen.read", "gemini.draft.insert", "gemini.question.ask") ->
                         AgentService.instance?.remoteControlSession?.epoch ?: -1L
                     else -> 0L
                 }
             },
             executeAllowed = { settings.enabled || settings.geminiDraftEnabled || settings.geminiQuestionEnabled || settings.tailscaleRecoveryEnabled || settings.selfUpdateEnabled || settings.genericControlEnabled },
-            operationAllowed = { id -> when(id) {
-                GenericControlOperations.ACTION, GenericControlOperations.SEQUENCE, GenericControlOperations.ISLAND_DRAG, GenericControlOperations.CONFIGURE, GenericControlOperations.FEEDBACK_TEST,
-                "android.control.session.start", "android.control.session.wait", "android.control.session.end",
-                ControlSessionOperations.USER_ACTION -> settings.genericControlEnabled
+            operationAllowed = { id -> if (GenericControlOperations.allowsExecutionWithGenericControl(id)) {
+                settings.genericControlEnabled
+            } else when(id) {
                 "android.control.session.status", "closepaw.self.status", "closepaw.projection.diagnostics",
                 "closepaw.projection.tuning.get", "closepaw.projection.tuning.set" -> settings.genericControlEnabled
                 SelfUpdateOperations.INSTALL -> settings.selfUpdateEnabled

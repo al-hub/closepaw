@@ -20,8 +20,10 @@ class KeyboardControlTest {
         override suspend fun apps(filter: String) = JsonArray(emptyList())
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
             calls++
-            this.frame = frame.copy(fingerprint = "post", inputTarget = field.copy(text = actual,
-                selectionStart = actual.length, selectionEnd = actual.length))
+            val updatedField = field.copy(text = actual, selectionStart = actual.length, selectionEnd = actual.length)
+            // Android capture derives the focused target from the same complete node scan.
+            this.frame = frame.copy(fingerprint = "post", inputTarget = updatedField,
+                nodes = frame.nodes.map { if (it.id == updatedField.id) updatedField else it })
             return effect
         }
     }

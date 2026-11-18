@@ -17,6 +17,7 @@ class KeyboardTouchGeometryTest {
         val result = cache.select(owner, "layout", entry, listOf(left))!!
         assertFalse(result.patch.contains(key.center.first, key.center.second))
         assertTrue(left.contains(result.patch))
+        assertFalse(cache.select(owner, "layout", entry, listOf(left))!!.reused)
         assertNull(cache.select(owner, "layout", entry.copy(neighbors = listOf(left)), listOf(left)))
         assertNull(cache.select(owner, "layout", entry, listOf(TapBounds(61, 130, 65, 145))))
         assertNull(cache.select(owner, "layout", entry, emptyList()))

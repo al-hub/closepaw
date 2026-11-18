@@ -567,6 +567,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     KeyboardImageFallbackPolicy.nodeShape(text, description, className,
                         node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
                         node.isTextEntryKey, node.childCount)))
+                val nativeEditorId = if (!keyboard && node.isEditable && node.isFocused && !node.isPassword &&
+                    Build.VERSION.SDK_INT >= 33 && (Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive))
+                    node.uniqueId?.takeIf { it.isNotBlank() } else null
                 val webContainer = if (!keyboard && node.packageName?.toString() == pkg &&
                     node.windowId == selected.selection.target && className == "android.webkit.WebView") index else webEditorContainer
                 if (keyboard) keyboardScan.record(text, description, node.className?.toString().orEmpty(),
@@ -581,6 +584,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     put("id", index); put("parent", parent); put("pkg", node.packageName?.toString().orEmpty())
                     put("text_hash", operationHash(text)); put("description_hash", operationHash(description)); put("hint", operationHash(hint))
                     put("resource", resource); put("class", node.className?.toString().orEmpty()); put("bounds", rect.flattenToString())
+                    nativeEditorId?.let { put("editor_identity_hash", operationHash(it)) }
                     put("text_entry_key", node.isTextEntryKey); put("visible", node.isVisibleToUser); put("enabled", node.isEnabled); put("clickable", node.isClickable)
                     put("long_clickable", node.isLongClickable); put("editable", node.isEditable); put("scrollable", node.isScrollable); put("password", node.isPassword)
                     put("focused", node.isFocused); put("selection_start", node.textSelectionStart); put("selection_end", node.textSelectionEnd)
@@ -612,7 +616,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                             visualKeyCandidate = visualKey != null,
                             terminal = terminalBinding?.evidence(node),
                             visualKeyChildCount = if (visualKey != null || imageCandidate) node.childCount else -1,
-                            keyboardImageCandidate = imageCandidate, webEditorContainer = webContainer))
+                            keyboardImageCandidate = imageCandidate, webEditorContainer = webContainer,
+                            nativeEditorId = nativeEditorId))
                         native.add(node)
                     }
                 }

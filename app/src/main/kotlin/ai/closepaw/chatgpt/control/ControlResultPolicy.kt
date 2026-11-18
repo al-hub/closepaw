@@ -24,17 +24,9 @@ internal object ControlResultPolicy {
                 else KeyboardKeyPolicy.identify(node.text, node.description, node.className, node.clickable, node.textEntryKey))
                 ?: return Verdict(false, "keyboard_key_unrecognized")
             val candidate = after.inputTarget
-            fun sameIdentity(other: ControlNode) = other.resourceId == field.resourceId && other.className == field.className &&
-                other.sourceWindowId == field.sourceWindowId && other.sourcePackage == field.sourcePackage
-            // A clear affordance can resize an editor after a literal changes its
-            // text. Document the same target by unique owned native resource in
-            // both complete frames. A first character may shrink a web input
-            // horizontally when a clear button appears. That read-only
-            // exception does not change the native pre-dispatch identity.
-            val sameField = candidate != null && sameIdentity(candidate) && if (field.resourceId.isNotEmpty()) {
-                before.nodes.count(::sameIdentity) == 1 && after.nodes.count(::sameIdentity) == 1
-            } else candidate.bounds == field.bounds || (action == "visual_key" && key.kind == KeyboardKeyPolicy.Kind.CHARACTER &&
-                anonymousWebFirstKey(before, after, field, candidate))
+            val sameField = KeyboardEditorContinuity.sameFocusedEditor(before, after,
+                allowAnonymousResize = action == "visual_key" && key.kind == KeyboardKeyPolicy.Kind.CHARACTER &&
+                    field.text.isEmpty() && field.selectionStart == 0 && field.selectionEnd == 0)
             if (key.kind == KeyboardKeyPolicy.Kind.LAYOUT) {
                 val beforeKeys = before.nodes.filter { it.sourceWindowId == before.keyboard.windowId &&
                     KeyboardKeyPolicy.identify(it.text,it.description,it.className,it.clickable,it.textEntryKey) != null }.map { it.keyboardKey }.filter { it.isNotEmpty() }.sorted()
@@ -106,21 +98,57 @@ internal object ControlResultPolicy {
         return Verdict(changed, "no_visible_change")
     }
 
-    private fun anonymousWebFirstKey(before: ControlFrame, after: ControlFrame, old: ControlNode, fresh: ControlNode): Boolean {
-        if (before.packageName != "com.android.chrome" || before.foregroundWindowId != after.foregroundWindowId ||
-            before.windowContext != after.windowContext || old.sourcePackage != before.packageName || old.sourceWindowId != before.windowId ||
-            old.text.isNotEmpty() || old.selectionStart != 0 || old.selectionEnd != 0 ||
-            old.webEditorContainer < 0 || fresh.webEditorContainer != old.webEditorContainer ||
-            old.parent < 0 || old.parent != fresh.parent || fresh.resourceId.isNotEmpty()) return false
-        fun sole(frame: ControlFrame, node: ControlNode) = frame.nodes.singleOrNull {
-            it.sourcePackage == frame.packageName && it.sourceWindowId == frame.windowId && it.focused &&
-                it.focusable && it.editable && it.enabled && !it.password
-        }?.id == node.id
+}
+
+/** Compares guarded, complete reads. Geometry or a matching prefix alone is
+ * never evidence of editor continuity or of a committed edit. */
+internal object KeyboardEditorContinuity {
+    fun sameFocusedEditor(before: ControlFrame, after: ControlFrame, allowAnonymousResize: Boolean): Boolean {
+        if (before.reason != null || after.reason != null || before.truncated || after.truncated ||
+            before.navigationOnly || after.navigationOnly ||
+            before.packageName != after.packageName || before.windowId != after.windowId ||
+            before.foregroundWindowId != after.foregroundWindowId || before.windowContext != after.windowContext ||
+            before.configurationRevision != after.configurationRevision || before.keyboard != after.keyboard) return false
+        fun focused(frame: ControlFrame): ControlNode? =
+            frame.nodes.singleOrNull { node ->
+                node.sourcePackage == frame.packageName && node.sourceWindowId == frame.windowId &&
+                    node.editable && node.focused && node.focusable && node.enabled && !node.password
+            }?.let { node -> frame.inputTarget?.takeIf { candidate ->
+                frame.inputTargetId == node.id && candidate.id == node.id &&
+                    candidate.copy(selectionStart = node.selectionStart, selectionEnd = node.selectionEnd,
+                        keyboardCursorGeneration = node.keyboardCursorGeneration) == node
+            } }
+        val old = focused(before) ?: return false
+        val fresh = focused(after) ?: return false
+        fun sameIdentity(node: ControlNode) = node.resourceId == old.resourceId && node.className == old.className &&
+            node.sourceWindowId == old.sourceWindowId && node.sourcePackage == old.sourcePackage
+        if (!sameIdentity(fresh)) return false
+        if (old.nativeEditorId != null || fresh.nativeEditorId != null)
+            return old.nativeEditorId == fresh.nativeEditorId
+        if (old.resourceId.isNotEmpty())
+            return before.nodes.count(::sameIdentity) == 1 && after.nodes.count(::sameIdentity) == 1
+        // Anonymous WebViews can expose no native unique ID. In that case
+        // require the same owned WebView ancestry and tightly bounded geometry.
+        if (old.webEditorContainer >= 0 || fresh.webEditorContainer >= 0) {
+            if (old.webEditorContainer < 0 || old.webEditorContainer != fresh.webEditorContainer ||
+                old.parent < 0 || old.parent != fresh.parent) return false
+        }
+        if (fresh.bounds == old.bounds) return old.parent == fresh.parent
+        if (!allowAnonymousResize || old.webEditorContainer < 0) return false
         val a = KeyboardImageFallbackPolicy.bounds(old.bounds) ?: return false
         val b = KeyboardImageFallbackPolicy.bounds(fresh.bounds) ?: return false
-        return sole(before, old) && sole(after, fresh) && a.top == b.top && a.bottom == b.bottom &&
-            (a.left == b.left || a.right == b.right) &&
+        return a.top == b.top && a.bottom == b.bottom && (a.left == b.left || a.right == b.right) &&
             2L * (minOf(a.right, b.right) - maxOf(a.left, b.left)) >= maxOf(a.right - a.left, b.right - b.left)
+    }
+
+    fun sameValue(before: ControlFrame, after: ControlFrame): Boolean {
+        val a = before.inputTarget ?: return false
+        val b = after.inputTarget ?: return false
+        // No reliable composition or suggestion metadata travels in this
+        // snapshot. Keep the entire platform value, including any unknown suffix.
+        return a.text == b.text && a.selectionStart in 0..a.text.length &&
+            a.selectionEnd in a.selectionStart..a.text.length &&
+            a.selectionStart == b.selectionStart && a.selectionEnd == b.selectionEnd
     }
 }
 

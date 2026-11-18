@@ -47,6 +47,8 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                     if (invocation.input["session_id"]?.jsonPrimitive?.content != session.id)
                         return appFailure("control_session_id_mismatch")
                 }
+                if (operation == VISUAL_KEY_SEQUENCE && invocation.admittedEpoch != session?.epoch)
+                    return appFailure("control_session_changed_before_start")
                 session?.refusal(invocation.input["session_id"]?.jsonPrimitive?.content)?.let { return appFailure(it) }
                 if (!mutex.tryLock()) return OperationResult(success = false, summary = "ui_busy",
                     data = buildJsonObject { put("reason_code", "ui_busy"); put("action_attempted", false) })
@@ -197,7 +199,7 @@ internal class GenericControlOperations(private val control: GenericControl, pri
             })
 
         registry.register(OperationDescriptor(VISUAL_KEY_SEQUENCE,
-            "Run 2..6 previously identified character/space keys from ONE freshly user-confirmed keyboard-only image, in one explicit session. Every next key reacquires a new keyboard image, rechecks the identical IME layout, window, crop, current focused editor, consent, certified pixels, and exact postcondition via visual_key native dispatch. No implicit layout switch, Enter/Search/Send, Backspace, clipboard, coordinates inferred by the app, stale-source replay, or fallback. If any effect is unknown, stop immediately; completed prefix may remain in the focused field. Exposes no typed text in result or diagnostics. Use android.screen.observe with keyboard_sequence_labels to obtain all requested nodes in one image. Use only after that actual keyboard screenshot has been read and all steps' image rectangles, labels and node IDs have been visually confirmed. A screenshot or consent alone is not touch permission.",
+            "Run 2..6 previously identified character/space keys from ONE freshly user-confirmed keyboard-only image, in one explicit session. Every next key reacquires a new keyboard image, rechecks the physical IME layout, window, crop, focused editor's exact value and caret, consent, certified pixels, and exact postcondition via visual_key native dispatch. No implicit layout switch, Enter/Search/Send, Backspace, clipboard, coordinates inferred by the app, stale-source replay, or fallback. Only a confirmed pre-touch screen change may trigger one guarded re-observation/retry per request. If any effect is unknown, stop immediately; completed prefix may remain in the focused field. Exposes no typed text in result or diagnostics. Use android.screen.observe with keyboard_sequence_labels to obtain all requested nodes in one image. Use only after that actual keyboard screenshot has been read and all steps' image rectangles, labels and node IDs have been visually confirmed. A screenshot or consent alone is not touch permission.",
             inputSchema = obj(
                 "observation_id" to str(128,1),
                 "visual_id" to str(128,1),
@@ -222,7 +224,7 @@ internal class GenericControlOperations(private val control: GenericControl, pri
             readOnly = false, permissions = listOf("accessibility", "generic_android_control"),
             effects = listOf("bounded_foreground_visual_key_sequence"), readiness = readiness),
             handler(VISUAL_KEY_SEQUENCE, showActivity = true) { invocation ->
-                control.visualKeySequence(invocation.input)
+                control.visualKeySequence(invocation.input, expectedEpoch = invocation.admittedEpoch)
             })
 
         registry.register(OperationDescriptor(SEQUENCE,
@@ -277,6 +279,14 @@ internal class GenericControlOperations(private val control: GenericControl, pri
         const val ACTION = "android.ui.action"
         const val SEQUENCE = "android.ui.sequence"
         const val VISUAL_KEY_SEQUENCE = "android.ui.visual_key_sequence"
+
+        fun requiresExecutionEpoch(id: String) =
+            id in setOf(ACTION, SEQUENCE, VISUAL_KEY_SEQUENCE, ISLAND_DRAG, FEEDBACK_TEST)
+
+        fun allowsExecutionWithGenericControl(id: String) = requiresExecutionEpoch(id) ||
+            id in setOf(CONFIGURE, "android.control.session.start", "android.control.session.wait",
+                "android.control.session.end", ControlSessionOperations.USER_ACTION)
+
         const val FEEDBACK_TEST = "android.control.feedback_test"
         private fun str(max: Int, min: Int = 0) = buildJsonObject { put("type", "string"); put("minLength", min); put("maxLength", max) }
         private fun obj(vararg fields: Pair<String, JsonObject>, required: List<String> = emptyList()) = buildJsonObject {

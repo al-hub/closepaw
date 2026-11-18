@@ -32,7 +32,7 @@ internal class KeyboardTouchGeometry {
         val table = layout.takeIf { it.isNotEmpty() }?.let { arrays.getOrPut(it) { LinkedHashMap(16, .75f, true) } }
         while (arrays.size > 4) arrays.remove(arrays.keys.first())
         table?.get(entry)?.let {
-            if (OwnedPixelPolicy.contains(owned, it)) return Selection(it, true)
+            if (OwnedPixelPolicy.contains(owned, entry.key)) return Selection(it, true)
             table.remove(entry)
         }
         val dx = maxOf(2, (entry.key.right - entry.key.left) / 8)
@@ -72,25 +72,26 @@ internal class KeyboardTouchGeometry {
  * not part of this key. Fresh ownership checks happen outside this identity. */
 internal object KeyboardTouchLayout {
     fun fingerprint(nodes: List<ControlNode>, imeBounds: TapBounds, ime: ControlKeyboard): String {
+        data class Key(val rect: TapBounds, val role: KeyboardKeyPolicy.Key?, val native: Boolean)
         val keys = nodes.mapNotNull { node ->
             val rect = KeyboardImageFallbackPolicy.bounds(node.bounds) ?: return@mapNotNull null
-            if (!imeBounds.contains(rect) || !node.enabled || node.password ||
+            if (!node.enabled || node.password ||
                 node.sourcePackage != ime.packageName || node.sourceWindowId != ime.windowId) return@mapNotNull null
             val key = VisualKeyboardPolicy.identifyCandidate(node, ime)
                 ?: KeyboardKeyPolicy.identify(node.text, node.description, node.className, node.clickable, node.textEntryKey)
             if (key == null && !node.keyboardImageCandidate) return@mapNotNull null
-            rect to key
-        }.distinct()
-        val literalRows = keys.filter { it.second?.kind == KeyboardKeyPolicy.Kind.CHARACTER }
-            .groupBy { it.first.center.second }
-            .filterValues { row -> row.map { it.first.left }.distinct().size >= 3 }
-            .keys
-        return keys.filter { (rect, _) -> literalRows.any { it in rect.top until rect.bottom } ||
-            literalRows.maxOrNull()?.let { row ->
-                rect.center.second >= row && rect.top - row <= rect.bottom - rect.top
-            } == true
-        }.map { (rect, role) ->
-            "${rect.left-imeBounds.left},${rect.top-imeBounds.top},${rect.right-imeBounds.left},${rect.bottom-imeBounds.top}:${role?.kind}:${role?.label.orEmpty()}"
-        }.sorted().joinToString("|")
+            Key(rect, key, node.textEntryKey)
+        }
+        // A detached strip above a corroborated character row is not a
+        // physical layout witness unless Android marks it as a text-entry key.
+        // Without row evidence keep all candidates rather than assume a strip.
+        val firstRowCenter = keys.filter { it.role?.kind == KeyboardKeyPolicy.Kind.CHARACTER && imeBounds.contains(it.rect) }
+            .groupBy { it.rect.center.second }
+            .filterValues { row -> row.map { it.rect.left }.distinct().size >= 3 }
+            .keys.minOrNull()
+        return keys.filter { it.native || firstRowCenter == null || it.rect.bottom > firstRowCenter }
+            .map { (rect, role, _) ->
+                "${rect.left-imeBounds.left},${rect.top-imeBounds.top},${rect.right-imeBounds.left},${rect.bottom-imeBounds.top}:${role?.kind}:${role?.label.orEmpty()}"
+            }.sorted().joinToString("|")
     }
 }
