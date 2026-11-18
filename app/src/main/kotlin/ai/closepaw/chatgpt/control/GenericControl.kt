@@ -305,11 +305,14 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var confirmed = 0
         var imageFallbackSpaces = 0
         var touched = false
-        fun stop(reason: String, unknown: Boolean = false): OperationResult {
+        var observationRetryReason: String? = null
+        fun stop(reason: String, unknown: Boolean = false, observationReason: String? = null): OperationResult {
             VisualImageCache.remove(current?.frame?.visual?.id)
             current = null
             return OperationResult(success = false, summary = reason, data = buildJsonObject {
                 put("reason_code", reason); put("completed_keys", confirmed)
+                observationReason?.let { put("observation_reason_code", it) }
+                observationRetryReason?.let { put("observation_retry_reason_code", it) }
                 put("confirmed_image_fallback_spaces", imageFallbackSpaces)
                 put("action_attempted", touched); put("outcome_unknown", unknown)
                 put("input_method", "visual_keyboard_sequence")
@@ -401,7 +404,20 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 if (refresh) {
                     val fresh = observe(includeImage = true, imageScope = "keyboard",
                         keyboardSequenceLabels = listOf(step.label))
-                    if (!fresh.success) return stop("keyboard_sequence_new_image_unavailable")
+                    if (!fresh.success) {
+                        val reason = (fresh.data["reason_code"] as? JsonPrimitive)?.contentOrNull
+                            ?.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,79}")) }
+                        // observe is read-only. Retry only the known post-capture tree race
+                        // and share the request budget with pre-touch dispatch refusals.
+                        // The next iteration still verifies the editor, value/caret, key
+                        // geometry and live pixels before it can dispatch the pending step.
+                        if (!retryUsed && reason == "visual_post_screen_changed" && sessionCurrent()) {
+                            retryUsed = true
+                            observationRetryReason = reason
+                            continue
+                        }
+                        return stop("keyboard_sequence_new_image_unavailable", observationReason = reason)
+                    }
                 }
                 val active = current ?: return stop("keyboard_observation_lost")
                 val proof = active.frame.visual ?: return stop("keyboard_visual_required")
@@ -482,6 +498,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 put("input_method", "visual_keyboard_sequence")
                 put("action_attempted", touched); put("outcome_unknown", false)
                 put("app_result_verified", true); put("completed_keys", confirmed)
+                observationRetryReason?.let { put("observation_retry_reason_code", it) }
                 put("confirmed_image_fallback_spaces", imageFallbackSpaces)
                 current?.let { put("observation_id", it.id) }
             })

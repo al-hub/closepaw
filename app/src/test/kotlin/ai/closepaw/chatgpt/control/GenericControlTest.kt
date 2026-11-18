@@ -362,6 +362,122 @@ class GenericControlTest {
         assertEquals(beforePause + 1, port.writes)
     }
 
+    private class FollowUpImageFixture {
+        val port = Port()
+        private val active = ControlSession().apply { start() }
+        private val ime = ControlKeyboard(4, "ime", "ime/.Keyboard")
+        private val editor = ControlNode(1, sourceWindowId = 3, sourcePackage = "example.app",
+            editable = true, focused = true, focusable = true, selectionStart = 0, selectionEnd = 0)
+        private fun key(id: Int, label: String, x: Int) = ControlNode(id, text = label, keyboardKey = label,
+            sourceWindowId = 4, sourcePackage = "ime", visualKeyCandidate = true,
+            bounds = "$x 50 ${x + 30} 85", visualKeyChildCount = 0)
+        private val keys = listOf(key(2, "n", 15), key(3, "v", 50), key(4, "d", 85))
+        val touched = mutableListOf<String>()
+        val control = GenericControl(port, { true })
+        init {
+            port.controlSession = active
+            port.frame = port.frame.copy(nodes = listOf(editor) + keys, keyboard = ime,
+                inputTarget = editor, inputTargetId = editor.id)
+            port.visualProof = VisualTargetProof(
+                ScreenImage(140, 120, "image/jpeg", byteArrayOf(1), ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
+                "test-image", TapBounds(0, 0, 140, 120), "test-window", System.currentTimeMillis(),
+                scope = "keyboard", sourceWindowId = 4, sourceImeWindowId = 4, sourceDisplayId = 0,
+                rotation = 0, displayGeneration = 1, imeBounds = "0 0 140 120",
+                disclosedRegions = listOf(TapBounds(0, 0, 140, 120)))
+            port.onWrite = { input ->
+                val key = keys.single { it.id == input.getValue("node_id").jsonPrimitive.int }
+                touched += key.keyboardKey
+                setEditor(checkNotNull(port.frame.inputTarget).text + key.keyboardKey)
+            }
+        }
+        fun setEditor(value: String, caret: Int = value.length) {
+            val edited = editor.copy(text = value, selectionStart = caret, selectionEnd = caret, empty = value.isEmpty())
+            port.frame = port.frame.copy(inputTarget = edited, nodes = listOf(edited) + keys, fingerprint = value)
+        }
+        suspend fun run(): ai.closepaw.chatgpt.operations.OperationResult {
+            val observed = control.observe(includeImage = true, imageScope = "keyboard", keyboardSequenceLabels = listOf("n", "v"))
+            assertTrue(observed.summary, observed.success)
+            return control.visualKeySequence(buildJsonObject {
+                put("session_id", active.id)
+                put("observation_id", observed.data.getValue("observation_id"))
+                put("visual_id", observed.data.getValue("visual").jsonObject.getValue("visual_id"))
+                put("visual_target_confirmed", true)
+                put("text", "nv")
+                put("steps", buildJsonArray {
+                    for ((index, key) in keys.take(2).withIndex()) add(buildJsonObject {
+                        put("node_id", key.id)
+                        put("label", key.keyboardKey)
+                        put("image_rect", JsonArray(listOf(20 + 35 * index, 55, 38 + 35 * index, 80).map { JsonPrimitive(it) }))
+                    })
+                })
+            })
+        }
+    }
+
+    @Test fun followUpImageFailurePreservesReasonWithoutReplayingFirstKey() = runBlocking {
+        for ((reason, expectedReads) in listOf("screen_share_revoked" to 1, "visual_post_screen_changed" to 2)) {
+            val fixture = FollowUpImageFixture()
+            var followUpReads = 0
+            fixture.port.denyVisual = { if (fixture.touched.isNotEmpty()) { followUpReads++; reason } else null }
+            val result = fixture.run()
+            assertFalse(result.success)
+            assertEquals("keyboard_sequence_new_image_unavailable", result.summary)
+            assertEquals(reason, result.data["observation_reason_code"]?.jsonPrimitive?.content)
+            assertEquals(1, result.data.getValue("completed_keys").jsonPrimitive.int)
+            assertFalse(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+            assertEquals(expectedReads, followUpReads)
+            assertEquals(listOf("n"), fixture.touched)
+            assertEquals("n", fixture.port.frame.inputTarget?.text)
+        }
+    }
+
+    @Test fun oneTransientFollowUpImageRetryStillRequiresTheExactEditor() = runBlocking {
+        for (changeEditor in listOf(false, true)) {
+            val fixture = FollowUpImageFixture()
+            var followUpReads = 0
+            fixture.port.denyVisual = {
+                if (fixture.touched.isNotEmpty() && ++followUpReads == 1) "visual_post_screen_changed" else null
+            }
+            fixture.port.onCapture = {
+                if (changeEditor && followUpReads == 1) fixture.setEditor("nExtra", 1)
+            }
+            val result = fixture.run()
+            assertEquals(result.summary, !changeEditor, result.success)
+            assertEquals("visual_post_screen_changed", result.data["observation_retry_reason_code"]?.jsonPrimitive?.content)
+            assertEquals(2, followUpReads)
+            assertEquals(if (changeEditor) listOf("n") else listOf("n", "v"), fixture.touched)
+            if (!changeEditor) {
+                assertEquals(2, result.data.getValue("completed_keys").jsonPrimitive.int)
+                assertEquals("nv", fixture.port.frame.inputTarget?.text)
+                assertEquals(2, fixture.port.frame.inputTarget?.selectionEnd)
+            }
+        }
+    }
+
+    @Test fun followUpObservationSharesTheSingleDispatchRetryBudget() = runBlocking {
+        val fixture = FollowUpImageFixture()
+        var firstRefusal = true
+        var followUpReads = 0
+        fixture.port.beforeWrite = {
+            if (!firstRefusal) null else {
+                firstRefusal = false
+                ControlEffect(false, false, "screen_changed")
+            }
+        }
+        fixture.port.denyVisual = {
+            if (fixture.touched.isEmpty()) null else {
+                followUpReads++
+                "visual_post_screen_changed"
+            }
+        }
+        val result = fixture.run()
+        assertFalse(result.success)
+        assertEquals("visual_post_screen_changed", result.data["observation_reason_code"]?.jsonPrimitive?.content)
+        assertNull(result.data["observation_retry_reason_code"])
+        assertEquals(1, followUpReads)
+        assertEquals(listOf("n"), fixture.touched)
+    }
+
     @Test fun visualSequenceWithoutConfirmedImageOrActiveSessionCannotWrite() = runBlocking {
         val port = Port()
         val control = GenericControl(port, { true })
@@ -471,8 +587,14 @@ class GenericControlTest {
         var effect = ControlEffect(true, true, "action_acknowledged")
         var visualProof: VisualTargetProof? = null
         var onWrite: ((JsonObject) -> Unit)? = null
-        override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = visualProof?.copy(
-            id = java.util.UUID.randomUUID().toString(), at = System.currentTimeMillis())
+        var denyVisual: (() -> String?)? = null
+        private var lastVisualDenial: String? = null
+        override fun visualFailure() = lastVisualDenial ?: super.visualFailure()
+        override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? {
+            lastVisualDenial = denyVisual?.invoke()
+            if (lastVisualDenial != null) return null
+            return visualProof?.copy(id = java.util.UUID.randomUUID().toString(), at = System.currentTimeMillis())
+        }
         var onCapture: (() -> Unit)? = null
         var beforeWrite: (() -> ControlEffect?)? = null
         override suspend fun capture(): ControlFrame {
