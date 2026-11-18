@@ -1,12 +1,16 @@
 package ai.closepaw.chatgpt.control
 
+import ai.closepaw.chatgpt.operations.OperationDispatcher
+import ai.closepaw.chatgpt.operations.OperationTaskStore
 import ai.closepaw.chatgpt.operations.OperationInvocation
 import ai.closepaw.chatgpt.operations.OperationReadiness
 import ai.closepaw.chatgpt.operations.OperationRegistry
 import ai.closepaw.chatgpt.operations.OperationSchemaValidator
 import ai.closepaw.model.ScreenImage
 import ai.closepaw.model.ScreenImageSource
+import java.nio.file.Files
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
@@ -115,7 +119,7 @@ class GenericControlTest {
      * explicitly approved; all subsequent native effects still need a newly
      * captured image and a confirmed edit result.
      */
-    @Test fun boundedVisualKeySequenceConfirmsLiteralAndImageOnlySpace() = runBlocking {
+    @Test fun boundedVisualKeySequenceConfirmsLiteralAndImageOnlySpace() = runTest {
         val port = Port()
         val active = ControlSession().apply { start() }
         port.controlSession = active
@@ -158,7 +162,7 @@ class GenericControlTest {
             "test-image", TapBounds(0,0,200,250), "test-window", System.currentTimeMillis(),
             scope = "keyboard", sourceWindowId = 4, sourceImeWindowId = 4,
             sourceDisplayId = 0, rotation = 0, displayGeneration = 1,
-            disclosedRegions = listOf(TapBounds(0,0,200,250)))
+            imeBounds = "0 0 200 250", disclosedRegions = listOf(TapBounds(0,0,200,250)))
         port.onWrite = { req ->
             val label = when (req["node_id"]?.jsonPrimitive?.int) {
                 keyA.id -> "a"
@@ -221,9 +225,56 @@ class GenericControlTest {
         assertTrue(observed.success)
         assertFalse(observed.data.getValue("output_truncated").jsonPrimitive.boolean)
         assertEquals(listOf(keyA.id, space.id), ids(observed.data))
-        val result = control.visualKeySequence(request(observed.data))
-        assertTrue(result.summary + ": " + result.data, result.success)
-        assertEquals(2, result.data.getValue("completed_keys").jsonPrimitive.int)
+        val ledger = Files.createTempDirectory("visual-sequence-dispatch").toFile()
+        try {
+            val scope = this
+            val operation = checkNotNull(registry.get(GenericControlOperations.VISUAL_KEY_SEQUENCE)).descriptor
+            var consent = true
+            val dispatcher = OperationDispatcher(registry, OperationTaskStore(ledger.resolve("tasks.json")), scope,
+                operationAllowed = { consent && GenericControlOperations.allowsExecutionWithGenericControl(it) },
+                operationEpoch = { if (GenericControlOperations.requiresExecutionEpoch(it))
+                    port.session()?.epoch ?: -1L else 0L })
+            fun executeArgs(id: String, input: JsonObject) = buildJsonObject {
+                put("request_id", id); put("operation_id", operation.id)
+                put("operation_version", operation.version); put("schema_hash", operation.schemaHash)
+                put("input", input)
+            }
+            fun accepted(id: String, input: JsonObject): JsonObject =
+                dispatcher.execute(executeArgs(id, input)).also {
+                    assertEquals("accepted", it.getValue("status").jsonPrimitive.content)
+                }
+            fun task(accepted: JsonObject): JsonObject {
+                testScheduler.runCurrent()
+                return dispatcher.getTask(buildJsonObject { put("task_id", accepted.getValue("task_id")) })
+            }
+            val valid = request(observed.data)
+            consent = false
+            val denied = dispatcher.execute(executeArgs("disabled", valid))
+            assertEquals("permission_denied", denied.getValue("error_code").jsonPrimitive.content)
+            consent = true
+            port.controlSession = null
+            val missing = task(accepted("missing", valid))
+            assertEquals("explicit_active_session_required", missing.getValue("summary").jsonPrimitive.content)
+            assertEquals(0, port.writes)
+            port.controlSession = active
+            // A replacement session can have the same numeric epoch, but not the old session ID.
+            val queuedWrongOwner = accepted("replacement", valid)
+            port.controlSession = ControlSession().apply { start() }
+            assertEquals("control_session_id_mismatch", task(queuedWrongOwner).getValue("summary").jsonPrimitive.content)
+            assertEquals(0, port.writes)
+            port.controlSession = active
+            val queuedOldEpoch = accepted("old-epoch", valid)
+            active.pause()
+            assertEquals("control_session_changed_before_start",
+                task(queuedOldEpoch).getValue("summary").jsonPrimitive.content)
+            assertEquals(0, port.writes)
+            check(active.beginResume()); active.finishResume(active.epoch, true)
+            val confirmed = task(accepted("active", request(observeRequested().data)))
+            assertEquals("succeeded", confirmed.getValue("state").jsonPrimitive.content)
+            val data = confirmed.getValue("result").jsonObject.getValue("data").jsonObject
+            assertEquals(2, data.getValue("completed_keys").jsonPrimitive.int)
+            assertEquals(1, data.getValue("confirmed_image_fallback_spaces").jsonPrimitive.int)
+        } finally { ledger.deleteRecursively() }
         assertEquals("a ", port.frame.inputTarget?.text)
         assertEquals(2, port.frame.inputTarget?.selectionStart)
         assertEquals(2, port.frame.inputTarget?.selectionEnd)
@@ -245,6 +296,70 @@ class GenericControlTest {
         assertEquals(1, stopped.data.getValue("completed_keys").jsonPrimitive.int)
         assertFalse(control.visualKeySequence(changed).success)
         assertEquals(3, port.writes)
+        val suggestion = key(99, "s", "8 0 25 9")
+        port.frame = originalFrame.copy(nodes = nodes + suggestion)
+        port.onWrite = { input ->
+            updateEditor(input)
+            port.frame = port.frame.copy(nodes = port.frame.nodes.filterNot { it.id == suggestion.id })
+        }
+        val samePhysicalKeys = control.visualKeySequence(request(observeRequested().data))
+        assertTrue(samePhysicalKeys.summary, samePhysicalKeys.success)
+        assertEquals(5, port.writes)
+
+        port.frame = originalFrame
+        port.onWrite = updateEditor
+        val preceding = port.writes
+        var afterFirst = 0
+        port.onCapture = {
+            // First postcondition initially matches. The next fresh read has an
+            // unproven suffix despite the unchanged caret.
+            if (port.writes == preceding + 1 && ++afterFirst == 2 && port.frame.inputTarget?.text == "a") {
+                val edited = port.frame.inputTarget!!.copy(text = "abcdefghi")
+                port.frame = port.frame.copy(inputTarget = edited,
+                    nodes = port.frame.nodes.map { if (it.id == edited.id) edited else it })
+            }
+        }
+        val unexpectedValue = control.visualKeySequence(request(observeRequested().data))
+        assertFalse(unexpectedValue.success)
+        assertTrue(unexpectedValue.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+        assertEquals(1, unexpectedValue.data.getValue("completed_keys").jsonPrimitive.int)
+        assertEquals(preceding + 1, port.writes)
+        port.onCapture = null
+        port.frame = originalFrame
+        val beforeRetry = port.writes
+        var remaining = 1
+        port.beforeWrite = {
+            if (remaining-- > 0) ControlEffect(false, false, "screen_changed") else null
+        }
+        val retry = control.visualKeySequence(request(observeRequested().data))
+        assertTrue(retry.summary, retry.success)
+        assertEquals(beforeRetry + 2, port.writes)
+        var refusals = 0
+        port.frame = originalFrame
+        port.beforeWrite = { refusals++; ControlEffect(false, false, "screen_changed") }
+        val blockedRetry = control.visualKeySequence(request(observeRequested().data))
+        assertFalse(blockedRetry.success)
+        assertFalse(blockedRetry.data.getValue("action_attempted").jsonPrimitive.boolean)
+        assertEquals(2, refusals)
+        port.beforeWrite = null
+
+        port.frame = originalFrame
+        val initialProof = checkNotNull(port.visualProof)
+        val beforeMask = port.writes
+        port.onWrite = { input ->
+            updateEditor(input)
+            // Crop/center are still visible, but part of the actual Space key is masked.
+            port.visualProof = initialProof.copy(disclosedRegions = listOf(TapBounds(64, 170, 124, 200)))
+        }
+        val masked = control.visualKeySequence(request(observeRequested().data))
+        assertEquals("keyboard_sequence_pixels_unverified", masked.summary)
+        assertEquals(beforeMask + 1, port.writes)
+        port.visualProof = initialProof
+        port.frame = originalFrame
+        val beforePause = port.writes
+        port.onWrite = { input -> updateEditor(input); active.pause() }
+        assertFalse(control.visualKeySequence(request(observeRequested().data)).success)
+        assertEquals(beforePause + 1, port.writes)
     }
 
     @Test fun visualSequenceWithoutConfirmedImageOrActiveSessionCannotWrite() = runBlocking {
@@ -358,14 +473,18 @@ class GenericControlTest {
         var onWrite: ((JsonObject) -> Unit)? = null
         override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = visualProof?.copy(
             id = java.util.UUID.randomUUID().toString(), at = System.currentTimeMillis())
+        var onCapture: (() -> Unit)? = null
+        var beforeWrite: (() -> ControlEffect?)? = null
         override suspend fun capture(): ControlFrame {
             captures++
+            onCapture?.invoke()
             if (writes > 0 && transientPostReads > 0) {
                 transientPostReads--; return frame.copy(reason = "active_root_missing")
             }
             return frame
         }
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
+            beforeWrite?.invoke()?.let { return it }
             writes++
             if (onWrite != null) { onWrite?.invoke(input); return effect }
             if (changeOnWrite) this.frame = this.frame.copy(fingerprint = "post-$writes",

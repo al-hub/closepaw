@@ -39,7 +39,7 @@ class KeyboardResultSelectionTest {
     }
 
     @Test fun firstVisualCharacterToleratesOnlyUniqueOwnedWebEditorResizing() {
-        val pkg = "com.android.chrome"
+        val pkg = "example.otherbrowser"
         val ime = ControlKeyboard(2, "ime", "ime/.Ime")
         val field = ControlNode(6, parent = 5, className = "android.widget.EditText",
             bounds = "10 100 300 150", sourceWindowId = 1, sourcePackage = pkg, editable = true,
@@ -59,6 +59,9 @@ class KeyboardResultSelectionTest {
         assertFalse(verify(resized.copy(webEditorContainer = 22)))
         assertFalse(verify(resized.copy(bounds = "10 160 245 200")))
         assertFalse(verify(resized.copy(text = "nv")))
+        assertFalse(verify(resized.copy(text = "nvidia123")))
+        assertFalse(verify(resized.copy(focused = false)))
+        assertFalse(verify(resized.copy(nativeEditorId = "a-different-editor")))
         assertFalse(verify(resized.copy(selectionStart = 0)))
         assertFalse(verify(resized, listOf(resized.copy(id = 22))))
         assertFalse(verify(resized, win = "other"))
