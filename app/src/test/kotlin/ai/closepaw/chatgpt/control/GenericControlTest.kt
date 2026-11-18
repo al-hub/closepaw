@@ -1,5 +1,7 @@
 package ai.closepaw.chatgpt.control
 
+import ai.closepaw.model.ScreenImage
+import ai.closepaw.model.ScreenImageSource
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
@@ -103,6 +105,79 @@ class GenericControlTest {
         assertEquals(1, port.writes) // Never send "b" or retry "a".
     }
 
+
+    /** E252-2: the original image and each of its role/rect pairs must be
+     * explicitly approved; all subsequent native effects still need a newly
+     * captured image and a confirmed edit result.
+     */
+    @Test fun boundedVisualKeySequenceRunsTwoIndependentlyConfirmedLiterals() = runBlocking {
+        val port = Port()
+        val active = ControlSession().apply { start() }
+        port.controlSession = active
+        val field = ControlNode(1, text = "", editable = true, focused = true,
+            focusable = true, selectionStart = 0, selectionEnd = 0,
+            sourceWindowId = 3, sourcePackage = "example.app")
+        val keyA = ControlNode(2, text = "a", keyboardKey = "a",
+            bounds = "10 10 30 30", sourceWindowId = 4, sourcePackage = "ime",
+            visualKeyCandidate = true)
+        val keyB = keyA.copy(id = 3, text = "b", keyboardKey = "b",
+            bounds = "40 10 60 30")
+        port.frame = port.frame.copy(nodes = listOf(field, keyA, keyB),
+            keyboard = ControlKeyboard(4, "ime", "ime/.Keyboard"),
+            inputTargetId = field.id, inputTarget = field)
+        port.visualProof = VisualTargetProof(
+            ScreenImage(100, 100, "image/jpeg", byteArrayOf(1), ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
+            "test-image", TapBounds(0,0,100,100), "test-window", System.currentTimeMillis(),
+            scope = "keyboard", sourceWindowId = 4, sourceImeWindowId = 4,
+            sourceDisplayId = 0, rotation = 0, displayGeneration = 1,
+            disclosedRegions = listOf(TapBounds(0,0,100,100)))
+        port.onWrite = { req ->
+            val label = if (req["node_id"]?.jsonPrimitive?.int == keyA.id) "a" else "b"
+            val old = checkNotNull(port.frame.inputTarget)
+            val updated = old.copy(text = old.text + label, selectionStart = old.text.length + 1,
+                selectionEnd = old.text.length + 1, empty = false)
+            port.frame = port.frame.copy(inputTarget = updated,
+                nodes = port.frame.nodes.map { if (it.id == updated.id) updated else it },
+                fingerprint = "after-" + updated.text.length)
+        }
+        val control = GenericControl(port, { true })
+        val observed = control.observe(filter = "keyboard_sequence_candidate",
+            includeImage = true, imageScope = "keyboard")
+        assertTrue(observed.success)
+        val id = observed.data.getValue("observation_id").jsonPrimitive.content
+        val proofId = observed.data.getValue("visual").jsonObject.getValue("visual_id").jsonPrimitive.content
+        fun step(nodeId: Int, label: String, left: Int, right: Int) = buildJsonObject {
+            put("node_id", nodeId); put("label", label)
+            put("image_rect", JsonArray(listOf(left,14,right,24).map { JsonPrimitive(it) }))
+        }
+        val request = buildJsonObject {
+            put("session_id", active.id); put("observation_id", id)
+            put("visual_id", proofId); put("visual_target_confirmed", true)
+            put("text", "ab"); put("steps", JsonArray(listOf(step(2,"a",14,24),step(3,"b",44,54))))
+        }
+        val result = control.visualKeySequence(request)
+        assertTrue(result.summary + ": " + result.data, result.success)
+        assertEquals(2, result.data.getValue("completed_keys").jsonPrimitive.int)
+        assertEquals("ab", port.frame.inputTarget?.text)
+        assertEquals(2, port.writes)
+    }
+
+    @Test fun visualSequenceWithoutConfirmedImageOrActiveSessionCannotWrite() = runBlocking {
+        val port = Port()
+        val control = GenericControl(port, { true })
+        val request = buildJsonObject {
+            put("observation_id", observe(control))
+            put("visual_id", "missing")
+            put("visual_target_confirmed", true)
+            put("text", "ab")
+            put("steps", JsonArray(emptyList()))
+        }
+        val result = control.visualKeySequence(request)
+        assertFalse(result.success)
+        assertEquals("explicit_active_session_required", result.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(0, port.writes)
+    }
+
     @Test fun unverifiedPopupReturnsBoundedDiagnosticsWithoutUnderlyingTargets() = runBlocking {
         val port = Port(); val diagnostics = buildJsonObject { put("window_count", 3); put("selection_reason", "unlinked_application_window") }
         port.frame = port.frame.copy(reason = "unlinked_application_window", windowDiagnostics = diagnostics)
@@ -194,6 +269,10 @@ class GenericControlTest {
         override val validatesAtNativeBoundary get() = nativeValidation
         var transientPostReads = 0
         var effect = ControlEffect(true, true, "action_acknowledged")
+        var visualProof: VisualTargetProof? = null
+        var onWrite: ((JsonObject) -> Unit)? = null
+        override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = visualProof?.copy(
+            id = java.util.UUID.randomUUID().toString(), at = System.currentTimeMillis())
         override suspend fun capture(): ControlFrame {
             captures++
             if (writes > 0 && transientPostReads > 0) {
@@ -203,6 +282,7 @@ class GenericControlTest {
         }
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
             writes++
+            if (onWrite != null) { onWrite?.invoke(input); return effect }
             if (changeOnWrite) this.frame = this.frame.copy(fingerprint = "post-$writes",
                 packageName = if (input["action"]?.jsonPrimitive?.content == "open_app") input.getValue("package_name").jsonPrimitive.content else frame.packageName)
             return effect
