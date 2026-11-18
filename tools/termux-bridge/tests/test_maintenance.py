@@ -182,6 +182,64 @@ def test_unknown_or_corrupt_history_refuses_update_without_replay(transaction, c
     assert c.script.read_bytes() == original
 
 
+
+def test_historical_unknown_retains_original_result_and_never_replays(transaction):
+    """A previous effect may have happened, but UNKNOWN must never authorize replay."""
+    from time import monotonic, sleep
+    from conftest import request_json, stop_process
+
+    m, c, original, _, revision = transaction
+    payload = {'request_id': 'historic-unknown', 'command': 'printf 1 >> unknown-effects'}
+    submitted = request_json(c.port, 'POST', '/v1/jobs', payload)
+    assert submitted.status == 202
+    job_id = submitted.body['job_id']
+    deadline = monotonic() + 5
+    while monotonic() < deadline:
+        finished = request_json(c.port, 'GET', '/v1/jobs/' + job_id).body
+        if finished['state'] not in ('queued', 'running'):
+            break
+        sleep(.05)
+    else:
+        raise AssertionError('fixture command did not finish')
+
+    # Deliberately simulate an interrupted record after an effect already occurred.
+    # This is an isolated HOME; no live user record is touched.
+    effect = c.root.parent / 'closepaw/workspace/unknown-effects'
+    assert finished['exit_code'] == 0 and effect.read_text() == '1'
+    stop_process(c.child)
+    record = c.root / 'jobs' / (job_id + '.json')
+    unknown = json.loads(record.read_text())
+    unknown.update(state='interrupted', outcome_unknown=True, exit_code=None)
+    record.write_text(json.dumps(unknown))
+    original_bytes = record.read_bytes()
+    original_sha = hashlib.sha256(original_bytes).hexdigest()
+
+    c.launch()
+    c.wait_ready()
+    assert c.apply(revision)['status'] == 'outcome_unknown'
+    assert c.script.read_bytes() == original
+    assert not c.journal.exists()
+    assert c.child.poll() is None
+
+    readback = request_json(c.port, 'GET', '/v1/jobs/' + job_id)
+    assert readback.status == 200
+    assert readback.body['state'] == 'interrupted'
+    assert readback.body['outcome_unknown'] is True
+    assert readback.body['exit_code'] is None
+
+    # Same request + fingerprint returns the original unknown ID, not another run.
+    same = request_json(c.port, 'POST', '/v1/jobs', payload)
+    assert same.status == 202 and same.body['job_id'] == job_id
+    assert same.body['outcome_unknown'] is True
+    conflict = request_json(c.port, 'POST', '/v1/jobs',
+                            {'request_id': payload['request_id'], 'command': 'printf 2 >> unknown-effects'})
+    assert conflict.status == 409
+    assert conflict.body['error'] == 'request_id_conflict'
+    assert effect.read_text() == '1'
+    assert record.read_bytes() == original_bytes
+    assert hashlib.sha256(record.read_bytes()).hexdigest() == original_sha
+
+
 def test_activate_response_loss_does_not_kill_activated_candidate(transaction, monkeypatch):
     m, c, _, _, revision = transaction
     original_call = c.call
