@@ -184,6 +184,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         } else if (filter == "keyboard_image_candidate") {
             frame.nodes.filter { node -> node.keyboardImageCandidate &&
                 frame.visual?.scope == "keyboard" && KeyboardImageFallbackPolicy.canPropose(frame, node) }
+        } else if (filter == "keyboard_sequence_candidate") {
+            val ime = frame.keyboard
+            frame.nodes.filter { node -> ime != null && frame.visual?.scope == "keyboard" &&
+                node.sourceWindowId == ime.windowId && node.sourcePackage == ime.packageName &&
+                (node.visualKeyCandidate || node.keyboardImageCandidate && KeyboardImageFallbackPolicy.canPropose(frame, node)) }
         } else frame.nodes.filter { filter.isEmpty() || it.text.contains(filter, true) ||
             it.description.contains(filter, true) || it.resourceId.contains(filter, true) || it.keyboardKey.contains(filter, true) }
         val exposed = mutableListOf<ControlNode>()
@@ -281,6 +286,170 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         return actionNative(input, observation)
     }
+
+    /**
+     * A bounded, single-layout sequence from model-confirmed locations in one
+     * *real* keyboard image. Every subsequent step reacquires its own live image
+     * and passes through the existing visual_key native proof and postcondition.
+     * No layout, backspace, submit, coordinate guessing, or unknown-outcome retry.
+     */
+    suspend fun visualKeySequence(input: JsonObject): OperationResult {
+        var confirmed = 0
+        var touched = false
+        fun stop(reason: String, unknown: Boolean = false): OperationResult {
+            VisualImageCache.remove(current?.frame?.visual?.id)
+            current = null
+            return OperationResult(success = false, summary = reason, data = buildJsonObject {
+                put("reason_code", reason); put("completed_keys", confirmed)
+                put("action_attempted", touched); put("outcome_unknown", unknown)
+                put("input_method", "visual_keyboard_sequence")
+            })
+        }
+        if (!allowed()) return stop("generic_control_disabled")
+        val original = current ?: return stop("observation_required")
+        if (input["observation_id"]?.jsonPrimitive?.content != original.id)
+            return stop("stale_observation")
+        val session = port.session()?.takeIf {
+            it.explicit && it.state == ControlSession.State.ACTIVE &&
+                it.id == input["session_id"]?.jsonPrimitive?.content && it.epoch == original.epoch
+        } ?: return stop("explicit_active_session_required")
+        val firstProof = original.frame.visual ?: return stop("keyboard_visual_required")
+        if (firstProof.scope != "keyboard" || firstProof.sourceDisplayId != 0 ||
+            !firstProof.sourceDisclosureAllowed() ||
+            input["visual_id"]?.jsonPrimitive?.content != firstProof.id ||
+            input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
+            now() - firstProof.at !in 0L..10_000L)
+            return stop("keyboard_visual_proof_unavailable")
+        val ime = original.frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed }
+            ?: return stop("keyboard_interaction_not_authorized")
+        if (VisualKeyboardPolicy.proofOwnerRefusal(firstProof, ime) != null)
+            return stop("keyboard_visual_owner_unverified")
+        val editor = original.frame.inputTarget ?: return stop("keyboard_input_target_unverified")
+        if (editor.id != original.frame.inputTargetId || !editor.focused ||
+            !editor.editable || !editor.focusable || !editor.enabled || editor.password ||
+            editor.sourcePackage != original.frame.packageName ||
+            editor.sourceWindowId != original.frame.windowId ||
+            editor.text.isNotEmpty() || editor.selectionStart != 0 || editor.selectionEnd != 0)
+            return stop("keyboard_empty_editor_required")
+        val text = input["text"]?.jsonPrimitive?.contentOrNull ?: return stop("keyboard_text_required")
+        val plan = UnifiedInputPolicy.plan(editor, text, "keyboard", "empty", false)
+        if (plan.refusal != null) return stop(plan.refusal)
+        val labels = HangulKeyComposer.labels(text)
+        val submitted = input["steps"] as? JsonArray ?: return stop("keyboard_steps_required")
+        if (labels.size !in 2..6 || submitted.size != labels.size)
+            return stop("keyboard_sequence_limit")
+        data class Step(val label: String, val originalNode: ControlNode, val crop: TapBounds)
+        val planned = mutableListOf<Step>()
+        for (i in labels.indices) {
+            val entry = submitted[i] as? JsonObject ?: return stop("keyboard_sequence_step_invalid")
+            val label = entry["label"]?.jsonPrimitive?.content ?: return stop("keyboard_sequence_step_invalid")
+            val id = entry["node_id"]?.jsonPrimitive?.intOrNull ?: return stop("keyboard_sequence_step_invalid")
+            if (label != labels[i] || KeyboardImageFallbackPolicy.key(label)?.kind !in
+                setOf(KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE))
+                return stop("keyboard_sequence_literal_only")
+            val node = original.frame.nodes.singleOrNull { it.id == id }
+                ?: return stop("keyboard_sequence_candidate_undisclosed")
+            if ((!node.visualKeyCandidate && !node.keyboardImageCandidate) ||
+                node.sourceWindowId != ime.windowId || node.sourcePackage != ime.packageName)
+                return stop("keyboard_sequence_candidate_unverified")
+            val native = if (node.keyboardImageCandidate) KeyboardImageFallbackPolicy.key(label)
+                else VisualKeyboardPolicy.identifyCandidate(node, ime)
+            if (native?.label != label || native.kind !in
+                setOf(KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE))
+                return stop("keyboard_sequence_literal_unverified")
+            VisualKeyboardPolicy.refusal(original.verificationFrame, node, "keyboard",
+                label.takeIf { node.keyboardImageCandidate })?.let { return stop(it) }
+            val raw = entry["image_rect"] as? JsonArray ?: return stop("keyboard_sequence_step_invalid")
+            if (raw.size != 4) return stop("keyboard_sequence_step_invalid")
+            val coords = raw.map { it.jsonPrimitive.intOrNull ?: return stop("keyboard_sequence_step_invalid") }
+            val crop = TapBounds(coords[0], coords[1], coords[2], coords[3])
+            val inScreen = firstProof.map(crop) ?: return stop("keyboard_sequence_pixels_unverified")
+            val nodeBounds = KeyboardImageFallbackPolicy.bounds(node.bounds)
+                ?: return stop("keyboard_visual_bounds_invalid")
+            if (!nodeBounds.contains(inScreen)) return stop("keyboard_sequence_pixels_unverified")
+            planned.add(Step(label, node, crop))
+        }
+        fun layout(frame: ControlFrame): List<String> {
+            val keyboard = frame.keyboard ?: return emptyList()
+            return frame.nodes.filter { node ->
+                node.sourceWindowId == keyboard.windowId && node.sourcePackage == keyboard.packageName &&
+                    (node.visualKeyCandidate || node.keyboardImageCandidate)
+            }.map { node ->
+                listOf(node.bounds, node.className, node.keyboardKey,
+                    node.description, node.visualKeyChildCount.toString(),
+                    node.keyboardImageCandidate.toString()).joinToString("|")
+            }.sorted()
+        }
+        val initialLayout = layout(original.verificationFrame)
+        if (initialLayout.isEmpty()) return stop("keyboard_sequence_layout_unverified")
+        for ((index, step) in planned.withIndex()) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (!allowed() || port.session() !== session ||
+                session.state != ControlSession.State.ACTIVE || session.epoch != original.epoch)
+                return stop("control_session_changed_observe_again")
+            if (index > 0) {
+                val fresh = observe(filter = "keyboard_sequence_candidate",
+                    includeImage = true, imageScope = "keyboard")
+                if (!fresh.success) return stop("keyboard_sequence_new_image_unavailable")
+            }
+            val active = current ?: return stop("keyboard_observation_lost")
+            val proof = active.frame.visual ?: return stop("keyboard_visual_required")
+            val liveEditor = active.frame.inputTarget ?: return stop("keyboard_input_target_changed")
+            if (active.epoch != original.epoch || active.frame.packageName != original.frame.packageName ||
+                active.frame.windowId != original.frame.windowId || active.frame.keyboard != ime ||
+                active.frame.touchContext != original.frame.touchContext ||
+                active.frame.configurationRevision != original.frame.configurationRevision ||
+                liveEditor.resourceId != editor.resourceId || liveEditor.className != editor.className ||
+                liveEditor.sourceWindowId != editor.sourceWindowId ||
+                liveEditor.sourcePackage != editor.sourcePackage ||
+                liveEditor.bounds != editor.bounds || !liveEditor.focused ||
+                proof.scope != "keyboard" || proof.sourceDisplayId != firstProof.sourceDisplayId ||
+                proof.sourceImeWindowId != firstProof.sourceImeWindowId ||
+                proof.window != firstProof.window || proof.rotation != firstProof.rotation ||
+                proof.image.width != firstProof.image.width || proof.image.height != firstProof.image.height ||
+                !proof.sourceDisclosureAllowed() || layout(active.verificationFrame) != initialLayout)
+                return stop("keyboard_sequence_layout_or_target_changed")
+            val node = active.frame.nodes.singleOrNull { candidate ->
+                candidate.bounds == step.originalNode.bounds &&
+                    candidate.className == step.originalNode.className &&
+                    candidate.description == step.originalNode.description &&
+                    candidate.keyboardKey == step.originalNode.keyboardKey &&
+                    candidate.visualKeyChildCount == step.originalNode.visualKeyChildCount &&
+                    candidate.visualKeyCandidate == step.originalNode.visualKeyCandidate &&
+                    candidate.keyboardImageCandidate == step.originalNode.keyboardImageCandidate &&
+                    candidate.sourceWindowId == ime.windowId && candidate.sourcePackage == ime.packageName
+            } ?: return stop("keyboard_sequence_candidate_changed")
+            VisualKeyboardPolicy.refusal(active.verificationFrame, node, "keyboard",
+                step.label.takeIf { node.keyboardImageCandidate })?.let { return stop(it) }
+            val result = action(buildJsonObject {
+                put("session_id", session.id); put("observation_id", active.id)
+                put("action", "visual_key"); put("node_id", node.id)
+                put("visual_id", proof.id); put("visual_target_confirmed", true)
+                put("image_rect", JsonArray(listOf(step.crop.left, step.crop.top,
+                    step.crop.right, step.crop.bottom).map { JsonPrimitive(it) }))
+                if (node.keyboardImageCandidate) put("image_key_label", step.label)
+            })
+            val tried = result.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
+            touched = touched || tried
+            if (!result.success || result.data["app_result_verified"]?.jsonPrimitive?.booleanOrNull != true)
+                return stop(result.data["reason_code"]?.jsonPrimitive?.content ?: "keyboard_input_unconfirmed",
+                    unknown = tried)
+            confirmed++
+        }
+        val result = current?.frame?.inputTarget
+        if (result == null || result.text != plan.resultText ||
+            result.selectionStart != plan.resultText.length ||
+            result.selectionEnd != plan.resultText.length)
+            return stop("keyboard_final_text_unconfirmed", unknown = touched)
+        return OperationResult(summary = "Exact bounded visual keyboard sequence confirmed.",
+            data = buildJsonObject {
+                put("input_method", "visual_keyboard_sequence")
+                put("action_attempted", touched); put("outcome_unknown", false)
+                put("app_result_verified", true); put("completed_keys", confirmed)
+                current?.let { put("observation_id", it.id) }
+            })
+    }
+
     private suspend fun actionNative(input: JsonObject, observation: Observation): OperationResult {
         val started = now()
         val startedNs = System.nanoTime()
