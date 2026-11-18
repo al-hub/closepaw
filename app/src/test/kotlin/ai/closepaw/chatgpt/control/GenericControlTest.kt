@@ -110,29 +110,43 @@ class GenericControlTest {
      * explicitly approved; all subsequent native effects still need a newly
      * captured image and a confirmed edit result.
      */
-    @Test fun boundedVisualKeySequenceRunsTwoIndependentlyConfirmedLiterals() = runBlocking {
+    @Test fun boundedVisualKeySequenceConfirmsLiteralAndImageOnlySpace() = runBlocking {
         val port = Port()
         val active = ControlSession().apply { start() }
         port.controlSession = active
+        val ime = ControlKeyboard(4, "com.samsung.android.honeyboard",
+            "com.samsung.android.honeyboard/.service.HoneyBoardService")
         val field = ControlNode(1, text = "", editable = true, focused = true,
             focusable = true, selectionStart = 0, selectionEnd = 0,
             sourceWindowId = 3, sourcePackage = "example.app")
-        val keyA = ControlNode(2, text = "a", keyboardKey = "a",
-            bounds = "10 10 30 30", sourceWindowId = 4, sourcePackage = "ime",
+        fun key(id: Int, label: String, rect: String) = ControlNode(
+            id, text = label, keyboardKey = label, bounds = rect,
+            sourceWindowId = ime.windowId, sourcePackage = ime.packageName,
+            className = "android.view.ViewGroup", parent = 20, visualKeyChildCount = 1,
             visualKeyCandidate = true)
-        val keyB = keyA.copy(id = 3, text = "b", keyboardKey = "b",
-            bounds = "40 10 60 30")
-        port.frame = port.frame.copy(nodes = listOf(field, keyA, keyB),
-            keyboard = ControlKeyboard(4, "ime", "ime/.Keyboard"),
+        val keyA = key(2, "a", "54 118 77 158")
+        val space = ControlNode(3, description = "스페이스 키", bounds = "50 165 140 205",
+            sourceWindowId = ime.windowId, sourcePackage = ime.packageName,
+            className = "android.view.ViewGroup", parent = 20, visualKeyChildCount = 1,
+            keyboardImageCandidate = true)
+        val nodes = listOf(field, keyA, space,
+            key(4, ",", "26 165 49 205"), key(5, ".", "141 165 165 205"),
+            key(6, "ㄴ", "79 118 102 158"), key(7, "ㅇ", "104 118 127 158"))
+        port.frame = port.frame.copy(nodes = nodes, keyboard = ime,
             inputTargetId = field.id, inputTarget = field)
+        assertTrue(KeyboardImageFallbackPolicy.canPropose(port.frame, space))
         port.visualProof = VisualTargetProof(
-            ScreenImage(100, 100, "image/jpeg", byteArrayOf(1), ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
-            "test-image", TapBounds(0,0,100,100), "test-window", System.currentTimeMillis(),
+            ScreenImage(200, 250, "image/jpeg", byteArrayOf(1), ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
+            "test-image", TapBounds(0,0,200,250), "test-window", System.currentTimeMillis(),
             scope = "keyboard", sourceWindowId = 4, sourceImeWindowId = 4,
             sourceDisplayId = 0, rotation = 0, displayGeneration = 1,
-            disclosedRegions = listOf(TapBounds(0,0,100,100)))
+            disclosedRegions = listOf(TapBounds(0,0,200,250)))
         port.onWrite = { req ->
-            val label = if (req["node_id"]?.jsonPrimitive?.int == keyA.id) "a" else "b"
+            val label = when (req["node_id"]?.jsonPrimitive?.int) {
+                keyA.id -> "a"
+                space.id -> " "
+                else -> error("Unexpected native key")
+            }
             val old = checkNotNull(port.frame.inputTarget)
             val updated = old.copy(text = old.text + label, selectionStart = old.text.length + 1,
                 selectionEnd = old.text.length + 1, empty = false)
@@ -146,19 +160,21 @@ class GenericControlTest {
         assertTrue(observed.success)
         val id = observed.data.getValue("observation_id").jsonPrimitive.content
         val proofId = observed.data.getValue("visual").jsonObject.getValue("visual_id").jsonPrimitive.content
-        fun step(nodeId: Int, label: String, left: Int, right: Int) = buildJsonObject {
+        fun step(nodeId: Int, label: String, rect: List<Int>) = buildJsonObject {
             put("node_id", nodeId); put("label", label)
-            put("image_rect", JsonArray(listOf(left,14,right,24).map { JsonPrimitive(it) }))
+            put("image_rect", JsonArray(rect.map { JsonPrimitive(it) }))
         }
         val request = buildJsonObject {
             put("session_id", active.id); put("observation_id", id)
             put("visual_id", proofId); put("visual_target_confirmed", true)
-            put("text", "ab"); put("steps", JsonArray(listOf(step(2,"a",14,24),step(3,"b",44,54))))
+            put("text", "a "); put("steps", JsonArray(listOf(
+                step(keyA.id, "a", listOf(57,125,74,150)),
+                step(space.id, "Space", listOf(70,172,120,193)))))
         }
         val result = control.visualKeySequence(request)
         assertTrue(result.summary + ": " + result.data, result.success)
         assertEquals(2, result.data.getValue("completed_keys").jsonPrimitive.int)
-        assertEquals("ab", port.frame.inputTarget?.text)
+        assertEquals("a ", port.frame.inputTarget?.text)
         assertEquals(2, port.writes)
     }
 
