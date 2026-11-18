@@ -142,13 +142,17 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     fun invalidate(clearSelections: Boolean = false) { pendingTerminal = null; VisualImageCache.remove(current?.frame?.visual?.id); current = null; port.invalidate(); if (clearSelections) port.clearSelections() }
 
     suspend fun observe(filter: String = "", includeImage: Boolean = false, imageScope: String = "app",
-        keyboardKeyExact: String? = null): OperationResult {
+        keyboardKeyExact: String? = null, keyboardSequenceLabels: List<String>? = null): OperationResult {
         VisualImageCache.remove(current?.frame?.visual?.id); current = null
         chainStarted = now(); chainActions = 0; noProgress = 0
         if (!allowed()) return failure("generic_control_disabled")
         if (keyboardKeyExact != null && (filter.isNotEmpty() ||
                 KeyboardKeyPolicy.identifyLabel(keyboardKeyExact, "")?.label != keyboardKeyExact))
             return failure("keyboard_key_exact_invalid")
+        if (keyboardSequenceLabels != null && (filter.isNotEmpty() || keyboardKeyExact != null ||
+                !includeImage || imageScope != "keyboard" || keyboardSequenceLabels.size !in 1..6 ||
+                keyboardSequenceLabels.any { VisualSequenceCandidates.literal(it) == null }))
+            return failure("keyboard_sequence_labels_invalid")
         if (imageScope !in setOf("app", "keyboard", "display", "screen_observe") || (imageScope != "app" && !includeImage)) return failure("image_scope_invalid")
         val visualEpoch = port.session()?.epoch
         port.presentation(ControlSession.VisualPhase.OBSERVING, visualEpoch)
@@ -167,17 +171,20 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 else -> frame.copy(visual = visual)
             }
         }
-        val result = publish(frame, filter, keyboardKeyExact)
+        val result = publish(frame, filter, keyboardKeyExact, keyboardSequenceLabels)
         port.presentation(if (result.success) ControlSession.VisualPhase.WAITING else ControlSession.VisualPhase.FAILED, visualEpoch)
         port.feedbackAtEpoch(if (result.success) "접근성 확인 완료 · 다음 명령 대기" else "화면 확인 실패 · 재관찰 필요", visualEpoch)
         return result
     }
-    private fun publish(frame: ControlFrame, filter: String = "", keyboardKeyExact: String? = null): OperationResult {
+    private fun publish(frame: ControlFrame, filter: String = "", keyboardKeyExact: String? = null,
+        keyboardSequenceLabels: List<String>? = null): OperationResult {
         if (!allowed()) { current = null; return failure("generic_control_disabled") }
         if (frame.reason != null) { current = null; return failure(frame.reason, diagnostics = frame.windowDiagnostics) }
         val rendered = mutableListOf<JsonElement>()
         var size = 0
-        val candidates = if (keyboardKeyExact != null) {
+        val candidates = if (keyboardSequenceLabels != null) {
+            VisualSequenceCandidates.select(frame, keyboardSequenceLabels)
+        } else if (keyboardKeyExact != null) {
             val ime = frame.keyboard?.takeIf { it.readAllowed }
             frame.nodes.filter { node -> ime != null && node.sourceWindowId == ime.windowId &&
                 node.sourcePackage == ime.packageName && node.keyboardKey == keyboardKeyExact }
@@ -338,20 +345,21 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val submitted = input["steps"] as? JsonArray ?: return stop("keyboard_steps_required")
         if (labels.size !in 2..6 || submitted.size != labels.size)
             return stop("keyboard_sequence_limit")
+        val candidateIds = VisualSequenceCandidates.select(original.verificationFrame, labels).map { it.id }.toSet()
         data class Step(val label: String, val originalNode: ControlNode, val crop: TapBounds)
         val planned = mutableListOf<Step>()
         for (i in labels.indices) {
             val entry = submitted[i] as? JsonObject ?: return stop("keyboard_sequence_step_invalid")
             val label = entry["label"]?.jsonPrimitive?.content ?: return stop("keyboard_sequence_step_invalid")
             val id = entry["node_id"]?.jsonPrimitive?.intOrNull ?: return stop("keyboard_sequence_step_invalid")
-            if (label != labels[i] || KeyboardImageFallbackPolicy.key(label)?.kind !in
-                setOf(KeyboardKeyPolicy.Kind.CHARACTER, KeyboardKeyPolicy.Kind.SPACE))
+            if (label != labels[i] || VisualSequenceCandidates.literal(label) == null)
                 return stop("keyboard_sequence_literal_only")
             val node = original.frame.nodes.singleOrNull { it.id == id }
                 ?: return stop("keyboard_sequence_candidate_undisclosed")
             if ((!node.visualKeyCandidate && !node.keyboardImageCandidate) ||
                 node.sourceWindowId != ime.windowId || node.sourcePackage != ime.packageName)
                 return stop("keyboard_sequence_candidate_unverified")
+            if (id !in candidateIds) return stop("keyboard_sequence_candidate_not_unique")
             val native = if (node.keyboardImageCandidate) KeyboardImageFallbackPolicy.key(label)
                 else VisualKeyboardPolicy.identifyCandidate(node, ime)
             if (native?.label != label || native.kind !in
@@ -392,8 +400,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 session.state != ControlSession.State.ACTIVE || session.epoch != original.epoch)
                 return stop("control_session_changed_observe_again")
             if (index > 0) {
-                val fresh = observe(filter = "keyboard_sequence_candidate",
-                    includeImage = true, imageScope = "keyboard")
+                val fresh = observe(includeImage = true, imageScope = "keyboard",
+                    keyboardSequenceLabels = listOf(step.label))
                 if (!fresh.success) return stop("keyboard_sequence_new_image_unavailable")
             }
             val active = current ?: return stop("keyboard_observation_lost")

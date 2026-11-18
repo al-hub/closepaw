@@ -1,8 +1,13 @@
 package ai.closepaw.chatgpt.control
 
+import ai.closepaw.chatgpt.operations.OperationInvocation
+import ai.closepaw.chatgpt.operations.OperationReadiness
+import ai.closepaw.chatgpt.operations.OperationRegistry
+import ai.closepaw.chatgpt.operations.OperationSchemaValidator
 import ai.closepaw.model.ScreenImage
 import ai.closepaw.model.ScreenImageSource
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -129,11 +134,24 @@ class GenericControlTest {
             sourceWindowId = ime.windowId, sourcePackage = ime.packageName,
             className = "android.view.ViewGroup", parent = 20, visualKeyChildCount = 1,
             keyboardImageCandidate = true)
-        val nodes = listOf(field, keyA, space,
+        // A Samsung frame can report 83 candidates, including wrapper/label
+        // pairs, with Space after the presentation limit. Not scan truncation.
+        val earlierKeys = (0 until 38).flatMap { index ->
+            val id = 100 + index * 2
+            val x = 8 + index % 10 * 18
+            val y = 10 + index / 10 * 22
+            val label = (index % 10).toString()
+            listOf(key(id, label, "$x $y ${x + 15} ${y + 20}"),
+                key(id + 1, label, "${x + 2} ${y + 2} ${x + 13} ${y + 18}")
+                    .copy(parent = id, className = "android.widget.TextView", visualKeyChildCount = 0))
+        }
+        val keyALabel = key(8, "a", "56 121 75 154")
+            .copy(parent = keyA.id, className = "android.widget.TextView", visualKeyChildCount = 0)
+        val nodes = listOf(field) + earlierKeys + listOf(keyA, keyALabel,
             key(4, ",", "26 165 49 205"), key(5, ".", "141 165 165 205"),
-            key(6, "ㄴ", "79 118 102 158"), key(7, "ㅇ", "104 118 127 158"))
+            key(6, "ㄴ", "79 118 102 158"), key(7, "ㅇ", "104 118 127 158"), space)
         port.frame = port.frame.copy(nodes = nodes, keyboard = ime,
-            inputTargetId = field.id, inputTarget = field)
+            inputTargetId = field.id, inputTarget = field, outputLimit = 100)
         assertTrue(KeyboardImageFallbackPolicy.canPropose(port.frame, space))
         port.visualProof = VisualTargetProof(
             ScreenImage(200, 250, "image/jpeg", byteArrayOf(1), ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
@@ -155,27 +173,78 @@ class GenericControlTest {
                 fingerprint = "after-" + updated.text.length)
         }
         val control = GenericControl(port, { true })
-        val observed = control.observe(filter = "keyboard_sequence_candidate",
+        fun ids(data: JsonObject) = data.getValue("nodes").jsonArray.map { it.jsonObject.getValue("node_id").jsonPrimitive.int }
+        val unfiltered = control.observe(filter = "keyboard_sequence_candidate",
             includeImage = true, imageScope = "keyboard")
-        assertTrue(observed.success)
-        val id = observed.data.getValue("observation_id").jsonPrimitive.content
-        val proofId = observed.data.getValue("visual").jsonObject.getValue("visual_id").jsonPrimitive.content
+        assertTrue(unfiltered.success)
+        assertEquals(83, unfiltered.data.getValue("matched_node_count").jsonPrimitive.int)
+        assertTrue(unfiltered.data.getValue("security_scan_complete").jsonPrimitive.boolean)
+        assertTrue(unfiltered.data.getValue("output_truncated").jsonPrimitive.boolean)
+        assertFalse(space.id in ids(unfiltered.data))
+        val registry = OperationRegistry()
+        GenericControlOperations(control, port, Mutex(), readiness = { OperationReadiness() }).register(registry)
+        val observeHandler = checkNotNull(registry.get(GenericControlOperations.OBSERVE))
+        val requestedInput = buildJsonObject {
+            put("session_id", active.id); put("include_image", true); put("image_scope", "keyboard")
+            put("keyboard_sequence_labels", JsonArray(listOf(JsonPrimitive("a"), JsonPrimitive("Space"))))
+        }
+        assertNull(OperationSchemaValidator.validate(observeHandler.descriptor.inputSchema, requestedInput))
+        val wrongRole = JsonObject(requestedInput + ("keyboard_sequence_labels" to JsonArray(listOf(JsonPrimitive("Search")))))
+        assertEquals("keyboard_sequence_labels_invalid",
+            observeHandler.handler.invoke(OperationInvocation("invalid-role", wrongRole)).summary)
+        suspend fun observeRequested() = observeHandler.handler.invoke(OperationInvocation("targeted-observation", requestedInput))
         fun step(nodeId: Int, label: String, rect: List<Int>) = buildJsonObject {
             put("node_id", nodeId); put("label", label)
             put("image_rect", JsonArray(rect.map { JsonPrimitive(it) }))
         }
-        val request = buildJsonObject {
-            put("session_id", active.id); put("observation_id", id)
-            put("visual_id", proofId); put("visual_target_confirmed", true)
+        fun request(observed: JsonObject) = buildJsonObject {
+            put("session_id", active.id); put("observation_id", observed.getValue("observation_id"))
+            put("visual_id", observed.getValue("visual").jsonObject.getValue("visual_id"))
+            put("visual_target_confirmed", true)
             put("text", "a "); put("steps", JsonArray(listOf(
                 step(keyA.id, "a", listOf(57,125,74,150)),
                 step(space.id, "Space", listOf(70,172,120,193)))))
         }
-        val result = control.visualKeySequence(request)
+        val originalFrame = port.frame
+        for (ambiguous in listOf(space.copy(id = 9), keyA.copy(id = 9, bounds = "30 118 53 158"))) {
+            port.frame = originalFrame.copy(nodes = nodes + ambiguous)
+            val refused = observeRequested()
+            assertTrue(refused.success)
+            assertTrue(ids(refused.data).isEmpty())
+            val blocked = control.visualKeySequence(request(refused.data))
+            assertFalse(blocked.success)
+            assertFalse(blocked.data.getValue("action_attempted").jsonPrimitive.boolean)
+            assertEquals(0, port.writes)
+        }
+        port.frame = originalFrame
+        val observed = observeRequested()
+        assertTrue(observed.success)
+        assertFalse(observed.data.getValue("output_truncated").jsonPrimitive.boolean)
+        assertEquals(listOf(keyA.id, space.id), ids(observed.data))
+        val result = control.visualKeySequence(request(observed.data))
         assertTrue(result.summary + ": " + result.data, result.success)
         assertEquals(2, result.data.getValue("completed_keys").jsonPrimitive.int)
         assertEquals("a ", port.frame.inputTarget?.text)
+        assertEquals(2, port.frame.inputTarget?.selectionStart)
+        assertEquals(2, port.frame.inputTarget?.selectionEnd)
         assertEquals(2, port.writes)
+
+        // Changing any physical key after the verified first effect prevents the next touch.
+        port.frame = originalFrame
+        val updateEditor = checkNotNull(port.onWrite)
+        port.onWrite = { input ->
+            updateEditor(input)
+            port.frame = port.frame.copy(nodes = port.frame.nodes.map {
+                if (it.id == 7) it.copy(bounds = "105 118 127 158") else it
+            })
+        }
+        val changed = request(observeRequested().data)
+        val stopped = control.visualKeySequence(changed)
+        assertFalse(stopped.success)
+        assertEquals("keyboard_sequence_layout_or_target_changed", stopped.summary)
+        assertEquals(1, stopped.data.getValue("completed_keys").jsonPrimitive.int)
+        assertFalse(control.visualKeySequence(changed).success)
+        assertEquals(3, port.writes)
     }
 
     @Test fun visualSequenceWithoutConfirmedImageOrActiveSessionCannotWrite() = runBlocking {
