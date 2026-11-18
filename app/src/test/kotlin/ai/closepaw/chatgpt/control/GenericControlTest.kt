@@ -54,6 +54,55 @@ class GenericControlTest {
         assertEquals(0, port.writes)
     }
 
+    /** #252 E252-1: observed image-only space is not a native text-entry key.
+     * A separate fresh visual proof must authorize it; do not guess or dispatch.
+     */
+    @Test fun imageOnlySpaceIsNotImplicitlyDispatchedByNativeKeyboardSequence() = runBlocking {
+        val port = Port()
+        val editor = ControlNode(1, text = "", editable = true, focused = true,
+            focusable = true, selectionStart = 0, selectionEnd = 0,
+            sourceWindowId = 3, sourcePackage = "example.app")
+        val imageOnlySpace = ControlNode(2, clickable = true, keyboardImageCandidate = true,
+            bounds = "10 10 120 60", sourceWindowId = 4, sourcePackage = "ime")
+        port.frame = port.frame.copy(
+            nodes = listOf(editor, imageOnlySpace),
+            keyboard = ControlKeyboard(4, "ime", "ime/.Keyboard"),
+            inputTargetId = editor.id, inputTarget = editor)
+        val control = GenericControl(port, { true })
+        val result = control.action(input(observe(control), "input",
+            mapOf("text" to JsonPrimitive(" "), "method" to JsonPrimitive("keyboard"))))
+        assertFalse(result.success)
+        assertEquals("keyboard_keys_not_uniquely_observed",
+            result.data["reason_code"]?.jsonPrimitive?.content)
+        assertFalse(result.data.getValue("action_attempted").jsonPrimitive.boolean)
+        assertFalse(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+        assertEquals(0, port.writes)
+    }
+
+    /** A native sequence must not replay or continue when the first attempted key
+     * was acknowledged but the exact editor state never changed.
+     */
+    @Test fun nativeKeyboardSequenceStopsAfterAnUnconfirmedKeyWithoutReplay() = runBlocking {
+        val port = Port()
+        val editor = ControlNode(1, text = "", editable = true, focused = true,
+            focusable = true, selectionStart = 0, selectionEnd = 0,
+            sourceWindowId = 3, sourcePackage = "example.app")
+        val keyA = ControlNode(2, text = "a", keyboardKey = "a", textEntryKey = true,
+            clickable = true, sourceWindowId = 4, sourcePackage = "ime")
+        val keyB = ControlNode(3, text = "b", keyboardKey = "b", textEntryKey = true,
+            clickable = true, sourceWindowId = 4, sourcePackage = "ime")
+        port.frame = port.frame.copy(nodes = listOf(editor, keyA, keyB),
+            keyboard = ControlKeyboard(4, "ime", "ime/.Keyboard"),
+            inputTargetId = editor.id, inputTarget = editor)
+        val control = GenericControl(port, { true })
+        val result = control.action(input(observe(control), "input",
+            mapOf("text" to JsonPrimitive("ab"), "method" to JsonPrimitive("keyboard"))))
+        assertFalse(result.success)
+        assertTrue(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+        assertEquals(0, result.data.getValue("completed_keys").jsonPrimitive.int)
+        assertEquals(1, port.writes) // Never send "b" or retry "a".
+    }
+
     @Test fun unverifiedPopupReturnsBoundedDiagnosticsWithoutUnderlyingTargets() = runBlocking {
         val port = Port(); val diagnostics = buildJsonObject { put("window_count", 3); put("selection_reason", "unlinked_application_window") }
         port.frame = port.frame.copy(reason = "unlinked_application_window", windowDiagnostics = diagnostics)
