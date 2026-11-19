@@ -1,6 +1,7 @@
 package ai.closepaw.ui.settings
 
 import android.content.ContentValues
+import android.content.Intent
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +70,7 @@ internal fun PermissionsAdvancedSettingsPage(
     onBack: () -> Unit,
     onClose: () -> Unit
 ) {
+    val localContext = LocalContext.current
     Column(modifier = Modifier.fillMaxWidth()) {
         PageMastheadDrillDown(title = "System & Debug", onBack = onBack, onClose = onClose)
         Column(
@@ -144,6 +146,11 @@ internal fun PermissionsAdvancedSettingsPage(
                     }
                 }
             }
+            SettingsNavigationRow(
+                title = "Samsung keyboard structure",
+                subtitle = "Local, read-only diagnostic · no settings changes",
+                onClick = { localContext.startActivity(Intent(localContext, LocalImeGeometryActivity::class.java)) }
+            )
             Spacer(modifier = Modifier.height(20.dp))
             UpdateSection()
             Spacer(modifier = Modifier.height(20.dp))
