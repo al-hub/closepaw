@@ -37,6 +37,8 @@ internal object WindowVisualCapture {
         requestId: String? = null, observationOnly: Boolean = false,
         geometry: ImeSurfaceGeometry? = null, minimumScreenshotUptimeMs: Long = -1,
         nativeKeyboardDisplay: Boolean = false,
+        // Local-only guard: evaluate on Main at each native boundary and do not publish diagnostics.
+        captureRefusal: (() -> String?)? = null,
         awaitSlot: suspend () -> Unit = {}): VisualCaptureResult {
         fun failure(code: String) = VisualCaptureResult(reason=code)
         if (observationOnly && (!display || projection?.screenObservationAllowed() != true))
@@ -54,10 +56,21 @@ internal object WindowVisualCapture {
             ?: return failure("projection_frame_unavailable") else null
         val snapshotStart = if (nativeKeyboardDisplay) android.os.SystemClock.uptimeMillis() else -1L
         val captured = if (projected != null) null else withTimeoutOrNull(5_000) { withContext(Dispatchers.Main) {
+            captureRefusal?.invoke()?.let { nativeReason = it; return@withContext null }
             suspendCancellableCoroutine<AccessibilityService.ScreenshotResult?> { continuation ->
                 val callback = object : AccessibilityService.TakeScreenshotCallback {
                     override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
-                        if (continuation.isActive) continuation.resume(screenshot, onCancellation = { _: Throwable -> screenshot.hardwareBuffer.close() }) else screenshot.hardwareBuffer.close()
+                        if (!continuation.isActive) {
+                            screenshot.hardwareBuffer.close()
+                            return
+                        }
+                        captureRefusal?.invoke()?.let {
+                            screenshot.hardwareBuffer.close()
+                            nativeReason = it
+                            continuation.resume(null)
+                            return
+                        }
+                        continuation.resume(screenshot, onCancellation = { _: Throwable -> screenshot.hardwareBuffer.close() })
                     }
                     override fun onFailure(errorCode: Int) {
                         nativeReason = VisualCaptureFailure.native(errorCode)
@@ -91,7 +104,8 @@ internal object WindowVisualCapture {
                 val source = bitmap ?: return@withContext failure("screenshot_bitmap_copy_failed")
                 val coordinates = geometry?.frame ?: window
                 if (source.width != coordinates.right-coordinates.left || source.height != coordinates.bottom-coordinates.top) {
-                    recordGeometryMismatch(service, if (display) "display" else "window", source.width, source.height, window)
+                    if (captureRefusal == null)
+                        recordGeometryMismatch(service, if (display) "display" else "window", source.width, source.height, window)
                     return@withContext failure("screenshot_buffer_geometry_mismatch")
                 }
                 if (source.width.toLong()*source.height > 8_000_000) return@withContext failure("screenshot_pixel_limit")
@@ -124,7 +138,7 @@ internal object WindowVisualCapture {
                             awaitSlot()
                             // Window-isolated verification never uses a display fallback.
                             val isolated=capturePixels(service,surface.windowId,surface.bounds,
-                                minimumUptimeMs=displayTimestamp)
+                                minimumUptimeMs=displayTimestamp, captureRefusal=captureRefusal)
                             val expected=isolated.pixels ?: return@withContext failure("display_isolated_"+isolated.reason)
                             val coordinatesInDisplay = if (nativeKeyboardDisplay)
                                 KeyboardDisplayAlignment.locate(window,isolated.width,expected.size / isolated.width,surface.bounds)
@@ -198,14 +212,25 @@ internal object WindowVisualCapture {
     }
     private data class PixelResult(val pixels: IntArray? = null, val reason: String? = null, val width: Int = 0)
     private suspend fun capturePixels(service: AccessibilityService,id: Int,bounds: TapBounds,
-        minimumUptimeMs: Long = -1L): PixelResult {
+        minimumUptimeMs: Long = -1L, captureRefusal: (() -> String?)? = null): PixelResult {
         if(Build.VERSION.SDK_INT<34 || !bounds.valid) return PixelResult(reason="screenshot_geometry_unverified")
         var failure="screenshot_timeout"
         val captured=withTimeoutOrNull(5_000) { withContext(Dispatchers.Main) {
+            captureRefusal?.invoke()?.let { failure = it; return@withContext null }
             suspendCancellableCoroutine<AccessibilityService.ScreenshotResult?> { continuation ->
                 try { service.takeScreenshotOfWindow(id,service.mainExecutor,object:AccessibilityService.TakeScreenshotCallback {
                     override fun onSuccess(value: AccessibilityService.ScreenshotResult) {
-                        if(continuation.isActive) continuation.resume(value,onCancellation={ _:Throwable->value.hardwareBuffer.close() }) else value.hardwareBuffer.close()
+                        if (!continuation.isActive) {
+                            value.hardwareBuffer.close()
+                            return
+                        }
+                        captureRefusal?.invoke()?.let {
+                            value.hardwareBuffer.close()
+                            failure = it
+                            continuation.resume(null)
+                            return
+                        }
+                        continuation.resume(value,onCancellation={ _:Throwable->value.hardwareBuffer.close() })
                     }
                     override fun onFailure(code:Int) { failure=VisualCaptureFailure.native(code);if(continuation.isActive) continuation.resume(null) }
                 }) } catch(e:CancellationException) { throw e }
@@ -220,7 +245,8 @@ internal object WindowVisualCapture {
             val buffer=captured.hardwareBuffer
             val width=buffer.width;val height=buffer.height
             if(minimumUptimeMs < 0 && (width!=bounds.right-bounds.left || height!=bounds.bottom-bounds.top)) {
-                recordGeometryMismatch(service, "isolated_window", buffer.width, buffer.height, bounds)
+                if (captureRefusal == null)
+                    recordGeometryMismatch(service, "isolated_window", buffer.width, buffer.height, bounds)
                 return PixelResult(reason="screenshot_buffer_geometry_mismatch")
             }
             if(width<=0 || height<=0 || width.toLong()*height>8_000_000) return PixelResult(reason="screenshot_pixel_limit")
