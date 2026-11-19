@@ -567,6 +567,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val shellIds = mutableSetOf<String>()
             val keyboardScan = KeyboardScanDiagnostics()
             val keyboardCaptionSlots = mutableListOf<KeyboardCaptionSlot>()
+            // Same already-admitted IME traversal, no extra reads or public nodes.
+            val suggestionGeometry = if (!localImeDiagnostic && selected.keyboard?.let {
+                    it.packageName == LocalImeGeometryFixture.SAMSUNG && it.readAllowed && it.interactAllowed
+                } == true) mutableListOf<ImeGeometryNode>() else null
+            val imeGeometry = geometry ?: suggestionGeometry
             var visited = 0
             var deepest = 0
             val truncationReasons = linkedSetOf<String>()
@@ -593,7 +598,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val className = node.className?.toString().orEmpty()
                 val ownKeyboardNode = selected.keyboard?.packageName == node.packageName?.toString() &&
                     selected.keyboard?.windowId == node.windowId
-                if (geometry != null && keyboard && ownKeyboardNode && diagnosticSceneAllowed(pkg, selected.keyboard)) {
+                if (imeGeometry != null && keyboard && ownKeyboardNode && diagnosticSceneAllowed(pkg, selected.keyboard)) {
                     val kind = when {
                         resource.endsWith(":id/candidate_with_sub_text_layout") && className == "android.view.ViewGroup" ->
                             ImeGeometryNode.Kind.WRAPPER
@@ -603,7 +608,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     }
                     val eligible = node.isVisibleToUser && node.isEnabled && !node.isPassword &&
                         (Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive)
-                    geometry.add(ImeGeometryNode(index, parent, bounds(rect), kind, eligible))
+                    imeGeometry.add(ImeGeometryNode(index, parent, bounds(rect), kind, eligible))
                 }
                 val imageCandidate = keyboard && labelEvidence == null && ownKeyboardNode &&
                     !node.isPassword && (Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive) &&
@@ -761,7 +766,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     pkg == AndroidGeminiDraftUi.GOOGLE_HOST && geminiIdentityVerified) AndroidGeminiDraftUi.PACKAGE else null,
                 keyboard = selected.keyboard, inputTargetId = inputTarget?.id, inputTarget = inputTarget,
                 keyboardDiagnostics = selected.keyboard?.takeIf { it.readAllowed }?.let { keyboardScan.json() },
-                keyboardCaptionSlots = keyboardCaptionSlots)
+                keyboardCaptionSlots = keyboardCaptionSlots,
+                keyboardSuggestionGeometry = if (code == null && !truncated) suggestionGeometry.orEmpty() else emptyList())
             block(EmptyOwnedSurfacePolicy.restrict(frame,
                 selected.selection.members.size > 1 && root.windowId in selected.selection.members &&
                     window.id in selected.selection.members), native)

@@ -16,7 +16,7 @@ internal object VisualSequenceCandidates {
         val proof = frame.visual?.takeIf { it.scope == "keyboard" } ?: return emptyList()
         val ime = frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed } ?: return emptyList()
         val owned = frame.nodes.filter { imeOwns(ime, it) }
-        val evidence by lazy { StripEvidence(owned, ime, proof, frame.keyboardCaptionSlots) }
+        val evidence by lazy { StripEvidence(owned, ime, proof, frame) }
         return labels.distinct().map { label ->
             val role = literal(label) ?: return emptyList()
             val native = owned.filter {
@@ -47,7 +47,7 @@ internal object VisualSequenceCandidates {
         val proof = frame.visual?.takeIf { it.scope == "keyboard" } ?: return frame.nodes
         val ime = frame.keyboard ?: return frame.nodes
         val evidence by lazy {
-            StripEvidence(frame.nodes.filter { imeOwns(ime, it) }, ime, proof, frame.keyboardCaptionSlots)
+            StripEvidence(frame.nodes.filter { imeOwns(ime, it) }, ime, proof, frame)
         }
         // A strip can itself contain three aligned labels. Do not let it
         // become the first physical layout row during sequence renewal.
@@ -66,10 +66,7 @@ internal object VisualSequenceCandidates {
         if (VisualKeyboardPolicy.proofOwnerRefusal(proof, ime) != null || proof.sourceDisplayId != 0)
             return emptyList()
         return nodes.mapNotNull { node ->
-            if (node.parent < 0 || !node.visualKeyCandidate || node.keyboardImageCandidate ||
-                (!node.textEntryKey && node.visualKeyChildCount != 1) ||
-                VisualKeyboardPolicy.identifyCandidate(node, ime)?.kind != KeyboardKeyPolicy.Kind.CHARACTER)
-                return@mapNotNull null
+            if (node.parent < 0 || !physicalCharacter(node, ime)) return@mapNotNull null
             ownedBounds(node, proof)?.let { Cell(node, it) }
         }.groupBy { cell ->
             listOf(cell.node.parent, cell.rect.top, cell.rect.bottom, cell.rect.right - cell.rect.left)
@@ -82,6 +79,11 @@ internal object VisualSequenceCandidates {
         }
     }
 
+    private fun physicalCharacter(node: ControlNode, ime: ControlKeyboard): Boolean =
+        node.visualKeyCandidate && !node.keyboardImageCandidate &&
+            (node.textEntryKey || node.visualKeyChildCount == 1) &&
+            VisualKeyboardPolicy.identifyCandidate(node, ime)?.kind == KeyboardKeyPolicy.Kind.CHARACTER
+
     private fun wideCharacterLeaf(node: ControlNode, ime: ControlKeyboard): Boolean {
         if (!node.visualKeyCandidate || node.keyboardImageCandidate || !node.clickable ||
             node.longClickable || node.textEntryKey || node.visualKeyChildCount != 0 ||
@@ -91,16 +93,26 @@ internal object VisualSequenceCandidates {
     }
 
     private class StripEvidence(owned: List<ControlNode>, ime: ControlKeyboard, private val proof: VisualTargetProof,
-        privateSlots: List<KeyboardCaptionSlot>) {
+        frame: ControlFrame) {
         private val rows = physicalRows(owned, ime, proof)
         private val first = rows.minByOrNull { it.top }
-        private val captions = (privateSlots + owned.mapNotNull {
+        private val wrapped = if (first != null && frame.reason == null && !frame.truncated && !frame.navigationOnly &&
+            ime.packageName == LocalImeGeometryFixture.SAMSUNG && ime.readAllowed && ime.interactAllowed &&
+            proof.scope == "keyboard" && proof.sourceDisclosureAllowed())
+            WrappedImeSuggestionStrip.prove(frame.keyboardSuggestionGeometry, owned.filter { physicalCharacter(it, ime) },
+                first.top, KeyboardImageFallbackPolicy.bounds(proof.imeBounds), proof.window)
+        else emptyMap()
+        private val captions = (frame.keyboardCaptionSlots + owned.mapNotNull {
             if (!wideCharacterLeaf(it, ime)) null
             else ownedBounds(it, proof)?.let { r -> KeyboardCaptionSlot(it.parent, r) }
         }).groupBy { it.parent }
 
         fun isSuggestion(node: ControlNode): Boolean {
             val row = first ?: return false
+            val geometry = KeyboardImageFallbackPolicy.bounds(node.bounds) ?: return false
+            // Structural exclusion is not pixel certification. Physical keys
+            // still need a fully certified owned bound and their own row proof.
+            if (wrapped[node.id] == geometry) return true
             val target = ownedBounds(node, proof) ?: return false
             if (node.parent < 0 || rows.any { it.parent == node.parent } || target.bottom > row.top ||
                 target.bottom - target.top >= row.bottom - row.top) return false
