@@ -234,7 +234,7 @@ class GenericControlTest {
     }
 
     @Test fun ambiguousSuggestionGeometryOrOwnershipDoesNotResolveTheCollision() = runBlocking {
-        for (uncertain in listOf("same-parent", "overlap", "missing-row", "masked-strip", "native-key")) {
+        for (uncertain in listOf("same-parent", "overlap", "missing-row", "masked-strip", "native-key", "isolated-wide-key")) {
             val fixture = JamoCandidateFixture(suggestionStrip = true)
             val port = fixture.port
             val nodes = port.frame.nodes
@@ -243,6 +243,7 @@ class GenericControlTest {
                 "same-parent" -> nodes.map { if (it.id == 117) it.copy(parent = 134) else it }
                 "overlap" -> nodes.map { if (it.id == 117) it.copy(bounds = "858 2110 1252 2215") else it }
                 "native-key" -> nodes.map { if (it.id == 117) it.copy(textEntryKey = true) else it }
+                "isolated-wide-key" -> nodes.map { if (it.id == 117) it.copy(parent = 301) else it }
                 else -> nodes
             })
             if (uncertain == "masked-strip") port.visualProof = port.visualProof?.copy(
@@ -252,6 +253,18 @@ class GenericControlTest {
             assertFalse(uncertain, fixture.requestJamo(observed).success)
             assertEquals(uncertain, 0, port.writes)
         }
+    }
+
+    @Test fun wideKeyCorroboratedByItsPhysicalRowIsNotMistakenForARecommendation() = runBlocking {
+        val fixture = JamoCandidateFixture(suggestionStrip = true)
+        val port = fixture.port
+        port.frame = port.frame.copy(nodes = port.frame.nodes.filterNot { it.id == 164 }.map {
+            if (it.id == 163) it.copy(bounds = "854 2154 1220 2309", clickable = true,
+                visualKeyChildCount = 0)
+            else it
+        })
+        assertEquals(fixture.expectedIds, fixture.ids(fixture.observeJamo()))
+        assertEquals(0, port.writes)
     }
 
     @Test fun hangulSequenceRechecksRecommendationCollisionAndConfirmsImageSpace() = runBlocking {
@@ -293,6 +306,18 @@ class GenericControlTest {
         assertEquals("가 ", port.frame.inputTarget?.text)
         assertEquals(2, port.frame.inputTarget?.selectionStart)
         assertEquals(2, port.frame.inputTarget?.selectionEnd)
+    }
+
+    @Test fun undisclosedNonliteralSiblingCaptionsCanCorroborateTheStripWithoutBecomingTargets() = runBlocking {
+        val fixture = JamoCandidateFixture(suggestionStrip = true)
+        val port = fixture.port
+        val siblings = port.frame.nodes.filter { it.id in setOf(115, 118) }
+        val slots = siblings.map { KeyboardCaptionSlot(it.parent, checkNotNull(KeyboardImageFallbackPolicy.bounds(it.bounds))) }
+        port.frame = port.frame.copy(nodes = port.frame.nodes - siblings.toSet(), keyboardCaptionSlots = slots)
+        val observed = fixture.observeJamo()
+        assertEquals(fixture.expectedIds, fixture.ids(observed))
+        assertFalse(observed.toString().contains("keyboardCaptionSlots"))
+        assertEquals(0, port.writes)
     }
 
     /** E252-2: the original image and each of its role/rect pairs must be

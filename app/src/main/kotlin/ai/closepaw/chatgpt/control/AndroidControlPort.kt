@@ -533,6 +533,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             var gemini = false
             val shellIds = mutableSetOf<String>()
             val keyboardScan = KeyboardScanDiagnostics()
+            val keyboardCaptionSlots = mutableListOf<KeyboardCaptionSlot>()
             var visited = 0
             var deepest = 0
             val truncationReasons = linkedSetOf<String>()
@@ -567,6 +568,17 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     KeyboardImageFallbackPolicy.nodeShape(text, description, className,
                         node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
                         node.isTextEntryKey, node.childCount)))
+                // Keep only private structural evidence for a suggestion sibling
+                // that would otherwise be absent from the disclosed key tree.
+                if (keyboard && ownKeyboardNode && labelEvidence == null && !imageCandidate &&
+                    parent >= 0 && node.childCount == 0 && !node.isTextEntryKey && !node.isLongClickable &&
+                    node.isVisibleToUser && node.isEnabled && !node.isPassword && !node.isShowingHintText &&
+                    (Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive) &&
+                    (node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }) &&
+                    (text.isNotBlank() || description.isNotBlank())) {
+                    val slot = bounds(rect)
+                    if (slot.valid) keyboardCaptionSlots.add(KeyboardCaptionSlot(parent, slot))
+                }
                 val nativeEditorId = if (!keyboard && node.isEditable && node.isFocused && !node.isPassword &&
                     Build.VERSION.SDK_INT >= 33 && (Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive))
                     node.uniqueId?.takeIf { it.isNotBlank() } else null
@@ -703,7 +715,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 verifiedApplicationPackage = if (code == null && !truncated &&
                     pkg == AndroidGeminiDraftUi.GOOGLE_HOST && geminiIdentityVerified) AndroidGeminiDraftUi.PACKAGE else null,
                 keyboard = selected.keyboard, inputTargetId = inputTarget?.id, inputTarget = inputTarget,
-                keyboardDiagnostics = selected.keyboard?.takeIf { it.readAllowed }?.let { keyboardScan.json() })
+                keyboardDiagnostics = selected.keyboard?.takeIf { it.readAllowed }?.let { keyboardScan.json() },
+                keyboardCaptionSlots = keyboardCaptionSlots)
             block(EmptyOwnedSurfacePolicy.restrict(frame,
                 selected.selection.members.size > 1 && root.windowId in selected.selection.members &&
                     window.id in selected.selection.members), native)

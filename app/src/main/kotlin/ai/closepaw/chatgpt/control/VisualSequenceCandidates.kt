@@ -1,5 +1,8 @@
 package ai.closepaw.chatgpt.control
 
+/** Private geometry of an owned IME caption with no recognized key role. */
+internal data class KeyboardCaptionSlot(val parent: Int, val bounds: TapBounds)
+
 /** Select the requested roles from the full verified frame, before presentation
  * limits. This is candidate disclosure only, never image or touch authority. */
 internal object VisualSequenceCandidates {
@@ -13,7 +16,7 @@ internal object VisualSequenceCandidates {
         val proof = frame.visual?.takeIf { it.scope == "keyboard" } ?: return emptyList()
         val ime = frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed } ?: return emptyList()
         val owned = frame.nodes.filter { imeOwns(ime, it) }
-        val rows by lazy { physicalRows(owned, ime, proof) }
+        val evidence by lazy { StripEvidence(owned, ime, proof, frame.keyboardCaptionSlots) }
         return labels.distinct().map { label ->
             val role = literal(label) ?: return emptyList()
             val native = owned.filter {
@@ -22,13 +25,12 @@ internal object VisualSequenceCandidates {
             }
             val candidate = if (native.isNotEmpty()) {
                 val possibleStrip = native.filter { wideCharacterLeaf(it, ime) }
-                val physical = native.filterNot { it in possibleStrip && detachedFromRows(it, rows, proof) }
-                onePhysicalKey(physical)?.takeIf {
+                val physical = native.filterNot { it in possibleStrip && evidence.isSuggestion(it) }
+                onePhysicalKey(physical)?.takeIf { key ->
                     // An unproven wide leaf must neither win a collision nor
                     // be promoted on its own when only a suggestion is present.
-                    (it !in possibleStrip) &&
-                        (physical.size == native.size || rows.any { row -> row.keys.any { key -> key.node.id == it.id } }) &&
-                        VisualKeyboardPolicy.refusal(frame, it, "keyboard") == null
+                    (key !in possibleStrip && physical.size == native.size || evidence.corroboratesKey(key)) &&
+                        VisualKeyboardPolicy.refusal(frame, key, "keyboard") == null
                 }
             } else {
                 owned.singleOrNull { it.keyboardImageCandidate &&
@@ -44,11 +46,13 @@ internal object VisualSequenceCandidates {
     fun layoutNodes(frame: ControlFrame): List<ControlNode> {
         val proof = frame.visual?.takeIf { it.scope == "keyboard" } ?: return frame.nodes
         val ime = frame.keyboard ?: return frame.nodes
-        val rows by lazy { physicalRows(frame.nodes.filter { imeOwns(ime, it) }, ime, proof) }
+        val evidence by lazy {
+            StripEvidence(frame.nodes.filter { imeOwns(ime, it) }, ime, proof, frame.keyboardCaptionSlots)
+        }
         // A strip can itself contain three aligned labels. Do not let it
         // become the first physical layout row during sequence renewal.
         return frame.nodes.filterNot {
-            imeOwns(ime, it) && wideCharacterLeaf(it, ime) && detachedFromRows(it, rows, proof)
+            imeOwns(ime, it) && wideCharacterLeaf(it, ime) && evidence.isSuggestion(it)
         }
     }
 
@@ -86,20 +90,47 @@ internal object VisualSequenceCandidates {
         return r.right - r.left > 2L * (r.bottom - r.top)
     }
 
-    private fun detachedFromRows(node: ControlNode, rows: List<Row>, proof: VisualTargetProof): Boolean {
-        val first = rows.minByOrNull { it.top } ?: return false
-        val r = ownedBounds(node, proof) ?: return false
-        return node.parent >= 0 && rows.none { it.parent == node.parent } &&
-            r.bottom <= first.top && r.right - r.left > 2L * first.width &&
-            r.bottom - r.top < first.bottom - first.top
-    }
+    private class StripEvidence(owned: List<ControlNode>, ime: ControlKeyboard, private val proof: VisualTargetProof,
+        privateSlots: List<KeyboardCaptionSlot>) {
+        private val rows = physicalRows(owned, ime, proof)
+        private val first = rows.minByOrNull { it.top }
+        private val captions = (privateSlots + owned.mapNotNull {
+            if (!wideCharacterLeaf(it, ime)) null
+            else ownedBounds(it, proof)?.let { r -> KeyboardCaptionSlot(it.parent, r) }
+        }).groupBy { it.parent }
 
-    private fun ownedBounds(node: ControlNode, proof: VisualTargetProof): TapBounds? {
-        val ime = KeyboardImageFallbackPolicy.bounds(proof.imeBounds) ?: return null
-        return KeyboardImageFallbackPolicy.bounds(node.bounds)?.takeIf {
-            ime.contains(it) && proof.window.contains(it) && OwnedPixelPolicy.contains(proof.disclosedRegions, it)
+        fun isSuggestion(node: ControlNode): Boolean {
+            val row = first ?: return false
+            val target = ownedBounds(node, proof) ?: return false
+            if (node.parent < 0 || rows.any { it.parent == node.parent } || target.bottom > row.top ||
+                target.bottom - target.top >= row.bottom - row.top) return false
+            val slots = captions[node.parent].orEmpty().map { it.bounds }.filter {
+                it.top == target.top && it.bottom == target.bottom && it.right - it.left > 2L * row.width &&
+                    it.right - it.left > 2L * (it.bottom - it.top) && ownedBounds(it, proof)
+            }.sortedBy { it.left }
+            // Being detached is not enough: require a whole strip of separate
+            // same-parent captions. An isolated competing key remains ambiguous.
+            return slots.size >= 3 && target in slots && slots.zipWithNext().all { (a, b) -> a.right <= b.left }
+        }
+
+        fun corroboratesKey(node: ControlNode): Boolean {
+            val target = ownedBounds(node, proof) ?: return false
+            return rows.any { row ->
+                row.parent == node.parent && row.top == target.top && row.bottom == target.bottom &&
+                    (row.keys.any { it.node.id == node.id } ||
+                        row.keys.all { it.rect.right <= target.left || target.right <= it.rect.left } &&
+                        row.keys.any { target.left - it.rect.right in 0..row.width ||
+                            it.rect.left - target.right in 0..row.width })
+            }
         }
     }
+
+    private fun ownedBounds(node: ControlNode, proof: VisualTargetProof): TapBounds? =
+        KeyboardImageFallbackPolicy.bounds(node.bounds)?.takeIf { ownedBounds(it, proof) }
+
+    private fun ownedBounds(rect: TapBounds, proof: VisualTargetProof): Boolean =
+        KeyboardImageFallbackPolicy.bounds(proof.imeBounds)?.contains(rect) == true &&
+            proof.window.contains(rect) && OwnedPixelPolicy.contains(proof.disclosedRegions, rect)
 
     // A directly nested label can corroborate its wrapper. Overlap or equal
     // text alone never merges two independently actionable physical keys.

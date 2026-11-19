@@ -83,7 +83,8 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val windowDiagnostics: JsonObject? = null, val configurationRevision: Long = 0, val outputLimit: Int = 50,
     val verifiedApplicationPackage: String? = null, val keyboard: ControlKeyboard? = null, val inputTargetId: Int? = null, val inputTarget: ControlNode? = null, val visual: VisualTargetProof? = null,
     val terminalSubmission: TerminalSubmission? = null, val keyboardDiagnostics: JsonObject? = null,
-    val navigationOnly: Boolean = false)
+    val navigationOnly: Boolean = false,
+    val keyboardCaptionSlots: List<KeyboardCaptionSlot> = emptyList())
 /** Logical identity is supplied only by a complete, guarded native application identity scan. */
 internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expected != null && reason == null &&
     (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
