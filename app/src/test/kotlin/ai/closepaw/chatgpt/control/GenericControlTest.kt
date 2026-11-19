@@ -115,6 +115,186 @@ class GenericControlTest {
     }
 
 
+    private class JamoCandidateFixture(suggestionStrip: Boolean = false, secondPhysicalKey: Boolean = false) {
+        private val ime = ControlKeyboard(4, "ime", "ime/.Keyboard")
+        private val session = ControlSession().apply { start() }
+        private val editor = ControlNode(1, sourceWindowId = 3, sourcePackage = "example.app",
+            editable = true, focusable = true, focused = true, selectionStart = 0, selectionEnd = 0)
+        private fun node(id: Int, bounds: String, parent: Int = -1) = ControlNode(id, bounds = bounds,
+            parent = parent, sourceWindowId = ime.windowId, sourcePackage = ime.packageName)
+        private fun key(id: Int, label: String, bounds: String, parent: Int) =
+            node(id, bounds, parent).copy(text = label, keyboardKey = label, visualKeyCandidate = true,
+                className = "android.view.ViewGroup", visualKeyChildCount = 1)
+        private fun caption(id: Int, label: String, bounds: String) =
+            key(id, label, bounds, 116).copy(className = "android.widget.TextView",
+                clickable = true, visualKeyChildCount = 0)
+
+        private val consonant = key(163, "ㄱ", "451 2154 569 2309", 134)
+        private val vowel = key(192, "ㅏ", "1081 2354 1199 2509", 176)
+        private val space = node(210, "800 2550 1250 2705", 200).copy(
+            description = "스페이스 키", className = "android.view.ViewGroup",
+            visualKeyChildCount = 1, keyboardImageCandidate = true)
+        val expectedIds = listOf(consonant.id, vowel.id)
+        val port = Port().apply {
+            controlSession = session
+            val nodes = buildList {
+                add(editor)
+                if (suggestionStrip) {
+                    add(node(116, "128 1798 1300 1975"))
+                    add(caption(115, "ㅇ", "142 1823 488 1928"))
+                    add(caption(118, "ㅈ", "498 1823 847 1928"))
+                    // The observed clickable suggestion is outside the key rows, but
+                    // is surfaced with the same candidate metadata as the physical key.
+                    add(caption(117, "ㄱ", "858 1823 1252 1928"))
+                }
+                add(node(134, "160 2135 1280 2325"))
+                add(key(160, "ㅈ", "171 2154 289 2309", 134))
+                add(key(161, "ㄷ", "311 2154 429 2309", 134))
+                add(consonant)
+                add(consonant.copy(id = 164, bounds = "463 2178 557 2285", parent = consonant.id,
+                    className = "android.widget.TextView", visualKeyChildCount = 0))
+                add(key(165, if (secondPhysicalKey) "ㄱ" else "ㅅ", "591 2154 709 2309", 134))
+                add(key(166, "ㅛ", "731 2154 849 2309", 134))
+                add(node(176, "160 2335 1280 2525"))
+                add(key(189, "ㅗ", "801 2354 919 2509", 176))
+                add(key(190, "ㅓ", "941 2354 1059 2509", 176))
+                add(vowel)
+                add(key(209, ",", "661 2550 779 2705", 200))
+                add(space)
+                add(key(211, ".", "1261 2550 1379 2705", 200))
+            }
+            frame = frame.copy(nodes = nodes, keyboard = ime, inputTarget = editor, inputTargetId = editor.id)
+            visualProof = VisualTargetProof(
+                ScreenImage(360, 780, "image/jpeg", byteArrayOf(1), ScreenImageSource.ACCESSIBILITY_SCREENSHOT),
+                "test-image", TapBounds(0, 0, 1440, 3120), "test-window", System.currentTimeMillis(),
+                scope = "keyboard", sourceWindowId = ime.windowId, sourceImeWindowId = ime.windowId,
+                sourceDisplayId = 0, rotation = 0, displayGeneration = 1, imeBounds = "0 1798 1440 3120",
+                disclosedRegions = listOf(TapBounds(0, 1798, 1440, 3120)))
+        }
+        private val control = GenericControl(port, { true })
+        suspend fun observeJamo(withSpace: Boolean = false): JsonObject {
+            val observed = control.observe(includeImage = true, imageScope = "keyboard",
+                keyboardSequenceLabels = if (withSpace) listOf("ㄱ", "ㅏ", "Space") else listOf("ㄱ", "ㅏ"))
+            assertTrue(observed.summary, observed.success)
+            return observed.data
+        }
+        fun ids(observed: JsonObject): List<Int> =
+            observed.getValue("nodes").jsonArray.map { it.jsonObject.getValue("node_id").jsonPrimitive.int }
+
+        suspend fun requestJamo(observed: JsonObject, withSpace: Boolean = false) = control.visualKeySequence(buildJsonObject {
+            put("session_id", session.id)
+            put("observation_id", observed.getValue("observation_id"))
+            put("visual_id", observed.getValue("visual").jsonObject.getValue("visual_id"))
+            put("visual_target_confirmed", true)
+            put("text", if (withSpace) "가 " else "가")
+            put("steps", buildJsonArray {
+                val steps = listOf(Triple(consonant, "ㄱ", listOf(118, 545, 137, 568)),
+                    Triple(vowel, "ㅏ", listOf(275, 595, 295, 615))) +
+                    if (withSpace) listOf(Triple(space, "Space", listOf(225, 645, 285, 665))) else emptyList()
+                for ((key, label, rect) in steps) add(buildJsonObject {
+                    put("node_id", key.id)
+                    put("label", label)
+                    put("image_rect", JsonArray(rect.map { JsonPrimitive(it) }))
+                })
+            })
+        })
+    }
+
+    @Test fun physicalJamoWrapperAndLabelAreOneCandidate() = runBlocking {
+        val fixture = JamoCandidateFixture()
+        assertEquals(fixture.expectedIds, fixture.ids(fixture.observeJamo()))
+        assertEquals(0, fixture.port.writes)
+    }
+
+    @Test fun sameLabelSuggestionDoesNotHideThePhysicalJamoKey() = runBlocking {
+        val fixture = JamoCandidateFixture(suggestionStrip = true)
+        assertEquals("Only the physical ㄱ and ㅏ belong to the sequence",
+            fixture.expectedIds, fixture.ids(fixture.observeJamo()))
+        assertEquals(0, fixture.port.writes)
+    }
+
+    @Test fun twoPhysicalJamoKeysWithTheSameLabelAreRefusedBeforeAnyTouch() = runBlocking {
+        val fixture = JamoCandidateFixture(suggestionStrip = true, secondPhysicalKey = true)
+        val observed = fixture.observeJamo()
+        assertTrue(fixture.ids(observed).isEmpty())
+        val refused = fixture.requestJamo(observed)
+        assertFalse(refused.success)
+        assertEquals("keyboard_sequence_candidate_undisclosed", refused.summary)
+        assertFalse(refused.data.getValue("action_attempted").jsonPrimitive.boolean)
+        assertEquals(0, fixture.port.writes)
+    }
+
+    @Test fun suggestionWithoutPhysicalKeyIsNotDisclosedOrTouched() = runBlocking {
+        val fixture = JamoCandidateFixture(suggestionStrip = true)
+        fixture.port.frame = fixture.port.frame.copy(nodes = fixture.port.frame.nodes.filterNot { it.id in 163..164 })
+        val observed = fixture.observeJamo()
+        assertTrue(fixture.ids(observed).isEmpty())
+        assertFalse(fixture.requestJamo(observed).success)
+        assertEquals(0, fixture.port.writes)
+    }
+
+    @Test fun ambiguousSuggestionGeometryOrOwnershipDoesNotResolveTheCollision() = runBlocking {
+        for (uncertain in listOf("same-parent", "overlap", "missing-row", "masked-strip", "native-key")) {
+            val fixture = JamoCandidateFixture(suggestionStrip = true)
+            val port = fixture.port
+            val nodes = port.frame.nodes
+            port.frame = port.frame.copy(nodes = when (uncertain) {
+                "missing-row" -> nodes.filterNot { it.id in setOf(160, 161, 165, 166, 189, 190) }
+                "same-parent" -> nodes.map { if (it.id == 117) it.copy(parent = 134) else it }
+                "overlap" -> nodes.map { if (it.id == 117) it.copy(bounds = "858 2110 1252 2215") else it }
+                "native-key" -> nodes.map { if (it.id == 117) it.copy(textEntryKey = true) else it }
+                else -> nodes
+            })
+            if (uncertain == "masked-strip") port.visualProof = port.visualProof?.copy(
+                disclosedRegions = listOf(TapBounds(0, 1975, 1440, 3120)))
+            val observed = fixture.observeJamo()
+            assertTrue(uncertain, fixture.ids(observed).isEmpty())
+            assertFalse(uncertain, fixture.requestJamo(observed).success)
+            assertEquals(uncertain, 0, port.writes)
+        }
+    }
+
+    @Test fun hangulSequenceRechecksRecommendationCollisionAndConfirmsImageSpace() = runBlocking {
+        val fixture = JamoCandidateFixture(suggestionStrip = true)
+        val port = fixture.port
+        val touched = mutableListOf<Int>()
+        port.onWrite = { input ->
+            val id = input.getValue("node_id").jsonPrimitive.int
+            touched += id
+            val value = when (id) {
+                163 -> "ㄱ"
+                192 -> "가"
+                210 -> {
+                    assertEquals("Space", input["image_key_label"]?.jsonPrimitive?.content)
+                    "가 "
+                }
+                else -> error("Non-key target: $id")
+            }
+            val editor = checkNotNull(port.frame.inputTarget).copy(text = value, empty = false,
+                selectionStart = value.length, selectionEnd = value.length)
+            port.frame = port.frame.copy(fingerprint = value, inputTarget = editor,
+                nodes = port.frame.nodes.map {
+                    when {
+                        it.id == editor.id -> editor
+                        it.id == 117 && id == 163 -> it.copy(text = "ㅏ", keyboardKey = "ㅏ")
+                        else -> it
+                    }
+                })
+        }
+        val observed = fixture.observeJamo(withSpace = true)
+        assertEquals(fixture.expectedIds + 210, fixture.ids(observed))
+        val result = fixture.requestJamo(observed, withSpace = true)
+        assertTrue(result.summary, result.success)
+        assertEquals(listOf(163, 192, 210), touched)
+        assertEquals(3, result.data.getValue("completed_keys").jsonPrimitive.int)
+        assertEquals(1, result.data.getValue("confirmed_image_fallback_spaces").jsonPrimitive.int)
+        assertTrue(result.data.getValue("app_result_verified").jsonPrimitive.boolean)
+        assertFalse(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+        assertEquals("가 ", port.frame.inputTarget?.text)
+        assertEquals(2, port.frame.inputTarget?.selectionStart)
+        assertEquals(2, port.frame.inputTarget?.selectionEnd)
+    }
+
     /** E252-2: the original image and each of its role/rect pairs must be
      * explicitly approved; all subsequent native effects still need a newly
      * captured image and a confirmed edit result.

@@ -391,7 +391,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 return stop("keyboard_sequence_pixels_unverified")
             planned.add(Step(label, node, crop, nodeBounds))
         }
-        fun layout(frame: ControlFrame) = KeyboardTouchLayout.fingerprint(frame.nodes, imeBounds, ime)
+        fun layout(frame: ControlFrame) =
+            KeyboardTouchLayout.fingerprint(VisualSequenceCandidates.layoutNodes(frame), imeBounds, ime)
         val initialLayout = layout(original.verificationFrame)
         if (initialLayout.isEmpty()) return stop("keyboard_sequence_layout_unverified")
         var lastVerified = original.verificationFrame
