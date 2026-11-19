@@ -2,13 +2,18 @@ package ai.closepaw.chatgpt.control
 
 import ai.closepaw.app.AgentService
 import ai.closepaw.chatgpt.McpExecutionSettings
+import ai.closepaw.platform.GuardedAccessibilityInputMethod
 import ai.closepaw.platform.virtualdisplay.ProjectionImageTransport
 import ai.closepaw.protocol.SessionState
 import ai.closepaw.security.ImageRevocationAuthority
 import android.app.KeyguardManager
+import android.graphics.Rect
+import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import androidx.annotation.RequiresApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -60,33 +65,110 @@ internal object LocalImeGeometryRead {
             delay(250)
         }
 
-        if (!ControlScreenLease.mutex.tryLock()) return@withContext Result("ui_busy")
-        try {
-            refusal()?.let { return@withContext Result(it) }
+        if (Build.VERSION.SDK_INT < 34) return@withContext Result("secure_window_probe_requires_android14")
+        LocalImeGeometryLease.capture(ControlScreenLease.mutex, timeoutMs = 15_000,
+            busy = { Result("ui_busy") }, timedOut = { Result("diagnostic_capture_deadline") }) capture@{
+            refusal()?.let { return@capture Result(it) }
+            val captureJob = currentCoroutineContext()[Job] ?: return@capture Result("cancelled")
             val sceneGeneration = service.remoteDisplayChanges.version()
-            fun captureRefusal(): String? = refusal() ?: if (service.remoteDisplayChanges.version() != sceneGeneration)
-                "diagnostic_scene_changed" else null
+            val contentGeneration = service.remoteControlChanges.version()
+            val input = service.inputMethod as? GuardedAccessibilityInputMethod
+                ?: return@capture Result("editor_binding_unavailable")
+            val editorGeneration = input.generation
+            val revision = settings.runtimeControl.snapshot().revision
+            fun stableScene(): String? = refusal() ?: when {
+                !captureJob.isActive -> "cancelled"
+                settings.runtimeControl.snapshot().revision != revision -> "configuration_revision_changed"
+                service.remoteDisplayChanges.version() != sceneGeneration ||
+                    service.remoteControlChanges.version() != contentGeneration -> "diagnostic_scene_changed"
+                service.inputMethod !== input || input.generation != editorGeneration || !input.currentInputStarted ||
+                    input.imagePrivacy?.let { it.packageName == LocalImeGeometryFixture.CHROME && !it.sensitive } != true ->
+                    "editor_binding_changed"
+                else -> null
+            }
+            stableScene()?.let { return@capture Result(it) }
+            var editorRefusal: (() -> String?)? = null
+            fun captureRefusal(): String? = try { stableScene() ?: editorRefusal?.invoke() }
+                catch (_: RuntimeException) { "diagnostic_guard_unavailable" }
             val authority = LocalInputAuthority { captureRefusal() == null }
             try {
                 val port = AndroidControlPort(service, mutationBlock = { "local_diagnostic_read_only" },
                     runtime = settings.runtimeControl, localAuthority = authority, localImeDiagnostic = true,
-                    allowed = { captureRefusal() == null })
+                    allowed = { captureJob.isActive })
                 try {
-                    val (frame, tree) = port.captureLocalImeGeometry()
-                    captureRefusal()?.let { return@withContext Result(it) }
-                    LocalImeGeometryFixture.refusal(frame)?.let { return@withContext Result(it) }
-                    val proof = port.visualKeyboard(frame)
-                    captureRefusal()?.let { return@withContext Result(it) }
-                    if (proof == null) return@withContext Result(fixedReason(port.visualFailure()))
-                    val captured = frame.copy(visual = proof)
-                    if (!port.visualDisclosureAllowed(captured)) return@withContext Result("keyboard_proof_revoked")
-                    val geometry = ImeGeometryReport.collect(frame, tree, proof)
-                    captureRefusal()?.let { return@withContext Result(it) }
-                    if (!port.visualDisclosureAllowed(captured)) return@withContext Result("keyboard_proof_revoked")
-                    Result("geometry_recorded", geometry)
+                    if (!port.localImeReadAllowed()) return@capture Result("chrome_samsung_read_required")
+                    val nativeEditor = withFocusedChromeEditor(service) { AccessibilityNodeInfo.obtain(it) }
+                        ?: return@capture Result("blank_editor_required")
+                    try {
+                        val editor = blankEditor(nativeEditor) ?: return@capture Result("blank_editor_required")
+                        val cursorProven = if (KeyboardCursorProof.needsProof(editor))
+                            KeyboardCursorBinding.prove(service, editor, nativeEditor) == editorGeneration else false
+                        if (!LocalImeGeometryFixture.emptyCaret(editor, cursorProven))
+                            return@capture Result("blank_editor_required")
+                        editorRefusal = {
+                            if (!port.localImeReadAllowed()) "chrome_samsung_read_required"
+                            else if (withFocusedChromeEditor(service) { fresh ->
+                                    val current = blankEditor(fresh)
+                                    fresh == nativeEditor && current != null &&
+                                        editor.copy(selectionStart = current.selectionStart,
+                                            selectionEnd = current.selectionEnd) == current &&
+                                        LocalImeGeometryFixture.emptyCaret(current, cursorProven)
+                                } == true) null else "editor_binding_changed"
+                        }
+                        captureRefusal()?.let { return@capture Result(it) }
+                        val (frame, tree) = port.captureLocalImeGeometry()
+                        captureRefusal()?.let { return@capture Result(it) }
+                        LocalImeGeometryFixture.refusal(frame, cursorProven)?.let { return@capture Result(it) }
+                        val admitted = frame.inputTarget ?: return@capture Result("editor_binding_changed")
+                        if (frame.windowId != editor.sourceWindowId || admitted.bounds != editor.bounds ||
+                            admitted.resourceId != editor.resourceId || admitted.className != editor.className)
+                            return@capture Result("editor_binding_changed")
+                        val proof = port.visualKeyboard(frame)
+                        captureRefusal()?.let { return@capture Result(it) }
+                        if (proof == null) return@capture Result(fixedReason(port.visualFailure()))
+                        val captured = frame.copy(visual = proof)
+                        if (!port.visualDisclosureAllowed(captured)) return@capture Result("keyboard_proof_revoked")
+                        val geometry = ImeGeometryReport.collect(frame, tree, proof)
+                        captureRefusal()?.let { return@capture Result(it) }
+                        if (!port.visualDisclosureAllowed(captured)) return@capture Result("keyboard_proof_revoked")
+                        Result("geometry_recorded", geometry)
+                    } finally {
+                        editorRefusal = null
+                        nativeEditor.recycle()
+                    }
                 } finally { port.invalidate() }
             } finally { authority.close() }
-        } finally { ControlScreenLease.mutex.unlock() }
+        }
+    }
+
+    // Only this exact editable Chrome focus is read, and only its blankness,
+    // caret and structural identity are retained for the running capture.
+    @RequiresApi(34)
+    private inline fun <T> withFocusedChromeEditor(service: AgentService, read: (AccessibilityNodeInfo) -> T): T? {
+        val root = service.rootInActiveWindow ?: return null
+        var focused: AccessibilityNodeInfo? = null
+        return try {
+            if (root.packageName?.toString() != LocalImeGeometryFixture.CHROME) return null
+            val node = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return null
+            focused = node
+            if (!node.refresh() || node.windowId != root.windowId ||
+                node.packageName?.toString() != LocalImeGeometryFixture.CHROME) null else read(node)
+        } finally {
+            if (focused !== root) focused?.recycle()
+            root.recycle()
+        }
+    }
+
+    @RequiresApi(34)
+    private fun blankEditor(node: AccessibilityNodeInfo): ControlNode? {
+        if (!node.isVisibleToUser || !node.isEnabled || !node.isFocusable || !node.isFocused ||
+            !node.isEditable || node.isPassword || node.isAccessibilityDataSensitive ||
+            (!node.isShowingHintText && !node.text.isNullOrEmpty())) return null
+        return ControlNode(0, resourceId = node.viewIdResourceName.orEmpty().take(100),
+            className = node.className?.toString().orEmpty(), bounds = Rect().also(node::getBoundsInScreen).flattenToString(),
+            enabled = true, empty = true, editable = true, focusable = true, focused = true,
+            sourceWindowId = node.windowId, sourcePackage = LocalImeGeometryFixture.CHROME,
+            selectionStart = node.textSelectionStart, selectionEnd = node.textSelectionEnd)
     }
 
     private fun chromeWithIme(service: AgentService): Boolean {

@@ -2,6 +2,7 @@ package ai.closepaw.qa
 
 import ai.closepaw.app.AgentService
 import ai.closepaw.chatgpt.control.AndroidControlPort
+import ai.closepaw.chatgpt.control.ControlDiagnostics
 import ai.closepaw.chatgpt.control.GenericControl
 import ai.closepaw.chatgpt.control.IsolatedVisualSurface
 import ai.closepaw.chatgpt.control.RuntimeControlSettings
@@ -32,8 +33,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.mockk.*
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -254,6 +259,37 @@ class WindowVisualCaptureGeometryTest {
                 verify(exactly=1) { service.takeScreenshot(0,any(),any()) }
                 verify(exactly=0) { service.takeScreenshotOfWindow(any(),any(),any()) }
             }
+        }
+    }
+
+    @Test fun localWindowGeometryFailureDoesNotWriteSharedDiagnostics() = runBlocking {
+        Surface(60,90).use { surface ->
+            val before = ControlDiagnostics.snapshot()
+            val result = WindowVisualCapture.capture(service(23,surface),23,TapBounds(0,0,60,100),"local",
+                captureRefusal={ null })
+            assertNull(result.proof)
+            assertEquals("screenshot_buffer_geometry_mismatch",result.reason)
+            assertEquals(before,ControlDiagnostics.snapshot())
+            assertTrue(surface.buffer.isClosed)
+        }
+    }
+
+    @Test fun localCancelledCaptureClosesLateNativeCallbackBuffer() = runBlocking {
+        Surface(60,100).use { surface ->
+            val dispatched = CompletableDeferred<AccessibilityService.TakeScreenshotCallback>()
+            val service = mockk<AccessibilityService>()
+            every { service.mainExecutor } returns Executor { it.run() }
+            every { service.takeScreenshotOfWindow(23,any(),any()) } answers {
+                dispatched.complete(thirdArg())
+                Unit
+            }
+            val capture = async {
+                WindowVisualCapture.capture(service,23,TapBounds(0,0,60,100),"local",captureRefusal={ null })
+            }
+            val callback = withTimeout(5_000) { dispatched.await() }
+            capture.cancelAndJoin()
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { callback.onSuccess(surface.screenshot) }
+            assertTrue(surface.buffer.isClosed)
         }
     }
 

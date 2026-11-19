@@ -266,6 +266,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     }
     override suspend fun capture(): ControlFrame = captureFrame()
 
+    /** Reuse the existing app and keyboard read rules before binding the local blank fixture. */
+    fun localImeReadAllowed(): Boolean = localImeDiagnostic && localAuthority != null &&
+        packageAllowed(LocalImeGeometryFixture.CHROME, operation = "read") &&
+        packageAllowed(LocalImeGeometryFixture.SAMSUNG, operation = "read")
+
     /** Local Settings diagnostic only. No ControlPort or MCP endpoint, no actionable nodes. */
     suspend fun captureLocalImeGeometry(): Pair<ControlFrame, List<ImeGeometryNode>> {
         check(localImeDiagnostic && localAuthority != null)

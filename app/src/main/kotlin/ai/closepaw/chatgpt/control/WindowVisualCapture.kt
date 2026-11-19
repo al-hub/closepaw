@@ -37,7 +37,7 @@ internal object WindowVisualCapture {
         requestId: String? = null, observationOnly: Boolean = false,
         geometry: ImeSurfaceGeometry? = null, minimumScreenshotUptimeMs: Long = -1,
         nativeKeyboardDisplay: Boolean = false,
-        // When supplied, evaluate on Main at each native dispatch and callback.
+        // Local-only guard: evaluate on Main at each native boundary and do not publish diagnostics.
         captureRefusal: (() -> String?)? = null,
         awaitSlot: suspend () -> Unit = {}): VisualCaptureResult {
         fun failure(code: String) = VisualCaptureResult(reason=code)
@@ -104,7 +104,8 @@ internal object WindowVisualCapture {
                 val source = bitmap ?: return@withContext failure("screenshot_bitmap_copy_failed")
                 val coordinates = geometry?.frame ?: window
                 if (source.width != coordinates.right-coordinates.left || source.height != coordinates.bottom-coordinates.top) {
-                    recordGeometryMismatch(service, if (display) "display" else "window", source.width, source.height, window)
+                    if (captureRefusal == null)
+                        recordGeometryMismatch(service, if (display) "display" else "window", source.width, source.height, window)
                     return@withContext failure("screenshot_buffer_geometry_mismatch")
                 }
                 if (source.width.toLong()*source.height > 8_000_000) return@withContext failure("screenshot_pixel_limit")
@@ -244,7 +245,8 @@ internal object WindowVisualCapture {
             val buffer=captured.hardwareBuffer
             val width=buffer.width;val height=buffer.height
             if(minimumUptimeMs < 0 && (width!=bounds.right-bounds.left || height!=bounds.bottom-bounds.top)) {
-                recordGeometryMismatch(service, "isolated_window", buffer.width, buffer.height, bounds)
+                if (captureRefusal == null)
+                    recordGeometryMismatch(service, "isolated_window", buffer.width, buffer.height, bounds)
                 return PixelResult(reason="screenshot_buffer_geometry_mismatch")
             }
             if(width<=0 || height<=0 || width.toLong()*height>8_000_000) return PixelResult(reason="screenshot_pixel_limit")

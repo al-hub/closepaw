@@ -11,6 +11,12 @@ Arm one attempt, switch to Chrome, and focus an empty editor with Samsung
 keyboard without typing or submitting. Return to the diagnostic screen to read
 the in-memory result, then stop the existing share. Setup stays unchanged and
 the diagnostic does not stop, resume, or originate remote sessions.
+The blank editor is bound under the existing Chrome and Samsung IME read rules
+before the first native screenshot. A subsequent focus, content, consent or
+session change refuses capture. After the readiness stage, an independent
+15-second capture limit releases the shared screen lease even if Android never
+calls back. Capture errors stay local and do not enter the remote diagnostics.
+
 
 This is a local UI only. No new Android permission or remote action, no
 automatic export, and no copy to a clipboard without a local user action.

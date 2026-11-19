@@ -78,6 +78,16 @@ class ImeGeometryReportTest {
         }
     }
 
+    @Test fun unknownNativeCaretNeedsBoundProofAndNeverAcceptsTextOrAMixedSelection() {
+        val unknown = ControlNode(7, selectionStart = -1, selectionEnd = -1)
+        assertFalse(LocalImeGeometryFixture.emptyCaret(unknown, bindingProven = false))
+        assertTrue(LocalImeGeometryFixture.emptyCaret(unknown, bindingProven = true))
+        for (bad in listOf(unknown.copy(text = "nonblank"), unknown.copy(empty = false),
+            unknown.copy(selectionEnd = 0), unknown.copy(selectionStart = 1, selectionEnd = 1))) {
+            assertFalse(LocalImeGeometryFixture.emptyCaret(bad, bindingProven = true))
+        }
+    }
+
     @Test fun localFixtureRequiresExactBlankChromeAndReadButNotInteraction() {
         val editor = ControlNode(3, sourceWindowId = frame.windowId, sourcePackage = frame.packageName,
             editable = true, focusable = true, focused = true, selectionStart = 0, selectionEnd = 0)
