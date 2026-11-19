@@ -32,7 +32,7 @@ import kotlinx.serialization.json.*
 internal object CaptureQaAcceptance {
     const val CANDIDATE = "ai.closepaw.capturecandidate"
     val fixtures = listOf("com.android.chrome", "com.samsung.android.app.notes")
-    val scopes = listOf("screen_observe", "keyboard", "display", "revoked")
+    val scopes = listOf("screen_observe", "keyboard", "display", "revoked", "ime_geometry")
     private var positiveEpoch: Long? = null
     private var positiveService = WeakReference<AgentService>(null)
     private var positiveAt = 0L
@@ -76,13 +76,15 @@ internal object CaptureQaAcceptance {
         require(BuildConfig.DEBUG && context.packageName == CANDIDATE)
         require(runner in setOf("local", "adb") && fixture in fixtures && scope in scopes)
         require(waitMs in 30_000L..600_000L)
+        require(scope != "ime_geometry" || runner == "local" && fixture == "com.android.chrome")
         check(acquire()) { "qa_already_running" }
         if (scope == "screen_observe") clearBaseline()
         var owned: CaptureQaOwner? = null
         val output = directory(context, runner, fixture, scope)
         val runId = UUID.randomUUID().toString()
         var result: JsonObject? = null
-        fun report(outcome: String, reason: String, visual: JsonObject? = null, bytes: ByteArray? = null) = buildJsonObject {
+        fun report(outcome: String, reason: String, visual: JsonObject? = null, bytes: ByteArray? = null,
+            imeGeometry: JsonObject? = null) = buildJsonObject {
             put("schema_version", 1); put("run_id", runId); put("runner", runner)
             put("source_commit", BuildConfig.CAPTURE_QA_SOURCE_SHA)
             put("version_name", BuildConfig.VERSION_NAME); put("version_code", BuildConfig.VERSION_CODE)
@@ -94,6 +96,7 @@ internal object CaptureQaAcceptance {
             put("image_saved", bytes != null && saveImage)
             if (scope == "revoked") positiveRunId?.let { put("baseline_run_id", it) }
             visual?.let { put("visual", it) }
+            imeGeometry?.let { put("ime_geometry", it) }
             bytes?.let { put("image_sha256", sha256(it)); put("image_bytes", it.size) }
         }
         try {
@@ -161,7 +164,8 @@ internal object CaptureQaAcceptance {
             if (!sceneReady) return report("SETUP_BLOCKED", "blank_fixture_deadline").also { result = it }
             guard()?.let { return report("STOPPED", it).also { result = it } }
             val port = AndroidControlPort(service, runtime = settings.runtimeControl) { settings.genericControlEnabled }
-            val frame = port.capture()
+            val geometryCapture = if (scope == "ime_geometry") port.captureImeGeometryQa() else null
+            val frame = geometryCapture?.first ?: port.capture()
             guard()?.let { return report("STOPPED", it).also { result = it } }
             if (frame.reason != null) return report("CAPTURE_BLOCKED", safeReason(frame.reason)).also { result = it }
             val input = frame.inputTarget
@@ -177,6 +181,23 @@ internal object CaptureQaAcceptance {
             )
             if (fixtureBlocker != null) {
                 return report("SETUP_BLOCKED", fixtureBlocker).also { result = it }
+            }
+            if (geometryCapture != null) {
+                if (frame.truncated || frame.navigationOnly || input?.text != "" ||
+                    input.selectionStart != 0 || input.selectionEnd != 0)
+                    return report("SETUP_BLOCKED", "complete_blank_editor_required").also { result = it }
+                val proof = port.visualKeyboard(frame)
+                guard()?.let { return report("STOPPED", it).also { result = it } }
+                if (proof != null && !proof.sourceDisclosureAllowed())
+                    return report("STOPPED", "source_revoked_before_report").also { result = it }
+                val geometry = ImeGeometryQaReport.collect(frame, geometryCapture.second, proof)
+                guard()?.let { return report("STOPPED", it).also { result = it } }
+                if (proof != null && !proof.sourceDisclosureAllowed())
+                    return report("STOPPED", "source_revoked_before_report").also { result = it }
+                // Metadata only. Never publishes a frame, image hash, native id or visual_id.
+                return report("GEOMETRY_RECORDED",
+                    if (proof == null) safeReason(port.visualFailure()) else "native_keyboard_proof_acquired",
+                    imeGeometry = geometry).also { result = it }
             }
             val proof = when (scope) {
                 "keyboard" -> port.visualKeyboard(frame)

@@ -1,6 +1,7 @@
 package ai.closepaw.chatgpt.control
 
 import ai.closepaw.app.AgentService
+import ai.closepaw.BuildConfig
 import ai.closepaw.chatgpt.AndroidGeminiDraftUi
 import ai.closepaw.chatgpt.GeminiDraftComposerPolicy
 import ai.closepaw.chatgpt.GeminiReadIdentity
@@ -263,7 +264,18 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             VerifiedReadDefaults.permits("read", active, bundled, userTier, ime, browser, browser)
         }.getOrDefault(false)
     }
-    override suspend fun capture(): ControlFrame {
+    override suspend fun capture(): ControlFrame = captureFrame()
+
+    // The non-exported, separately installed debug QA activity is the sole caller.
+    // This is not a ControlPort capability, an MCP operation, or a node publication path.
+    suspend fun captureImeGeometryQa(): Pair<ControlFrame, List<ImeGeometryQaNode>> {
+        check(BuildConfig.DEBUG && context.packageName == "ai.closepaw.capturecandidate")
+        val geometry = mutableListOf<ImeGeometryQaNode>()
+        val frame = captureFrame(geometry)
+        return frame to if (frame.reason == null && !frame.truncated && !frame.navigationOnly) geometry.toList() else emptyList()
+    }
+
+    private suspend fun captureFrame(geometry: MutableList<ImeGeometryQaNode>? = null): ControlFrame {
         val service = AgentService.instance
         reason(service)?.let { return denied(it) }
         service ?: return denied("accessibility_permission_missing")
@@ -277,7 +289,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         }
         feedback("접근성 정보 읽는 중")
         val probedAt = SystemClock.elapsedRealtime()
-        return withTree(service) { frame, _ -> frame }.also { frame ->
+        return withTree(service, geometry) { frame, _ -> frame }.also { frame ->
             ControlDiagnostics.record("capture", frame.reason ?: "completed", SystemClock.elapsedRealtime() - started,
                 metrics = buildJsonObject {
                     put("probe_ms", probedAt - started); put("tree_ms", SystemClock.elapsedRealtime() - probedAt)
@@ -503,7 +515,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
         }
     }
-    private suspend fun <T> withTree(service: AgentService,
+    private suspend fun <T> withTree(service: AgentService, geometry: MutableList<ImeGeometryQaNode>? = null,
         block: suspend (ControlFrame, List<AccessibilityNodeInfo>) -> T): T = withContext(Dispatchers.Main) {
         reason(service)?.let { return@withContext block(denied(it), emptyList()) }
         val root = service.rootInActiveWindow ?: return@withContext block(denied("active_root_missing"), emptyList())
@@ -560,6 +572,19 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val className = node.className?.toString().orEmpty()
                 val ownKeyboardNode = selected.keyboard?.packageName == node.packageName?.toString() &&
                     selected.keyboard?.windowId == node.windowId
+                if (geometry != null && keyboard && ownKeyboardNode && pkg == "com.android.chrome" &&
+                    selected.keyboard?.packageName == "com.samsung.android.honeyboard") {
+                    val kind = when {
+                        resource.endsWith(":id/candidate_with_sub_text_layout") && className == "android.view.ViewGroup" ->
+                            ImeGeometryQaNode.Kind.WRAPPER
+                        resource.endsWith(":id/main_label") && className == "android.widget.TextView" ->
+                            ImeGeometryQaNode.Kind.CAPTION
+                        else -> ImeGeometryQaNode.Kind.OTHER
+                    }
+                    val eligible = node.isVisibleToUser && node.isEnabled && !node.isPassword &&
+                        (Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive)
+                    geometry.add(ImeGeometryQaNode(index, parent, bounds(rect), kind, eligible))
+                }
                 val imageCandidate = keyboard && labelEvidence == null && ownKeyboardNode &&
                     !node.isPassword && (Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive) &&
                     ((rect.width().toLong() * 2 >= rect.height().toLong() * 3 &&

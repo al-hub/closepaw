@@ -89,7 +89,8 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }
         scope = Spinner(this).apply {
             adapter = ArrayAdapter(this@LocalCaptureQaActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("Screen observation", "Strict keyboard refusal", "Strict display refusal", "After sharing stopped (same-process baseline required)"))
+                listOf("Screen observation", "Strict keyboard refusal", "Strict display refusal",
+                    "After sharing stopped (same-process baseline required)", "Samsung IME geometry · Chrome only · no saved image"))
             column.addView(this)
         }
         save = CheckBox(this).apply {
@@ -135,6 +136,10 @@ class LocalCaptureQaActivity : ComponentActivity() {
     private fun arm() {
         if (job?.isActive == true) return
         val pkg = selectedFixture(); val mode = selectedScope(); val saveImage = save.isChecked
+        if (mode == "ime_geometry" && pkg != "com.android.chrome") {
+            status.text = "Select Chrome for Samsung IME geometry."
+            return
+        }
         previewIfReadyClear(); report.text = "New run requested; previous evidence is not this run."
         guardedButtons.forEach { it.isEnabled = false }; fixture.isEnabled = false; scope.isEnabled = false; save.isEnabled = false
         job = lifecycleScope.launch {
