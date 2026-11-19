@@ -280,21 +280,31 @@ class GenericControlTest {
         }
     }
 
-    @Test fun visibleCropCannotAuthorizeWrappedPhysicalKeyWithMaskedBoundary() = runBlocking {
-        // Same-parent control proves this refusal is due to the actual key
-        // pixels, independently of any wrapped-recommendation candidate block.
-        val fixture = JamoCandidateFixture(suggestionStrip = true)
-        val port = fixture.port
-        port.visualProof = checkNotNull(port.visualProof).copy(disclosedRegions = listOf(
-            TapBounds(0, 1798, 1440, 2100), TapBounds(0, 2100, 560, 3120), TapBounds(580, 2100, 1440, 3120)))
-        val observed = fixture.observeJamo(withSpace = true)
-        assertEquals(fixture.expectedIds + 210, fixture.ids(observed))
-        val stopped = fixture.requestJamo(observed, withSpace = true)
-        assertFalse(stopped.success)
-        assertEquals("keyboard_sequence_pixels_unverified", stopped.summary)
-        assertEquals(0, stopped.data.getValue("completed_keys").jsonPrimitive.int)
-        assertFalse(stopped.data.getValue("action_attempted").jsonPrimitive.boolean)
-        assertEquals(0, port.writes)
+    @Test fun visibleCropCannotAuthorizeAPhysicalKeyWithMaskedBoundary() = runBlocking {
+        for (suggestionStrip in listOf(false, true)) {
+            val fixture = JamoCandidateFixture(suggestionStrip = suggestionStrip)
+            val port = fixture.port
+            val expected = fixture.expectedIds + 210
+            assertEquals(expected, fixture.ids(fixture.observeJamo(withSpace = true)))
+            val proof = checkNotNull(port.visualProof).copy(disclosedRegions = listOf(
+                TapBounds(0, 1798, 1440, 2100), TapBounds(0, 2100, 560, 3120), TapBounds(580, 2100, 1440, 3120)))
+            assertNotNull(proof.map(TapBounds(118, 545, 137, 568)))
+            assertFalse(OwnedPixelPolicy.contains(proof.disclosedRegions, TapBounds(451, 2154, 569, 2309)))
+            port.visualProof = proof
+            val observed = fixture.observeJamo(withSpace = true)
+            // A collision needs enough pixels to corroborate the physical key
+            // already at selection time. Without a collision, the disclosed key
+            // still cannot pass the independent dispatch pixel check.
+            assertEquals(if (suggestionStrip) emptyList<Int>() else expected, fixture.ids(observed))
+            val stopped = fixture.requestJamo(observed, withSpace = true)
+            assertFalse(stopped.success)
+            val reason = if (suggestionStrip) "keyboard_sequence_candidate_undisclosed"
+                else "keyboard_sequence_pixels_unverified"
+            assertEquals(reason, stopped.summary)
+            assertEquals(0, stopped.data.getValue("completed_keys").jsonPrimitive.int)
+            assertFalse(stopped.data.getValue("action_attempted").jsonPrimitive.boolean)
+            assertEquals(0, port.writes)
+        }
     }
 
     @Test fun hangulRefreshWithChangedPhysicalLayoutOrEditorStopsWithoutReplay() = runBlocking {
