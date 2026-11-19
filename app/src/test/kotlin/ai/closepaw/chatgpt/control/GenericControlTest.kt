@@ -172,9 +172,38 @@ class GenericControlTest {
                 disclosedRegions = listOf(TapBounds(0, 1798, 1440, 3120)))
         }
         private val control = GenericControl(port, { true })
-        suspend fun observeJamo(withSpace: Boolean = false): JsonObject {
+        fun wrapRecommendationCaptions(topology: WrappedStrip) {
+            val captions = port.frame.nodes.filter { it.id in setOf(115, 117, 118) }.sortedBy {
+                checkNotNull(KeyboardImageFallbackPolicy.bounds(it.bounds)).left
+            }
+            check(captions.size == 3)
+            val root = 300
+            val dedicated = 301
+            val strip = node(dedicated, "128 1798 1300 1975", root)
+            val ancestor = when (topology) {
+                WrappedStrip.UNKNOWN -> -1
+                WrappedStrip.DEDICATED -> dedicated
+                WrappedStrip.SHARED_ROOT -> root
+            }
+            val wrappers = captions.flatMapIndexed { i, caption ->
+                val outer = 310 + 2 * i
+                listOf(node(outer, caption.bounds, ancestor), node(outer + 1, caption.bounds, outer),
+                    caption.copy(parent = outer + 1))
+            }
+            // Common ancestry and intermediate bounds are hypotheses, not
+            // device evidence. Only the two distinct wrapper levels are known.
+            val nodes = port.frame.nodes.filterNot { it.id in setOf(115, 116, 117, 118) }.map {
+                if (it.id in setOf(134, 176)) it.copy(parent = root) else it
+            }
+            port.frame = port.frame.copy(nodes = nodes + node(root, "0 1798 1440 3120") +
+                listOfNotNull(strip.takeIf { topology == WrappedStrip.DEDICATED }) + wrappers)
+        }
+        suspend fun observeJamo(withSpace: Boolean = false): JsonObject =
+            observeLabels(if (withSpace) listOf("ㄱ", "ㅏ", "Space") else listOf("ㄱ", "ㅏ"))
+
+        suspend fun observeLabels(labels: List<String>): JsonObject {
             val observed = control.observe(includeImage = true, imageScope = "keyboard",
-                keyboardSequenceLabels = if (withSpace) listOf("ㄱ", "ㅏ", "Space") else listOf("ㄱ", "ㅏ"))
+                keyboardSequenceLabels = labels)
             assertTrue(observed.summary, observed.success)
             return observed.data
         }
@@ -198,6 +227,116 @@ class GenericControlTest {
                 })
             })
         })
+    }
+
+    private enum class WrappedStrip { UNKNOWN, DEDICATED, SHARED_ROOT }
+
+    private suspend fun assertNoWrappedJamoTouch(fixture: JamoCandidateFixture, situation: String) {
+        val observed = fixture.observeJamo(withSpace = true)
+        assertTrue(situation, fixture.ids(observed).isEmpty())
+        val stopped = fixture.requestJamo(observed, withSpace = true)
+        assertFalse(situation, stopped.success)
+        assertEquals(situation, "keyboard_sequence_candidate_undisclosed", stopped.summary)
+        assertEquals(situation, 0, stopped.data.getValue("completed_keys").jsonPrimitive.int)
+        assertFalse(situation, stopped.data.getValue("action_attempted").jsonPrimitive.boolean)
+        assertFalse(situation, stopped.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+        assertEquals(situation, 0, fixture.port.writes)
+        assertEquals(situation, "", fixture.port.frame.inputTarget?.text)
+        assertEquals(situation, 0, fixture.port.frame.inputTarget?.selectionStart)
+        assertEquals(situation, 0, fixture.port.frame.inputTarget?.selectionEnd)
+    }
+
+    @Test fun wrappedRecommendationBaselineReproducesConsonantOnlyBlockBeforeAnyTouch() = runBlocking {
+        for (topology in listOf(WrappedStrip.UNKNOWN, WrappedStrip.DEDICATED)) {
+            val fixture = JamoCandidateFixture(suggestionStrip = true)
+            fixture.wrapRecommendationCaptions(topology)
+            assertTrue(fixture.ids(fixture.observeLabels(listOf("ㄱ"))).isEmpty())
+            assertEquals(listOf(192), fixture.ids(fixture.observeLabels(listOf("ㅏ"))))
+            assertEquals(listOf(210), fixture.ids(fixture.observeLabels(listOf("Space"))))
+            // The dedicated-container hypothesis is still a baseline rejection.
+            // E252-4 is not green until real evidence enables the positive oracle.
+            assertNoWrappedJamoTouch(fixture, topology.name)
+        }
+    }
+
+    @Test fun wrappedRecommendationAmbiguityCannotPromoteAnUnprovenTarget() = runBlocking {
+        val cases = listOf("shared-ime-root", "recommendation-only", "duplicate-physical-key",
+            "overlapping-strip", "foreign-ancestor", "cyclic-path")
+        for (scenario in cases) {
+            val fixture = JamoCandidateFixture(suggestionStrip = true,
+                secondPhysicalKey = scenario == "duplicate-physical-key")
+            fixture.wrapRecommendationCaptions(
+                if (scenario == "shared-ime-root") WrappedStrip.SHARED_ROOT else WrappedStrip.DEDICATED)
+            val port = fixture.port
+            val nodes = port.frame.nodes
+            port.frame = port.frame.copy(nodes = when (scenario) {
+                "recommendation-only" -> nodes.filterNot { it.id in 163..164 }
+                "overlapping-strip" -> nodes.map { if (it.id == 301) it.copy(bounds = "128 1798 1300 2220") else it }
+                "foreign-ancestor" -> nodes.map { if (it.id == 301) it.copy(sourceWindowId = 99) else it }
+                "cyclic-path" -> nodes.map { if (it.id == 301) it.copy(parent = 310) else it }
+                else -> nodes
+            })
+            assertNoWrappedJamoTouch(fixture, scenario)
+        }
+    }
+
+    @Test fun visibleCropCannotAuthorizeWrappedPhysicalKeyWithMaskedBoundary() = runBlocking {
+        // Same-parent control proves this refusal is due to the actual key
+        // pixels, independently of any wrapped-recommendation candidate block.
+        val fixture = JamoCandidateFixture(suggestionStrip = true)
+        val port = fixture.port
+        port.visualProof = checkNotNull(port.visualProof).copy(disclosedRegions = listOf(
+            TapBounds(0, 1798, 1440, 2100), TapBounds(0, 2100, 560, 3120), TapBounds(580, 2100, 1440, 3120)))
+        val observed = fixture.observeJamo(withSpace = true)
+        assertEquals(fixture.expectedIds + 210, fixture.ids(observed))
+        val stopped = fixture.requestJamo(observed, withSpace = true)
+        assertFalse(stopped.success)
+        assertEquals("keyboard_sequence_pixels_unverified", stopped.summary)
+        assertEquals(0, stopped.data.getValue("completed_keys").jsonPrimitive.int)
+        assertFalse(stopped.data.getValue("action_attempted").jsonPrimitive.boolean)
+        assertEquals(0, port.writes)
+    }
+
+    @Test fun hangulRefreshWithChangedPhysicalLayoutOrEditorStopsWithoutReplay() = runBlocking {
+        for (changeLayout in listOf(true, false)) {
+            val fixture = JamoCandidateFixture(suggestionStrip = true)
+            val port = fixture.port
+            val touched = mutableListOf<Int>()
+            port.onWrite = { input ->
+                touched += input.getValue("node_id").jsonPrimitive.int
+                val editor = checkNotNull(port.frame.inputTarget).copy(text = "ㄱ", empty = false,
+                    selectionStart = 1, selectionEnd = 1)
+                port.frame = port.frame.copy(fingerprint = "confirmed-first-jamo", inputTarget = editor,
+                    nodes = port.frame.nodes.map { if (it.id == editor.id) editor else it })
+            }
+            var readsAfterFirst = 0
+            port.onCapture = {
+                // First postcondition is confirmed before the renewal snapshot changes.
+                if (port.writes == 1 && ++readsAfterFirst == 2) {
+                    val editor = checkNotNull(port.frame.inputTarget)
+                    val fresh = if (changeLayout) editor else editor.copy(resourceId = "example.app:id/other_editor")
+                    port.frame = port.frame.copy(inputTarget = fresh, fingerprint = "renewal-changed",
+                        nodes = port.frame.nodes.map {
+                            when {
+                                it.id == editor.id -> fresh
+                                changeLayout && it.id == 166 -> it.copy(bounds = "746 2154 864 2309")
+                                else -> it
+                            }
+                        })
+                }
+            }
+            val observed = fixture.observeJamo(withSpace = true)
+            assertEquals(fixture.expectedIds + 210, fixture.ids(observed))
+            val stopped = fixture.requestJamo(observed, withSpace = true)
+            assertFalse(stopped.success)
+            assertEquals("keyboard_sequence_layout_or_target_changed", stopped.summary)
+            assertEquals(1, stopped.data.getValue("completed_keys").jsonPrimitive.int)
+            assertEquals(0, stopped.data.getValue("confirmed_image_fallback_spaces").jsonPrimitive.int)
+            assertFalse(stopped.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+            assertFalse(fixture.requestJamo(observed, withSpace = true).success)
+            assertEquals(listOf(163), touched)
+            assertEquals(1, port.writes)
+        }
     }
 
     @Test fun physicalJamoWrapperAndLabelAreOneCandidate() = runBlocking {
@@ -268,7 +407,12 @@ class GenericControlTest {
     }
 
     @Test fun hangulSequenceRechecksRecommendationCollisionAndConfirmsImageSpace() = runBlocking {
-        val fixture = JamoCandidateFixture(suggestionStrip = true)
+        assertHangulSequenceWithSuggestionRefresh(JamoCandidateFixture(suggestionStrip = true))
+    }
+
+    // Reuse the same exact-effect oracle with the wrapped fixture only after
+    // a dedicated, separately owned strip is confirmed on the device.
+    private suspend fun assertHangulSequenceWithSuggestionRefresh(fixture: JamoCandidateFixture) {
         val port = fixture.port
         val touched = mutableListOf<Int>()
         port.onWrite = { input ->
