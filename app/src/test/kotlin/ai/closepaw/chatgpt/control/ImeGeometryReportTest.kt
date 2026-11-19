@@ -62,7 +62,10 @@ class ImeGeometryReportTest {
         for (p in listOf(mask.copy(sourceWindowId = 9), mask.copy(sourceDisclosureAllowed = { false }), null)) {
             val r = ImeGeometryReport.collect(frame, tree(), p)
             assertEquals("false", r.field("certified_pixels_available"))
-            assertFalse(r.toString().contains("\"certified_coverage\":\"full\""))
+            val coverage = r.getValue("path_geometry").jsonObject.values +
+                r.getValue("physical_rows").jsonArray.toList()
+            assertTrue(coverage.isNotEmpty())
+            assertTrue(coverage.all { it.jsonObject.field("certified_coverage") == "unknown" })
         }
     }
 

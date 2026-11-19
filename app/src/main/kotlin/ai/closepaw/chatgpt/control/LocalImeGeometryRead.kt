@@ -63,22 +63,25 @@ internal object LocalImeGeometryRead {
         if (!ControlScreenLease.mutex.tryLock()) return@withContext Result("ui_busy")
         try {
             refusal()?.let { return@withContext Result(it) }
-            val authority = LocalInputAuthority { refusal() == null }
+            val sceneGeneration = service.remoteDisplayChanges.version()
+            fun captureRefusal(): String? = refusal() ?: if (service.remoteDisplayChanges.version() != sceneGeneration)
+                "diagnostic_scene_changed" else null
+            val authority = LocalInputAuthority { captureRefusal() == null }
             try {
                 val port = AndroidControlPort(service, mutationBlock = { "local_diagnostic_read_only" },
                     runtime = settings.runtimeControl, localAuthority = authority, localImeDiagnostic = true,
-                    allowed = { refusal() == null })
+                    allowed = { captureRefusal() == null })
                 try {
                     val (frame, tree) = port.captureLocalImeGeometry()
-                    refusal()?.let { return@withContext Result(it) }
+                    captureRefusal()?.let { return@withContext Result(it) }
                     LocalImeGeometryFixture.refusal(frame)?.let { return@withContext Result(it) }
                     val proof = port.visualKeyboard(frame)
-                    refusal()?.let { return@withContext Result(it) }
+                    captureRefusal()?.let { return@withContext Result(it) }
                     if (proof == null) return@withContext Result(fixedReason(port.visualFailure()))
                     val captured = frame.copy(visual = proof)
                     if (!port.visualDisclosureAllowed(captured)) return@withContext Result("keyboard_proof_revoked")
                     val geometry = ImeGeometryReport.collect(frame, tree, proof)
-                    refusal()?.let { return@withContext Result(it) }
+                    captureRefusal()?.let { return@withContext Result(it) }
                     if (!port.visualDisclosureAllowed(captured)) return@withContext Result("keyboard_proof_revoked")
                     Result("geometry_recorded", geometry)
                 } finally { port.invalidate() }

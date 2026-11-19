@@ -385,7 +385,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             VisualKeyboardPolicy.imageReadRefusal(keyboard, keyboard?.let { packageAllowed(it.packageName, operation = "read") } == true,
                 scope == "keyboard", frame.inputTarget != null) != null) return fail("visual_keyboard_policy_denied")
         val captureId = if (scope == "keyboard") keyboard!!.windowId else frame.windowId
-        if(displayCapture) {
+        if(displayCapture && !localImeDiagnostic) {
             // These are our pixel-only intent/ripple cues, never user controls.
             // Remove them before planning both observations and key revalidation;
             // the border, X, island and all source/coverage checks stay in place.
@@ -405,10 +405,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         if (projectionDisplay && projection == null) return fail("screen_share_not_active")
         if (observationOnly && projection?.screenObservationAllowed() != true) return fail("screen_observation_consent_required")
         val projectionRequestId = if (projection != null) java.util.UUID.randomUUID().toString().replace("-", "") else null
+        // Local authority can end while a native slot or callback is pending.
+        // Keep the existing remote capture path and its behavior unchanged.
+        val localCaptureRefusal: (() -> String?)? = if (localImeDiagnostic) ({ reason(service) }) else null
         suspend fun captureOnce(): VisualCaptureResult =
             WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,displayCapture,plan?.region,
                 plan?.surfaces.orEmpty(),projection=projection,requestId=projectionRequestId,observationOnly=observationOnly,
-                nativeKeyboardDisplay=nativeKeyboardDisplay) { probeThrottle.awaitSlot() }
+                nativeKeyboardDisplay=nativeKeyboardDisplay, captureRefusal=localCaptureRefusal) { probeThrottle.awaitSlot() }
         probeThrottle.awaitSlot()
         var captured = captureOnce()
         // Retry only an explicit OS screenshot rate refusal, before any action.
@@ -506,7 +509,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
                             mark(ControlTiming.Event.PROBE_CALLBACK_OK)
                             screenshot.hardwareBuffer.close()
-                            if (continuation.isActive) continuation.resume(null)
+                            if (continuation.isActive)
+                                continuation.resume(if (localImeDiagnostic) reason(service) else null)
                         }
                         override fun onFailure(errorCode: Int) {
                             mark(ControlTiming.Event.PROBE_CALLBACK_FAILED)
