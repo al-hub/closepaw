@@ -1,9 +1,27 @@
 # #252 Samsung IME wrapped recommendation regression preparation
 
-Scope: test fixtures and decision notes only. No production selector, operation,
-permission, diagnostic PR, version, APK, or device change. Refs #252.
+The first commits prepared test fixtures only. The final branch adds the
+confirmed selector exclusion and a release version. No new command, permission
+or tap authority. Refs #252.
 
-## Evidence and hypotheses
+## Device evidence — signed v0.1.128/code129
+
+The local one-shot diagnostic completed without exercising input. Three
+caption paths converge after two distinct wrapper levels. The closest common
+container (report alias n4) is not the IME root (n23), contains no physical
+character candidate, and ends above the first physical row. The rightmost
+caption's bounds match the independently recorded recommendation collision.
+The local frame certified the container and the reported physical rows.
+This is not certification of any pixel in a later remote-control frame.
+
+The final fixture matches the owned dedicated path and its separation from
+the physical rows, without using any report alias, observed ID, or coordinates
+as a production condition. The test now admits the physical key on the confirmed
+shape even with a masked recommendation edge, requires native ownership and
+full certification for the physical key, and keeps the unsafe alternatives
+below as refusals. This release's device input acceptance is still pending.
+
+## Historical baseline and hypotheses
 
 On signed v0.1.127/code128 the recommendation captions had different immediate
 parents and different parents one level above. A similarly labelled physical
@@ -57,8 +75,7 @@ confirmed first key when the physical row or editor changes during refresh.
    still needs all of its certified bounds, valid ownership and existing
    live session/editor and no-replay checks.
 
-The test branch is not a fix or an acceptance PASS. Do not merge or release it
-as a way to obtain a diagnostic APK. After independent source review, required
+Synthetic tests are not a device acceptance PASS. After independent source review, required
 PR/main CI and a verified signed final APK, the single Galaxy request is
 `ㄱ → ㅏ → Space`. It must report `completed_keys=3`,
 `confirmed_image_fallback_spaces=1`, `app_result_verified=true` and

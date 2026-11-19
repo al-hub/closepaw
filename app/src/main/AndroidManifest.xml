@@ -84,6 +84,8 @@
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Material.NoActionBar" />
 
+        <activity android:name=".ui.settings.LocalImeGeometryActivity" android:exported="false" />
+
         <activity
             android:name=".ui.viewer.VirtualDisplayViewerActivity"
             android:theme="@style/Theme.ClosePaw.FullScreen"

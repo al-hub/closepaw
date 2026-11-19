@@ -47,6 +47,7 @@ import kotlin.coroutines.resume
 /** Native adapter: semantic targets only; explicit guarded node tap, never automatic gesture fallback. */
 internal class AndroidControlPort(context: Context, private val mutationBlock: (String) -> String? = { null },
     private val runtime: RuntimeControlSettings? = null, private val localAuthority: LocalInputAuthority? = null,
+    private val localImeDiagnostic: Boolean = false,
     private val allowed: () -> Boolean) : ControlPort {
     override val validatesAtNativeBoundary = true
     override fun islandRefusal(sessionId: String): String? {
@@ -263,7 +264,23 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             VerifiedReadDefaults.permits("read", active, bundled, userTier, ime, browser, browser)
         }.getOrDefault(false)
     }
-    override suspend fun capture(): ControlFrame {
+    override suspend fun capture(): ControlFrame = captureFrame()
+
+    /** Reuse the existing app and keyboard read rules before binding the local blank fixture. */
+    fun localImeReadAllowed(): Boolean = localImeDiagnostic && localAuthority != null &&
+        packageAllowed(LocalImeGeometryFixture.CHROME, operation = "read") &&
+        packageAllowed(LocalImeGeometryFixture.SAMSUNG, operation = "read")
+
+    /** Local Settings diagnostic only. No ControlPort or MCP endpoint, no actionable nodes. */
+    suspend fun captureLocalImeGeometry(): Pair<ControlFrame, List<ImeGeometryNode>> {
+        check(localImeDiagnostic && localAuthority != null)
+        val geometry = mutableListOf<ImeGeometryNode>()
+        val frame = captureFrame(geometry)
+        return frame to if (frame.reason == null && !frame.truncated && !frame.navigationOnly)
+            geometry.toList() else emptyList()
+    }
+
+    private suspend fun captureFrame(geometry: MutableList<ImeGeometryNode>? = null): ControlFrame {
         val service = AgentService.instance
         reason(service)?.let { return denied(it) }
         service ?: return denied("accessibility_permission_missing")
@@ -272,19 +289,23 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         feedback("화면 보안 확인 중")
         val started = SystemClock.elapsedRealtime()
         secureWindow(service)?.let {
-            ControlDiagnostics.record("capture_probe", it, SystemClock.elapsedRealtime() - started)
+            if (!localImeDiagnostic) ControlDiagnostics.record("capture_probe", it, SystemClock.elapsedRealtime() - started)
             return denied(it, windowDiagnostics)
         }
         feedback("접근성 정보 읽는 중")
         val probedAt = SystemClock.elapsedRealtime()
-        return withTree(service) { frame, _ -> frame }.also { frame ->
-            ControlDiagnostics.record("capture", frame.reason ?: "completed", SystemClock.elapsedRealtime() - started,
+        return withTree(service, geometry) { frame, _ -> frame }.also { frame ->
+            if (!localImeDiagnostic) ControlDiagnostics.record("capture", frame.reason ?: "completed", SystemClock.elapsedRealtime() - started,
                 metrics = buildJsonObject {
                     put("probe_ms", probedAt - started); put("tree_ms", SystemClock.elapsedRealtime() - probedAt)
                     put("visited_nodes", frame.visitedNodes); put("truncated", frame.truncated)
                 })
         }
     }
+
+    private fun diagnosticSceneAllowed(pkg: String, ime: ControlKeyboard?): Boolean =
+        !localImeDiagnostic || (localAuthority != null && pkg == LocalImeGeometryFixture.CHROME &&
+            ime?.packageName == LocalImeGeometryFixture.SAMSUNG && ime.readAllowed)
     private var visualFailureReason = "visual_observation_unavailable"
     override fun visualFailure() = visualFailureReason
     override suspend fun visual(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "app")
@@ -369,7 +390,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             VisualKeyboardPolicy.imageReadRefusal(keyboard, keyboard?.let { packageAllowed(it.packageName, operation = "read") } == true,
                 scope == "keyboard", frame.inputTarget != null) != null) return fail("visual_keyboard_policy_denied")
         val captureId = if (scope == "keyboard") keyboard!!.windowId else frame.windowId
-        if(displayCapture) {
+        if(displayCapture && !localImeDiagnostic) {
             // These are our pixel-only intent/ripple cues, never user controls.
             // Remove them before planning both observations and key revalidation;
             // the border, X, island and all source/coverage checks stay in place.
@@ -389,10 +410,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         if (projectionDisplay && projection == null) return fail("screen_share_not_active")
         if (observationOnly && projection?.screenObservationAllowed() != true) return fail("screen_observation_consent_required")
         val projectionRequestId = if (projection != null) java.util.UUID.randomUUID().toString().replace("-", "") else null
+        // Local authority can end while a native slot or callback is pending.
+        // Keep the existing remote capture path and its behavior unchanged.
+        val localCaptureRefusal: (() -> String?)? = if (localImeDiagnostic) ({ reason(service) }) else null
         suspend fun captureOnce(): VisualCaptureResult =
             WindowVisualCapture.capture(service,captureId,bounds,frame.touchContext,displayCapture,plan?.region,
                 plan?.surfaces.orEmpty(),projection=projection,requestId=projectionRequestId,observationOnly=observationOnly,
-                nativeKeyboardDisplay=nativeKeyboardDisplay) { probeThrottle.awaitSlot() }
+                nativeKeyboardDisplay=nativeKeyboardDisplay, captureRefusal=localCaptureRefusal) { probeThrottle.awaitSlot() }
         probeThrottle.awaitSlot()
         var captured = captureOnce()
         // Retry only an explicit OS screenshot rate refusal, before any action.
@@ -447,7 +471,13 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             reason(service)?.let { return@withContext null }
             val root = service.rootInActiveWindow ?: return@withContext null
             val windows = service.windows.orEmpty()
-            try { controlledWindows(service, root.windowId, root.packageName?.toString().orEmpty(), windows) }
+            try {
+                val pkg = root.packageName?.toString().orEmpty()
+                if (localImeDiagnostic && pkg != LocalImeGeometryFixture.CHROME) return@withContext null
+                controlledWindows(service, root.windowId, pkg, windows).takeIf {
+                    diagnosticSceneAllowed(pkg, it.keyboard)
+                }
+            }
             finally { root.recycleCompat(); windows.forEach { runCatching { it.recycle() } } }
         } ?: return reason(service) ?: "active_root_missing"
         windowDiagnostics = selected.diagnostics
@@ -484,7 +514,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
                             mark(ControlTiming.Event.PROBE_CALLBACK_OK)
                             screenshot.hardwareBuffer.close()
-                            if (continuation.isActive) continuation.resume(null)
+                            if (continuation.isActive)
+                                continuation.resume(if (localImeDiagnostic) reason(service) else null)
                         }
                         override fun onFailure(errorCode: Int) {
                             mark(ControlTiming.Event.PROBE_CALLBACK_FAILED)
@@ -503,7 +534,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             }
         }
     }
-    private suspend fun <T> withTree(service: AgentService,
+    private suspend fun <T> withTree(service: AgentService, geometry: MutableList<ImeGeometryNode>? = null,
         block: suspend (ControlFrame, List<AccessibilityNodeInfo>) -> T): T = withContext(Dispatchers.Main) {
         reason(service)?.let { return@withContext block(denied(it), emptyList()) }
         val root = service.rootInActiveWindow ?: return@withContext block(denied("active_root_missing"), emptyList())
@@ -514,6 +545,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             if (pkg.isBlank()) return@withContext block(denied("package_unknown"), emptyList())
             val selected = controlledWindows(service, root.windowId, pkg, windows)
             selected.selection.reason?.let { return@withContext block(denied(it, selected.diagnostics), emptyList()) }
+            if (!diagnosticSceneAllowed(pkg, selected.keyboard))
+                return@withContext block(denied("diagnostic_scene_changed"), emptyList())
             val certified = certifiedWindows
             if (certified == null || certified.signature != selected.signature || certified.selection != selected.selection)
                 return@withContext block(denied("secure_window_changed", selected.diagnostics), emptyList())
@@ -534,6 +567,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val shellIds = mutableSetOf<String>()
             val keyboardScan = KeyboardScanDiagnostics()
             val keyboardCaptionSlots = mutableListOf<KeyboardCaptionSlot>()
+            // Same already-admitted IME traversal, no extra reads or public nodes.
+            val suggestionGeometry = if (!localImeDiagnostic && selected.keyboard?.let {
+                    it.packageName == LocalImeGeometryFixture.SAMSUNG && it.readAllowed && it.interactAllowed
+                } == true) mutableListOf<ImeGeometryNode>() else null
+            val imeGeometry = geometry ?: suggestionGeometry
             var visited = 0
             var deepest = 0
             val truncationReasons = linkedSetOf<String>()
@@ -560,6 +598,18 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val className = node.className?.toString().orEmpty()
                 val ownKeyboardNode = selected.keyboard?.packageName == node.packageName?.toString() &&
                     selected.keyboard?.windowId == node.windowId
+                if (imeGeometry != null && keyboard && ownKeyboardNode && diagnosticSceneAllowed(pkg, selected.keyboard)) {
+                    val kind = when {
+                        resource.endsWith(":id/candidate_with_sub_text_layout") && className == "android.view.ViewGroup" ->
+                            ImeGeometryNode.Kind.WRAPPER
+                        resource.endsWith(":id/main_label") && className == "android.widget.TextView" ->
+                            ImeGeometryNode.Kind.CAPTION
+                        else -> ImeGeometryNode.Kind.OTHER
+                    }
+                    val eligible = node.isVisibleToUser && node.isEnabled && !node.isPassword &&
+                        (Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive)
+                    imeGeometry.add(ImeGeometryNode(index, parent, bounds(rect), kind, eligible))
+                }
                 val imageCandidate = keyboard && labelEvidence == null && ownKeyboardNode &&
                     !node.isPassword && (Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive) &&
                     ((rect.width().toLong() * 2 >= rect.height().toLong() * 3 &&
@@ -716,7 +766,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     pkg == AndroidGeminiDraftUi.GOOGLE_HOST && geminiIdentityVerified) AndroidGeminiDraftUi.PACKAGE else null,
                 keyboard = selected.keyboard, inputTargetId = inputTarget?.id, inputTarget = inputTarget,
                 keyboardDiagnostics = selected.keyboard?.takeIf { it.readAllowed }?.let { keyboardScan.json() },
-                keyboardCaptionSlots = keyboardCaptionSlots)
+                keyboardCaptionSlots = keyboardCaptionSlots,
+                keyboardSuggestionGeometry = if (code == null && !truncated) suggestionGeometry.orEmpty() else emptyList())
             block(EmptyOwnedSurfacePolicy.restrict(frame,
                 selected.selection.members.size > 1 && root.windowId in selected.selection.members &&
                     window.id in selected.selection.members), native)
