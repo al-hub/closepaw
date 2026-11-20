@@ -364,6 +364,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var usedFallback = false
         var displayWindowRecheckKey: Int? = null
         var observationRetryReason: String? = null
+        // Categorical proof failure only. Never retain pixels, text or geometry.
+        var pixelFailureStage: String? = null
+        var pixelFailureKey: Int? = null
         fun JsonObjectBuilder.metrics() {
             if (!reuseMaps) return
             put("reused_key_steps", reusedKeySteps)
@@ -384,6 +387,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             return OperationResult(success = false, summary = reason, data = buildJsonObject {
                 metrics()
                 put("reason_code", reason); put("completed_keys", confirmed)
+                pixelFailureStage?.let { put("pixel_failure_stage", it) }
+                pixelFailureKey?.let { put("pixel_failure_key", it) }
                 observationReason?.let { put("observation_reason_code", it) }
                 if (postCheckRefusals.isNotEmpty()) put("keyboard_post_check_refusals", JsonArray(postCheckRefusals))
                 observationRetryReason?.let { put("observation_retry_reason_code", it) }
@@ -505,12 +510,22 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 return stop("keyboard_sequence_literal_unverified")
             VisualKeyboardPolicy.refusal(original.verificationFrame, node, "keyboard",
                 label.takeIf { node.keyboardImageCandidate })?.let { return stop(it) }
-            val inScreen = firstProof.map(crop) ?: return stop("keyboard_sequence_pixels_unverified")
+            val inScreen = firstProof.map(crop) ?: run {
+                pixelFailureStage = if (firstProof.mapGeometry(crop) == null)
+                    KeyboardSequencePixelProof.Failure.IMAGE_RECT_OUTSIDE_FRAME.code
+                else KeyboardSequencePixelProof.Failure.IMAGE_CROP_NOT_DISCLOSED.code
+                pixelFailureKey = i + 1
+                return stop("keyboard_sequence_pixels_unverified")
+            }
             val nodeBounds = KeyboardImageFallbackPolicy.bounds(node.bounds)
                 ?: return stop("keyboard_visual_bounds_invalid")
             if (!nodeBounds.contains(inScreen) || !imeBounds.contains(nodeBounds) ||
-                !OwnedPixelPolicy.contains(firstProof.disclosedRegions, nodeBounds))
+                !OwnedPixelPolicy.contains(firstProof.disclosedRegions, nodeBounds)) {
+                pixelFailureStage = KeyboardSequencePixelProof.failure(firstProof, crop, nodeBounds, imeBounds)?.code
+                    ?: "pixel_failure_unclassified"
+                pixelFailureKey = i + 1
                 return stop("keyboard_sequence_pixels_unverified")
+            }
             planned.add(Step(label, node, crop, nodeBounds))
         }
         if (submitted == null) {
@@ -615,8 +630,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         candidate.sourceWindowId == ime.windowId && candidate.sourcePackage == ime.packageName
                 } ?: return stop("keyboard_sequence_candidate_changed")
                 if (proof.map(step.crop)?.let(step.bounds::contains) != true ||
-                    !OwnedPixelPolicy.contains(proof.disclosedRegions, step.bounds))
+                    !OwnedPixelPolicy.contains(proof.disclosedRegions, step.bounds)) {
+                    pixelFailureStage = KeyboardSequencePixelProof.failure(proof, step.crop, step.bounds, imeBounds)?.code
+                        ?: "pixel_failure_unclassified"
+                    pixelFailureKey = index + 1
                     return stop("keyboard_sequence_pixels_unverified")
+                }
                 VisualKeyboardPolicy.refusal(active.verificationFrame, node, "keyboard",
                     step.label.takeIf { node.keyboardImageCandidate })?.let { return stop(it) }
                 keyboardCheckpoint = null // Uncertain dispatch or cancellation must leave no resume authority.
