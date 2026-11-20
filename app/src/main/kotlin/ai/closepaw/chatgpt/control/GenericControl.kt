@@ -93,6 +93,9 @@ internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expec
 
 internal data class ControlEffect(val attempted: Boolean, val acknowledged: Boolean, val reason: String,
     val visualSourceFailure: VisualSourceFailure? = null)
+/** The frame is the snapshot certified with these pixels, not an earlier proposal. */
+internal data class CertifiedKeyboardFrame(val frame: ControlFrame, val proof: VisualTargetProof)
+
 internal interface ControlPort : IslandControlPort {
     override fun islandRefusal(sessionId: String): String? = "island_control_unavailable"
     override suspend fun observeIsland(): IslandBounds? = null
@@ -119,7 +122,8 @@ internal interface ControlPort : IslandControlPort {
     suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = null
     suspend fun captureKeyboardSequenceFrame(): ControlFrame = capture()
     suspend fun visualKeyboardSequenceFollowUp(frame: ControlFrame,
-        onPostCheckRefusal: (JsonObject) -> Unit): VisualTargetProof? = visualKeyboard(frame)
+        onPostCheckRefusal: (JsonObject) -> Unit): CertifiedKeyboardFrame? =
+        visualKeyboard(frame)?.let { CertifiedKeyboardFrame(frame, it) }
     suspend fun visualDisplay(frame: ControlFrame): VisualTargetProof? = null
     /** Explicitly consented shared-screen reading; never a visual action proof. */
     suspend fun visualScreenObserve(frame: ControlFrame): VisualTargetProof? = null
@@ -184,9 +188,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val followUpDiagnostic = onKeyboardPostCheckRefusal?.takeIf { includeImage && imageScope == "keyboard" }
         var frame = if (followUpDiagnostic == null) port.capture() else port.captureKeyboardSequenceFrame()
         if (includeImage && frame.reason == null && !frame.truncated && !frame.navigationOnly) {
-            val visual = when(imageScope) {
-                "keyboard" -> if (followUpDiagnostic == null) port.visualKeyboard(frame)
-                    else port.visualKeyboardSequenceFollowUp(frame, followUpDiagnostic)
+            val certified = followUpDiagnostic?.let { port.visualKeyboardSequenceFollowUp(frame, it) }
+            val visual = if (followUpDiagnostic != null) certified?.proof else when (imageScope) {
+                "keyboard" -> port.visualKeyboard(frame)
                 "display" -> port.visualDisplay(frame)
                 "screen_observe" -> port.visualScreenObserve(frame)
                 else -> port.visual(frame)
@@ -195,10 +199,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 visual == null -> frame.copy(reason = port.visualFailure())
                 imageScope == "screen_observe" && visual.scope != "screen_observe" ->
                     frame.copy(reason = "screen_observation_proof_invalid")
-                else -> frame.copy(visual = visual)
+                else -> (certified?.frame ?: frame).copy(visual = visual)
             }
         }
-        if (followUpDiagnostic != null) frame = frame.copy(keyboardVisualFingerprintParts = null)
         val result = publish(frame, filter, keyboardKeyExact, keyboardSequenceLabels)
         port.presentation(if (result.success) ControlSession.VisualPhase.WAITING else ControlSession.VisualPhase.FAILED, visualEpoch)
         port.feedbackAtEpoch(if (result.success) "접근성 확인 완료 · 다음 명령 대기" else "화면 확인 실패 · 재관찰 필요", visualEpoch)

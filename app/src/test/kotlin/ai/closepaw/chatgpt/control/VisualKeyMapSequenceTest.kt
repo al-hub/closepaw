@@ -13,13 +13,22 @@ class VisualKeyMapSequenceTest {
         const val benchmark = "오늘 회의는 Zoom으로 3시에 시작! 자료는 A2개."
     }
 
-    private class Fixture : ControlPort {
+    private class Fixture(private val chrome: Boolean = false) : ControlPort {
         val control = GenericControl(this, { allowed })
         val active = ControlSession().apply { start() }
-        val ime = ControlKeyboard(20, "test.ime", "test.ime/.Ime")
-        private var editor = ControlNode(1, resourceId = "test.app:id/isolated_editor", className = "EditText",
-            editable = true, focused = true, focusable = true, selectionStart = 0, selectionEnd = 0,
-            sourceWindowId = 10, sourcePackage = "test.app", nativeEditorId = "editor-1")
+        private val app = if (chrome) LocalImeGeometryFixture.CHROME else "test.app"
+        private val imePackage = if (chrome) LocalImeGeometryFixture.SAMSUNG else "test.ime"
+        val ime = ControlKeyboard(20, imePackage, if (chrome) "$imePackage/.service.HoneyBoardService" else "$imePackage/.Ime")
+        private var editor = ControlNode(1, resourceId = if (chrome) "$app:id/url_bar" else "$app:id/isolated_editor",
+            className = "EditText", editable = true, focused = true, focusable = true, selectionStart = 0,
+            selectionEnd = 0, sourceWindowId = 10, sourcePackage = app, nativeEditorId = "editor-1")
+        var duringFirstSpaceCapture: (() -> Unit)? = null
+        var afterFirstSpaceCapture: (() -> Unit)? = null
+        var alternativeCaption = 0
+        var otherRegion = "other"
+        var layoutRevision = "original"
+        var suggestionMotion = false
+        fun moveCaret() { editor = editor.copy(selectionStart = 0, selectionEnd = 0) }
         var allowed = true
         var fallbackRefusal: String? = null
         var loseCallbackFor: String? = null
@@ -32,8 +41,8 @@ class VisualKeyMapSequenceTest {
         private val frameBounds = TapBounds(0, 0, 1200, 150)
         private val controls = listOf("Shift", "한/영", "?123", "#+=", "ABC").mapIndexed { index, label ->
             ControlNode(90 + index, text = label, keyboardKey = label, clickable = true,
-                bounds = "${index * 40} 85 ${(index + 1) * 40} 110",
-                sourceWindowId = 20, sourcePackage = "test.ime", visualKeyCandidate = true)
+                bounds = "${(if (chrome) 820 else 0) + index * 40} 85 ${(if (chrome) 820 else 0) + (index + 1) * 40} 110",
+                sourceWindowId = 20, sourcePackage = imePackage, visualKeyCandidate = true)
         }
         var state = "ko"
         var nextState: String? = null
@@ -49,9 +58,12 @@ class VisualKeyMapSequenceTest {
         fun key(label: String): ControlNode {
             val i = rows.getValue(state).indexOf(label)
             require(i >= 0)
+            if (chrome && label == "Space") return ControlNode(i + 3, parent = 80,
+                bounds = "165 82 325 112", sourceWindowId = 20, sourcePackage = imePackage,
+                className = "android.view.ViewGroup", keyboardImageCandidate = true, visualKeyChildCount = 0)
             val x = i * 40 + 5
             return ControlNode(i + 3, text = label, keyboardKey = label, clickable = true, textEntryKey = true,
-                bounds = "$x 45 ${x + 35} 75", sourceWindowId = 20, sourcePackage = "test.ime",
+                bounds = "$x 45 ${x + 35} 75", sourceWindowId = 20, sourcePackage = imePackage,
                 visualKeyCandidate = true, visualKeyChildCount = 0)
         }
         fun currentEditor() = editor
@@ -60,11 +72,38 @@ class VisualKeyMapSequenceTest {
         override fun session() = active
         override suspend fun apps(filter: String) = JsonArray(emptyList())
         override suspend fun capture(): ControlFrame {
-            return ControlFrame("test.app", 10, "${editor.text}/$state/${editor.nativeEditorId}",
-                listOf(editor) + controls + rows.getValue(state).map(::key),
+            val scope = if (chrome) KeyboardVisualFingerprintParts("context", "${editor.text}/$alternativeCaption/$otherRegion",
+                "$state/$layoutRevision", ChromeTreeRegions.Fingerprints(
+                    "${editor.text}/${editor.selectionEnd}", "caption-$alternativeCaption", otherRegion,
+                    if (suggestionMotion) "suggestion moved" else "suggestion shape")) else null
+            val spaceNeighbors = if (chrome) listOf("," to "140 82 165 112", "." to "325 82 350 112").mapIndexed { i, (label, bounds) ->
+                ControlNode(70 + i, text = label, keyboardKey = label, bounds = bounds, parent = 80,
+                    sourceWindowId = 20, sourcePackage = imePackage, clickable = true, textEntryKey = true, visualKeyCandidate = true)
+            } else emptyList()
+            return ControlFrame(app, 10, "${editor.text}/$state/${editor.nativeEditorId}/$alternativeCaption/$otherRegion/$layoutRevision/${editor.selectionEnd}",
+                listOf(editor) + controls + rows.getValue(state).map(::key) + spaceNeighbors,
                 touchContext = "verified touch region", windowContext = "verified window",
-                keyboard = ime, inputTargetId = editor.id, inputTarget = editor)
+                keyboard = ime, inputTargetId = editor.id, inputTarget = editor, keyboardVisualFingerprintParts = scope)
         }
+
+        override suspend fun visualKeyboardSequenceFollowUp(frame: ControlFrame,
+            onPostCheckRefusal: (JsonObject) -> Unit): CertifiedKeyboardFrame? {
+            val proof = visualKeyboard(frame)
+            if (editor.text != "가") return CertifiedKeyboardFrame(frame, proof)
+            duringFirstSpaceCapture?.invoke()
+            val after = capture()
+            val refusal = GenericControlActionPolicy.refusal(frame, after, "visual_key")
+            val certified = KeyboardVisualPostCheck.certifiedFrame(frame, after, refusal, allowCaptionOnly = chrome)
+            if (certified == null) {
+                onPostCheckRefusal(KeyboardVisualPostCheck.describe(frame, after))
+                failure = "visual_post_$refusal"
+                return null
+            }
+            afterFirstSpaceCapture?.invoke()
+            return CertifiedKeyboardFrame(certified, proof)
+        }
+        private var failure = "visual_observation_unavailable"
+        override fun visualFailure() = failure
 
         override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof {
             captures++
@@ -84,7 +123,8 @@ class VisualKeyMapSequenceTest {
             val fresh = capture()
             val refusal = GenericControlActionPolicy.refusal(frame, fresh, "visual_key")
             if (refusal != null) return ControlEffect(false, false, refusal)
-            val label = node?.keyboardKey ?: return ControlEffect(false, false, "no-key")
+            val label = node?.keyboardKey?.ifEmpty { input["image_key_label"]?.jsonPrimitive?.content.orEmpty() }
+                ?: return ControlEffect(false, false, "no-key")
             if (label == fallbackRefusal) {
                 fallbackRefusal = null
                 return ControlEffect(false, false, "visual_pixels_or_geometry_changed")
@@ -182,6 +222,47 @@ class VisualKeyMapSequenceTest {
         assertEquals(7, f.nativeChecks)
         assertEquals(JsonPrimitive(true), result.data["fallback_used"])
         assertEquals(JsonPrimitive(5), result.data["keyboard_image_renewals"])
+    }
+
+    @Test fun captionOnlyWhileRenewingFirstSpaceDoesNotPublishTheObsoleteFrame() = runBlocking {
+        val f = Fixture(chrome = true)
+        f.fallbackRefusal = "Space"
+        f.duringFirstSpaceCapture = { f.alternativeCaption++ }
+        val result = f.run("가 나 ")
+        assertTrue(result.summary, result.success)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
+        assertEquals("가 나 ", f.currentEditor().text)
+        assertEquals(4, f.currentEditor().selectionEnd)
+        assertEquals(JsonPrimitive(2), result.data["confirmed_image_fallback_spaces"])
+    }
+
+    @Test fun firstSpaceRenewalCannotCertifyCaretOrLayoutOrSuggestionGeometryChanges() = runBlocking {
+        val mutations: Map<String, (Fixture) -> Unit> = mapOf(
+            "caret" to { it.moveCaret() },
+            "IME layout" to { it.layoutRevision += " changed" },
+            "suggestion geometry" to { it.suggestionMotion = !it.suggestionMotion; it.alternativeCaption++ },
+            "other Chrome region" to { it.otherRegion += " changed"; it.alternativeCaption++ },
+        )
+        for ((name, change) in mutations) {
+            val f = Fixture(chrome = true).apply { fallbackRefusal = "Space" }
+            f.duringFirstSpaceCapture = { change(f) }
+            val result = f.run("가 나 ")
+            assertFalse("$name: ${result.summary}", result.success)
+            assertEquals(JsonPrimitive(2), result.data["completed_keys"])
+            assertEquals(listOf("ㄱ", "ㅏ"), f.touched)
+            assertEquals("가", f.currentEditor().text)
+        }
+    }
+
+    @Test fun anotherChangeAfterCertificationCannotPassStrictNativeGuard() = runBlocking {
+        val f = Fixture(chrome = true).apply { fallbackRefusal = "Space" }
+        f.duringFirstSpaceCapture = { f.alternativeCaption++ }
+        f.afterFirstSpaceCapture = { f.otherRegion += " changed" }
+        val result = f.run("가 나 ")
+        assertEquals("screen_changed", result.summary)
+        assertEquals(JsonPrimitive(2), result.data["completed_keys"])
+        assertEquals(JsonPrimitive(false), result.data["outcome_unknown"])
+        assertEquals(listOf("ㄱ", "ㅏ"), f.touched)
     }
 
     @Test fun verifiedStateChangesCacheOnlyTheirOwnMapAndOneShotShiftRequiresNewObservation() = runBlocking {

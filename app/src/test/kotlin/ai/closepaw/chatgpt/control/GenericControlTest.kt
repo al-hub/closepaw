@@ -1169,11 +1169,11 @@ class GenericControlTest {
         var observeWindowTrace: ((DisplayWindowChangeJournal.Mark?) -> Unit)? = null
 
         override suspend fun visualKeyboardSequenceFollowUp(frame: ControlFrame,
-            onPostCheckRefusal: (JsonObject) -> Unit): VisualTargetProof? {
+            onPostCheckRefusal: (JsonObject) -> Unit): CertifiedKeyboardFrame? {
             val proof = visualKeyboard(frame)
             if (proof == null && visualFailure() == "visual_post_screen_changed")
                 describePostCheck?.invoke(frame)?.let(onPostCheckRefusal)
-            return proof
+            return proof?.let { CertifiedKeyboardFrame(frame, it) }
         }
         private var lastVisualDenial: String? = null
         override fun visualFailure() = lastVisualDenial ?: super.visualFailure()
