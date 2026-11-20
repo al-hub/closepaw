@@ -11,6 +11,7 @@ import android.view.SurfaceView
 import android.view.accessibility.AccessibilityEvent
 import ai.closepaw.debug.ActionDebugReceiver
 import ai.closepaw.chatgpt.control.ControlSession
+import ai.closepaw.chatgpt.control.DisplayWindowChangeJournal
 import ai.closepaw.platform.virtualdisplay.MediaProjectionCaptureService
 import ai.closepaw.protocol.Op
 import ai.closepaw.protocol.PlatformMode
@@ -96,6 +97,7 @@ class AgentService : AccessibilityService() {
     private var actionVisualizer: ActionVisualizerManager? = null
     internal val remoteControlChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
     internal val remoteDisplayChanges = ai.closepaw.chatgpt.control.ControlChangeSignal()
+    internal val remoteDisplayJournal = DisplayWindowChangeJournal()
     internal val remoteControlSession: ai.closepaw.chatgpt.control.ControlSession by lazy {
         val prefs = getSharedPreferences("remote-control-session", MODE_PRIVATE)
         ai.closepaw.chatgpt.control.ControlSession(prefs.getString("state", "idle") ?: "idle") {
@@ -457,6 +459,12 @@ class AgentService : AccessibilityService() {
         // snapshots match. Count all owners (including null and our own overlays).
         if (event?.eventType in setOf(AccessibilityEvent.TYPE_WINDOWS_CHANGED, AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)) {
             remoteDisplayChanges.changed()
+            if (remoteControlSession.state == ControlSession.State.ACTIVE) {
+                val type = if (event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED)
+                    DisplayWindowChangeJournal.Type.WINDOWS_CHANGED else DisplayWindowChangeJournal.Type.WINDOW_STATE_CHANGED
+                remoteDisplayJournal.record(remoteDisplayChanges.version(), type,
+                    DisplayWindowChangeJournal.ownerOf(event?.packageName?.toString(), packageName))
+            }
         }
         // No node reads or text copying in the callback; events only wake the bounded observer.
         if (event != null && event.packageName?.toString() != packageName &&

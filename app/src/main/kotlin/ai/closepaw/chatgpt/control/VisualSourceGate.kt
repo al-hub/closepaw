@@ -1,5 +1,6 @@
 package ai.closepaw.chatgpt.control
 
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -19,8 +20,13 @@ internal enum class VisualSourceStage(val code: String) {
 }
 
 /** Bounded codes only. No screenshot, input, window identifier or generation is exported. */
-internal data class VisualSourceFailure(val stage: VisualSourceStage, val condition: VisualSourceCondition) {
-    fun json() = buildJsonObject { put("stage", stage.code); put("condition", condition.code) }
+internal data class VisualSourceFailure(
+    val stage: VisualSourceStage, val condition: VisualSourceCondition, val windowEvents: JsonObject? = null,
+) {
+    fun json() = buildJsonObject {
+        put("stage", stage.code); put("condition", condition.code)
+        windowEvents?.let { put("window_event_interval", it) }
+    }
 }
 
 /** The decision and its diagnostic come from one ordered, short-circuit check. */
