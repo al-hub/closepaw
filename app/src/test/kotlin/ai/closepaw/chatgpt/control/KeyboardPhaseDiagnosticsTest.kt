@@ -36,6 +36,36 @@ class KeyboardPhaseDiagnosticsTest {
         assertFalse(change.toString().contains("only suggestion changes"))
     }
 
+    @Test fun onlyChromeCaptionsCanVaryDuringOptInKeyboardImageCertification() {
+        val editor = ControlNode(2, resourceId = "com.android.chrome:id/url_bar", text = "가",
+            editable = true, focused = true, focusable = true, sourceWindowId = 2,
+            sourcePackage = "com.android.chrome", selectionStart = 1, selectionEnd = 1, nativeEditorId = "stable")
+        fun regions(caption: String, geometry: String = "10 10 40 40", parent: Int = 0) =
+            ChromeTreeRegions().apply {
+                add(Region.OTHER, node(0, -1))
+                add(Region.SUGGESTIONS, JsonObject(node(1, parent, caption) + ("bounds" to JsonPrimitive(geometry))))
+                add(Region.EDITOR, node(2, 0))
+            }.fingerprints()
+        val parts = KeyboardVisualFingerprintParts("context", "app-before", "ime", regions("old"))
+        val before = ControlFrame("com.android.chrome", 2, "full-before", listOf(editor),
+            keyboard = ControlKeyboard(8, "com.samsung.android.honeyboard", "samsung/.Keyboard"),
+            inputTargetId = editor.id, inputTarget = editor, touchContext = "verified geometry",
+            keyboardVisualFingerprintParts = parts)
+        val after = before.copy(fingerprint = "full-after", keyboardVisualFingerprintParts =
+            parts.copy(appTree = "app-after", chrome = regions("new")))
+        assertTrue(KeyboardVisualPostCheck.suggestionCaptionOnly(before, after))
+        assertEquals("screen_changed", GenericControlActionPolicy.refusal(before, after, "visual_key"))
+        for (reject in listOf(
+            after.copy(truncated = true),
+            after.copy(foregroundWindowId = 3),
+            after.copy(touchContext = "changed geometry"),
+            after.copy(inputTarget = editor.copy(selectionEnd = 0)),
+            after.copy(keyboardVisualFingerprintParts = parts.copy(appTree = "app-after", imeTree = "changed", chrome = regions("new"))),
+            after.copy(keyboardVisualFingerprintParts = parts.copy(appTree = "app-after", chrome = regions("new", "10 10 40 41"))),
+            after.copy(keyboardVisualFingerprintParts = parts.copy(appTree = "app-after", chrome = regions("new", parent = 2))),
+        )) assertFalse(KeyboardVisualPostCheck.suggestionCaptionOnly(before, reject))
+    }
+
     @Test fun neverObservedChromeRegionIsNotReportedAsUnchanged() {
         val regions = ChromeTreeRegions().apply { add(Region.OTHER, node(0, -1)) }.fingerprints()
         val parts = KeyboardVisualFingerprintParts("context", "app-before", "ime", regions)

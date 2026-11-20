@@ -42,6 +42,22 @@ internal object VisualSequenceCandidates {
         }.takeIf { nodes -> nodes.map { it.id }.distinct().size == nodes.size }.orEmpty()
     }
 
+    /** Optional case/language/page witness. Two distinct physically disjoint
+     * character locations are needed. Space or a layout-control caption is
+     * not evidence that the requested page became active. */
+    fun witnessesLayout(frame: ControlFrame, labels: List<String>): Boolean {
+        if (labels.size !in 2..6 || labels.distinct().size != labels.size ||
+            labels.any { literal(it)?.kind != KeyboardKeyPolicy.Kind.CHARACTER }) return false
+        val physical = select(frame, labels).filterNot { it.keyboardImageCandidate }
+            .mapNotNull { KeyboardImageFallbackPolicy.bounds(it.bounds) }
+        return physical.size == labels.size && physical.indices.any { i ->
+            physical.drop(i + 1).any { b ->
+                val a = physical[i]
+                a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top
+            }
+        }
+    }
+
     private data class Cell(val node: ControlNode, val rect: TapBounds)
     private data class Row(val parent: Int, val top: Int, val bottom: Int, val width: Int, val keys: List<Cell>)
 

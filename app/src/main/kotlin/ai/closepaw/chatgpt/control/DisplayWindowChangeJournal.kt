@@ -5,7 +5,7 @@ import kotlin.coroutines.CoroutineContext
 import kotlinx.serialization.json.*
 
 /** Each visual-sequence key gets its own marker; never reused as proof. */
-internal class KeyboardWindowTrace(val keyIndex: Int, val readAttempt: Int) : AbstractCoroutineContextElement(Key) {
+internal class KeyboardWindowTrace(val keyIndex: Int, val readAttempt: Int, val reuseKeyMap: Boolean = false) : AbstractCoroutineContextElement(Key) {
     companion object Key : CoroutineContext.Key<KeyboardWindowTrace>
     var mark: DisplayWindowChangeJournal.Mark? = null
 }

@@ -8,6 +8,29 @@ internal data class KeyboardVisualFingerprintParts(
 )
 
 internal object KeyboardVisualPostCheck {
+    /** A keyboard-only image masks Chrome pixels. A caption update alone may
+     * occur during its capture. This never authorizes a touch and never makes
+     * an exception for structure, editor values, any window or IME changes. */
+    fun suggestionCaptionOnly(before: ControlFrame, after: ControlFrame): Boolean {
+        if (before.packageName != LocalImeGeometryFixture.CHROME ||
+            before.keyboard?.packageName != LocalImeGeometryFixture.SAMSUNG ||
+            before.inputTarget?.resourceId != "com.android.chrome:id/url_bar" ||
+            before.inputTarget != after.inputTarget ||
+            !KeyboardEditorContinuity.sameFocusedEditor(before, after, allowAnonymousResize = false) ||
+            !KeyboardEditorContinuity.sameValue(before, after) ||
+            GenericControlActionPolicy.refusal(before, after.copy(fingerprint = before.fingerprint), "visual_key") != null)
+            return false
+        val old = before.keyboardVisualFingerprintParts ?: return false
+        val new = after.keyboardVisualFingerprintParts ?: return false
+        val a = old.chrome ?: return false
+        val b = new.chrome ?: return false
+        return old.context == new.context && old.appTree != new.appTree &&
+            old.imeTree != null && old.imeTree == new.imeTree &&
+            a.editor != null && a.editor == b.editor && a.other != null && a.other == b.other &&
+            a.suggestions != null && b.suggestions != null && a.suggestions != b.suggestions &&
+            a.suggestionShape != null && a.suggestionShape == b.suggestionShape
+    }
+
     /** Make the IME tree independent of a change in the app's node count. */
     fun relativeImeNode(node: JsonObject, index: Int, parent: Int, imeBase: Int): JsonObject = JsonObject(node + mapOf(
         "id" to JsonPrimitive(index - imeBase),
