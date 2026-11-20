@@ -210,6 +210,13 @@ class GenericControlTest {
                     }, true)
                 })
         }
+        fun longClickableCenterRecommendation(topology: WrappedStrip) {
+            wrapRecommendationCaptions(topology)
+            // The other two captions have structural evidence but no literal key role.
+            port.frame = port.frame.copy(nodes = port.frame.nodes.filterNot { it.id in setOf(115, 117) }.map {
+                if (it.id == 118) it.copy(text = "ㄱ", keyboardKey = "ㄱ", longClickable = true) else it
+            })
+        }
         suspend fun observeJamo(withSpace: Boolean = false): JsonObject =
             observeLabels(if (withSpace) listOf("ㄱ", "ㅏ", "Space") else listOf("ㄱ", "ㅏ"))
 
@@ -279,6 +286,48 @@ class GenericControlTest {
         port.visualProof = checkNotNull(port.visualProof).copy(disclosedRegions = listOf(
             TapBounds(110, 1798, 1440, 1952), TapBounds(0, 1952, 1440, 3120)))
         assertHangulSequenceWithSuggestionRefresh(fixture)
+    }
+
+    @Test fun confirmedLongClickableRecommendationIsNotAPhysicalKeyAtAnyStep() = runBlocking {
+        val fixture = JamoCandidateFixture(suggestionStrip = true, samsung = true)
+        fixture.longClickableCenterRecommendation(WrappedStrip.DEDICATED)
+        val port = fixture.port
+        port.visualProof = checkNotNull(port.visualProof).copy(disclosedRegions = listOf(
+            TapBounds(140, 1798, 1300, 1952), TapBounds(0, 1952, 1440, 3120)))
+        assertEquals(fixture.expectedIds + 210, fixture.ids(fixture.observeJamo(withSpace = true)))
+        for (label in listOf("ㄱ", "ㅏ")) {
+            val frame = port.frame.copy(visual = port.visualProof, nodes = port.frame.nodes.map {
+                if (it.id == 118) it.copy(text = label, keyboardKey = label) else it
+            })
+            assertFalse(VisualSequenceCandidates.layoutNodes(frame).any { it.id == 118 })
+        }
+        assertHangulSequenceWithSuggestionRefresh(fixture, recommendationId = 118)
+    }
+
+    @Test fun longClickableRecommendationWithoutDedicatedEvidenceNeverUnblocksTheCollision() = runBlocking {
+        for (topology in listOf(WrappedStrip.UNKNOWN, WrappedStrip.SHARED_ROOT)) {
+            val fixture = JamoCandidateFixture(suggestionStrip = true, samsung = true)
+            fixture.longClickableCenterRecommendation(topology)
+            val frame = fixture.port.frame.copy(visual = fixture.port.visualProof)
+            assertTrue(VisualSequenceCandidates.layoutNodes(frame).any { it.id == 118 })
+            assertNoWrappedJamoTouch(fixture, topology.name)
+        }
+        val legacy = JamoCandidateFixture(suggestionStrip = true, samsung = true)
+        legacy.port.frame = legacy.port.frame.copy(nodes = legacy.port.frame.nodes.map {
+            if (it.id == 117) it.copy(longClickable = true) else it
+        })
+        assertNoWrappedJamoTouch(legacy, "same-parent strip is not enough for long-click exclusion")
+    }
+
+    @Test fun confirmedLongClickableRecommendationDoesNotAuthorizeDuplicateOrMaskedPhysicalKeys() = runBlocking {
+        for (duplicate in listOf(true, false)) {
+            val fixture = JamoCandidateFixture(suggestionStrip = true, secondPhysicalKey = duplicate, samsung = true)
+            fixture.longClickableCenterRecommendation(WrappedStrip.DEDICATED)
+            val port = fixture.port
+            if (!duplicate) port.visualProof = checkNotNull(port.visualProof).copy(disclosedRegions = listOf(
+                TapBounds(0, 1798, 560, 3120), TapBounds(580, 1798, 1440, 3120)))
+            assertNoWrappedJamoTouch(fixture, if (duplicate) "duplicate physical keys" else "masked physical key")
+        }
     }
 
     @Test fun wrappedRecommendationAmbiguityCannotPromoteAnUnprovenTarget() = runBlocking {
@@ -472,7 +521,7 @@ class GenericControlTest {
     }
 
     // Same exact-effect oracle for the existing strip and the device-confirmed wrapper shape.
-    private suspend fun assertHangulSequenceWithSuggestionRefresh(fixture: JamoCandidateFixture) {
+    private suspend fun assertHangulSequenceWithSuggestionRefresh(fixture: JamoCandidateFixture, recommendationId: Int = 117) {
         val port = fixture.port
         val touched = mutableListOf<Int>()
         port.onWrite = { input ->
@@ -493,7 +542,7 @@ class GenericControlTest {
                 nodes = port.frame.nodes.map {
                     when {
                         it.id == editor.id -> editor
-                        it.id == 117 && id == 163 -> it.copy(text = "ㅏ", keyboardKey = "ㅏ")
+                        it.id == recommendationId && id == 163 -> it.copy(text = "ㅏ", keyboardKey = "ㅏ")
                         else -> it
                     }
                 })

@@ -29,7 +29,9 @@ internal object VisualSequenceCandidates {
                 onePhysicalKey(physical)?.takeIf { key ->
                     // An unproven wide leaf must neither win a collision nor
                     // be promoted on its own when only a suggestion is present.
-                    (key !in possibleStrip && physical.size == native.size || evidence.corroboratesKey(key)) &&
+                    // Keep the old corroboration requirement for an unproven long-click target.
+                    ((key !in possibleStrip || key.longClickable) && physical.size == native.size ||
+                        evidence.corroboratesKey(key)) &&
                         VisualKeyboardPolicy.refusal(frame, key, "keyboard") == null
                 }
             } else {
@@ -86,7 +88,7 @@ internal object VisualSequenceCandidates {
 
     private fun wideCharacterLeaf(node: ControlNode, ime: ControlKeyboard): Boolean {
         if (!node.visualKeyCandidate || node.keyboardImageCandidate || !node.clickable ||
-            node.longClickable || node.textEntryKey || node.visualKeyChildCount != 0 ||
+            node.textEntryKey || node.visualKeyChildCount != 0 ||
             VisualKeyboardPolicy.identifyCandidate(node, ime)?.kind != KeyboardKeyPolicy.Kind.CHARACTER) return false
         val r = KeyboardImageFallbackPolicy.bounds(node.bounds) ?: return false
         return r.right - r.left > 2L * (r.bottom - r.top)
@@ -103,7 +105,7 @@ internal object VisualSequenceCandidates {
                 first.top, KeyboardImageFallbackPolicy.bounds(proof.imeBounds), proof.window)
         else emptyMap()
         private val captions = (frame.keyboardCaptionSlots + owned.mapNotNull {
-            if (!wideCharacterLeaf(it, ime)) null
+            if (it.longClickable || !wideCharacterLeaf(it, ime)) null
             else ownedBounds(it, proof)?.let { r -> KeyboardCaptionSlot(it.parent, r) }
         }).groupBy { it.parent }
 
@@ -113,6 +115,10 @@ internal object VisualSequenceCandidates {
             // Structural exclusion is not pixel certification. Physical keys
             // still need a fully certified owned bound and their own row proof.
             if (wrapped[node.id] == geometry) return true
+            // Samsung's removable recommendation can be long-clickable. The
+            // legacy same-parent heuristic must never exclude it without the
+            // dedicated container proof above.
+            if (node.longClickable) return false
             val target = ownedBounds(node, proof) ?: return false
             if (node.parent < 0 || rows.any { it.parent == node.parent } || target.bottom > row.top ||
                 target.bottom - target.top >= row.bottom - row.top) return false
