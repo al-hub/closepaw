@@ -85,7 +85,8 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val terminalSubmission: TerminalSubmission? = null, val keyboardDiagnostics: JsonObject? = null,
     val navigationOnly: Boolean = false,
     val keyboardCaptionSlots: List<KeyboardCaptionSlot> = emptyList(),
-    val keyboardSuggestionGeometry: List<ImeGeometryNode> = emptyList())
+    val keyboardSuggestionGeometry: List<ImeGeometryNode> = emptyList(),
+    val keyboardVisualFingerprintParts: KeyboardVisualFingerprintParts? = null)
 /** Logical identity is supplied only by a complete, guarded native application identity scan. */
 internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expected != null && reason == null &&
     (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
@@ -116,6 +117,9 @@ internal interface ControlPort : IslandControlPort {
     }
     suspend fun visual(frame: ControlFrame): VisualTargetProof? = null
     suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = null
+    suspend fun captureKeyboardSequenceFrame(): ControlFrame = capture()
+    suspend fun visualKeyboardSequenceFollowUp(frame: ControlFrame,
+        onPostCheckRefusal: (JsonObject) -> Unit): VisualTargetProof? = visualKeyboard(frame)
     suspend fun visualDisplay(frame: ControlFrame): VisualTargetProof? = null
     /** Explicitly consented shared-screen reading; never a visual action proof. */
     suspend fun visualScreenObserve(frame: ControlFrame): VisualTargetProof? = null
@@ -146,7 +150,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     fun invalidate(clearSelections: Boolean = false) { pendingTerminal = null; VisualImageCache.remove(current?.frame?.visual?.id); current = null; port.invalidate(); if (clearSelections) port.clearSelections() }
 
     suspend fun observe(filter: String = "", includeImage: Boolean = false, imageScope: String = "app",
-        keyboardKeyExact: String? = null, keyboardSequenceLabels: List<String>? = null): OperationResult {
+        keyboardKeyExact: String? = null, keyboardSequenceLabels: List<String>? = null,
+        onKeyboardPostCheckRefusal: ((JsonObject) -> Unit)? = null): OperationResult {
         VisualImageCache.remove(current?.frame?.visual?.id); current = null
         chainStarted = now(); chainActions = 0; noProgress = 0
         if (!allowed()) return failure("generic_control_disabled")
@@ -160,10 +165,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (imageScope !in setOf("app", "keyboard", "display", "screen_observe") || (imageScope != "app" && !includeImage)) return failure("image_scope_invalid")
         val visualEpoch = port.session()?.epoch
         port.presentation(ControlSession.VisualPhase.OBSERVING, visualEpoch)
-        var frame = port.capture()
+        val followUpDiagnostic = onKeyboardPostCheckRefusal?.takeIf { includeImage && imageScope == "keyboard" }
+        var frame = if (followUpDiagnostic == null) port.capture() else port.captureKeyboardSequenceFrame()
         if (includeImage && frame.reason == null && !frame.truncated && !frame.navigationOnly) {
             val visual = when(imageScope) {
-                "keyboard" -> port.visualKeyboard(frame)
+                "keyboard" -> if (followUpDiagnostic == null) port.visualKeyboard(frame)
+                    else port.visualKeyboardSequenceFollowUp(frame, followUpDiagnostic)
                 "display" -> port.visualDisplay(frame)
                 "screen_observe" -> port.visualScreenObserve(frame)
                 else -> port.visual(frame)
@@ -175,6 +182,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 else -> frame.copy(visual = visual)
             }
         }
+        if (followUpDiagnostic != null) frame = frame.copy(keyboardVisualFingerprintParts = null)
         val result = publish(frame, filter, keyboardKeyExact, keyboardSequenceLabels)
         port.presentation(if (result.success) ControlSession.VisualPhase.WAITING else ControlSession.VisualPhase.FAILED, visualEpoch)
         port.feedbackAtEpoch(if (result.success) "접근성 확인 완료 · 다음 명령 대기" else "화면 확인 실패 · 재관찰 필요", visualEpoch)
@@ -309,6 +317,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var imageFallbackSpaces = 0
         var touched = false
         var observationRetryReason: String? = null
+        val postCheckRefusals = mutableListOf<JsonObject>()
         fun stop(reason: String, unknown: Boolean = false, observationReason: String? = null,
             visualSourceFailure: JsonObject? = null): OperationResult {
             VisualImageCache.remove(current?.frame?.visual?.id)
@@ -316,6 +325,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             return OperationResult(success = false, summary = reason, data = buildJsonObject {
                 put("reason_code", reason); put("completed_keys", confirmed)
                 observationReason?.let { put("observation_reason_code", it) }
+                if (postCheckRefusals.isNotEmpty()) put("keyboard_post_check_refusals", JsonArray(postCheckRefusals))
                 observationRetryReason?.let { put("observation_retry_reason_code", it) }
                 visualSourceFailure?.let { put("visual_source_failure", it) }
                 put("confirmed_image_fallback_spaces", imageFallbackSpaces)
@@ -403,13 +413,26 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var lastVerified = original.verificationFrame
         var retryUsed = false
         var refresh = false
-        for (step in planned) {
+        for ((index, step) in planned.withIndex()) {
+            var followUpAttempt = 0
             while (true) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 if (!sessionCurrent()) return stop("control_session_changed_observe_again")
                 if (refresh) {
+                    followUpAttempt++
+                    val startedNs = System.nanoTime()
+                    var postCheck: JsonObject? = null
                     val fresh = observe(includeImage = true, imageScope = "keyboard",
-                        keyboardSequenceLabels = listOf(step.label))
+                        keyboardSequenceLabels = listOf(step.label),
+                        onKeyboardPostCheckRefusal = { postCheck = it })
+                    postCheck?.let { change ->
+                        postCheckRefusals.add(buildJsonObject {
+                            put("key_index", index + 1)
+                            put("read_attempt", followUpAttempt)
+                            put("read_elapsed_ms", ((System.nanoTime() - startedNs) / 1_000_000L).coerceAtLeast(0L))
+                            put("change", change)
+                        })
+                    }
                     if (!fresh.success) {
                         val reason = (fresh.data["reason_code"] as? JsonPrimitive)?.contentOrNull
                             ?.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,79}")) }
@@ -507,6 +530,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 put("action_attempted", touched); put("outcome_unknown", false)
                 put("app_result_verified", true); put("completed_keys", confirmed)
                 observationRetryReason?.let { put("observation_retry_reason_code", it) }
+                if (postCheckRefusals.isNotEmpty()) put("keyboard_post_check_refusals", JsonArray(postCheckRefusals))
                 put("confirmed_image_fallback_spaces", imageFallbackSpaces)
                 current?.let { put("observation_id", it.id) }
             })

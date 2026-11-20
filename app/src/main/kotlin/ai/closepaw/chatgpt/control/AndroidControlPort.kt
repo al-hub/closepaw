@@ -265,6 +265,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         }.getOrDefault(false)
     }
     override suspend fun capture(): ControlFrame = captureFrame()
+    override suspend fun captureKeyboardSequenceFrame(): ControlFrame =
+        captureFrame(collectKeyboardVisualParts = true)
 
     /** Reuse the existing app and keyboard read rules before binding the local blank fixture. */
     fun localImeReadAllowed(): Boolean = localImeDiagnostic && localAuthority != null &&
@@ -280,7 +282,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             geometry.toList() else emptyList()
     }
 
-    private suspend fun captureFrame(geometry: MutableList<ImeGeometryNode>? = null): ControlFrame {
+    private suspend fun captureFrame(geometry: MutableList<ImeGeometryNode>? = null,
+        collectKeyboardVisualParts: Boolean = false): ControlFrame {
         val service = AgentService.instance
         reason(service)?.let { return denied(it) }
         service ?: return denied("accessibility_permission_missing")
@@ -294,7 +297,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         }
         feedback("접근성 정보 읽는 중")
         val probedAt = SystemClock.elapsedRealtime()
-        return withTree(service, geometry) { frame, _ -> frame }.also { frame ->
+        return withTree(service, geometry, collectKeyboardVisualParts) { frame, _ -> frame }.also { frame ->
             if (!localImeDiagnostic) ControlDiagnostics.record("capture", frame.reason ?: "completed", SystemClock.elapsedRealtime() - started,
                 metrics = buildJsonObject {
                     put("probe_ms", probedAt - started); put("tree_ms", SystemClock.elapsedRealtime() - probedAt)
@@ -310,6 +313,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     override fun visualFailure() = visualFailureReason
     override suspend fun visual(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "app")
     override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "keyboard")
+    override suspend fun visualKeyboardSequenceFollowUp(frame: ControlFrame,
+        onPostCheckRefusal: (JsonObject) -> Unit): VisualTargetProof? =
+        captureVisual(frame, "keyboard", onPostCheckRefusal)
     override suspend fun visualDisplay(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "display")
     override suspend fun visualScreenObserve(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "screen_observe")
     private data class DisplayPlan(val bounds: TapBounds, val rotation: Int, val region: Region,
@@ -366,7 +372,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 ime?.let { windowBounds(it).flattenToString() }.orEmpty(),surfaces)
         } finally { windows.forEach { runCatching { it.recycle() } } }
     }
-    private suspend fun captureVisual(frame: ControlFrame, scope: String): VisualTargetProof? {
+    private suspend fun captureVisual(frame: ControlFrame, scope: String,
+        onKeyboardPostCheckRefusal: ((JsonObject) -> Unit)? = null): VisualTargetProof? {
         fun fail(code: String): VisualTargetProof? { visualFailureReason=code; return null }
         visualFailureReason="visual_observation_unavailable"
         val observationOnly = scope == "screen_observe"
@@ -429,7 +436,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             captured.reason ?: if (captured.proof != null) "acquired" else "visual_observation_unavailable",
             metrics = kotlinx.serialization.json.buildJsonObject { put("request_id", projectionRequestId) })
         val proof = captured.proof ?: return fail(captured.reason ?: "visual_observation_unavailable")
-        val after = capture()
+        val after = if (onKeyboardPostCheckRefusal == null) capture() else captureKeyboardSequenceFrame()
         if(!ai.closepaw.platform.InputTypePrivacyPolicy.sameGeneration(admittedEditorGeneration,editorGeneration(service))) return fail("visual_editor_privacy_changed")
         editorImageRefusal(service,frame.packageName)?.let {return fail(it)}
         if (displayCapture) {
@@ -440,7 +447,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             DisplayCapturePolicy.interveningChange(displayGeneration,service.remoteDisplayChanges.version())?.let { return fail(it) }
         }
         val refusal=GenericControlActionPolicy.refusal(frame,after,if(keyboardImage) "visual_key" else "visual_tap")
-        if (refusal!=null) return fail("visual_post_" + refusal)
+        if (refusal != null) {
+            if (refusal == "screen_changed") onKeyboardPostCheckRefusal?.invoke(KeyboardVisualPostCheck.describe(frame, after))
+            return fail("visual_post_" + refusal)
+        }
         if (keyboardImage && (frame.keyboard != after.keyboard || frame.inputTarget != after.inputTarget)) return fail("visual_post_keyboard_changed")
         if (plan!=null) {
             val latest=withContext(Dispatchers.Main) { displayPlan(service,after,nativeKeyboardDisplay) } ?: return fail("display_post_surface_changed")
@@ -535,6 +545,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         }
     }
     private suspend fun <T> withTree(service: AgentService, geometry: MutableList<ImeGeometryNode>? = null,
+        collectKeyboardVisualParts: Boolean = false,
         block: suspend (ControlFrame, List<AccessibilityNodeInfo>) -> T): T = withContext(Dispatchers.Main) {
         reason(service)?.let { return@withContext block(denied(it), emptyList()) }
         val root = service.rootInActiveWindow ?: return@withContext block(denied("active_root_missing"), emptyList())
@@ -561,6 +572,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val terminalBinding = try { TerminalInputBinding.capture(service) } catch (_: Exception) { null }
             val identity = StringBuilder("configuration=$revision\n").append(selected.signature).append('\n')
             terminalBinding?.let { identity.append("input_generation=${it.generation}:${it.fieldId}\n") }
+            // Side fingerprints are private, read-only and never replace the original identity.
+            val appIdentityStart = identity.length
+            val keyboardNodesForDiagnosis = if (collectKeyboardVisualParts) mutableListOf<JsonObject>() else null
+            var keyboardVisualParts: KeyboardVisualFingerprintParts? = null
             var truncated = false
             var protected = false
             var gemini = false
@@ -654,6 +669,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     put("child_count", node.childCount); put("actions", node.actionList.joinToString { it.id.toString() })
                 }
                 identity.append(json.toString()).append('\n')
+                if (keyboard) keyboardNodesForDiagnosis?.add(json)
                 if (expose && (!keyboard || key != null || labelEvidence != null || imageCandidate) && node.isVisibleToUser && !rect.isEmpty &&
                     (imageCandidate || text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable || node.isFocusable ||
                         node.actionList.any { it.id in setOf(AccessibilityNodeInfo.ACTION_CLICK, AccessibilityNodeInfo.ACTION_EXPAND, AccessibilityNodeInfo.ACTION_COLLAPSE) })) {
@@ -707,6 +723,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     identity.append("window=").append(id).append('\n')
                     visit(member, 0, -1, id == selected.selection.target)
                 }
+                val appIdentityEnd = identity.length
+                val keyboardNodeBase = visited
                 selected.keyboard?.takeIf { it.readAllowed }?.let { keyboard ->
                     val member = windows.single { it.id == keyboard.windowId }.root
                     if (member == null || member.windowId != keyboard.windowId || member.packageName?.toString() != keyboard.packageName) {
@@ -716,7 +734,26 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         visit(member, 0, -1, true, true)
                     }
                 }
-                operationHash(identity.toString())
+                val fullFingerprint = operationHash(identity.toString())
+                // Defer diagnostic hashing until after the same bounded traversal.
+                if (keyboardNodesForDiagnosis != null) {
+                    val imeIdentity = buildString {
+                        if (keyboardNodesForDiagnosis.isNotEmpty()) {
+                            append(selected.keyboard?.inputMethodId.orEmpty()).append('\n')
+                            for (node in keyboardNodesForDiagnosis) {
+                                val index = node.getValue("id").jsonPrimitive.int
+                                val parent = node.getValue("parent").jsonPrimitive.int
+                                append(KeyboardVisualPostCheck.relativeImeNode(node, index, parent, keyboardNodeBase)).append('\n')
+                            }
+                        }
+                    }
+                    keyboardVisualParts = KeyboardVisualFingerprintParts(
+                        context = operationHash(identity.substring(0, appIdentityStart)),
+                        appTree = operationHash(identity.substring(appIdentityStart, appIdentityEnd)),
+                        imeTree = imeIdentity.takeIf { it.isNotEmpty() }?.let { operationHash(it) },
+                    )
+                }
+                fullFingerprint
             } }
             traversalFailure?.let { return@withContext block(denied(it, selected.diagnostics), emptyList()) }
             reason(service)?.let { return@withContext block(denied(it), emptyList()) }
@@ -767,7 +804,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 keyboard = selected.keyboard, inputTargetId = inputTarget?.id, inputTarget = inputTarget,
                 keyboardDiagnostics = selected.keyboard?.takeIf { it.readAllowed }?.let { keyboardScan.json() },
                 keyboardCaptionSlots = keyboardCaptionSlots,
-                keyboardSuggestionGeometry = if (code == null && !truncated) suggestionGeometry.orEmpty() else emptyList())
+                keyboardSuggestionGeometry = if (code == null && !truncated) suggestionGeometry.orEmpty() else emptyList(),
+                keyboardVisualFingerprintParts = keyboardVisualParts)
             block(EmptyOwnedSurfacePolicy.restrict(frame,
                 selected.selection.members.size > 1 && root.windowId in selected.selection.members &&
                     window.id in selected.selection.members), native)

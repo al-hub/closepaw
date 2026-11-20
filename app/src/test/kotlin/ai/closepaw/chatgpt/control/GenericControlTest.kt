@@ -890,6 +890,66 @@ class GenericControlTest {
         }
     }
 
+    @Test fun keyboardPostCheckClassifiesRefusalsWithoutDisclosingRawFrameData() {
+        val parts = KeyboardVisualFingerprintParts("private-context", "private-app-tree", "private-ime-tree")
+        val before = ControlFrame("private.pkg", 3, "private-fingerprint", emptyList(),
+            keyboardVisualFingerprintParts = parts)
+        val cases = listOf(
+            before.copy(reason = "screen_changed") to
+                """{"source":"post_capture_frame_denied"}""",
+            before.copy(windowId = 4) to
+                """{"source":"window_identity","app_identity_changed":false,"target_window_changed":true,"foreground_window_changed":false}""",
+            before.copy(packageName = "other.pkg", foregroundWindowId = 5) to
+                """{"source":"window_identity","app_identity_changed":true,"target_window_changed":false,"foreground_window_changed":true}""",
+            before.copy(fingerprint = "new-fp", keyboardVisualFingerprintParts = parts.copy(appTree = "new-app-tree")) to
+                """{"source":"full_fingerprint","frame_context_changed":false,"app_tree_changed":true,"ime_tree_changed":false}""",
+            before.copy(fingerprint = "new-fp", keyboardVisualFingerprintParts = parts.copy(imeTree = "new-ime-tree")) to
+                """{"source":"full_fingerprint","frame_context_changed":false,"app_tree_changed":false,"ime_tree_changed":true}""",
+            before.copy(fingerprint = "new-fp", keyboardVisualFingerprintParts = parts.copy(context = "new-context")) to
+                """{"source":"full_fingerprint","frame_context_changed":true,"app_tree_changed":false,"ime_tree_changed":false}""",
+            before.copy(fingerprint = "new-fp", keyboardVisualFingerprintParts = null) to
+                """{"source":"full_fingerprint"}""",
+        )
+        for ((after, expected) in cases) {
+            assertEquals("screen_changed", GenericControlActionPolicy.refusal(before, after, "visual_key"))
+            assertEquals(Json.parseToJsonElement(expected), KeyboardVisualPostCheck.describe(before, after))
+        }
+    }
+
+    @Test fun imeComparisonIgnoresShiftFromAppNodeCountButKeepsImeHierarchy() {
+        fun node(id: Int, parent: Int, base: Int) = KeyboardVisualPostCheck.relativeImeNode(
+            buildJsonObject {
+                put("id", id); put("parent", parent); put("text_hash", "private")
+            }, id, parent, base)
+        assertEquals(node(30, -1, 30), node(40, -1, 40))
+        assertEquals(node(34, 31, 30), node(44, 41, 40))
+        assertNotEquals(node(34, 31, 30), node(44, 42, 40))
+    }
+
+    @Test fun keyboardPostCheckCorrelatesBothDeniedReadsWithoutReplayingTheKey() = runBlocking {
+        val fixture = FollowUpImageFixture()
+        fixture.port.denyVisual = { if (fixture.touched.isNotEmpty()) "visual_post_screen_changed" else null }
+        var reads = 0
+        fixture.port.describePostCheck = { frame ->
+            val changed = if (++reads == 1) frame.copy(foregroundWindowId = frame.foregroundWindowId + 1)
+                else frame.copy(fingerprint = "new private fingerprint")
+            KeyboardVisualPostCheck.describe(frame, changed)
+        }
+        val result = fixture.run()
+        assertFalse(result.success)
+        assertEquals("keyboard_sequence_new_image_unavailable", result.summary)
+        assertEquals("visual_post_screen_changed", result.data["observation_reason_code"]?.jsonPrimitive?.content)
+        assertEquals("visual_post_screen_changed", result.data["observation_retry_reason_code"]?.jsonPrimitive?.content)
+        assertEquals(listOf("n"), fixture.touched)
+        assertFalse(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+        val diagnostics = result.data.getValue("keyboard_post_check_refusals").jsonArray.map { it.jsonObject }
+        assertEquals(listOf(2, 2), diagnostics.map { it.getValue("key_index").jsonPrimitive.int })
+        assertEquals(listOf(1, 2), diagnostics.map { it.getValue("read_attempt").jsonPrimitive.int })
+        assertTrue(diagnostics.all { it.getValue("read_elapsed_ms").jsonPrimitive.long >= 0L })
+        assertEquals(listOf("window_identity", "full_fingerprint"),
+            diagnostics.map { it.getValue("change").jsonObject.getValue("source").jsonPrimitive.content })
+    }
+
     @Test fun oneTransientFollowUpImageRetryStillRequiresTheExactEditor() = runBlocking {
         for (changeEditor in listOf(false, true)) {
             val fixture = FollowUpImageFixture()
@@ -1094,6 +1154,15 @@ class GenericControlTest {
         var visualProof: VisualTargetProof? = null
         var onWrite: ((JsonObject) -> Unit)? = null
         var denyVisual: (() -> String?)? = null
+        var describePostCheck: ((ControlFrame) -> JsonObject)? = null
+
+        override suspend fun visualKeyboardSequenceFollowUp(frame: ControlFrame,
+            onPostCheckRefusal: (JsonObject) -> Unit): VisualTargetProof? {
+            val proof = visualKeyboard(frame)
+            if (proof == null && visualFailure() == "visual_post_screen_changed")
+                describePostCheck?.invoke(frame)?.let(onPostCheckRefusal)
+            return proof
+        }
         private var lastVisualDenial: String? = null
         override fun visualFailure() = lastVisualDenial ?: super.visualFailure()
         override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? {
