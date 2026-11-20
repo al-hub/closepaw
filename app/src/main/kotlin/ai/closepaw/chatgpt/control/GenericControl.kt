@@ -90,7 +90,8 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
 internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expected != null && reason == null &&
     (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
 
-internal data class ControlEffect(val attempted: Boolean, val acknowledged: Boolean, val reason: String)
+internal data class ControlEffect(val attempted: Boolean, val acknowledged: Boolean, val reason: String,
+    val visualSourceFailure: VisualSourceFailure? = null)
 internal interface ControlPort : IslandControlPort {
     override fun islandRefusal(sessionId: String): String? = "island_control_unavailable"
     override suspend fun observeIsland(): IslandBounds? = null
@@ -308,13 +309,15 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var imageFallbackSpaces = 0
         var touched = false
         var observationRetryReason: String? = null
-        fun stop(reason: String, unknown: Boolean = false, observationReason: String? = null): OperationResult {
+        fun stop(reason: String, unknown: Boolean = false, observationReason: String? = null,
+            visualSourceFailure: JsonObject? = null): OperationResult {
             VisualImageCache.remove(current?.frame?.visual?.id)
             current = null
             return OperationResult(success = false, summary = reason, data = buildJsonObject {
                 put("reason_code", reason); put("completed_keys", confirmed)
                 observationReason?.let { put("observation_reason_code", it) }
                 observationRetryReason?.let { put("observation_retry_reason_code", it) }
+                visualSourceFailure?.let { put("visual_source_failure", it) }
                 put("confirmed_image_fallback_spaces", imageFallbackSpaces)
                 put("action_attempted", touched); put("outcome_unknown", unknown)
                 put("input_method", "visual_keyboard_sequence")
@@ -473,7 +476,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         refresh = true
                         continue
                     }
-                    return stop(reason, unknown = attempted != false || unknown != false)
+                    return stop(reason, unknown = attempted != false || unknown != false,
+                        visualSourceFailure = if (reason == VISUAL_SOURCE_REFUSED)
+                            result.data["visual_source_failure"] as? JsonObject else null)
                 }
                 val verified = current?.verificationFrame
                     ?: return stop("keyboard_postcondition_unavailable", unknown = attempted == true)
@@ -539,7 +544,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         if (action.startsWith("visual_")) {
             val proof = frame.visual ?: return failure("visual_observation_required")
-            if (!proof.sourceDisclosureAllowed()) return failure("visual_source_revoked_or_expired")
+            if (action == "visual_key") {
+                proof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)?.let {
+                    return failure(VISUAL_SOURCE_REFUSED, visualSourceFailure = it)
+                }
+            } else if (!proof.sourceDisclosureAllowed()) return failure(VISUAL_SOURCE_REFUSED)
             if (!VisualActionPolicy.scopeAllowed(action,proof.scope)) return failure("visual_scope_mismatch")
             if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
                 now() - proof.at !in 0L..60_000L) return failure("visual_proof_invalid_or_expired")
@@ -647,6 +656,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 put("observation_age_ms", (started - observation.at).coerceAtLeast(0))
                 put("validation_scope", GenericControlActionPolicy.validationScope(action))
                 put("reason_code", resultReason)
+                if (resultReason == VISUAL_SOURCE_REFUSED)
+                    effect.visualSourceFailure?.let { put("visual_source_failure", it.json()) }
                 if (action == "key" || action == "visual_key") put("keyboard_key_origin", when {
                     node?.keyboardImageCandidate == true -> "image_fallback"
                     action == "visual_key" -> "accessibility_label_with_image"
@@ -740,7 +751,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     private fun canReadVisual(id: String?, epoch: Long?) = allowed() && port.session()?.id == id &&
         port.session()?.epoch == epoch && port.session()?.state == ControlSession.State.ACTIVE &&
         current?.frame?.let(port::visualDisclosureAllowed) == true
-    private fun failure(reason: String, validationScope: String? = null, diagnostics: JsonObject? = null) = OperationResult(success = false, summary = reason,
+    private fun failure(reason: String, validationScope: String? = null, diagnostics: JsonObject? = null,
+        visualSourceFailure: VisualSourceFailure? = null) = OperationResult(success = false, summary = reason,
         data = buildJsonObject { put("reason_code", reason); put("action_attempted", false); put("outcome_unknown", false); validationScope?.let { put("validation_scope", it) }
-            diagnostics?.let { put("window_diagnostics", it) } })
+            diagnostics?.let { put("window_diagnostics", it) }; visualSourceFailure?.let { put("visual_source_failure", it.json()) } })
 }

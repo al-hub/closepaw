@@ -446,17 +446,17 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val latest=withContext(Dispatchers.Main) { displayPlan(service,after,nativeKeyboardDisplay) } ?: return fail("display_post_surface_changed")
             if (latest.bounds!=plan.bounds || latest.rotation!=plan.rotation || latest.region!=plan.region || latest.surfaces!=plan.surfaces) return fail("display_post_geometry_changed")
         }
-        val sourceCheck = proof.sourceDisclosureAllowed
-        val disclosureCheck: () -> Boolean = {
-            ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageConsentEpoch) &&
-                (!displayCapture || displayGeneration == service.remoteDisplayChanges.version()) &&
-            sourceCheck() && sessionOwner.get()?.let {
+        val gate = VisualSourceGate(
+            consentValid = { ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(imageConsentEpoch) },
+            displayValid = { !displayCapture || displayGeneration == service.remoteDisplayChanges.version() },
+            sourceValid = proof.sourceDisclosureAllowed,
+            sessionValid = { sessionOwner.get()?.let {
                 it.id == admittedSessionId && it.epoch == admittedSessionEpoch &&
                     it.explicit && it.state == ControlSession.State.ACTIVE
-            } == true
-        }
-        if (!disclosureCheck()) return fail("visual_source_revoked_or_expired")
-        return proof.copy(sourceDisclosureAllowed=disclosureCheck,scope=scope,sourceWindowId=if(projectionDisplay) -1 else captureId,
+            } == true },
+        )
+        if (!gate.allowed()) return fail(VISUAL_SOURCE_REFUSED)
+        return proof.copy(sourceDisclosureAllowed=gate::allowed,sourceDisclosureGate=gate,scope=scope,sourceWindowId=if(projectionDisplay) -1 else captureId,
             sourceDisplayId=if(plan!=null) 0 else -1,rotation=plan?.rotation ?: -1,
             applicationBounds=plan?.appBounds.orEmpty(),imeBounds=plan?.imeBounds.orEmpty(),
             sourceImeWindowId=if(plan!=null) keyboard?.windowId ?: -1 else -1,displayGeneration=if(plan!=null) displayGeneration else -1,editorPrivacyGeneration=admittedEditorGeneration)
@@ -961,7 +961,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val imageOnlyKey = action == "visual_key" && node?.keyboardImageCandidate == true
             if (action.startsWith("visual_")) {
                 val proof = frame.visual ?: return@withTree ControlEffect(false, false, "visual_observation_required")
-                if (!proof.sourceDisclosureAllowed()) return@withTree ControlEffect(false,false,"visual_source_revoked_or_expired")
+                if (action == "visual_key") {
+                    proof.sourceFailure(VisualSourceStage.NATIVE_ACTION_VALIDATION)?.let {
+                        return@withTree ControlEffect(false, false, VISUAL_SOURCE_REFUSED, it)
+                    }
+                } else if (!proof.sourceDisclosureAllowed()) return@withTree ControlEffect(false, false, VISUAL_SOURCE_REFUSED)
                 if(!editorGenerationMatches(proof,service) || editorImageRefusal(service,frame.packageName)!=null)
                     return@withTree ControlEffect(false,false,"visual_editor_privacy_changed")
                 if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
@@ -1136,11 +1140,14 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         return@withTree ControlEffect(false, false, "keyboard_visual_bounds_invalid")
                     verified
                 } else rect
-                return@withTree tap(service, fresh, tapRect, fresh.keyboard.windowId, requireWholePatch = action == "visual_key") {
+                var preGestureSourceFailure: VisualSourceFailure? = null
+                val effect = tap(service, fresh, tapRect, fresh.keyboard.windowId, requireWholePatch = action == "visual_key") {
                     if (action == "visual_key" && service.remoteControlCovers(tapRect))
                         return@tap "control_button_covers_target"
-                    if (action=="visual_key" && frame.visual?.sourceDisclosureAllowed() != true)
-                        return@tap "visual_source_revoked_or_expired"
+                    if (action == "visual_key") {
+                        preGestureSourceFailure = frame.visual?.sourceFailure(VisualSourceStage.PRE_GESTURE)
+                        if (frame.visual == null || preGestureSourceFailure != null) return@tap VISUAL_SOURCE_REFUSED
+                    }
                     if(action=="visual_key" && (!editorGenerationMatches(frame.visual,service) || editorImageRefusal(service,frame.packageName)!=null))
                         return@tap "visual_editor_privacy_changed"
                     if (action == "visual_key" && frame.visual?.sourceDisplayId == 0 && frame.visual.displayGeneration != service.remoteDisplayChanges.version())
@@ -1207,6 +1214,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         appRoot?.recycleCompat(); appWindow.forEach { runCatching { it.recycle() } }
                     }
                 }
+                return@withTree if (preGestureSourceFailure != null && effect.reason == VISUAL_SOURCE_REFUSED)
+                    effect.copy(visualSourceFailure = preGestureSourceFailure) else effect
             }
             if (action == "tap") {
                 if (!target.isClickable && target.actionList.none { it.id == AccessibilityNodeInfo.ACTION_CLICK })

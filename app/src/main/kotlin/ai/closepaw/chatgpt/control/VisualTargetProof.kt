@@ -10,7 +10,13 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
     val context: String, val at: Long, val id: String = UUID.randomUUID().toString(), val scope: String = "app", val sourceWindowId: Int = -1,
     val sourceDisplayId: Int = -1, val rotation: Int = -1, val applicationBounds: String = "", val imeBounds: String = "",
     val sourceImeWindowId: Int = -1, val displayGeneration: Long = -1, val disclosedRegions: List<TapBounds> = emptyList(), val editorPrivacyGeneration: Long = -1,
-    val sourceDisclosureAllowed: () -> Boolean = { true }, val captureUptimeMs: Long = -1) {
+    val sourceDisclosureAllowed: () -> Boolean = { true }, val captureUptimeMs: Long = -1,
+    val sourceDisclosureGate: VisualSourceGate? = null) {
+    fun sourceFailure(stage: VisualSourceStage): VisualSourceFailure? {
+        val condition = if (sourceDisclosureGate != null) sourceDisclosureGate.refusal()
+        else if (!sourceDisclosureAllowed()) VisualSourceCondition.IMAGE_SOURCE_UNAVAILABLE else null
+        return condition?.let { VisualSourceFailure(stage, it) }
+    }
     fun metadata() = buildJsonObject {
         val observationOnly = scope == "screen_observe"
         put("observation_only", observationOnly)
