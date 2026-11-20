@@ -142,12 +142,28 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     private data class Observation(val id: String, val at: Long, val frame: ControlFrame, val epoch: Long,
         val verificationFrame: ControlFrame)
     private var current: Observation? = null
+    private val visualKeyMaps = VisualKeyMapCache()
+    private data class KeyboardCheckpoint(val session: String, val epoch: Long, val consent: Long,
+        val frame: ControlFrame)
+    private var keyboardCheckpoint: KeyboardCheckpoint? = null
+    private fun checkpointFrame(frame: ControlFrame): ControlFrame? {
+        val field = frame.inputTarget ?: return null
+        val identityNodes = frame.nodes.filter {
+            it.id == field.id || (it.sourcePackage == field.sourcePackage && it.sourceWindowId == field.sourceWindowId &&
+                it.resourceId == field.resourceId && it.className == field.className)
+        }
+        return frame.copy(nodes = identityNodes, visual = null, keyboardVisualFingerprintParts = null)
+    }
     private data class PendingTerminal(val proof: TerminalSubmission, val frame: ControlFrame, val node: ControlNode, val epoch: Long, val at: Long)
     private var pendingTerminal: PendingTerminal? = null
     private var chainStarted = 0L
     private var chainActions = 0
     private var noProgress = 0
-    fun invalidate(clearSelections: Boolean = false) { pendingTerminal = null; VisualImageCache.remove(current?.frame?.visual?.id); current = null; port.invalidate(); if (clearSelections) port.clearSelections() }
+    fun invalidate(clearSelections: Boolean = false) {
+        pendingTerminal = null; keyboardCheckpoint = null; visualKeyMaps.clear()
+        VisualImageCache.remove(current?.frame?.visual?.id); current = null; port.invalidate()
+        if (clearSelections) port.clearSelections()
+    }
 
     suspend fun observe(filter: String = "", includeImage: Boolean = false, imageScope: String = "app",
         keyboardKeyExact: String? = null, keyboardSequenceLabels: List<String>? = null,
@@ -271,6 +287,24 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (!allowed()) { current = null; return failure("generic_control_disabled") }
         val observation = current ?: return failure("observation_required")
         if (input["observation_id"]?.jsonPrimitive?.content != observation.id) return failure("stale_observation")
+        // Only a positively verified visual layout change can carry a sequence
+        // checkpoint across a separate action. An uncertain effect never carries it.
+        val checkpoint = keyboardCheckpoint
+        keyboardCheckpoint = null
+        val isLayout = input["action"]?.jsonPrimitive?.content == "visual_key" &&
+            observation.frame.nodes.singleOrNull { it.id == input["node_id"]?.jsonPrimitive?.intOrNull }?.let {
+                VisualKeyboardPolicy.identifyCandidate(it, observation.frame.keyboard)?.kind ==
+                    KeyboardKeyPolicy.Kind.LAYOUT
+            } == true
+        if (isLayout) {
+            val result = actionNative(input, observation)
+            val after = current?.verificationFrame
+            if (checkpoint != null && result.success && after != null &&
+                KeyboardEditorContinuity.sameFocusedEditor(checkpoint.frame, after, allowAnonymousResize = false) &&
+                KeyboardEditorContinuity.sameValue(checkpoint.frame, after))
+                keyboardCheckpoint = checkpointFrame(after)?.let { checkpoint.copy(frame = it) }
+            return result
+        }
         // Route keyboard text through this SAME single-use action executor for every key.
         // The runner never invokes the platform directly or retries an unknown effect.
         if (input["action"]?.jsonPrimitive?.content == "input") {
@@ -308,21 +342,42 @@ internal class GenericControl(private val port: ControlPort, private val allowed
 
     /**
      * A bounded, single-layout sequence from model-confirmed locations in one
-     * *real* keyboard image. Every subsequent step reacquires its own live image
-     * and passes through the existing visual_key native proof and postcondition.
-     * No layout, backspace, submit, coordinate guessing, or unknown-outcome retry.
+     * *real* keyboard image. The opt-in path can reuse its proposal against a
+     * newer guarded tree. The Android port still checks fresh native pixels and
+     * the exact postcondition on every touch. Layout changes are separate
+     * verified actions. No backspace, submit, coordinate guessing or replay.
      */
     suspend fun visualKeySequence(input: JsonObject, expectedEpoch: Long? = null): OperationResult {
         var confirmed = 0
         var imageFallbackSpaces = 0
         var touched = false
+        val reuseMaps = input["reuse_key_map"]?.jsonPrimitive?.booleanOrNull == true
+        var reusedKeySteps = 0
+        var mapHits = 0
+        var mapEntriesConfirmed = 0
+        var mapsLearned = 0
+        var renewals = 0
+        var resolvedAcknowledgements = 0
+        var usedFallback = false
         var observationRetryReason: String? = null
+        fun JsonObjectBuilder.metrics() {
+            if (!reuseMaps) return
+            put("reused_key_steps", reusedKeySteps)
+            put("key_map_hits", mapHits)
+            put("confirmed_key_map_entries", mapEntriesConfirmed)
+            put("new_layout_key_maps", mapsLearned)
+            put("keyboard_image_renewals", renewals)
+            put("fallback_used", usedFallback)
+            put("resolved_acknowledgements", resolvedAcknowledgements)
+        }
         val postCheckRefusals = mutableListOf<JsonObject>()
         fun stop(reason: String, unknown: Boolean = false, observationReason: String? = null,
             visualSourceFailure: JsonObject? = null): OperationResult {
             VisualImageCache.remove(current?.frame?.visual?.id)
             current = null
+            if (unknown) keyboardCheckpoint = null
             return OperationResult(success = false, summary = reason, data = buildJsonObject {
+                metrics()
                 put("reason_code", reason); put("completed_keys", confirmed)
                 observationReason?.let { put("observation_reason_code", it) }
                 if (postCheckRefusals.isNotEmpty()) put("keyboard_post_check_refusals", JsonArray(postCheckRefusals))
@@ -359,34 +414,84 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val editor = original.frame.inputTarget ?: return stop("keyboard_input_target_unverified")
         if (editor.id != original.frame.inputTargetId || !editor.focused ||
             !editor.editable || !editor.focusable || !editor.enabled || editor.password ||
-            editor.sourcePackage != original.frame.packageName ||
-            editor.sourceWindowId != original.frame.windowId ||
-            editor.text.isNotEmpty() || editor.selectionStart != 0 || editor.selectionEnd != 0)
-            return stop("keyboard_empty_editor_required")
+            editor.sourcePackage != original.frame.packageName || editor.sourceWindowId != original.frame.windowId)
+            return stop("keyboard_input_target_unverified")
+        val prefix = input["expected_prefix"]?.jsonPrimitive?.contentOrNull
+        val consent = ai.closepaw.security.ImageRevocationAuthority.currentEpoch
+        if (prefix == null) {
+            if (editor.text.isNotEmpty() || editor.selectionStart != 0 || editor.selectionEnd != 0)
+                return stop("keyboard_empty_editor_required")
+        } else {
+            val checkpoint = keyboardCheckpoint
+            if (!reuseMaps || prefix.isEmpty() || editor.text != prefix ||
+                editor.selectionStart != prefix.length || editor.selectionEnd != prefix.length ||
+                checkpoint == null || checkpoint.session != session.id || checkpoint.epoch != session.epoch ||
+                checkpoint.consent != consent || !KeyboardEditorContinuity.sameFocusedEditor(
+                    checkpoint.frame, original.verificationFrame, allowAnonymousResize = false) ||
+                !KeyboardEditorContinuity.sameValue(checkpoint.frame, original.verificationFrame))
+                return stop("keyboard_sequence_prefix_unverified")
+        }
         val text = input["text"]?.jsonPrimitive?.contentOrNull ?: return stop("keyboard_text_required")
-        val plan = UnifiedInputPolicy.plan(editor, text, "keyboard", "empty", false)
+        val plan = UnifiedInputPolicy.plan(editor, text, "keyboard", if (prefix == null) "empty" else "insert", false)
         if (plan.refusal != null) return stop(plan.refusal)
         val labels = HangulKeyComposer.labels(text)
-        val submitted = input["steps"] as? JsonArray ?: return stop("keyboard_steps_required")
-        if (labels.size !in 2..6 || submitted.size != labels.size)
+        val submitted = input["steps"] as? JsonArray
+        if (!reuseMaps && submitted == null) return stop("keyboard_steps_required")
+        if (labels.size !in (if (reuseMaps) 1 else 2)..6 || submitted != null && submitted.size != labels.size)
             return stop("keyboard_sequence_limit")
-        val candidateIds = VisualSequenceCandidates.select(original.verificationFrame, labels).map { it.id }.toSet()
+        val candidates = VisualSequenceCandidates.select(original.verificationFrame, labels)
+        val byLabel = labels.distinct().zip(candidates).toMap()
+        val witnesses = (input["layout_witness_labels"] as? JsonArray)?.map { it.jsonPrimitive.content }
+        if (witnesses != null && (!reuseMaps || !VisualSequenceCandidates.witnessesLayout(
+                original.verificationFrame, witnesses)))
+            return stop("keyboard_sequence_layout_witness_mismatch")
         val imeBounds = KeyboardImageFallbackPolicy.bounds(firstProof.imeBounds)
             ?: return stop("keyboard_sequence_layout_unverified")
+        fun layout(frame: ControlFrame) =
+            KeyboardTouchLayout.fingerprint(VisualSequenceCandidates.layoutNodes(frame), imeBounds, ime)
+        val initialLayout = layout(original.verificationFrame)
+        if (initialLayout.isEmpty()) return stop("keyboard_sequence_layout_unverified")
+        // Only unique native/resource identity survives across independent observations.
+        val stableEditor = editor.nativeEditorId?.let { "native:$it" } ?: editor.resourceId.takeIf { id ->
+            id.isNotEmpty() && original.verificationFrame.nodes.count {
+                it.resourceId == id && it.className == editor.className &&
+                    it.sourceWindowId == editor.sourceWindowId && it.sourcePackage == editor.sourcePackage
+            } == 1
+        }?.let { "resource:$it" }
+        val owner = if (reuseMaps && stableEditor != null) VisualKeyMapCache.Owner(session.id, session.epoch,
+            consent, original.frame.configurationRevision, original.frame.windowContext, ime, stableEditor, editor.className)
+            else null
+        val layoutId = VisualKeyMapCache.Layout(initialLayout, firstProof.window, firstProof.imeBounds,
+            firstProof.rotation, firstProof.image.width, firstProof.image.height)
         data class Step(val label: String, val originalNode: ControlNode, val crop: TapBounds, val bounds: TapBounds)
         val planned = mutableListOf<Step>()
-        for (i in labels.indices) {
-            val entry = submitted[i] as? JsonObject ?: return stop("keyboard_sequence_step_invalid")
-            val label = entry["label"]?.jsonPrimitive?.content ?: return stop("keyboard_sequence_step_invalid")
-            val id = entry["node_id"]?.jsonPrimitive?.intOrNull ?: return stop("keyboard_sequence_step_invalid")
-            if (label != labels[i] || VisualSequenceCandidates.literal(label) == null)
-                return stop("keyboard_sequence_literal_only")
-            val node = original.frame.nodes.singleOrNull { it.id == id }
-                ?: return stop("keyboard_sequence_candidate_undisclosed")
+        for ((i, label) in labels.withIndex()) {
+            if (VisualSequenceCandidates.literal(label) == null) return stop("keyboard_sequence_literal_only")
+            val node: ControlNode
+            val crop: TapBounds
+            if (submitted == null) {
+                val map = owner?.let { visualKeyMaps.find(it, layoutId, label) }
+                    ?: return stop("keyboard_sequence_key_map_miss")
+                node = byLabel[label] ?: return stop("keyboard_sequence_candidate_not_unique")
+                if (KeyboardImageFallbackPolicy.bounds(node.bounds) != map.screenBounds ||
+                    node.keyboardImageCandidate != map.imageOnly) return stop("keyboard_sequence_candidate_changed")
+                crop = map.crop
+                mapHits++
+            } else {
+                val entry = submitted[i] as? JsonObject ?: return stop("keyboard_sequence_step_invalid")
+                if (entry["label"]?.jsonPrimitive?.content != label) return stop("keyboard_sequence_literal_only")
+                val id = entry["node_id"]?.jsonPrimitive?.intOrNull ?: return stop("keyboard_sequence_step_invalid")
+                node = original.frame.nodes.singleOrNull { it.id == id }
+                    ?: return stop("keyboard_sequence_candidate_undisclosed")
+                val raw = entry["image_rect"] as? JsonArray ?: return stop("keyboard_sequence_step_invalid")
+                if (raw.size != 4) return stop("keyboard_sequence_step_invalid")
+                val coords = raw.map { it.jsonPrimitive.intOrNull ?: return stop("keyboard_sequence_step_invalid") }
+                crop = TapBounds(coords[0], coords[1], coords[2], coords[3])
+            }
             if ((!node.visualKeyCandidate && !node.keyboardImageCandidate) ||
                 node.sourceWindowId != ime.windowId || node.sourcePackage != ime.packageName)
                 return stop("keyboard_sequence_candidate_unverified")
-            if (id !in candidateIds) return stop("keyboard_sequence_candidate_not_unique")
+            if (node != byLabel[label]) return stop("keyboard_sequence_candidate_not_unique")
             val native = if (node.keyboardImageCandidate) KeyboardImageFallbackPolicy.key(label)
                 else VisualKeyboardPolicy.identifyCandidate(node, ime)
             if (native?.label != label || native.kind !in
@@ -394,10 +499,6 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 return stop("keyboard_sequence_literal_unverified")
             VisualKeyboardPolicy.refusal(original.verificationFrame, node, "keyboard",
                 label.takeIf { node.keyboardImageCandidate })?.let { return stop(it) }
-            val raw = entry["image_rect"] as? JsonArray ?: return stop("keyboard_sequence_step_invalid")
-            if (raw.size != 4) return stop("keyboard_sequence_step_invalid")
-            val coords = raw.map { it.jsonPrimitive.intOrNull ?: return stop("keyboard_sequence_step_invalid") }
-            val crop = TapBounds(coords[0], coords[1], coords[2], coords[3])
             val inScreen = firstProof.map(crop) ?: return stop("keyboard_sequence_pixels_unverified")
             val nodeBounds = KeyboardImageFallbackPolicy.bounds(node.bounds)
                 ?: return stop("keyboard_visual_bounds_invalid")
@@ -406,11 +507,27 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 return stop("keyboard_sequence_pixels_unverified")
             planned.add(Step(label, node, crop, nodeBounds))
         }
-        fun layout(frame: ControlFrame) =
-            KeyboardTouchLayout.fingerprint(VisualSequenceCandidates.layoutNodes(frame), imeBounds, ime)
-        val initialLayout = layout(original.verificationFrame)
-        if (initialLayout.isEmpty()) return stop("keyboard_sequence_layout_unverified")
+        if (submitted == null) {
+            // Admit only the already verified candidates for this private request.
+            // No new nodes/authority are exposed as reusable MCP observations.
+            current = original.copy(frame = original.frame.copy(nodes = planned.map { it.originalNode }.distinct()))
+        }
         var lastVerified = original.verificationFrame
+        fun checkpoint(frame: ControlFrame) {
+            if (reuseMaps) keyboardCheckpoint = checkpointFrame(frame)?.let {
+                KeyboardCheckpoint(session.id, session.epoch, consent, it)
+            }
+        }
+        fun cachedFollowUp(step: Step): Observation? {
+            if (!port.validatesAtNativeBoundary || now() - firstProof.at !in 0L..10_000L ||
+                !firstProof.sourceDisclosureAllowed()) return null
+            val fresh = current?.verificationFrame?.copy(visual = firstProof) ?: return null
+            if (!KeyboardEditorContinuity.sameFocusedEditor(lastVerified, fresh, allowAnonymousResize = false) ||
+                !KeyboardEditorContinuity.sameValue(lastVerified, fresh) || fresh.touchContext != original.frame.touchContext ||
+                layout(fresh) != initialLayout) return null
+            val candidate = VisualSequenceCandidates.select(fresh, listOf(step.label)).singleOrNull() ?: return null
+            return Observation(UUID.randomUUID().toString(), now(), fresh.copy(nodes = listOf(candidate)), session.epoch, fresh)
+        }
         var retryUsed = false
         var refresh = false
         for ((index, step) in planned.withIndex()) {
@@ -418,13 +535,19 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             while (true) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 if (!sessionCurrent()) return stop("control_session_changed_observe_again")
-                if (refresh) {
+                val cached = if (refresh && reuseMaps && !usedFallback) cachedFollowUp(step) else null
+                if (cached != null) current = cached
+                if (refresh && cached == null) {
+                    if (reuseMaps) usedFallback = true
+                    renewals++
                     followUpAttempt++
                     val startedNs = System.nanoTime()
                     var postCheck: JsonObject? = null
-                    val fresh = observe(includeImage = true, imageScope = "keyboard",
-                        keyboardSequenceLabels = listOf(step.label),
-                        onKeyboardPostCheckRefusal = { postCheck = it })
+                    val fresh = kotlinx.coroutines.withContext(KeyboardWindowTrace(index + 1, followUpAttempt, reuseMaps)) {
+                        observe(includeImage = true, imageScope = "keyboard",
+                            keyboardSequenceLabels = listOf(step.label),
+                            onKeyboardPostCheckRefusal = { postCheck = it })
+                    }
                     postCheck?.let { change ->
                         postCheckRefusals.add(buildJsonObject {
                             put("key_index", index + 1)
@@ -462,7 +585,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     proof.image.width != firstProof.image.width || proof.image.height != firstProof.image.height ||
                     now() - proof.at !in 0L..10_000L || !proof.sourceDisclosureAllowed() ||
                     VisualKeyboardPolicy.proofOwnerRefusal(proof, ime) != null ||
-                    layout(active.verificationFrame) != initialLayout)
+                    (cached == null && layout(active.verificationFrame) != initialLayout))
                     return stop("keyboard_sequence_layout_or_target_changed")
                 if (!KeyboardEditorContinuity.sameValue(lastVerified, active.verificationFrame))
                     return stop("keyboard_input_unconfirmed", unknown = touched)
@@ -481,35 +604,75 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     return stop("keyboard_sequence_pixels_unverified")
                 VisualKeyboardPolicy.refusal(active.verificationFrame, node, "keyboard",
                     step.label.takeIf { node.keyboardImageCandidate })?.let { return stop(it) }
-                val result = kotlinx.coroutines.withContext(KeyboardWindowTrace(index + 1, followUpAttempt)) {
-                    action(buildJsonObject {
-                        put("session_id", session.id); put("observation_id", active.id)
-                        put("action", "visual_key"); put("node_id", node.id)
-                        put("visual_id", proof.id); put("visual_target_confirmed", true)
-                        put("image_rect", JsonArray(listOf(step.crop.left, step.crop.top,
-                            step.crop.right, step.crop.bottom).map { JsonPrimitive(it) }))
-                        if (node.keyboardImageCandidate) put("image_key_label", step.label)
-                    })
+                keyboardCheckpoint = null // Uncertain dispatch or cancellation must leave no resume authority.
+                val actionInput = buildJsonObject {
+                    put("session_id", session.id); put("observation_id", active.id)
+                    put("action", "visual_key"); put("node_id", node.id)
+                    put("visual_id", proof.id); put("visual_target_confirmed", true)
+                    put("image_rect", JsonArray(listOf(step.crop.left, step.crop.top,
+                        step.crop.right, step.crop.bottom).map { JsonPrimitive(it) }))
+                    if (node.keyboardImageCandidate) put("image_key_label", step.label)
+                }
+                val result = kotlinx.coroutines.withContext(KeyboardWindowTrace(index + 1, followUpAttempt, reuseMaps)) {
+                    actionNative(actionInput, active)
                 }
                 val attempted = result.data["action_attempted"]?.jsonPrimitive?.booleanOrNull
                 val unknown = result.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull
                 val reason = result.data["reason_code"]?.jsonPrimitive?.content ?: "keyboard_input_unconfirmed"
                 touched = touched || attempted == true
+                var verified = current?.verificationFrame
                 if (!result.success || result.data["app_result_verified"]?.jsonPrimitive?.booleanOrNull != true) {
-                    if (!retryUsed && attempted == false && unknown == false && reason == "screen_changed") {
-                        retryUsed = true
-                        refresh = true
-                        continue
+                    if (attempted == false && unknown == false) {
+                        checkpoint(lastVerified)
+                        if (cached != null && reason in setOf("screen_changed", "visual_pixels_or_geometry_changed",
+                                "visual_revalidation_failed", VISUAL_SOURCE_REFUSED)) {
+                            usedFallback = true
+                            refresh = true
+                            continue
+                        }
+                        if (!retryUsed && reason == "screen_changed") {
+                            retryUsed = true
+                            refresh = true
+                            continue
+                        }
                     }
-                    return stop(reason, unknown = attempted != false || unknown != false,
+                    // An exact ASCII echo can settle a lost acknowledgement, never
+                    // a possibly composing Hangul deliverable or ambiguous target.
+                    // Require two independent post-reads for the same pending key.
+                    val asciiKey = step.label == "Space" || step.label.singleOrNull()?.let { it.code in 33..126 } == true
+                    val asciiValue = lastVerified.inputTarget?.text?.all { it.code in 32..126 } == true
+                    fun confirmsPending(read: ControlFrame) =
+                        ControlResultPolicy.verify("visual_key", active.verificationFrame, read, node, actionInput)
+                            .let { it.confirmed && it.goalVerified }
+                    val firstRead = verified
+                    verified = if (reuseMaps && attempted == true && unknown == true && asciiKey && asciiValue &&
+                        sessionCurrent() && firstRead != null && confirmsPending(firstRead)) {
+                        val independent = port.capture()
+                        independent.takeIf {
+                            KeyboardEditorContinuity.sameFocusedEditor(firstRead, it, allowAnonymousResize = false) &&
+                                KeyboardEditorContinuity.sameValue(firstRead, it) &&
+                                confirmsPending(it)
+                        }
+                    } else null
+                    if (verified == null) return stop(reason, unknown = attempted != false || unknown != false,
                         visualSourceFailure = if (reason == VISUAL_SOURCE_REFUSED)
                             result.data["visual_source_failure"] as? JsonObject else null)
+                    resolvedAcknowledgements++
+                    usedFallback = true
+                    publish(verified)
                 }
-                val verified = current?.verificationFrame
+                val confirmedFrame = verified
                     ?: return stop("keyboard_postcondition_unavailable", unknown = attempted == true)
                 if (!sessionCurrent()) return stop("control_session_changed_observe_again", unknown = true)
-                lastVerified = verified
+                lastVerified = confirmedFrame
+                checkpoint(confirmedFrame)
                 confirmed++
+                if (cached != null) reusedKeySteps++
+                if (owner != null && submitted != null) {
+                    if (visualKeyMaps.remember(owner, layoutId, step.label, VisualKeyMapCache.Entry(
+                            step.bounds, step.crop, node.keyboardImageCandidate))) mapsLearned++
+                    mapEntriesConfirmed++
+                }
                 if (step.label == "Space" && node.keyboardImageCandidate) imageFallbackSpaces++
                 refresh = true
                 break
@@ -526,8 +689,10 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             return stop("keyboard_final_text_unconfirmed", unknown = touched)
         // The final read, not the earlier transient postcondition, owns the next observation.
         publish(finalFrame)
+        checkpoint(finalFrame)
         return OperationResult(summary = "Exact bounded visual keyboard sequence confirmed.",
             data = buildJsonObject {
+                metrics()
                 put("input_method", "visual_keyboard_sequence")
                 put("action_attempted", touched); put("outcome_unknown", false)
                 put("app_result_verified", true); put("completed_keys", confirmed)

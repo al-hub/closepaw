@@ -436,7 +436,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             captured.reason ?: if (captured.proof != null) "acquired" else "visual_observation_unavailable",
             metrics = kotlinx.serialization.json.buildJsonObject { put("request_id", projectionRequestId) })
         val proof = captured.proof ?: return fail(captured.reason ?: "visual_observation_unavailable")
-        val after = if (onKeyboardPostCheckRefusal == null) capture() else captureKeyboardSequenceFrame()
+        val reuseKeyMap = scope == "keyboard" && currentCoroutineContext()[KeyboardWindowTrace]?.reuseKeyMap == true
+        val after = if (onKeyboardPostCheckRefusal != null || reuseKeyMap) captureKeyboardSequenceFrame() else capture()
         if(!ai.closepaw.platform.InputTypePrivacyPolicy.sameGeneration(admittedEditorGeneration,editorGeneration(service))) return fail("visual_editor_privacy_changed")
         editorImageRefusal(service,frame.packageName)?.let {return fail(it)}
         if (displayCapture) {
@@ -448,8 +449,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         }
         val refusal=GenericControlActionPolicy.refusal(frame,after,if(keyboardImage) "visual_key" else "visual_tap")
         if (refusal != null) {
-            if (refusal == "screen_changed") onKeyboardPostCheckRefusal?.invoke(KeyboardVisualPostCheck.describe(frame, after))
-            return fail("visual_post_" + refusal)
+            if (refusal != "screen_changed" || !reuseKeyMap || !KeyboardVisualPostCheck.suggestionCaptionOnly(frame, after)) {
+                if (refusal == "screen_changed") onKeyboardPostCheckRefusal?.invoke(KeyboardVisualPostCheck.describe(frame, after))
+                return fail("visual_post_" + refusal)
+            }
+            ControlDiagnostics.record("keyboard_visual_post_check", "chrome_suggestion_caption_changed")
         }
         if (keyboardImage && (frame.keyboard != after.keyboard || frame.inputTarget != after.inputTarget)) return fail("visual_post_keyboard_changed")
         if (plan!=null) {
@@ -959,7 +963,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 secureWindow(service)?.let { return ControlEffect(false, false, it) }
             }
         }
-        val effect = controlSpan("fresh_fingerprint_and_action") { withTree(service) { fresh, native ->
+        val sequenceKeyMap = action == "visual_key" && currentCoroutineContext()[KeyboardWindowTrace]?.reuseKeyMap == true
+        val effect = controlSpan("fresh_fingerprint_and_action") { withTree(service,
+            collectKeyboardVisualParts = sequenceKeyMap) { fresh, native ->
             if (sessionFor(service).epoch != admittedEpoch)
                 return@withTree ControlEffect(false, false, "control_session_changed_observe_again")
             val failure = GenericControlActionPolicy.refusal(frame, fresh, action)

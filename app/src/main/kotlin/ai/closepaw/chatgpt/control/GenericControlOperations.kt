@@ -199,14 +199,19 @@ internal class GenericControlOperations(private val control: GenericControl, pri
             })
 
         registry.register(OperationDescriptor(VISUAL_KEY_SEQUENCE,
-            "Run 2..6 previously identified character/space keys from ONE freshly user-confirmed keyboard-only image, in one explicit session. Every next key reacquires a new keyboard image, rechecks the physical IME layout, window, crop, focused editor's exact value and caret, consent, certified pixels, and exact postcondition via visual_key native dispatch. No implicit layout switch, Enter/Search/Send, Backspace, clipboard, coordinates inferred by the app, stale-source replay, or fallback. Only a confirmed pre-touch screen change or the post-capture screen-change refusal on a read-only observation may use the one shared retry per request. Failed follow-up observations report a bounded reason code. If any effect is unknown, stop immediately; completed prefix may remain in the focused field. Exposes no typed text in result or diagnostics. Use android.screen.observe with keyboard_sequence_labels to obtain all requested nodes in one image. Use only after that actual keyboard screenshot has been read and all steps' image rectangles, labels and node IDs have been visually confirmed. A screenshot or consent alone is not touch permission.",
+            "Run up to six separately verified character/space keys in one explicitly active session and fixed observed layout. The default takes 2..6 screenshot-confirmed steps and renews the keyboard image per step. Opt in with reuse_key_map=true for 1..6 keys, a fresh keyboard observation and cached geometry when previously confirmed for this editor and physical layout. Omit steps only for already confirmed labels. Native ownership, live pixels and exact text/caret are always checked per touch. Fallback renews the image only at a confirmed no-touch boundary; it never replays a dispatched key. An exact independently observed ASCII effect can settle a lost callback. Unknown composition or editor identity stops. expected_prefix requires an exact checkpoint from this same session; require a fresh layout observation after every language, symbol or Shift change and after one-shot Shift. layout_witness_labels can require at least two mode-discriminating physical keys from the fresh observation. Never Enter/Search/Send, Backspace or clipboard. Obtain each new mapping from a real keyboard image and physically confirmed rectangles.",
             inputSchema = obj(
                 "observation_id" to str(128,1),
                 "visual_id" to str(128,1),
                 "text" to str(2000,1),
+                "reuse_key_map" to buildJsonObject { put("type","boolean") },
+                "expected_prefix" to str(2000,1),
+                "layout_witness_labels" to buildJsonObject {
+                    put("type", "array"); put("minItems", 2); put("maxItems", 6); put("items", str(32, 1))
+                },
                 "visual_target_confirmed" to buildJsonObject { put("type","boolean") },
                 "steps" to buildJsonObject {
-                    put("type","array"); put("minItems",2); put("maxItems",6)
+                    put("type","array"); put("minItems",1); put("maxItems",6)
                     put("items", buildJsonObject {
                         put("type","object"); put("additionalProperties",false)
                         put("required", JsonArray(listOf("node_id", "label", "image_rect").map { JsonPrimitive(it) }))
@@ -220,7 +225,7 @@ internal class GenericControlOperations(private val control: GenericControl, pri
                         })
                     })
                 },
-                required = listOf("session_id","observation_id","visual_id","text","visual_target_confirmed","steps")),
+                required = listOf("session_id","observation_id","visual_id","text","visual_target_confirmed")),
             readOnly = false, permissions = listOf("accessibility", "generic_android_control"),
             effects = listOf("bounded_foreground_visual_key_sequence"), readiness = readiness),
             handler(VISUAL_KEY_SEQUENCE, showActivity = true) { invocation ->
