@@ -1,3 +1,10 @@
+<!-- cp147-v0131-signed-handoff -->
+## #147 v0.1.131 signed release — 2026-11-20 KST
+
+- [PR #268](https://github.com/al-hub/closepaw/pull/268) merged to exact release source `850d8931c7ffabd5144edf2d6ad37704cc818ce9`; PR/main tree matched. [PR Security](https://github.com/al-hub/closepaw/actions/runs/44688628883), [PR UI attempt 2](https://github.com/al-hub/closepaw/actions/runs/44688628966/attempts/2), [main Security](https://github.com/al-hub/closepaw/actions/runs/44691668913), [main UI attempt 2](https://github.com/al-hub/closepaw/actions/runs/44691668890/attempts/2) success. Earlier UI failures retained in the issue evidence. Separate Codex review produced no verdict (`model_not_found`).
+- [Signed Release](https://github.com/al-hub/closepaw/actions/runs/44694354159) and independent public verification PASS. [v0.1.131/code132](https://github.com/al-hub/closepaw/releases/tag/v0.1.131) APK 117083207 bytes, SHA-256 `5deb5829166cb326f2449715f43d70232b8833a992d03539ddccd49a3da0a472`, existing signer, v3, `ai.closepaw`, both ARM64 runtimes, ZIP CRC and annotated tag source verified.
+- [#147 evidence](https://github.com/al-hub/closepaw/issues/147#issuecomment-7033222195). No install or Galaxy test. #147 open, speed and improvement unmeasured, next device repeats exactly three per condition. This is a post-publication documentation-only update, not a new release source.
+
 ## #228 CLOSED; old failure investigation #231 OPEN — 2026-11-11 KST
 
 - User requested separating the historical v108→v109 cause investigation and closing #228. #228 CLOSED(completed)20:40:10KST; [#231](https://github.com/al-hub/closepaw/issues/231) OPEN, historical cause stillUNCONFIRMED. Do not interpret the transfer/closure as root-cause proof.
