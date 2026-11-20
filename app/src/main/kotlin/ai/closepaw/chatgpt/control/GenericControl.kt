@@ -362,6 +362,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var renewals = 0
         var resolvedAcknowledgements = 0
         var usedFallback = false
+        var displayWindowRecheckKey: Int? = null
         var observationRetryReason: String? = null
         fun JsonObjectBuilder.metrics() {
             if (!reuseMaps) return
@@ -372,6 +373,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             put("keyboard_image_renewals", renewals)
             put("fallback_used", usedFallback)
             put("resolved_acknowledgements", resolvedAcknowledgements)
+            displayWindowRecheckKey?.let { put("display_window_recheck_key", it) }
         }
         val postCheckRefusals = mutableListOf<JsonObject>()
         fun stop(reason: String, unknown: Boolean = false, observationReason: String? = null,
@@ -403,6 +405,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         fun sessionCurrent() = allowed() && port.session() === session &&
             session.explicit && session.state == ControlSession.State.ACTIVE &&
             session.id == input["session_id"]?.jsonPrimitive?.content && session.epoch == original.epoch
+        val consent = ai.closepaw.security.ImageRevocationAuthority.currentEpoch
+        fun sameImageConsent() = ai.closepaw.security.ImageRevocationAuthority.currentEpoch == consent
         val firstProof = original.frame.visual ?: return stop("keyboard_visual_required")
         if (firstProof.scope != "keyboard" || firstProof.sourceDisplayId != 0 ||
             !firstProof.sourceDisclosureAllowed() ||
@@ -420,7 +424,6 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             editor.sourcePackage != original.frame.packageName || editor.sourceWindowId != original.frame.windowId)
             return stop("keyboard_input_target_unverified")
         val prefix = input["expected_prefix"]?.jsonPrimitive?.contentOrNull
-        val consent = ai.closepaw.security.ImageRevocationAuthority.currentEpoch
         if (prefix == null) {
             if (editor.text.isNotEmpty() || editor.selectionStart != 0 || editor.selectionEnd != 0)
                 return stop("keyboard_empty_editor_required")
@@ -531,13 +534,17 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             val candidate = VisualSequenceCandidates.select(fresh, listOf(step.label)).singleOrNull() ?: return null
             return Observation(UUID.randomUUID().toString(), now(), fresh.copy(nodes = listOf(candidate)), session.epoch, fresh)
         }
+        data class InvalidatedDisplayProof(val id: String, val generation: Long)
         var retryUsed = false
         var refresh = false
         for ((index, step) in planned.withIndex()) {
             var followUpAttempt = 0
+            var recheckOf: InvalidatedDisplayProof? = null
             while (true) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 if (!sessionCurrent()) return stop("control_session_changed_observe_again")
+                if (recheckOf != null && !sameImageConsent())
+                    return stop("keyboard_sequence_window_recheck_consent_changed")
                 val cached = if (refresh && reuseMaps && !usedFallback) cachedFollowUp(step) else null
                 if (cached != null) current = cached
                 if (refresh && cached == null) {
@@ -578,9 +585,14 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 val proof = active.frame.visual ?: return stop("keyboard_visual_required")
                 if (!sessionCurrent() || active.epoch != original.epoch)
                     return stop("control_session_changed_observe_again")
+                recheckOf?.let {
+                    if (!sameImageConsent()) return stop("keyboard_sequence_window_recheck_consent_changed")
+                    if (proof.id == it.id || proof.displayGeneration <= it.generation)
+                        return stop("keyboard_sequence_window_recheck_stale")
+                }
                 if (active.frame.touchContext != original.frame.touchContext ||
                     !KeyboardEditorContinuity.sameFocusedEditor(lastVerified, active.verificationFrame,
-                        allowAnonymousResize = true) ||
+                        allowAnonymousResize = recheckOf == null) ||
                     proof.scope != "keyboard" || proof.sourceDisplayId != firstProof.sourceDisplayId ||
                     proof.sourceImeWindowId != firstProof.sourceImeWindowId ||
                     proof.window != firstProof.window || proof.rotation != firstProof.rotation ||
@@ -622,13 +634,29 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 val attempted = result.data["action_attempted"]?.jsonPrimitive?.booleanOrNull
                 val unknown = result.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull
                 val reason = result.data["reason_code"]?.jsonPrimitive?.content ?: "keyboard_input_unconfirmed"
+                val sourceFailure = if (reason == VISUAL_SOURCE_REFUSED)
+                    result.data["visual_source_failure"] as? JsonObject else null
+                val nativeDisplayInvalidation =
+                    sourceFailure?.get("stage")?.jsonPrimitive?.content == VisualSourceStage.NATIVE_ACTION_VALIDATION.code &&
+                    sourceFailure["condition"]?.jsonPrimitive?.content == VisualSourceCondition.DISPLAY_WINDOW_CHANGED.code
                 touched = touched || attempted == true
                 var verified = current?.verificationFrame
                 if (!result.success || result.data["app_result_verified"]?.jsonPrimitive?.booleanOrNull != true) {
                     if (attempted == false && unknown == false) {
                         checkpoint(lastVerified)
+                        // Share the bounded request budget with other pre-touch retries.
+                        // Do not rescue a lost callback or reuse the invalidated image.
+                        if (nativeDisplayInvalidation && reuseMaps && port.validatesAtNativeBoundary &&
+                            !retryUsed && sessionCurrent() && sameImageConsent()) {
+                            retryUsed = true
+                            displayWindowRecheckKey = index + 1
+                            recheckOf = InvalidatedDisplayProof(proof.id, proof.displayGeneration)
+                            usedFallback = true
+                            refresh = true
+                            continue
+                        }
                         if (cached != null && reason in setOf("screen_changed", "visual_pixels_or_geometry_changed",
-                                "visual_revalidation_failed", VISUAL_SOURCE_REFUSED)) {
+                                "visual_revalidation_failed")) {
                             usedFallback = true
                             refresh = true
                             continue
@@ -658,8 +686,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         }
                     } else null
                     if (verified == null) return stop(reason, unknown = attempted != false || unknown != false,
-                        visualSourceFailure = if (reason == VISUAL_SOURCE_REFUSED)
-                            result.data["visual_source_failure"] as? JsonObject else null)
+                        visualSourceFailure = sourceFailure)
                     resolvedAcknowledgements++
                     usedFallback = true
                     publish(verified)
