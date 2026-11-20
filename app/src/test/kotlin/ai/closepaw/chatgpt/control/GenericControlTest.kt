@@ -888,6 +888,53 @@ class GenericControlTest {
         assertEquals(listOf("n"), fixture.touched)
     }
 
+    @Test fun followUpSourceFailuresPreserveStageAndConditionWithoutAnotherTouch() = runBlocking {
+        for (stage in VisualSourceStage.entries) for (condition in listOf(
+            VisualSourceCondition.DISPLAY_WINDOW_CHANGED, VisualSourceCondition.IMAGE_CONSENT_CHANGED,
+            VisualSourceCondition.CONTROL_SESSION_CHANGED,
+        )) {
+            val fixture = FollowUpImageFixture()
+            var valid = true
+            val gate = VisualSourceGate(
+                consentValid = { valid || condition != VisualSourceCondition.IMAGE_CONSENT_CHANGED },
+                displayValid = { valid || condition != VisualSourceCondition.DISPLAY_WINDOW_CHANGED },
+                sourceValid = { true },
+                sessionValid = { valid || condition != VisualSourceCondition.CONTROL_SESSION_CHANGED },
+            )
+            fixture.port.visualProof = checkNotNull(fixture.port.visualProof)
+                .copy(sourceDisclosureAllowed = gate::allowed, sourceDisclosureGate = gate)
+            var followUpReads = 0
+            var blockedAttempts = 0
+            fixture.port.denyVisual = {
+                if (fixture.touched.isNotEmpty() && ++followUpReads == 1) "visual_post_screen_changed" else null
+            }
+            if (stage == VisualSourceStage.ACTION_VALIDATION) {
+                // Capture for action validation occurs after the successful second observation.
+                fixture.port.onCapture = { if (followUpReads == 2) { valid = false; blockedAttempts++ } }
+            } else {
+                fixture.port.beforeWrite = {
+                    if (fixture.touched.isEmpty()) null else {
+                        valid = false
+                        blockedAttempts++
+                        val info = checkNotNull(fixture.port.visualProof?.sourceFailure(stage))
+                        ControlEffect(false, false, VISUAL_SOURCE_REFUSED, info)
+                    }
+                }
+            }
+            val result = fixture.run()
+            assertFalse(result.success)
+            assertEquals(VISUAL_SOURCE_REFUSED, result.summary)
+            assertEquals(VisualSourceFailure(stage, condition).json(), result.data["visual_source_failure"])
+            assertEquals("visual_post_screen_changed", result.data["observation_retry_reason_code"]?.jsonPrimitive?.content)
+            assertEquals(1, result.data.getValue("completed_keys").jsonPrimitive.int)
+            assertFalse(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
+            assertEquals(1, blockedAttempts)
+            assertEquals(2, followUpReads)
+            assertEquals(listOf("n"), fixture.touched)
+            assertEquals("n", fixture.port.frame.inputTarget?.text)
+        }
+    }
+
     @Test fun visualSequenceWithoutConfirmedImageOrActiveSessionCannotWrite() = runBlocking {
         val port = Port()
         val control = GenericControl(port, { true })
