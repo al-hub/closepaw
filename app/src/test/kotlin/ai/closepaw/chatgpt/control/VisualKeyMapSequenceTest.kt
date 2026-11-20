@@ -30,6 +30,22 @@ class VisualKeyMapSequenceTest {
         var suggestionMotion = false
         fun moveCaret() { editor = editor.copy(selectionStart = 0, selectionEnd = 0) }
         var allowed = true
+        var rejectFourthOnce = false
+        var fifthSourceRefusals = 0
+        var fifthSourceRefusalsSeen = 0
+        var fifthSourceCondition = VisualSourceCondition.DISPLAY_WINDOW_CHANGED
+        var fifthSourceStage = VisualSourceStage.NATIVE_ACTION_VALIDATION
+        var fifthSourceAttempted = false
+        var advanceWindowVersion = true
+        var reuseRejectedProofId = false
+        var afterFifthSourceRefusal: (() -> Unit)? = null
+        var duringFifthRenewal: (() -> Unit)? = null
+        var invalidateFifthRenewal = false
+        private var windowVersion = 1L
+        private var rejectedProofId: String? = null
+        var keyOffset = 0
+        var touchContext = "verified touch region"
+        fun replaceEditor() { editor = editor.copy(nativeEditorId = "different-editor") }
         var fallbackRefusal: String? = null
         var loseCallbackFor: String? = null
         var wrongEffectFor: String? = null
@@ -61,7 +77,7 @@ class VisualKeyMapSequenceTest {
             if (chrome && label == "Space") return ControlNode(i + 3, parent = 80,
                 bounds = "165 82 325 112", sourceWindowId = 20, sourcePackage = imePackage,
                 className = "android.view.ViewGroup", keyboardImageCandidate = true, visualKeyChildCount = 0)
-            val x = i * 40 + 5
+            val x = i * 40 + 5 + keyOffset
             return ControlNode(i + 3, text = label, keyboardKey = label, clickable = true, textEntryKey = true,
                 bounds = "$x 45 ${x + 35} 75", sourceWindowId = 20, sourcePackage = imePackage,
                 visualKeyCandidate = true, visualKeyChildCount = 0)
@@ -82,12 +98,19 @@ class VisualKeyMapSequenceTest {
             } else emptyList()
             return ControlFrame(app, 10, "${editor.text}/$state/${editor.nativeEditorId}/$alternativeCaption/$otherRegion/$layoutRevision/${editor.selectionEnd}",
                 listOf(editor) + controls + rows.getValue(state).map(::key) + spaceNeighbors,
-                touchContext = "verified touch region", windowContext = "verified window",
+                touchContext = touchContext, windowContext = "verified window",
                 keyboard = ime, inputTargetId = editor.id, inputTarget = editor, keyboardVisualFingerprintParts = scope)
         }
 
         override suspend fun visualKeyboardSequenceFollowUp(frame: ControlFrame,
             onPostCheckRefusal: (JsonObject) -> Unit): CertifiedKeyboardFrame? {
+            if (fifthSourceRefusalsSeen > 0 && editor.text == "가 ㄴ") {
+                duringFifthRenewal?.invoke()
+                if (invalidateFifthRenewal) {
+                    failure = "display_window_changed_during_capture"
+                    return null
+                }
+            }
             val proof = visualKeyboard(frame)
             if (editor.text != "가") return CertifiedKeyboardFrame(frame, proof)
             duringFirstSpaceCapture?.invoke()
@@ -111,11 +134,12 @@ class VisualKeyMapSequenceTest {
                 maskNextImage = false
                 listOf(TapBounds(0, 0, 240, 30))
             } else listOf(frameBounds)
-            return VisualTargetProof(ScreenImage(1200, 150, "image/jpeg", byteArrayOf(1),
+            val proof = VisualTargetProof(ScreenImage(1200, 150, "image/jpeg", byteArrayOf(1),
                 ScreenImageSource.ACCESSIBILITY_SCREENSHOT), "pixels", frameBounds, "context",
                 System.currentTimeMillis(), scope = "keyboard", sourceWindowId = 20, sourceImeWindowId = 20,
-                sourceDisplayId = 0, displayGeneration = 1, rotation = 0, imeBounds = "0 0 1200 150",
+                sourceDisplayId = 0, displayGeneration = windowVersion, rotation = 0, imeBounds = "0 0 1200 150",
                 disclosedRegions = regions)
+            return if (reuseRejectedProofId) rejectedProofId?.let { proof.copy(id = it) } ?: proof else proof
         }
 
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
@@ -123,6 +147,19 @@ class VisualKeyMapSequenceTest {
             val fresh = capture()
             val refusal = GenericControlActionPolicy.refusal(frame, fresh, "visual_key")
             if (refusal != null) return ControlEffect(false, false, refusal)
+            if (rejectFourthOnce && editor.text == "가 " && node?.keyboardKey == "ㄴ") {
+                rejectFourthOnce = false
+                return ControlEffect(false, false, "screen_changed")
+            }
+            // Refuse after the real full-frame policy passed, before this fake port dispatches.
+            if (fifthSourceRefusalsSeen < fifthSourceRefusals && editor.text == "가 ㄴ" && node?.keyboardKey == "ㅏ") {
+                fifthSourceRefusalsSeen++
+                rejectedProofId = frame.visual?.id
+                if (advanceWindowVersion) windowVersion++
+                afterFifthSourceRefusal?.invoke()
+                return ControlEffect(fifthSourceAttempted, false, VISUAL_SOURCE_REFUSED,
+                    VisualSourceFailure(fifthSourceStage, fifthSourceCondition))
+            }
             val label = node?.keyboardKey?.ifEmpty { input["image_key_label"]?.jsonPrimitive?.content.orEmpty() }
                 ?: return ControlEffect(false, false, "no-key")
             if (label == fallbackRefusal) {
@@ -369,6 +406,118 @@ class VisualKeyMapSequenceTest {
             assertEquals(benchmark.length, f.currentEditor().selectionEnd)
             assertEquals(if (fallback) 1 else 0, fallbackCount)
         }
+    }
+
+    private fun pendingFifth(refusals: Int = 1) = Fixture(chrome = true).apply {
+        fallbackRefusal = "Space"
+        fifthSourceRefusals = refusals
+        duringFirstSpaceCapture = { alternativeCaption++ }
+    }
+
+    @Test fun nativeWindowChangeRenewsOnlyUnsentFifthKeyAndPreservesPrefix() = runBlocking {
+        val f = pendingFifth()
+        val result = f.run("가 나 ")
+        assertTrue(result.summary, result.success)
+        assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
+        assertEquals(1, f.fifthSourceRefusalsSeen)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
+        assertEquals("가 나 ", f.currentEditor().text)
+        assertEquals(4, f.currentEditor().selectionEnd)
+    }
+
+    @Test fun secondNativeWindowChangeStopsBeforeDelivery() = runBlocking {
+        val f = pendingFifth(refusals = 2)
+        val result = f.run("가 나 ")
+        assertFalse(result.success)
+        assertEquals(VISUAL_SOURCE_REFUSED, result.summary)
+        assertEquals(JsonPrimitive(4), result.data["completed_keys"])
+        assertEquals(JsonPrimitive(true), result.data["fallback_used"])
+        assertEquals(JsonPrimitive(false), result.data["outcome_unknown"])
+        assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
+        assertEquals(2, f.fifthSourceRefusalsSeen)
+        assertEquals("display_window_changed",
+            result.data.getValue("visual_source_failure").jsonObject.getValue("condition").jsonPrimitive.content)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+        assertEquals("가 ㄴ", f.currentEditor().text)
+        assertEquals(3, f.currentEditor().selectionEnd)
+    }
+    @Test fun renewedKeyRequiresNewImageIdAndNewerDisplayGeneration() = runBlocking {
+        for (f in listOf(pendingFifth().apply { advanceWindowVersion = false },
+            pendingFifth().apply { reuseRejectedProofId = true })) {
+            val result = f.run("가 나 ")
+            assertEquals("keyboard_sequence_window_recheck_stale", result.summary)
+            assertEquals(JsonPrimitive(4), result.data["completed_keys"])
+            assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
+            assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+        }
+    }
+
+    @Test fun renewedKeyCannotCrossAnEditorCaretLayoutOrTouchRegionChange() = runBlocking {
+        val changes: Map<String, Fixture.() -> Unit> = mapOf(
+            "editor" to { replaceEditor() },
+            "caret" to { moveCaret() },
+            "layout" to { keyOffset = 3 },
+            "touch region" to { touchContext = "covered" },
+        )
+        for ((name, change) in changes) {
+            val f = pendingFifth().apply { afterFifthSourceRefusal = { change(this) } }
+            val result = f.run("가 나 ")
+            assertFalse("$name: ${result.summary}", result.success)
+            assertEquals(JsonPrimitive(4), result.data["completed_keys"])
+            assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
+            assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+        }
+    }
+
+    @Test fun staleImageDoesNotBecomeASecondRetryDuringRenewal() = runBlocking {
+        val f = pendingFifth().apply { invalidateFifthRenewal = true }
+        val result = f.run("가 나 ")
+        assertEquals("keyboard_sequence_new_image_unavailable", result.summary)
+        assertEquals(JsonPrimitive("display_window_changed_during_capture"), result.data["observation_reason_code"])
+        assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
+        assertEquals(1, f.fifthSourceRefusalsSeen)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+    }
+
+    @Test fun unrelatedSourceReasonWrongStageAndAmbiguousTouchAreNotRenewed() = runBlocking {
+        val cases = listOf(
+            pendingFifth().apply { fifthSourceCondition = VisualSourceCondition.IMAGE_CONSENT_CHANGED },
+            pendingFifth().apply { fifthSourceCondition = VisualSourceCondition.IMAGE_SOURCE_UNAVAILABLE },
+            pendingFifth().apply { fifthSourceStage = VisualSourceStage.PRE_GESTURE },
+            pendingFifth().apply { fifthSourceAttempted = true },
+        )
+        for (f in cases) {
+            val result = f.run("가 나 ")
+            assertEquals(VISUAL_SOURCE_REFUSED, result.summary)
+            assertNull(result.data["display_window_recheck_key"])
+            assertEquals(JsonPrimitive(f.fifthSourceAttempted), result.data["outcome_unknown"])
+            assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+        }
+    }
+
+    @Test fun renewedKeyCannotUseNewConsentEpochOrEndedSession() = runBlocking {
+        val f = pendingFifth().apply {
+            duringFifthRenewal = { ai.closepaw.security.ImageRevocationAuthority.revokeConsent() }
+        }
+        val result = f.run("가 나 ")
+        assertEquals("keyboard_sequence_window_recheck_consent_changed", result.summary)
+        assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+        val ended = pendingFifth().apply { duringFifthRenewal = { active.pause() } }
+        val stopped = ended.run("가 나 ")
+        assertEquals("control_session_changed_observe_again", stopped.summary)
+        assertEquals(JsonPrimitive(5), stopped.data["display_window_recheck_key"])
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), ended.touched)
+    }
+
+    @Test fun windowRecheckSharesThePriorPreTouchRetryBudget() = runBlocking {
+        val f = pendingFifth().apply { rejectFourthOnce = true }
+        val result = f.run("가 나 ")
+        assertEquals(VISUAL_SOURCE_REFUSED, result.summary)
+        assertEquals(JsonPrimitive(4), result.data["completed_keys"])
+        assertNull(result.data["display_window_recheck_key"])
+        assertEquals(1, f.fifthSourceRefusalsSeen)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
     }
 
 }
