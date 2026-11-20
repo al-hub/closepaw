@@ -229,14 +229,17 @@ class GenericControlTest {
         fun ids(observed: JsonObject): List<Int> =
             observed.getValue("nodes").jsonArray.map { it.jsonObject.getValue("node_id").jsonPrimitive.int }
 
-        suspend fun requestJamo(observed: JsonObject, withSpace: Boolean = false) = control.visualKeySequence(buildJsonObject {
+        suspend fun requestJamo(observed: JsonObject, withSpace: Boolean = false,
+            screenSpaceFirstRect: Boolean = false) = control.visualKeySequence(buildJsonObject {
             put("session_id", session.id)
             put("observation_id", observed.getValue("observation_id"))
             put("visual_id", observed.getValue("visual").jsonObject.getValue("visual_id"))
             put("visual_target_confirmed", true)
             put("text", if (withSpace) "가 " else "가")
             put("steps", buildJsonArray {
-                val steps = listOf(Triple(consonant, "ㄱ", listOf(118, 545, 137, 568)),
+                val firstRect = if (screenSpaceFirstRect) listOf(451, 2154, 569, 2309)
+                    else listOf(118, 545, 137, 568)
+                val steps = listOf(Triple(consonant, "ㄱ", firstRect),
                     Triple(vowel, "ㅏ", listOf(275, 595, 295, 615))) +
                     if (withSpace) listOf(Triple(space, "Space", listOf(225, 645, 285, 665))) else emptyList()
                 for ((key, label, rect) in steps) add(buildJsonObject {
@@ -459,6 +462,23 @@ class GenericControlTest {
         val fixture = JamoCandidateFixture(suggestionStrip = true)
         assertEquals("Only the physical ㄱ and ㅏ belong to the sequence",
             fixture.expectedIds, fixture.ids(fixture.observeJamo()))
+        assertEquals(0, fixture.port.writes)
+    }
+
+    /** The actual API must reject a screen-space rectangle accidentally passed
+     * as image_rect; node.bounds and image_rect are not interchangeable. */
+    @Test fun galaxyScreenSpaceRectSubmittedAsImageRectIsRejectedBeforeAnyTouch() = runBlocking {
+        val fixture = JamoCandidateFixture(samsung = true)
+        val observed = fixture.observeJamo()
+        assertEquals(fixture.expectedIds, fixture.ids(observed))
+        val result = fixture.requestJamo(observed, screenSpaceFirstRect = true)
+        assertFalse(result.success)
+        assertEquals("keyboard_sequence_pixels_unverified", result.summary)
+        assertEquals("image_rect_outside_frame", result.data["pixel_failure_stage"]?.jsonPrimitive?.content)
+        assertEquals(1, result.data["pixel_failure_key"]?.jsonPrimitive?.int)
+        assertEquals(0, result.data.getValue("completed_keys").jsonPrimitive.int)
+        assertFalse(result.data.getValue("action_attempted").jsonPrimitive.boolean)
+        assertFalse(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
         assertEquals(0, fixture.port.writes)
     }
 
