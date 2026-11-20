@@ -8,6 +8,16 @@ internal data class KeyboardVisualFingerprintParts(
 )
 
 internal object KeyboardVisualPostCheck {
+    /** Full matches need no rebind. The only non-identical frame that can be
+     * carried forward is a caption-only update already accepted for this image.
+     * The next native validation still compares the complete fingerprint. */
+    fun certifiedFrame(before: ControlFrame, after: ControlFrame, refusal: String?, allowCaptionOnly: Boolean): ControlFrame? =
+        when {
+            refusal == null -> before
+            refusal == "screen_changed" && allowCaptionOnly && suggestionCaptionOnly(before, after) -> after
+            else -> null
+        }
+
     /** A keyboard-only image masks Chrome pixels. A caption update alone may
      * occur during its capture. This never authorizes a touch and never makes
      * an exception for structure, editor values, any window or IME changes. */
