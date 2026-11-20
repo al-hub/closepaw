@@ -575,6 +575,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             // Side fingerprints are private, read-only and never replace the original identity.
             val appIdentityStart = identity.length
             val keyboardNodesForDiagnosis = if (collectKeyboardVisualParts) mutableListOf<JsonObject>() else null
+            val chromeNodesForDiagnosis = if (collectKeyboardVisualParts && pkg == "com.android.chrome")
+                ChromeTreeRegions() else null
             var keyboardVisualParts: KeyboardVisualFingerprintParts? = null
             var truncated = false
             var protected = false
@@ -591,7 +593,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             var deepest = 0
             val truncationReasons = linkedSetOf<String>()
             fun visit(node: AccessibilityNodeInfo, depth: Int, parent: Int, expose: Boolean, keyboard: Boolean = false,
-                webEditorContainer: Int = -1) {
+                webEditorContainer: Int = -1, chromeRegion: ChromeTreeRegions.Region = ChromeTreeRegions.Region.OTHER) {
                 deepest = maxOf(deepest, depth)
                 if (depth > 64 || visited >= nodeBudget || SystemClock.elapsedRealtime() - scanStarted > 2500) {
                     truncated = true
@@ -603,6 +605,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val text = node.text?.toString().orEmpty()
                 val description = node.contentDescription?.toString().orEmpty()
                 val resource = node.viewIdResourceName.orEmpty()
+                val region = if (!keyboard && chromeNodesForDiagnosis != null) ChromeTreeRegions.regionOf(resource, chromeRegion)
+                    else chromeRegion
                 val hint = node.hintText?.toString().orEmpty()
                 val key = if (keyboard) KeyboardKeyPolicy.identify(text, description, node.className?.toString().orEmpty(),
                     node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, node.isTextEntryKey) else null
@@ -669,7 +673,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     put("child_count", node.childCount); put("actions", node.actionList.joinToString { it.id.toString() })
                 }
                 identity.append(json.toString()).append('\n')
-                if (keyboard) keyboardNodesForDiagnosis?.add(json)
+                if (keyboard) keyboardNodesForDiagnosis?.add(json) else chromeNodesForDiagnosis?.add(region, json)
                 if (expose && (!keyboard || key != null || labelEvidence != null || imageCandidate) && node.isVisibleToUser && !rect.isEmpty &&
                     (imageCandidate || text.isNotEmpty() || description.isNotEmpty() || node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable || node.isFocusable ||
                         node.actionList.any { it.id in setOf(AccessibilityNodeInfo.ACTION_CLICK, AccessibilityNodeInfo.ACTION_EXPAND, AccessibilityNodeInfo.ACTION_COLLAPSE) })) {
@@ -706,7 +710,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     }
                     val child = node.getChild(i)
                     if (child == null) { truncated = true; truncationReasons.add("child_unavailable"); continue }
-                    owned.add(child); visit(child, depth + 1, index, expose, keyboard, webContainer)
+                    owned.add(child); visit(child, depth + 1, index, expose, keyboard, webContainer, region)
                 }
             }
             var traversalFailure: String? = null
@@ -751,6 +755,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         context = operationHash(identity.substring(0, appIdentityStart)),
                         appTree = operationHash(identity.substring(appIdentityStart, appIdentityEnd)),
                         imeTree = imeIdentity.takeIf { it.isNotEmpty() }?.let { operationHash(it) },
+                        chrome = chromeNodesForDiagnosis?.fingerprints(),
                     )
                 }
                 fullFingerprint
@@ -1000,8 +1005,12 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             if (action.startsWith("visual_")) {
                 val proof = frame.visual ?: return@withTree ControlEffect(false, false, "visual_observation_required")
                 if (action == "visual_key") {
-                    proof.sourceFailure(VisualSourceStage.NATIVE_ACTION_VALIDATION)?.let {
-                        return@withTree ControlEffect(false, false, VISUAL_SOURCE_REFUSED, it)
+                    proof.sourceFailure(VisualSourceStage.NATIVE_ACTION_VALIDATION)?.let { failure ->
+                        val mark = currentCoroutineContext()[KeyboardWindowTrace]?.mark
+                        val enriched = if (failure.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED && mark != null)
+                            failure.copy(windowEvents = service.remoteDisplayJournal.summarize(mark, service.remoteDisplayChanges.version()))
+                        else failure
+                        return@withTree ControlEffect(false, false, VISUAL_SOURCE_REFUSED, enriched)
                     }
                 } else if (!proof.sourceDisclosureAllowed()) return@withTree ControlEffect(false, false, VISUAL_SOURCE_REFUSED)
                 if(!editorGenerationMatches(proof,service) || editorImageRefusal(service,frame.packageName)!=null)

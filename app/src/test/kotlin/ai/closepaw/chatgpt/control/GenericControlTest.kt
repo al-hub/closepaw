@@ -890,6 +890,17 @@ class GenericControlTest {
         }
     }
 
+    @Test fun windowMarkerFollowsTheSameKeyAndReadIntoTheNativeAdapter() = runBlocking {
+        val fixture = FollowUpImageFixture()
+        val marks = mutableListOf<DisplayWindowChangeJournal.Mark?>()
+        fixture.port.observeWindowTrace = { marks.add(it) }
+        val result = fixture.run()
+        assertTrue(result.summary, result.success)
+        assertEquals(listOf(1 to 0, 2 to 1), marks.map { checkNotNull(it).let { m -> m.keyIndex to m.readAttempt } })
+        assertTrue(marks.all { it?.generation == 1L })
+        assertEquals(listOf("n", "v"), fixture.touched)
+    }
+
     @Test fun keyboardPostCheckClassifiesRefusalsWithoutDisclosingRawFrameData() {
         val parts = KeyboardVisualFingerprintParts("private-context", "private-app-tree", "private-ime-tree")
         val before = ControlFrame("private.pkg", 3, "private-fingerprint", emptyList(),
@@ -1155,6 +1166,7 @@ class GenericControlTest {
         var onWrite: ((JsonObject) -> Unit)? = null
         var denyVisual: (() -> String?)? = null
         var describePostCheck: ((ControlFrame) -> JsonObject)? = null
+        var observeWindowTrace: ((DisplayWindowChangeJournal.Mark?) -> Unit)? = null
 
         override suspend fun visualKeyboardSequenceFollowUp(frame: ControlFrame,
             onPostCheckRefusal: (JsonObject) -> Unit): VisualTargetProof? {
@@ -1181,6 +1193,7 @@ class GenericControlTest {
             return frame
         }
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
+            observeWindowTrace?.invoke(kotlinx.coroutines.currentCoroutineContext()[KeyboardWindowTrace]?.mark)
             beforeWrite?.invoke()?.let { return it }
             writes++
             if (onWrite != null) { onWrite?.invoke(input); return effect }

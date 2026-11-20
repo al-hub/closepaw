@@ -481,14 +481,16 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     return stop("keyboard_sequence_pixels_unverified")
                 VisualKeyboardPolicy.refusal(active.verificationFrame, node, "keyboard",
                     step.label.takeIf { node.keyboardImageCandidate })?.let { return stop(it) }
-                val result = action(buildJsonObject {
-                    put("session_id", session.id); put("observation_id", active.id)
-                    put("action", "visual_key"); put("node_id", node.id)
-                    put("visual_id", proof.id); put("visual_target_confirmed", true)
-                    put("image_rect", JsonArray(listOf(step.crop.left, step.crop.top,
-                        step.crop.right, step.crop.bottom).map { JsonPrimitive(it) }))
-                    if (node.keyboardImageCandidate) put("image_key_label", step.label)
-                })
+                val result = kotlinx.coroutines.withContext(KeyboardWindowTrace(index + 1, followUpAttempt)) {
+                    action(buildJsonObject {
+                        put("session_id", session.id); put("observation_id", active.id)
+                        put("action", "visual_key"); put("node_id", node.id)
+                        put("visual_id", proof.id); put("visual_target_confirmed", true)
+                        put("image_rect", JsonArray(listOf(step.crop.left, step.crop.top,
+                            step.crop.right, step.crop.bottom).map { JsonPrimitive(it) }))
+                        if (node.keyboardImageCandidate) put("image_key_label", step.label)
+                    })
+                }
                 val attempted = result.data["action_attempted"]?.jsonPrimitive?.booleanOrNull
                 val unknown = result.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull
                 val reason = result.data["reason_code"]?.jsonPrimitive?.content ?: "keyboard_input_unconfirmed"
@@ -569,9 +571,14 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         if (action.startsWith("visual_")) {
             val proof = frame.visual ?: return failure("visual_observation_required")
             if (action == "visual_key") {
+                val trace = kotlinx.coroutines.currentCoroutineContext()[KeyboardWindowTrace]
+                val mark = if (trace != null && proof.displayGeneration >= 0)
+                    DisplayWindowChangeJournal.Mark(proof.displayGeneration, System.nanoTime(), trace.keyIndex, trace.readAttempt)
+                else null
                 proof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)?.let {
                     return failure(VISUAL_SOURCE_REFUSED, visualSourceFailure = it)
                 }
+                trace?.mark = mark
             } else if (!proof.sourceDisclosureAllowed()) return failure(VISUAL_SOURCE_REFUSED)
             if (!VisualActionPolicy.scopeAllowed(action,proof.scope)) return failure("visual_scope_mismatch")
             if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||

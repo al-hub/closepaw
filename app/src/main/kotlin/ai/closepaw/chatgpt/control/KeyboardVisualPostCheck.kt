@@ -3,7 +3,9 @@ package ai.closepaw.chatgpt.control
 import kotlinx.serialization.json.*
 
 /** Private comparison inputs. Never serialize these fingerprints to the task result. */
-internal data class KeyboardVisualFingerprintParts(val context: String, val appTree: String, val imeTree: String?)
+internal data class KeyboardVisualFingerprintParts(
+    val context: String, val appTree: String, val imeTree: String?, val chrome: ChromeTreeRegions.Fingerprints? = null,
+)
 
 internal object KeyboardVisualPostCheck {
     /** Make the IME tree independent of a change in the app's node count. */
@@ -33,6 +35,15 @@ internal object KeyboardVisualPostCheck {
                     put("frame_context_changed", original.context != current.context)
                     put("app_tree_changed", original.appTree != current.appTree)
                     put("ime_tree_changed", original.imeTree != current.imeTree)
+                    val oldChrome = original.chrome
+                    val newChrome = current.chrome
+                    if (oldChrome != null && newChrome != null) {
+                        if (oldChrome.editor != null || newChrome.editor != null)
+                            put("chrome_editor_changed", oldChrome.editor != newChrome.editor)
+                        if (oldChrome.suggestions != null || newChrome.suggestions != null)
+                            put("chrome_suggestions_changed", oldChrome.suggestions != newChrome.suggestions)
+                        put("chrome_other_changed", oldChrome.other != newChrome.other)
+                    }
                 }
             }
         }
