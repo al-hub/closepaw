@@ -86,8 +86,12 @@ class KeyboardPhaseDiagnosticsTest {
         now = 6_000_000L; journal.record(7, Type.WINDOWS_CHANGED, Owner.OTHER)
         val result = journal.summarize(mark, 6)
         assertEquals(Json.parseToJsonElement("""{"key_index":2,"read_attempt":2,"elapsed_ms":4,"unrecorded_count":0,"events":[
-            {"after_action_source_check_ms":1,"type":"window_state_changed","reported_owner":"closepaw"},
-            {"after_action_source_check_ms":3,"type":"windows_changed","reported_owner":"unknown"}]}"""), result)
+            {"after_action_source_check_ms":1,"type":"window_state_changed","reported_owner":"closepaw",
+             "event_window_match":"unknown","window_change_mask":0,"unknown_change_bits":false,
+             "event_display_class":"unknown"},
+            {"after_action_source_check_ms":3,"type":"windows_changed","reported_owner":"unknown",
+             "event_window_match":"unknown","window_change_mask":0,"unknown_change_bits":false,
+             "event_display_class":"unknown"}]}"""), result)
         val failure = VisualSourceFailure(VisualSourceStage.NATIVE_ACTION_VALIDATION, VisualSourceCondition.DISPLAY_WINDOW_CHANGED)
         assertFalse("window_event_interval" in failure.json())
         assertEquals(result, failure.copy(windowEvents = result).json().getValue("window_event_interval"))
