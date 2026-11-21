@@ -8,6 +8,17 @@ internal data class KeyboardVisualFingerprintParts(
 )
 
 internal object KeyboardVisualPostCheck {
+    /** Only opt-in keyboard SEQUENCE native validation may ignore a certified
+     * stationary Chrome suggestion-caption delta. Leave capture/post-check and
+     * all general action fingerprints strict so a fresh frame can be published.
+     * Native source, owned pixels, editor, session and pre-gesture checks remain.
+     */
+    fun nativeSequenceRefusal(before: ControlFrame, after: ControlFrame, action: String,
+        optInSequence: Boolean): String? {
+        val refusal = GenericControlActionPolicy.refusal(before, after, action)
+        return if (refusal == "screen_changed" && optInSequence && action == "visual_key" &&
+            suggestionCaptionOnly(before, after)) null else refusal
+    }
     /** Full matches need no rebind. The only non-identical frame that can be
      * carried forward is a caption-only update already accepted for this image.
      * The next native validation still compares the complete fingerprint. */

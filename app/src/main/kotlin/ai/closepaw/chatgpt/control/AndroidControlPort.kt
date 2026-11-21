@@ -976,7 +976,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             collectKeyboardVisualParts = sequenceKeyMap) { fresh, native ->
             if (sessionFor(service).epoch != admittedEpoch)
                 return@withTree ControlEffect(false, false, "control_session_changed_observe_again")
-            val failure = GenericControlActionPolicy.refusal(frame, fresh, action)
+            val failure = KeyboardVisualPostCheck.nativeSequenceRefusal(frame, fresh, action, sequenceKeyMap)
             if (failure != null) {
                 ControlDiagnostics.record("native_validation", failure, metrics = buildJsonObject {
                     put("configuration_changed", frame.configurationRevision != fresh.configurationRevision)

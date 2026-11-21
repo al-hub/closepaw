@@ -150,7 +150,7 @@ class VisualKeyMapSequenceTest {
                 alternativeCaption++
             }
             val fresh = capture()
-            val refusal = GenericControlActionPolicy.refusal(frame, fresh, "visual_key")
+            val refusal = KeyboardVisualPostCheck.nativeSequenceRefusal(frame, fresh, "visual_key", true)
             if (refusal != null) return ControlEffect(false, false, refusal)
             if (rejectFourthOnce && editor.text == "가 " && node?.keyboardKey == "ㄴ") {
                 rejectFourthOnce = false
@@ -422,12 +422,14 @@ class VisualKeyMapSequenceTest {
         assertEquals(4, f.currentEditor().selectionEnd)
         val before = f.capture()
         f.alternativeCaption++
-        assertNull(GenericControlActionPolicy.refusal(before, f.capture(), "visual_key"))
-        f.suggestionMotion = true
         assertEquals("screen_changed", GenericControlActionPolicy.refusal(before, f.capture(), "visual_key"))
+        assertNull(KeyboardVisualPostCheck.nativeSequenceRefusal(before, f.capture(), "visual_key", true))
+        assertEquals("screen_changed", KeyboardVisualPostCheck.nativeSequenceRefusal(before, f.capture(), "visual_key", false))
+        f.suggestionMotion = true
+        assertEquals("screen_changed", KeyboardVisualPostCheck.nativeSequenceRefusal(before, f.capture(), "visual_key", true))
         f.suggestionMotion = false
         f.otherRegion = "new-overlay"
-        assertEquals("screen_changed", GenericControlActionPolicy.refusal(before, f.capture(), "visual_key"))
+        assertEquals("screen_changed", KeyboardVisualPostCheck.nativeSequenceRefusal(before, f.capture(), "visual_key", true))
     }
 
     private fun pendingFifth(refusals: Int = 1) = Fixture(chrome = true).apply {
@@ -538,7 +540,7 @@ class VisualKeyMapSequenceTest {
         assertTrue(result.summary, result.success)
         assertEquals(JsonPrimitive(6), result.data["completed_keys"])
         assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
-        assertEquals(JsonPrimitive(2), result.data["pre_touch_retries"])
+        assertEquals(JsonPrimitive(3), result.data["pre_touch_retries"])
         assertEquals(1, f.fifthSourceRefusalsSeen)
         assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
     }

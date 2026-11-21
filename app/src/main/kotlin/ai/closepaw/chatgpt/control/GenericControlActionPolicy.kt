@@ -12,11 +12,7 @@ internal object GenericControlActionPolicy {
         expected.configurationRevision != fresh.configurationRevision -> "configuration_revision_changed"
         expected.packageName != fresh.packageName || expected.windowId != fresh.windowId ||
             expected.foregroundWindowId != fresh.foregroundWindowId -> "screen_changed"
-        // The existing classifier permits only unchanged editor, IME, suggestion shape,
-        // window and touch context with a changed Chrome suggestion caption.
-        // All later native image/source, ownership and pre-gesture guards still apply.
-        requiresCompleteTree(action) && expected.fingerprint != fresh.fingerprint &&
-            !(action == "visual_key" && KeyboardVisualPostCheck.suggestionCaptionOnly(expected, fresh)) -> "screen_changed"
+        requiresCompleteTree(action) && expected.fingerprint != fresh.fingerprint -> "screen_changed"
         requiresCompleteTree(action) && (expected.truncated || fresh.truncated) -> "truncated_observation"
         requiresCompleteTree(action) && (expected.navigationOnly || fresh.navigationOnly) -> "surface_navigation_only"
         action in setOf("key", "visual_key") && (expected.keyboard != fresh.keyboard || expected.inputTargetId != fresh.inputTargetId ||
