@@ -365,6 +365,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var resolvedAcknowledgements = 0
         var usedFallback = false
         var displayWindowRecheckKey: Int? = null
+        var displayWindowRechecks = 0
         var observationRetryReason: String? = null
         var preTouchRetries = 0
         // Categorical proof failure only. Never retain pixels, text or geometry.
@@ -381,6 +382,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             put("fallback_used", usedFallback)
             put("resolved_acknowledgements", resolvedAcknowledgements)
             displayWindowRecheckKey?.let { put("display_window_recheck_key", it) }
+            put("display_window_rechecks", displayWindowRechecks)
         }
         val postCheckRefusals = mutableListOf<JsonObject>()
         fun stop(reason: String, unknown: Boolean = false, observationReason: String? = null,
@@ -675,9 +677,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         checkpoint(lastVerified)
                         // Share the bounded request budget with other pre-touch retries.
                         // Do not rescue a lost callback or reuse the invalidated image.
+                        // Multiple confirmed NO-TOUCH display invalidations may use the remaining
+                        // request budget. Each loop must recapture a NEW image with a newer
+                        // generation and reverify editor, caret, IME, window, geometry and pixels.
                         if (nativeDisplayInvalidation && reuseMaps && port.validatesAtNativeBoundary &&
-                            recheckOf == null && sessionCurrent() && sameImageConsent() &&
-                            claimPreTouchRetry()) {
+                            sessionCurrent() && sameImageConsent() && claimPreTouchRetry()) {
+                            displayWindowRechecks++
                             displayWindowRecheckKey = index + 1
                             recheckOf = InvalidatedDisplayProof(proof.id, proof.displayGeneration)
                             usedFallback = true
