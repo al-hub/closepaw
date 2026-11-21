@@ -5,8 +5,9 @@
 The v0.1.137/code138 acceptance attempt for #147 ended **before any character or
 Space was dispatched**. The Chrome `com.android.chrome:id/url_bar` was visibly
 empty and focused, but its raw accessibility selection remained `-1/-1`. The
-`bound_empty_editor` keyboard association is **not** proof of absolute caret
-`0/0`. A native `focus` request was refused without effect. A later guarded
+`bound_empty_editor` keyboard binding **does** indicate a native
+empty-caret `0/0` proof for that observation, even though the raw node stays
+`-1/-1`. It does **not** authorize a future gesture without fresh verification. A native `focus` request was refused without effect. A later guarded
 `tap` on the already focused field created Chrome floating editing toolbars,
 and the keyboard input-target binding became unverified. This means the attempt
 did not exercise the visual key sequence or pixel stage at all.
