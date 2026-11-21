@@ -445,7 +445,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         fun sameImageConsent() = ai.closepaw.security.ImageRevocationAuthority.currentEpoch == consent
         val continuingGoal = input["expected_prefix"]?.jsonPrimitive?.contentOrNull != null
         val oldBudget = sequenceRecoveryBudget
-        sharedRecoveryBudget = if (continuingGoal && oldBudget != null &&
+        // An invalid "new" request against a nonempty editor cannot zero
+        // an already spent budget. Only a proved empty editor starts a new goal.
+        val verifiedNewGoal = !continuingGoal && original.verificationFrame.inputTarget?.let {
+            it.text.isEmpty() && it.selectionStart == 0 && it.selectionEnd == 0
+        } == true
+        sharedRecoveryBudget = if (!verifiedNewGoal && oldBudget != null &&
             oldBudget.session == session.id && oldBudget.epoch == session.epoch &&
             oldBudget.consent == consent) oldBudget
         else SequenceRecoveryBudget(session.id, session.epoch, consent).also {

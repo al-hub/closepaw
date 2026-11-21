@@ -681,6 +681,10 @@ class VisualKeyMapSequenceTest {
             assertEquals(JsonPrimitive(1), result.data["pre_touch_retries"])
         }
         val deliveredBefore = f.touched.toList()
+        val invalidRestart = f.run("가")
+        assertEquals("keyboard_empty_editor_required", invalidRestart.summary)
+        assertEquals(JsonPrimitive(3), invalidRestart.data["recovery_budget_total"])
+        assertEquals(deliveredBefore, f.touched)
         f.fallbackRefusal = "ㅏ"
         val stopped = f.run("가", prefix)
         assertFalse(stopped.success)
