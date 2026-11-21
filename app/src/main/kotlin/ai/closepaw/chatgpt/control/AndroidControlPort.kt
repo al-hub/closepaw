@@ -136,7 +136,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         if (selected.selection.reason != null) return selected
         fun refuse() = selected.copy(selection = selected.selection.copy(reason = "input_method_unverified"))
         val keyboards = windows.filter { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
-        if (keyboards.isEmpty()) return selected
+        if (keyboards.isEmpty()) {
+            service.remoteDisplayJournal.observeKnownWindows(selected.selection.target, null)
+            return selected
+        }
         if (keyboards.size != 1) return refuse()
         val window = keyboards.single()
         if (window.displayId != android.view.Display.DEFAULT_DISPLAY || window.isInPictureInPictureMode) return refuse()
@@ -151,6 +154,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val keyboard = ControlKeyboard(window.id, inputMethod.packageName, id,
             readAllowed = packageAllowed(inputMethod.packageName, operation = "read"),
             interactAllowed = packageAllowed(inputMethod.packageName, operation = "interact"))
+        service.remoteDisplayJournal.observeKnownWindows(selected.selection.target, window.id)
         return selected.copy(signature = operationHash(selected.signature + "\n" + keyboard.toString()), keyboard = keyboard)
     }
     private val context = context.applicationContext
@@ -413,6 +417,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             islandRefusal(sessionFor(service).id)?.let {return fail(it)}
         }
         val displayGeneration = service.remoteDisplayChanges.version()
+        val trace = currentCoroutineContext()[KeyboardWindowTrace]
+        val captureWindowMark = if (displayCapture) DisplayWindowChangeJournal.Mark(
+            displayGeneration, System.nanoTime(), trace?.keyIndex ?: 0, trace?.readAttempt ?: 0) else null
         val plan = if (displayCapture) withContext(Dispatchers.Main) { displayPlan(service,frame,nativeKeyboardDisplay) } else null
         if (displayCapture && plan==null) return fail("display_surface_unverified")
         val bounds = plan?.bounds ?: withContext(Dispatchers.Main) {
@@ -452,7 +459,16 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             // notification timeout. Drain that bounded delivery interval before
             // comparing the monotonic generation; never replay a capture here.
             kotlinx.coroutines.delay(75)
-            DisplayCapturePolicy.interveningChange(displayGeneration,service.remoteDisplayChanges.version())?.let { return fail(it) }
+            val currentGeneration = service.remoteDisplayChanges.version()
+            DisplayCapturePolicy.interveningChange(displayGeneration, currentGeneration)?.let { refusal ->
+                // Capture-time failures previously lacked the native gate's bounded event provenance.
+                // This is read-only instrumentation; the original refusal is unchanged.
+                captureWindowMark?.let { mark ->
+                    ControlDiagnostics.record("display_capture_window_change", refusal,
+                        metrics = service.remoteDisplayJournal.summarize(mark, currentGeneration))
+                }
+                return fail(refusal)
+            }
         }
         val refusal = GenericControlActionPolicy.refusal(frame, after, if (keyboardImage) "visual_key" else "visual_tap")
         val certified = KeyboardVisualPostCheck.certifiedFrame(frame, after, refusal, allowCaptionOnly = reuseKeyMap)
