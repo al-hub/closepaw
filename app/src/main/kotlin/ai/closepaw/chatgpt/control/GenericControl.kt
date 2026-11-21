@@ -397,6 +397,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             put("initial_proof_renewals", initialProofRenewals)
             initialProofReason?.let { put("initial_proof_reason_code", it) }
             initialProofAgeMs?.let { put("initial_proof_age_ms", it) }
+            displayWindowRecheckKey?.let { put("display_window_recheck_key", it) }
+            put("display_window_rechecks", displayWindowRechecks)
             if (!reuseMaps) return
             put("reused_key_steps", reusedKeySteps)
             put("key_map_hits", mapHits)
@@ -405,8 +407,6 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             put("keyboard_image_renewals", renewals)
             put("fallback_used", usedFallback)
             put("resolved_acknowledgements", resolvedAcknowledgements)
-            displayWindowRecheckKey?.let { put("display_window_recheck_key", it) }
-            put("display_window_rechecks", displayWindowRechecks)
         }
         val postCheckRefusals = mutableListOf<JsonObject>()
         fun stop(reason: String, unknown: Boolean = false, observationReason: String? = null,
@@ -839,10 +839,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         checkpoint(lastVerified)
                         // Share the bounded request budget with other pre-touch retries.
                         // Do not rescue a lost callback or reuse the invalidated image.
-                        // Multiple confirmed NO-TOUCH display invalidations may use the remaining
+                        // Both sequence modes may recertify a confirmed no-touch refusal.
+                        // Multiple display invalidations may use the remaining
                         // request budget. Each loop must recapture a NEW image with a newer
                         // generation and reverify editor, caret, IME, window, geometry and pixels.
-                        if (nativeDisplayInvalidation && reuseMaps && port.validatesAtNativeBoundary &&
+                        if (nativeDisplayInvalidation && port.validatesAtNativeBoundary &&
                             sessionCurrent() && sameImageConsent() && claimPreTouchRetry()) {
                             displayWindowRechecks++
                             displayWindowRecheckKey = index + 1

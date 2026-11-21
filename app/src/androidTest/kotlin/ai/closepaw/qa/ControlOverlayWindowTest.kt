@@ -3,6 +3,9 @@ package ai.closepaw.qa
 import ai.closepaw.app.AgentService
 import ai.closepaw.app.ServiceOverlayController
 import ai.closepaw.chatgpt.control.ControlSession
+import ai.closepaw.chatgpt.control.DisplayCapturePolicy
+import ai.closepaw.chatgpt.control.VisualSourceCondition
+import ai.closepaw.chatgpt.control.VisualSourceGate
 import ai.closepaw.protocol.SessionEndReason
 import android.app.UiAutomation
 import android.os.SystemClock
@@ -129,7 +132,9 @@ class ControlOverlayWindowTest {
         lateinit var modernX: Any
         lateinit var island: View
         lateinit var x: View
+        var priorDisplayGeneration = -1L
         try {
+            instrumentation.waitForIdleSync()
             main {
                 controller = field(service, "overlayController") as ServiceOverlayController
                 islandHost = requireNotNull(field(controller, "statusIslandManager"))
@@ -137,6 +142,7 @@ class ControlOverlayWindowTest {
                 remoteX = requireNotNull(field(indicator, "xStopOverlay"))
                 modernX = requireNotNull(field(controller, "xStopOverlay"))
                 service.remoteControlSession.start()
+                priorDisplayGeneration = service.remoteDisplayChanges.version()
                 service.showRemoteControlActivity()
             }
             instrumentation.waitForIdleSync()
@@ -174,6 +180,26 @@ class ControlOverlayWindowTest {
                     assertEquals(ControlSession.State.ACTIVE, service.remoteControlSession.state)
                     assertTrue(x.isAttachedToWindow)
                 }
+            }
+            // Accessibility events can arrive after the overlay window moves.
+            val displayEventDeadline = SystemClock.uptimeMillis() + 2_500
+            while (service.remoteDisplayChanges.version() <= priorDisplayGeneration &&
+                SystemClock.uptimeMillis() < displayEventDeadline) {
+                SystemClock.sleep(25)
+            }
+            val afterDisplayGeneration = service.remoteDisplayChanges.version()
+            assertTrue("real overlay window changes must advance display generation",
+                afterDisplayGeneration > priorDisplayGeneration)
+            assertEquals("display_window_changed_during_capture",
+                DisplayCapturePolicy.interveningChange(priorDisplayGeneration, afterDisplayGeneration))
+            main {
+                val priorDisplayGate = VisualSourceGate(
+                    consentValid = { true },
+                    displayValid = { priorDisplayGeneration == service.remoteDisplayChanges.version() },
+                    sourceValid = { true },
+                    sessionValid = { service.remoteControlSession.state == ControlSession.State.ACTIVE },
+                )
+                assertEquals(VisualSourceCondition.DISPLAY_WINDOW_CHANGED, priorDisplayGate.refusal())
             }
             var expectedX = 0
             var expectedY = 0
