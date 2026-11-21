@@ -50,6 +50,7 @@ class VisualKeyMapSequenceTest {
         private var rejectedProofId: String? = null
         var keyOffset = 0
         var keyNodeIdRevision = 0
+        var proposalOutputLimit = 50
         var touchContext = "verified touch region"
         fun replaceEditor() { editor = editor.copy(nativeEditorId = "different-editor") }
         var fallbackRefusal: String? = null
@@ -110,6 +111,7 @@ class VisualKeyMapSequenceTest {
             } else emptyList()
             return ControlFrame(app, 10, "${editor.text}/$state/${editor.nativeEditorId}/$alternativeCaption/$otherRegion/$layoutRevision/${editor.selectionEnd}",
                 listOf(editor) + controls + rows.getValue(state).map(::key) + spaceNeighbors,
+                outputLimit = proposalOutputLimit,
                 touchContext = touchContext, windowContext = "verified window",
                 keyboard = ime, inputTargetId = editor.id, inputTarget = editor, keyboardVisualFingerprintParts = scope)
         }
@@ -665,6 +667,24 @@ class VisualKeyMapSequenceTest {
         assertEquals("keyboard_sequence_environment_changed", refused.summary)
         assertEquals(JsonPrimitive(false), refused.data["action_attempted"])
         assertTrue(changed.touched.isEmpty())
+    }
+
+    @Test fun recertificationCannotElevateNodeHiddenByOriginalObservationLimit() = runBlocking {
+        val f = Fixture().apply {
+            proposalOutputLimit = 1
+            initialProofAgeMs = 12_000L
+            // A subsequent read may disclose many more keys; it cannot enlarge
+            // the authority of the caller's original one-key observation.
+            onNextSequenceCapture = {
+                proposalOutputLimit = 50
+                keyNodeIdRevision = 1000
+            }
+        }
+        val refused = f.run("가 나 ")
+        assertEquals("keyboard_sequence_candidate_undisclosed", refused.summary)
+        assertEquals(JsonPrimitive(false), refused.data["action_attempted"])
+        assertEquals(JsonPrimitive(0), refused.data["pre_touch_retries"])
+        assertEquals(0, f.touched.size)
     }
 
     @Test fun initialRebuildCannotCrossEditorIdentityAndWrongImageIdCannotBeRebound() = runBlocking {

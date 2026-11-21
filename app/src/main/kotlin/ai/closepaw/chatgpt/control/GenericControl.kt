@@ -457,6 +457,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             sequenceRecoveryBudget = it
         }
         var firstProof = original.frame.visual ?: return stop("keyboard_visual_required")
+        // A full verification frame may contain nodes omitted from the response.
+        // Recovery must never promote an undisclosed node to dispatch authority.
+        val originallyDisclosedNodeIds = original.frame.nodes.mapTo(mutableSetOf()) { it.id }
         // Node IDs are observation-local. Only a fully identified physical key
         // at the same owned IME location can be rebound to a fresh observation.
         val recertifiedNodeIds = mutableMapOf<Int, Int>()
@@ -505,6 +508,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 return stop("keyboard_sequence_literal_only")
             val anchorCandidates = VisualSequenceCandidates.select(anchor.verificationFrame, retryLabels)
             if (anchorCandidates.size != retryLabels.size) return stop("keyboard_sequence_candidate_not_unique")
+            if (anchorCandidates.any { it.id !in originallyDisclosedNodeIds })
+                return stop("keyboard_sequence_candidate_undisclosed")
             while (true) {
                 if (!sessionCurrent() || !sameImageConsent()) return stop("control_session_changed_observe_again")
                 if (!claimPreTouchRetry()) return stop("keyboard_sequence_recovery_budget_exhausted")
@@ -640,6 +645,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 val entry = submitted[i] as? JsonObject ?: return stop("keyboard_sequence_step_invalid")
                 if (entry["label"]?.jsonPrimitive?.content != label) return stop("keyboard_sequence_literal_only")
                 val id = entry["node_id"]?.jsonPrimitive?.intOrNull ?: return stop("keyboard_sequence_step_invalid")
+                if (id !in originallyDisclosedNodeIds) return stop("keyboard_sequence_candidate_undisclosed")
                 val liveId = if (recertifiedNodeIds.isEmpty()) id
                     else recertifiedNodeIds[id] ?: return stop("keyboard_sequence_candidate_undisclosed")
                 node = original.frame.nodes.singleOrNull { it.id == liveId }
