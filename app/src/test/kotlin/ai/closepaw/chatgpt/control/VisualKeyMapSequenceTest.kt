@@ -444,27 +444,63 @@ class VisualKeyMapSequenceTest {
         assertTrue(result.summary, result.success)
         assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
         assertEquals(1, f.fifthSourceRefusalsSeen)
+        assertEquals(JsonPrimitive(1), result.data["display_window_rechecks"])
         assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
         assertEquals("가 나 ", f.currentEditor().text)
         assertEquals(4, f.currentEditor().selectionEnd)
     }
 
-    @Test fun secondNativeWindowChangeStopsBeforeDelivery() = runBlocking {
+    @Test fun repeatedNativeWindowChangesRecertifyOnlyPendingKeyWithinSharedBudget() = runBlocking {
+        // A prior Space fallback consumes one retry; two more confirmed no-touch
+        // display refusals may use the remaining shared budget with fresh image proofs.
         val f = pendingFifth(refusals = 2)
+        val result = f.run("가 나 ")
+        assertTrue(result.summary, result.success)
+        assertEquals(JsonPrimitive(6), result.data["completed_keys"])
+        assertEquals(JsonPrimitive(3), result.data["pre_touch_retries"])
+        assertEquals(JsonPrimitive(2), result.data["display_window_rechecks"])
+        assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
+        assertEquals(2, f.fifthSourceRefusalsSeen)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
+        assertEquals("가 나 ", f.currentEditor().text)
+        assertEquals(4, f.currentEditor().selectionEnd)
+    }
+
+    @Test fun furtherNativeWindowChangeStopsAtRequestBudgetWithoutReplaying() = runBlocking {
+        val f = pendingFifth(refusals = 3)
         val result = f.run("가 나 ")
         assertFalse(result.success)
         assertEquals(VISUAL_SOURCE_REFUSED, result.summary)
         assertEquals(JsonPrimitive(4), result.data["completed_keys"])
+        assertEquals(JsonPrimitive(3), result.data["pre_touch_retries"])
+        assertEquals(JsonPrimitive(2), result.data["display_window_rechecks"])
         assertEquals(JsonPrimitive(true), result.data["fallback_used"])
         assertEquals(JsonPrimitive(false), result.data["outcome_unknown"])
         assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
-        assertEquals(2, f.fifthSourceRefusalsSeen)
+        assertEquals(3, f.fifthSourceRefusalsSeen)
         assertEquals("display_window_changed",
             result.data.getValue("visual_source_failure").jsonObject.getValue("condition").jsonPrimitive.content)
         assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
         assertEquals("가 ㄴ", f.currentEditor().text)
         assertEquals(3, f.currentEditor().selectionEnd)
     }
+
+    @Test fun repeatedWindowRecertificationStillBlocksChangedEditorAndGesture() = runBlocking {
+        for (change in listOf<Fixture.() -> Unit>(
+            { replaceEditor() },
+            { touchContext = "covered" },
+        )) {
+            val f = pendingFifth(refusals = 2)
+            f.afterFifthSourceRefusal = { if (f.fifthSourceRefusalsSeen == 2) change(f) }
+            val result = f.run("가 나 ")
+            assertFalse(result.summary, result.success)
+            assertEquals(JsonPrimitive(4), result.data["completed_keys"])
+            assertEquals(JsonPrimitive(false), result.data["outcome_unknown"])
+            assertEquals(2, f.fifthSourceRefusalsSeen)
+            assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+        }
+    }
+
     @Test fun renewedKeyRequiresNewImageIdAndNewerDisplayGeneration() = runBlocking {
         for (f in listOf(pendingFifth().apply { advanceWindowVersion = false },
             pendingFifth().apply { reuseRejectedProofId = true })) {
