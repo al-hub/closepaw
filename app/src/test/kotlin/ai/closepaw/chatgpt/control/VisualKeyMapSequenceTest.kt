@@ -42,9 +42,15 @@ class VisualKeyMapSequenceTest {
         var afterFifthSourceRefusal: (() -> Unit)? = null
         var duringFifthRenewal: (() -> Unit)? = null
         var invalidateFifthRenewal = false
+        var transientFifthCaptureFailures = 0
+        var initialProofAgeMs = 0L
+        var wrongInitialProofId = false
+        var onNextSequenceCapture: (() -> Unit)? = null
         private var windowVersion = 1L
         private var rejectedProofId: String? = null
         var keyOffset = 0
+        var keyNodeIdRevision = 0
+        var proposalOutputLimit = 50
         var touchContext = "verified touch region"
         fun replaceEditor() { editor = editor.copy(nativeEditorId = "different-editor") }
         var fallbackRefusal: String? = null
@@ -81,7 +87,7 @@ class VisualKeyMapSequenceTest {
                 bounds = "165 82 325 112", sourceWindowId = 20, sourcePackage = imePackage,
                 className = "android.view.ViewGroup", keyboardImageCandidate = true, visualKeyChildCount = 0)
             val x = i * 40 + 5 + keyOffset
-            return ControlNode(i + 3, text = label, keyboardKey = label, clickable = true, textEntryKey = true,
+            return ControlNode(i + 3 + keyNodeIdRevision, text = label, keyboardKey = label, clickable = true, textEntryKey = true,
                 bounds = "$x 45 ${x + 35} 75", sourceWindowId = 20, sourcePackage = imePackage,
                 visualKeyCandidate = true, visualKeyChildCount = 0)
         }
@@ -90,6 +96,10 @@ class VisualKeyMapSequenceTest {
         override val validatesAtNativeBoundary = true
         override fun session() = active
         override suspend fun apps(filter: String) = JsonArray(emptyList())
+        override suspend fun captureKeyboardSequenceFrame(): ControlFrame {
+            onNextSequenceCapture?.let { onNextSequenceCapture = null; it() }
+            return capture()
+        }
         override suspend fun capture(): ControlFrame {
             val scope = if (chrome) KeyboardVisualFingerprintParts("context", "${editor.text}/$alternativeCaption/$otherRegion",
                 "$state/$layoutRevision", ChromeTreeRegions.Fingerprints(
@@ -101,6 +111,7 @@ class VisualKeyMapSequenceTest {
             } else emptyList()
             return ControlFrame(app, 10, "${editor.text}/$state/${editor.nativeEditorId}/$alternativeCaption/$otherRegion/$layoutRevision/${editor.selectionEnd}",
                 listOf(editor) + controls + rows.getValue(state).map(::key) + spaceNeighbors,
+                outputLimit = proposalOutputLimit,
                 touchContext = touchContext, windowContext = "verified window",
                 keyboard = ime, inputTargetId = editor.id, inputTarget = editor, keyboardVisualFingerprintParts = scope)
         }
@@ -109,7 +120,8 @@ class VisualKeyMapSequenceTest {
             onPostCheckRefusal: (JsonObject) -> Unit): CertifiedKeyboardFrame? {
             if (fifthSourceRefusalsSeen > 0 && editor.text == "가 ㄴ") {
                 duringFifthRenewal?.invoke()
-                if (invalidateFifthRenewal) {
+                if (invalidateFifthRenewal || transientFifthCaptureFailures > 0) {
+                    if (transientFifthCaptureFailures > 0) transientFifthCaptureFailures--
                     failure = "display_window_changed_during_capture"
                     return null
                 }
@@ -144,7 +156,7 @@ class VisualKeyMapSequenceTest {
             }
             val proof = VisualTargetProof(ScreenImage(1200, 150, "image/jpeg", byteArrayOf(1),
                 ScreenImageSource.ACCESSIBILITY_SCREENSHOT), "pixels", frameBounds, "context",
-                System.currentTimeMillis(), scope = "keyboard", sourceWindowId = 20, sourceImeWindowId = 20,
+                System.currentTimeMillis() - initialProofAgeMs.also { initialProofAgeMs = 0L }, scope = "keyboard", sourceWindowId = 20, sourceImeWindowId = 20,
                 sourceDisplayId = 0, displayGeneration = windowVersion, rotation = 0, imeBounds = "0 0 1200 150",
                 disclosedRegions = regions)
             return if (reuseRejectedProofId) rejectedProofId?.let { proof.copy(id = it) } ?: proof else proof
@@ -195,7 +207,7 @@ class VisualKeyMapSequenceTest {
 
         private fun observedInput(observed: OperationResult) = buildJsonObject {
             put("observation_id", observed.data.getValue("observation_id"))
-            put("visual_id", observed.data.getValue("visual").jsonObject.getValue("visual_id"))
+            put("visual_id", if (wrongInitialProofId) JsonPrimitive("wrong-image-id") else observed.data.getValue("visual").jsonObject.getValue("visual_id"))
             put("session_id", active.id)
             put("visual_target_confirmed", true)
         }
@@ -612,4 +624,120 @@ class VisualKeyMapSequenceTest {
         assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
     }
 
+
+    @Test fun transientCaptureWindowRaceRenewsEnvironmentAndResumesWithoutDuplicate() = runBlocking {
+        val f = pendingFifth().apply { transientFifthCaptureFailures = 1 }
+        val result = f.run("가 나 ")
+        assertTrue(result.summary, result.success)
+        assertEquals(JsonPrimitive(3), result.data["pre_touch_retries"])
+        assertEquals(JsonPrimitive(6), result.data["completed_keys"])
+        assertEquals(JsonPrimitive(false), result.data["outcome_unknown"])
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
+        assertEquals("가 나 ", f.currentEditor().text)
+        assertEquals(4, f.currentEditor().selectionEnd)
+    }
+
+    @Test fun expiredInitialImageIsRecertifiedBeforeFirstGesture() = runBlocking {
+        val f = Fixture().apply { initialProofAgeMs = 12_000L }
+        val result = f.run("가 나 ")
+        assertTrue(result.summary, result.success)
+        assertEquals(JsonPrimitive(1), result.data["pre_touch_retries"])
+        assertEquals(6, f.touched.size)
+        assertEquals("가 나 ", f.currentEditor().text)
+    }
+
+    @Test fun expiredImageRebindsOnlyEquivalentPhysicalKeyWhenNativeNodeIdsChange() = runBlocking {
+        val f = Fixture().apply {
+            initialProofAgeMs = 12_000L
+            onNextSequenceCapture = { keyNodeIdRevision = 1000 }
+        }
+        val result = f.run("가 나 ")
+        assertTrue(result.summary, result.success)
+        assertEquals(JsonPrimitive(1), result.data["pre_touch_retries"])
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
+        assertEquals("가 나 ", f.currentEditor().text)
+        assertEquals(4, f.currentEditor().selectionEnd)
+
+        // ID churn never authorizes a changed key rectangle.
+        val changed = Fixture().apply {
+            initialProofAgeMs = 12_000L
+            onNextSequenceCapture = { keyNodeIdRevision = 1000; keyOffset = 5 }
+        }
+        val refused = changed.run("가 나 ")
+        assertEquals("keyboard_sequence_environment_changed", refused.summary)
+        assertEquals(JsonPrimitive(false), refused.data["action_attempted"])
+        assertTrue(changed.touched.isEmpty())
+    }
+
+    @Test fun recertificationCannotElevateNodeHiddenByOriginalObservationLimit() = runBlocking {
+        val f = Fixture().apply {
+            proposalOutputLimit = 1
+            initialProofAgeMs = 12_000L
+            // A subsequent read may disclose many more keys; it cannot enlarge
+            // the authority of the caller's original one-key observation.
+            onNextSequenceCapture = {
+                proposalOutputLimit = 50
+                keyNodeIdRevision = 1000
+            }
+        }
+        val refused = f.run("가 나 ")
+        assertEquals("keyboard_sequence_candidate_undisclosed", refused.summary)
+        assertEquals(JsonPrimitive(false), refused.data["action_attempted"])
+        assertEquals(JsonPrimitive(0), refused.data["pre_touch_retries"])
+        assertEquals(0, f.touched.size)
+    }
+
+    @Test fun initialRebuildCannotCrossEditorIdentityAndWrongImageIdCannotBeRebound() = runBlocking {
+        val replaced = Fixture().apply {
+            initialProofAgeMs = 12_000L
+            onNextSequenceCapture = { replaceEditor() }
+        }
+        val stopped = replaced.run("가 나 ")
+        assertFalse(stopped.success)
+        assertTrue(replaced.touched.isEmpty())
+        assertEquals(JsonPrimitive(false), stopped.data["action_attempted"])
+        val wrong = Fixture().apply { wrongInitialProofId = true }
+        val invalid = wrong.run("가 나 ")
+        assertEquals("keyboard_visual_proof_unavailable", invalid.summary)
+        assertTrue(wrong.touched.isEmpty())
+        assertEquals(JsonPrimitive(false), invalid.data["action_attempted"])
+    }
+
+    @Test fun repeatedCaptureWindowRaceStopsAtSharedRecoveryBudgetWithoutReplay() = runBlocking {
+        val f = pendingFifth().apply { transientFifthCaptureFailures = 5 }
+        val stopped = f.run("가 나 ")
+        assertFalse(stopped.success)
+        assertEquals(JsonPrimitive(3), stopped.data["pre_touch_retries"])
+        assertEquals(JsonPrimitive(4), stopped.data["completed_keys"])
+        assertEquals(JsonPrimitive(false), stopped.data["outcome_unknown"])
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+    }
+
+    @Test fun verifiedMultiChunkGoalSharesOneRecoveryBudgetAcrossSequences() = runBlocking {
+        val f = Fixture()
+        var prefix = ""
+        for (segment in listOf("가 ", "나", "바")) {
+            f.fallbackRefusal = "ㅏ"
+            val result = f.run(segment, prefix.ifEmpty { null })
+            assertTrue(result.summary, result.success)
+            prefix += segment
+            assertEquals(prefix, f.currentEditor().text)
+            assertEquals(JsonPrimitive(1), result.data["pre_touch_retries"])
+        }
+        val deliveredBefore = f.touched.toList()
+        val invalidRestart = f.run("가")
+        assertEquals("keyboard_empty_editor_required", invalidRestart.summary)
+        assertEquals(JsonPrimitive(3), invalidRestart.data["recovery_budget_total"])
+        assertEquals(deliveredBefore, f.touched)
+        f.fallbackRefusal = "ㅏ"
+        val stopped = f.run("가", prefix)
+        assertFalse(stopped.success)
+        assertEquals(JsonPrimitive(3), stopped.data["recovery_budget_total"])
+        assertEquals(JsonPrimitive(0), stopped.data["pre_touch_retries"])
+        assertEquals(JsonPrimitive(false), stopped.data["outcome_unknown"])
+        assertEquals(JsonPrimitive(1), stopped.data["completed_keys"])
+        assertEquals(deliveredBefore + "ㄱ", f.touched)
+        // A Korean final consonant composes into the preceding syllable ("바" + ㄱ = "박").
+        assertEquals(HangulKeyComposer.append(prefix, "ㄱ"), f.currentEditor().text)
+    }
 }

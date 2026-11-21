@@ -150,6 +150,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     private data class KeyboardCheckpoint(val session: String, val epoch: Long, val consent: Long,
         val frame: ControlFrame)
     private var keyboardCheckpoint: KeyboardCheckpoint? = null
+    // A verified continuation of one editor goal shares its recovery budget
+    // across multiple <=6-key sequences. A genuinely new empty-editor goal
+    // or a different session/consent gets a fresh ledger.
+    private data class SequenceRecoveryBudget(
+        val session: String, val epoch: Long, val consent: Long, var used: Int = 0)
+    private var sequenceRecoveryBudget: SequenceRecoveryBudget? = null
     private fun checkpointFrame(frame: ControlFrame): ControlFrame? {
         val field = frame.inputTarget ?: return null
         val identityNodes = frame.nodes.filter {
@@ -164,7 +170,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     private var chainActions = 0
     private var noProgress = 0
     fun invalidate(clearSelections: Boolean = false) {
-        pendingTerminal = null; keyboardCheckpoint = null; visualKeyMaps.clear()
+        pendingTerminal = null; keyboardCheckpoint = null; sequenceRecoveryBudget = null; visualKeyMaps.clear()
         VisualImageCache.remove(current?.frame?.visual?.id); current = null; port.invalidate()
         if (clearSelections) port.clearSelections()
     }
@@ -368,10 +374,16 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var displayWindowRechecks = 0
         var observationRetryReason: String? = null
         var preTouchRetries = 0
+        var sharedRecoveryBudget: SequenceRecoveryBudget? = null
         var partialCropRecoveries = 0
+        var initialProofRenewals = 0
+        var initialProofReason: String? = null
+        var initialProofAgeMs: Long? = null
         // One shared budget for every pre-dispatch recovery within the request.
         fun claimPreTouchRetry(): Boolean {
-            if (preTouchRetries >= 3) return false
+            val budget = sharedRecoveryBudget ?: return false
+            if (budget.used >= 3) return false
+            budget.used++
             preTouchRetries++
             return true
         }
@@ -380,7 +392,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var pixelFailureKey: Int? = null
         fun JsonObjectBuilder.metrics() {
             put("pre_touch_retries", preTouchRetries)
+            sharedRecoveryBudget?.let { put("recovery_budget_total", it.used) }
             put("partial_crop_recoveries", partialCropRecoveries)
+            put("initial_proof_renewals", initialProofRenewals)
+            initialProofReason?.let { put("initial_proof_reason_code", it) }
+            initialProofAgeMs?.let { put("initial_proof_age_ms", it) }
             if (!reuseMaps) return
             put("reused_key_steps", reusedKeySteps)
             put("key_map_hits", mapHits)
@@ -413,26 +429,146 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             })
         }
         if (!allowed()) return stop("generic_control_disabled")
-        val original = current ?: return stop("observation_required")
+        var original = current ?: return stop("observation_required")
         if (input["observation_id"]?.jsonPrimitive?.content != original.id)
             return stop("stale_observation")
+        val anchorEpoch = original.epoch
         val session = port.session()?.takeIf {
             it.explicit && it.state == ControlSession.State.ACTIVE &&
-                it.id == input["session_id"]?.jsonPrimitive?.content && it.epoch == original.epoch &&
+                it.id == input["session_id"]?.jsonPrimitive?.content && it.epoch == anchorEpoch &&
                 (expectedEpoch == null || it.epoch == expectedEpoch)
         } ?: return stop("explicit_active_session_required")
         fun sessionCurrent() = allowed() && port.session() === session &&
             session.explicit && session.state == ControlSession.State.ACTIVE &&
-            session.id == input["session_id"]?.jsonPrimitive?.content && session.epoch == original.epoch
+            session.id == input["session_id"]?.jsonPrimitive?.content && session.epoch == anchorEpoch
         val consent = ai.closepaw.security.ImageRevocationAuthority.currentEpoch
         fun sameImageConsent() = ai.closepaw.security.ImageRevocationAuthority.currentEpoch == consent
-        val firstProof = original.frame.visual ?: return stop("keyboard_visual_required")
-        if (firstProof.scope != "keyboard" || firstProof.sourceDisplayId != 0 ||
-            !firstProof.sourceDisclosureAllowed() ||
-            input["visual_id"]?.jsonPrimitive?.content != firstProof.id ||
-            input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
-            now() - firstProof.at !in 0L..10_000L)
-            return stop("keyboard_visual_proof_unavailable")
+        val continuingGoal = input["expected_prefix"]?.jsonPrimitive?.contentOrNull != null
+        val oldBudget = sequenceRecoveryBudget
+        // An invalid "new" request against a nonempty editor cannot zero
+        // an already spent budget. Only a proved empty editor starts a new goal.
+        val verifiedNewGoal = !continuingGoal && original.verificationFrame.inputTarget?.let {
+            it.text.isEmpty() && it.selectionStart == 0 && it.selectionEnd == 0
+        } == true
+        sharedRecoveryBudget = if (!verifiedNewGoal && oldBudget != null &&
+            oldBudget.session == session.id && oldBudget.epoch == session.epoch &&
+            oldBudget.consent == consent) oldBudget
+        else SequenceRecoveryBudget(session.id, session.epoch, consent).also {
+            sequenceRecoveryBudget = it
+        }
+        var firstProof = original.frame.visual ?: return stop("keyboard_visual_required")
+        // A full verification frame may contain nodes omitted from the response.
+        // Recovery must never promote an undisclosed node to dispatch authority.
+        val originallyDisclosedNodeIds = original.frame.nodes.mapTo(mutableSetOf()) { it.id }
+        // Node IDs are observation-local. Only a fully identified physical key
+        // at the same owned IME location can be rebound to a fresh observation.
+        val recertifiedNodeIds = mutableMapOf<Int, Int>()
+        fun samePhysicalCandidate(a: ControlNode, b: ControlNode) =
+            a.bounds == b.bounds && a.sourceWindowId == b.sourceWindowId &&
+            a.sourcePackage == b.sourcePackage && a.keyboardKey == b.keyboardKey &&
+            a.text == b.text && a.description == b.description &&
+            a.className == b.className && a.visualKeyCandidate == b.visualKeyCandidate &&
+            a.keyboardImageCandidate == b.keyboardImageCandidate &&
+            a.visualKeyChildCount == b.visualKeyChildCount && a.clickable == b.clickable &&
+            a.textEntryKey == b.textEntryKey
+        initialProofAgeMs = now() - firstProof.at
+        val sourceFailure = firstProof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)
+        initialProofReason = when {
+            input["visual_id"]?.jsonPrimitive?.content != firstProof.id -> "image_id_mismatch"
+            input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true -> "image_not_confirmed"
+            firstProof.scope != "keyboard" || firstProof.sourceDisplayId != 0 -> "image_owner_invalid"
+            sourceFailure?.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED -> "display_window_changed"
+            sourceFailure != null || !firstProof.sourceDisclosureAllowed() -> "image_source_or_consent_revoked"
+            initialProofAgeMs!! < 0L -> "image_clock_invalid"
+            initialProofAgeMs!! > 10_000L -> "image_expired"
+            else -> null
+        }
+        if (initialProofReason != null) {
+            // The caller's original image ID and consent cannot be repaired or replaced.
+            // Only an expired or independently identified display-generation race
+            // can be recertified, without a physical gesture, under the SAME session.
+            if (initialProofReason !in setOf("image_expired", "display_window_changed") ||
+                !reuseMaps || !port.validatesAtNativeBoundary || !sessionCurrent() || !sameImageConsent())
+                return stop("keyboard_visual_proof_unavailable")
+            val anchor = original
+            val anchorProof = firstProof
+            val anchorIme = anchor.verificationFrame.keyboard?.takeIf { it.readAllowed && it.interactAllowed }
+                ?: return stop("keyboard_interaction_not_authorized")
+            if (VisualKeyboardPolicy.proofOwnerRefusal(anchorProof, anchorIme) != null)
+                return stop("keyboard_visual_owner_unverified")
+            val anchorEditor = anchor.verificationFrame.inputTarget
+                ?: return stop("keyboard_input_target_unverified")
+            if (!anchorEditor.focused || !anchorEditor.editable || !anchorEditor.enabled ||
+                anchorEditor.password || anchorEditor.sourcePackage != anchor.verificationFrame.packageName ||
+                anchorEditor.sourceWindowId != anchor.verificationFrame.windowId)
+                return stop("keyboard_input_target_unverified")
+            val retryLabels = input["text"]?.jsonPrimitive?.contentOrNull
+                ?.let(HangulKeyComposer::labels)?.distinct() ?: emptyList()
+            if (retryLabels.size !in 1..6 || retryLabels.any { VisualSequenceCandidates.literal(it) == null })
+                return stop("keyboard_sequence_literal_only")
+            val anchorCandidates = VisualSequenceCandidates.select(anchor.verificationFrame, retryLabels)
+            if (anchorCandidates.size != retryLabels.size) return stop("keyboard_sequence_candidate_not_unique")
+            if (anchorCandidates.any { it.id !in originallyDisclosedNodeIds })
+                return stop("keyboard_sequence_candidate_undisclosed")
+            while (true) {
+                if (!sessionCurrent() || !sameImageConsent()) return stop("control_session_changed_observe_again")
+                if (!claimPreTouchRetry()) return stop("keyboard_sequence_recovery_budget_exhausted")
+                initialProofRenewals++
+                renewals++
+                usedFallback = true
+                val read = observe(includeImage = true, imageScope = "keyboard",
+                    keyboardSequenceLabels = retryLabels,
+                    onKeyboardPostCheckRefusal = { /* no raw pixels or editor content retained */ })
+                if (!read.success) {
+                    val reason = read.data["reason_code"]?.jsonPrimitive?.contentOrNull
+                    if (reason in setOf("visual_post_screen_changed", "display_window_changed_during_capture") &&
+                        sessionCurrent() && sameImageConsent()) {
+                        observationRetryReason = reason
+                        continue
+                    }
+                    return stop("keyboard_sequence_new_image_unavailable", observationReason = reason)
+                }
+                val newer = current ?: return stop("keyboard_observation_lost")
+                val newProof = newer.frame.visual ?: return stop("keyboard_visual_required")
+                val newCandidates = VisualSequenceCandidates.select(newer.verificationFrame, retryLabels)
+                // New frame must be equivalent to the originally reviewed target.
+                // A replacement IMAGE-ONLY candidate cannot inherit a changed
+                // image pixel hash: it has no independent native character label.
+                val imageOnlyUnchanged = anchorCandidates.none { it.keyboardImageCandidate } ||
+                    newProof.pixelHash == anchorProof.pixelHash
+                if (!sessionCurrent() || !sameImageConsent() || newer.epoch != anchorEpoch ||
+                    newer.verificationFrame.packageName != anchor.verificationFrame.packageName ||
+                    newer.verificationFrame.windowId != anchor.verificationFrame.windowId ||
+                    newer.verificationFrame.windowContext != anchor.verificationFrame.windowContext ||
+                    newer.verificationFrame.touchContext != anchor.verificationFrame.touchContext ||
+                    newer.verificationFrame.configurationRevision != anchor.verificationFrame.configurationRevision ||
+                    newer.verificationFrame.keyboard != anchorIme ||
+                    !KeyboardEditorContinuity.sameFocusedEditor(anchor.verificationFrame, newer.verificationFrame,
+                        allowAnonymousResize = false) ||
+                    !KeyboardEditorContinuity.sameValue(anchor.verificationFrame, newer.verificationFrame) ||
+                    newProof.id == anchorProof.id ||
+                    (initialProofReason == "display_window_changed" &&
+                        newProof.displayGeneration <= anchorProof.displayGeneration) ||
+                    newProof.scope != "keyboard" || newProof.sourceDisplayId != 0 ||
+                    newProof.sourceImeWindowId != anchorProof.sourceImeWindowId ||
+                    newProof.window != anchorProof.window || newProof.rotation != anchorProof.rotation ||
+                    newProof.imeBounds != anchorProof.imeBounds ||
+                    newProof.image.width != anchorProof.image.width ||
+                    newProof.image.height != anchorProof.image.height ||
+                    now() - newProof.at !in 0L..10_000L || !newProof.sourceDisclosureAllowed() ||
+                    VisualKeyboardPolicy.proofOwnerRefusal(newProof, anchorIme) != null ||
+                    newCandidates.size != anchorCandidates.size ||
+                    !anchorCandidates.zip(newCandidates).all { (a, b) -> samePhysicalCandidate(a, b) } ||
+                    !imageOnlyUnchanged)
+                    return stop("keyboard_sequence_environment_changed")
+                // The original image's node IDs are never reused as dispatch authority.
+                // Rebind only explicitly proposed, unique keys after full recertification.
+                recertifiedNodeIds.putAll(anchorCandidates.zip(newCandidates).associate { (a, b) -> a.id to b.id })
+                original = newer
+                firstProof = newProof
+                break
+            }
+        }
         val ime = original.frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed }
             ?: return stop("keyboard_interaction_not_authorized")
         if (VisualKeyboardPolicy.proofOwnerRefusal(firstProof, ime) != null)
@@ -509,7 +645,10 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 val entry = submitted[i] as? JsonObject ?: return stop("keyboard_sequence_step_invalid")
                 if (entry["label"]?.jsonPrimitive?.content != label) return stop("keyboard_sequence_literal_only")
                 val id = entry["node_id"]?.jsonPrimitive?.intOrNull ?: return stop("keyboard_sequence_step_invalid")
-                node = original.frame.nodes.singleOrNull { it.id == id }
+                if (id !in originallyDisclosedNodeIds) return stop("keyboard_sequence_candidate_undisclosed")
+                val liveId = if (recertifiedNodeIds.isEmpty()) id
+                    else recertifiedNodeIds[id] ?: return stop("keyboard_sequence_candidate_undisclosed")
+                node = original.frame.nodes.singleOrNull { it.id == liveId }
                     ?: return stop("keyboard_sequence_candidate_undisclosed")
                 val raw = entry["image_rect"] as? JsonArray ?: return stop("keyboard_sequence_step_invalid")
                 if (raw.size != 4) return stop("keyboard_sequence_step_invalid")
@@ -610,8 +749,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         // and share the request budget with pre-touch dispatch refusals.
                         // The next iteration still verifies the editor, value/caret, key
                         // geometry and live pixels before it can dispatch the pending step.
-                        if (reason == "visual_post_screen_changed" && sessionCurrent() &&
-                            sameImageConsent() && claimPreTouchRetry()) {
+                        if (reason in setOf("visual_post_screen_changed", "display_window_changed_during_capture") &&
+                            sessionCurrent() && sameImageConsent() && claimPreTouchRetry()) {
+                            // The capture was read-only. Discard the failed image, and
+                            // on a window event demand a new, later display generation.
+                            // Never replay the already verified preceding key.
+                            if (reason == "display_window_changed_during_capture" && recheckOf == null)
+                                recheckOf = InvalidatedDisplayProof(firstProof.id, firstProof.displayGeneration)
                             observationRetryReason = reason
                             continue
                         }
