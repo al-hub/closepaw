@@ -490,6 +490,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             firstProof.rotation, firstProof.image.width, firstProof.image.height)
         data class Step(val label: String, val originalNode: ControlNode, val crop: TapBounds, val bounds: TapBounds)
         val planned = mutableListOf<Step>()
+        // Multiple occurrences of one physical key in the same certified frame
+        // share one no-touch crop recovery and one budget charge.
+        val initialCrops = mutableMapOf<Pair<Int, TapBounds>, TapBounds>()
         for ((i, label) in labels.withIndex()) {
             if (VisualSequenceCandidates.literal(label) == null) return stop("keyboard_sequence_literal_only")
             val node: ControlNode
@@ -526,7 +529,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 label.takeIf { node.keyboardImageCandidate })?.let { return stop(it) }
             val nodeBounds = KeyboardImageFallbackPolicy.bounds(node.bounds)
                 ?: return stop("keyboard_visual_bounds_invalid")
-            val resolved = KeyboardSequencePixelProof.resolvedCrop(
+            val recoveryKey = node.id to crop
+            val previouslyResolved = initialCrops[recoveryKey]
+            val resolved = previouslyResolved ?: KeyboardSequencePixelProof.resolvedCrop(
                 firstProof, crop, nodeBounds, imeBounds, node.keyboardImageCandidate)
             if (resolved == null) {
                 pixelFailureStage = KeyboardSequencePixelProof.failure(
@@ -535,13 +540,14 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 pixelFailureKey = i + 1
                 return stop("keyboard_sequence_pixels_unverified")
             }
-            if (resolved != crop) {
+            if (resolved != crop && previouslyResolved == null) {
                 // No action has started. The replacement is rechecked by the
                 // native selector; it is not a bypass of a masked pixel.
                 if (!claimPreTouchRetry()) return stop("keyboard_sequence_recovery_budget_exhausted")
                 partialCropRecoveries++
                 usedFallback = true
             }
+            initialCrops[recoveryKey] = resolved
             planned.add(Step(label, node, resolved, nodeBounds))
         }
         if (submitted == null) {
