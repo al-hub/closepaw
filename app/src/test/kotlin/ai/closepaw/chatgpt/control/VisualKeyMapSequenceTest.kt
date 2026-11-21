@@ -3,6 +3,7 @@ package ai.closepaw.chatgpt.control
 import ai.closepaw.chatgpt.operations.OperationResult
 import ai.closepaw.model.ScreenImage
 import ai.closepaw.model.ScreenImageSource
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
@@ -24,6 +25,8 @@ class VisualKeyMapSequenceTest {
             selectionEnd = 0, sourceWindowId = 10, sourcePackage = app, nativeEditorId = "editor-1")
         var duringFirstSpaceCapture: (() -> Unit)? = null
         var afterFirstSpaceCapture: (() -> Unit)? = null
+        var reproduceGalaxyKeyTwo = false
+        var afterGalaxyNativeRefusal: (() -> Unit)? = null
         var alternativeCaption = 0
         var otherRegion = "other"
         var layoutRevision = "original"
@@ -127,8 +130,15 @@ class VisualKeyMapSequenceTest {
                 }
             }
             val proof = visualKeyboard(frame)
-            if (editor.text != "가") return CertifiedKeyboardFrame(frame, proof)
-            duringFirstSpaceCapture?.invoke()
+            val trace = currentCoroutineContext()[KeyboardWindowTrace]
+            val galaxyFirstRead = reproduceGalaxyKeyTwo && trace?.keyIndex == 2 && trace.readAttempt == 1
+            if (editor.text != "가" && !galaxyFirstRead) return CertifiedKeyboardFrame(frame, proof)
+            if (galaxyFirstRead) {
+                alternativeCaption++
+                suggestionMotion = true
+            } else {
+                duringFirstSpaceCapture?.invoke()
+            }
             val after = capture()
             val refusal = GenericControlActionPolicy.refusal(frame, after, "visual_key")
             val certified = KeyboardVisualPostCheck.certifiedFrame(frame, after, refusal, allowCaptionOnly = chrome)
@@ -154,16 +164,39 @@ class VisualKeyMapSequenceTest {
                 partiallyMaskedNativeVowel -> listOf(TapBounds(0, 0, 70, 150), TapBounds(80, 0, 1200, 150))
                 else -> listOf(frameBounds)
             }
+            val generation = windowVersion
+            val sourceGate = if (reproduceGalaxyKeyTwo) VisualSourceGate(
+                consentValid = { true }, displayValid = { windowVersion == generation },
+                sourceValid = { true }, sessionValid = { active.state == ControlSession.State.ACTIVE },
+            ) else null
             val proof = VisualTargetProof(ScreenImage(1200, 150, "image/jpeg", byteArrayOf(1),
                 ScreenImageSource.ACCESSIBILITY_SCREENSHOT), "pixels", frameBounds, "context",
                 System.currentTimeMillis() - initialProofAgeMs.also { initialProofAgeMs = 0L }, scope = "keyboard", sourceWindowId = 20, sourceImeWindowId = 20,
                 sourceDisplayId = 0, displayGeneration = windowVersion, rotation = 0, imeBounds = "0 0 1200 150",
-                disclosedRegions = regions)
+                disclosedRegions = regions, sourceDisclosureGate = sourceGate,
+                sourceDisclosureAllowed = { sourceGate?.allowed() ?: true })
             return if (reuseRejectedProofId) rejectedProofId?.let { proof.copy(id = it) } ?: proof else proof
         }
 
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
             nativeChecks++
+            val trace = currentCoroutineContext()[KeyboardWindowTrace]
+            if (reproduceGalaxyKeyTwo && trace?.keyIndex == 2 && trace.readAttempt == 2) {
+                var now = 1_000_000_000L
+                val journal = DisplayWindowChangeJournal { now }
+                journal.observeKnownWindows(applicationWindow = 10, imeWindow = ime.windowId)
+                val mark = DisplayWindowChangeJournal.Mark(windowVersion, now, trace.keyIndex, trace.readAttempt)
+                for (deltaMs in listOf(125L, 219L)) {
+                    now += deltaMs * 1_000_000
+                    journal.record(++windowVersion, DisplayWindowChangeJournal.Type.WINDOWS_CHANGED,
+                        DisplayWindowChangeJournal.Owner.UNKNOWN, eventWindowId = 3003,
+                        windowChanges = 8, eventDisplayId = 0)
+                }
+                val failure = checkNotNull(frame.visual?.sourceFailure(VisualSourceStage.NATIVE_ACTION_VALIDATION))
+                    .copy(windowEvents = journal.summarize(mark, windowVersion))
+                afterGalaxyNativeRefusal?.invoke()
+                return ControlEffect(false, false, VISUAL_SOURCE_REFUSED, failure)
+            }
             if (captionChangeAtNativeSpace && editor.text == "가" && node?.keyboardImageCandidate == true) {
                 captionChangeAtNativeSpace = false
                 alternativeCaption++
@@ -213,7 +246,7 @@ class VisualKeyMapSequenceTest {
         }
 
         suspend fun run(text: String, prefix: String? = null, learn: Boolean = true,
-            witnesses: List<String>? = null): OperationResult {
+            witnesses: List<String>? = null, reuseKeyMap: Boolean = true): OperationResult {
             val labels = HangulKeyComposer.labels(text)
             // Invalid phase requests are still valid method calls with a fresh image.
             val observed = control.observe(includeImage = true, imageScope = "keyboard",
@@ -221,7 +254,7 @@ class VisualKeyMapSequenceTest {
             assertTrue(observed.summary, observed.success)
             return control.visualKeySequence(buildJsonObject {
                 for ((key, value) in observedInput(observed)) put(key, value)
-                put("reuse_key_map", true)
+                if (reuseKeyMap) put("reuse_key_map", true)
                 put("text", text)
                 witnesses?.let { put("layout_witness_labels", JsonArray(it.map(::JsonPrimitive))) }
                 if (prefix != null) put("expected_prefix", prefix)
@@ -411,6 +444,52 @@ class VisualKeyMapSequenceTest {
         assertEquals("keyboard_sequence_prefix_unverified", f.run("a", "a", learn = false).summary)
         assertEquals(listOf("a"), f.touched)
     }
+    @Test fun galaxyKeyTwoRecoversWithFreshProofInDefaultExplicitStepSequence() = runBlocking {
+        val f = Fixture(chrome = true).apply { reproduceGalaxyKeyTwo = true }
+
+        val result = f.run("오늘 ", reuseKeyMap = false)
+
+        assertTrue(result.summary, result.success)
+        assertEquals(listOf("ㅇ", "ㅗ", "ㄴ", "ㅡ", "ㄹ", "Space"), f.touched)
+        assertEquals("오늘 ", f.currentEditor().text)
+        assertEquals(3, f.currentEditor().selectionStart)
+        assertEquals(3, f.currentEditor().selectionEnd)
+        assertEquals(JsonPrimitive(2), result.data["recovery_budget_total"])
+        assertEquals(JsonPrimitive(1), result.data["display_window_rechecks"])
+        assertEquals(JsonPrimitive(2), result.data["display_window_recheck_key"])
+        val refusedRead = result.data.getValue("keyboard_post_check_refusals").jsonArray.single().jsonObject
+        assertEquals(JsonPrimitive(2), refusedRead["key_index"])
+        assertEquals(JsonPrimitive(1), refusedRead["read_attempt"])
+        val change = refusedRead.getValue("change").jsonObject
+        assertEquals(JsonPrimitive(true), change["chrome_suggestions_changed"])
+        assertEquals(JsonPrimitive(false), change["chrome_editor_changed"])
+        assertEquals(JsonPrimitive(false), change["ime_tree_changed"])
+    }
+
+    @Test fun galaxyKeyTwoStaysUnsentWhenFreshDefaultProofCannotRecertify() = runBlocking {
+        val cases: List<Pair<String, Fixture.() -> Unit>> = listOf(
+            "keyboard_sequence_pixels_unverified" to { maskNextImage = true },
+            "keyboard_sequence_layout_or_target_changed" to { touchContext = "covered" },
+            "keyboard_input_unconfirmed" to { moveCaret() },
+            VISUAL_SOURCE_REFUSED to { ai.closepaw.security.ImageRevocationAuthority.revokeConsent() },
+            VISUAL_SOURCE_REFUSED to { active.pause() },
+        )
+        for ((reason, change) in cases) {
+            val f = Fixture(chrome = true).apply {
+                reproduceGalaxyKeyTwo = true
+                afterGalaxyNativeRefusal = { change(this) }
+            }
+
+            val result = f.run("오늘 ", reuseKeyMap = false)
+
+            assertFalse(result.summary, result.success)
+            assertEquals(reason, result.summary)
+            assertEquals(JsonPrimitive(1), result.data["completed_keys"])
+            assertEquals(listOf("ㅇ"), f.touched)
+            assertEquals("ㅇ", f.currentEditor().text)
+        }
+    }
+
     @Test fun fixedMixedBenchmarkThreeTimesPerSimulatedPath() = runBlocking {
         val phases = listOf(
             "ko" to "오늘 회의는 ", "shift" to "Z", "en" to "oom", "ko" to "으로 ",
