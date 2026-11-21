@@ -69,4 +69,15 @@ class KeyboardSequencePixelProofTest {
             KeyboardSequencePixelProof.failure(proof(), TapBounds(145, 675, 168, 700), node,
                 TapBounds(0, 1798, 1440, 2220)))
     }
+    @Test fun ownedPartialNativeKeyCanUseCertifiedInteriorWithoutFullNodeDisclosure() {
+        // Reproduces the right-edge native key boundary from Galaxy v0.1.140,
+        // with the user-reviewed crop wholly inside an independently owned area.
+        val key = TapBounds(1221, 2354, 1339, 2509)
+        val crop = TapBounds(382, 741, 393, 755)
+        val partlyOwned = proof(listOf(TapBounds(1221, 2354, 1280, 2509)))
+        assertNotNull(partlyOwned.map(crop))
+        assertFalse(OwnedPixelPolicy.contains(partlyOwned.disclosedRegions, key))
+        assertNull(KeyboardSequencePixelProof.failure(partlyOwned, crop, key, ime))
+    }
+
 }
