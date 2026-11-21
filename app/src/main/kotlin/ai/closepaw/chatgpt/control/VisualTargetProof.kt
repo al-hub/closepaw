@@ -35,7 +35,7 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
         put("verified_region_count", disclosedRegions.size); put("verified_pixel_count", disclosedRegions.sumOf { (it.right-it.left).toLong()*(it.bottom-it.top) }); put("unverified_pixels_masked", independentlyVerified)
         put("masked_outside_owned_regions", independentlyVerified); put("owned_pixels_verified_against_isolated_windows", independentlyVerified)
         put("window_bounds", "${window.left} ${window.top} ${window.right} ${window.bottom}")
-        put("coordinate_space", "snapshot_image_pixels"); put("expires_in_ms", if (image.source == ai.closepaw.model.ScreenImageSource.MEDIA_PROJECTION) 10_000 else 60_000)
+        put("coordinate_space", "snapshot_image_pixels"); put("expires_in_ms", if (scope == "keyboard" || image.source == ai.closepaw.model.ScreenImageSource.MEDIA_PROJECTION) 10_000 else 60_000)
     }
     fun mapGeometry(rect: TapBounds): TapBounds? {
         if (scope == "screen_observe") return null

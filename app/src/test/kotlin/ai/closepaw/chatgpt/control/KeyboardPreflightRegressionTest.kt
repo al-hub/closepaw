@@ -49,6 +49,12 @@ class KeyboardPreflightRegressionTest {
         disclosedRegions = regions
     )
 
+    @Test fun keyboardImageReportsItsActualTenSecondSequenceProofWindow() {
+        val p = proof(listOf(TapBounds(0, 1798, 1440, 3120)))
+        // Even accessibility screenshots have a 10s action gate in visualKeySequence.
+        assertEquals("10000", p.metadata().getValue("expires_in_ms").toString())
+    }
+
     @Test fun screenSpaceNodeBoundsCannotBePassedAsImageSpaceRect() {
         val node = TapBounds(451, 2154, 569, 2309)
         val p = proof(listOf(TapBounds(0, 1798, 1440, 3120)))
