@@ -1,0 +1,3 @@
+# ClosePaw #147 – partial native key ownership recovery
+
+Physical native-key identity is separate from full key-node pixel disclosure. `KeyboardSequencePixelProof.resolvedCrop` uses only a bounded interior image patch that is independently disclosed and maps inside the same uniquely selected native node and IME. OCR-only keys remain whole-node checked. This helper never grants dispatch: native KeyboardTouchGeometry, gesture-window/overlay, session/consent/editor, pixel, display-generation and cancellation checks still apply. A changed editor, ambiguous label, missing interior or uncertain touch must stop; recovery budget is request-wide three. The Galaxy v0.1.140 mixed trial remained incomplete; off-device CI is not device acceptance.

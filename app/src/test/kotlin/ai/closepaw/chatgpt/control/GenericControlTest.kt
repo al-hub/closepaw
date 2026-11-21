@@ -380,7 +380,7 @@ class GenericControlTest {
         assertEquals(0, fixture.port.writes)
     }
 
-    @Test fun visibleCropCannotAuthorizeAPhysicalKeyWithMaskedBoundary() = runBlocking {
+    @Test fun partiallyMaskedNativeKeyNeedsUniqueIdentityAndIndependentPostcondition() = runBlocking {
         for (suggestionStrip in listOf(false, true)) {
             val fixture = JamoCandidateFixture(suggestionStrip = suggestionStrip)
             val port = fixture.port
@@ -392,18 +392,18 @@ class GenericControlTest {
             assertFalse(OwnedPixelPolicy.contains(proof.disclosedRegions, TapBounds(451, 2154, 569, 2309)))
             port.visualProof = proof
             val observed = fixture.observeJamo(withSpace = true)
-            // A collision needs enough pixels to corroborate the physical key
-            // already at selection time. Without a collision, the disclosed key
-            // still cannot pass the independent dispatch pixel check.
+            // Suggestion collision remains blocked during candidate selection.
+            // Without a collision the independently owned native-key interior
+            // is admissible; this fake Port then deliberately never updates the
+            // editor, so postcondition must fail without replaying later keys.
             assertEquals(if (suggestionStrip) emptyList<Int>() else expected, fixture.ids(observed))
             val stopped = fixture.requestJamo(observed, withSpace = true)
             assertFalse(stopped.success)
-            val reason = if (suggestionStrip) "keyboard_sequence_candidate_undisclosed"
-                else "keyboard_sequence_pixels_unverified"
-            assertEquals(reason, stopped.summary)
+            assertEquals(if (suggestionStrip) "keyboard_sequence_candidate_undisclosed"
+                else "keyboard_input_unconfirmed", stopped.summary)
             assertEquals(0, stopped.data.getValue("completed_keys").jsonPrimitive.int)
-            assertFalse(stopped.data.getValue("action_attempted").jsonPrimitive.boolean)
-            assertEquals(0, port.writes)
+            assertEquals(!suggestionStrip, stopped.data.getValue("action_attempted").jsonPrimitive.boolean)
+            assertEquals(if (suggestionStrip) 0 else 1, port.writes)
         }
     }
 

@@ -368,11 +368,19 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var displayWindowRechecks = 0
         var observationRetryReason: String? = null
         var preTouchRetries = 0
+        var partialCropRecoveries = 0
+        // One shared budget for every pre-dispatch recovery within the request.
+        fun claimPreTouchRetry(): Boolean {
+            if (preTouchRetries >= 3) return false
+            preTouchRetries++
+            return true
+        }
         // Categorical proof failure only. Never retain pixels, text or geometry.
         var pixelFailureStage: String? = null
         var pixelFailureKey: Int? = null
         fun JsonObjectBuilder.metrics() {
             put("pre_touch_retries", preTouchRetries)
+            put("partial_crop_recoveries", partialCropRecoveries)
             if (!reuseMaps) return
             put("reused_key_steps", reusedKeySteps)
             put("key_map_hits", mapHits)
@@ -482,6 +490,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             firstProof.rotation, firstProof.image.width, firstProof.image.height)
         data class Step(val label: String, val originalNode: ControlNode, val crop: TapBounds, val bounds: TapBounds)
         val planned = mutableListOf<Step>()
+        // Multiple occurrences of one physical key in the same certified frame
+        // share one no-touch crop recovery and one budget charge.
+        val initialCrops = mutableMapOf<Pair<Int, TapBounds>, TapBounds>()
         for ((i, label) in labels.withIndex()) {
             if (VisualSequenceCandidates.literal(label) == null) return stop("keyboard_sequence_literal_only")
             val node: ControlNode
@@ -516,23 +527,28 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 return stop("keyboard_sequence_literal_unverified")
             VisualKeyboardPolicy.refusal(original.verificationFrame, node, "keyboard",
                 label.takeIf { node.keyboardImageCandidate })?.let { return stop(it) }
-            val inScreen = firstProof.map(crop) ?: run {
-                pixelFailureStage = if (firstProof.mapGeometry(crop) == null)
-                    KeyboardSequencePixelProof.Failure.IMAGE_RECT_OUTSIDE_FRAME.code
-                else KeyboardSequencePixelProof.Failure.IMAGE_CROP_NOT_DISCLOSED.code
-                pixelFailureKey = i + 1
-                return stop("keyboard_sequence_pixels_unverified")
-            }
             val nodeBounds = KeyboardImageFallbackPolicy.bounds(node.bounds)
                 ?: return stop("keyboard_visual_bounds_invalid")
-            if (!nodeBounds.contains(inScreen) || !imeBounds.contains(nodeBounds) ||
-                !OwnedPixelPolicy.contains(firstProof.disclosedRegions, nodeBounds)) {
-                pixelFailureStage = KeyboardSequencePixelProof.failure(firstProof, crop, nodeBounds, imeBounds)?.code
-                    ?: "pixel_failure_unclassified"
+            val recoveryKey = node.id to crop
+            val previouslyResolved = initialCrops[recoveryKey]
+            val resolved = previouslyResolved ?: KeyboardSequencePixelProof.resolvedCrop(
+                firstProof, crop, nodeBounds, imeBounds, node.keyboardImageCandidate)
+            if (resolved == null) {
+                pixelFailureStage = KeyboardSequencePixelProof.failure(
+                    firstProof, crop, nodeBounds, imeBounds, node.keyboardImageCandidate)?.code
+                    ?: "owned_touch_patch_not_available"
                 pixelFailureKey = i + 1
                 return stop("keyboard_sequence_pixels_unverified")
             }
-            planned.add(Step(label, node, crop, nodeBounds))
+            if (resolved != crop && previouslyResolved == null) {
+                // No action has started. The replacement is rechecked by the
+                // native selector; it is not a bypass of a masked pixel.
+                if (!claimPreTouchRetry()) return stop("keyboard_sequence_recovery_budget_exhausted")
+                partialCropRecoveries++
+                usedFallback = true
+            }
+            initialCrops[recoveryKey] = resolved
+            planned.add(Step(label, node, resolved, nodeBounds))
         }
         if (submitted == null) {
             // Admit only the already verified candidates for this private request.
@@ -556,15 +572,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             return Observation(UUID.randomUUID().toString(), now(), fresh.copy(nodes = listOf(candidate)), session.epoch, fresh)
         }
         data class InvalidatedDisplayProof(val id: String, val generation: Long)
-        // Count recoverable read/no-touch dispatch failures across the ENTIRE request.
-        // Normal per-key image renewal does not consume a retry. Ambiguous touches never retry.
-        fun claimPreTouchRetry(): Boolean {
-            if (preTouchRetries >= 3) return false
-            preTouchRetries++
-            return true
-        }
         var refresh = false
         for ((index, step) in planned.withIndex()) {
+            var touchCrop = step.crop
             var followUpAttempt = 0
             var recheckOf: InvalidatedDisplayProof? = null
             while (true) {
@@ -641,12 +651,20 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         candidate.keyboardImageCandidate == step.originalNode.keyboardImageCandidate &&
                         candidate.sourceWindowId == ime.windowId && candidate.sourcePackage == ime.packageName
                 } ?: return stop("keyboard_sequence_candidate_changed")
-                if (proof.map(step.crop)?.let(step.bounds::contains) != true ||
-                    !OwnedPixelPolicy.contains(proof.disclosedRegions, step.bounds)) {
-                    pixelFailureStage = KeyboardSequencePixelProof.failure(proof, step.crop, step.bounds, imeBounds)?.code
-                        ?: "pixel_failure_unclassified"
+                val resolved = KeyboardSequencePixelProof.resolvedCrop(
+                    proof, touchCrop, step.bounds, imeBounds, node.keyboardImageCandidate)
+                if (resolved == null) {
+                    pixelFailureStage = KeyboardSequencePixelProof.failure(
+                        proof, touchCrop, step.bounds, imeBounds, node.keyboardImageCandidate)?.code
+                        ?: "owned_touch_patch_not_available"
                     pixelFailureKey = index + 1
                     return stop("keyboard_sequence_pixels_unverified")
+                }
+                if (resolved != touchCrop) {
+                    if (!claimPreTouchRetry()) return stop("keyboard_sequence_recovery_budget_exhausted")
+                    touchCrop = resolved
+                    partialCropRecoveries++
+                    usedFallback = true
                 }
                 VisualKeyboardPolicy.refusal(active.verificationFrame, node, "keyboard",
                     step.label.takeIf { node.keyboardImageCandidate })?.let { return stop(it) }
@@ -655,8 +673,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     put("session_id", session.id); put("observation_id", active.id)
                     put("action", "visual_key"); put("node_id", node.id)
                     put("visual_id", proof.id); put("visual_target_confirmed", true)
-                    put("image_rect", JsonArray(listOf(step.crop.left, step.crop.top,
-                        step.crop.right, step.crop.bottom).map { JsonPrimitive(it) }))
+                    put("image_rect", JsonArray(listOf(touchCrop.left, touchCrop.top,
+                        touchCrop.right, touchCrop.bottom).map { JsonPrimitive(it) }))
                     if (node.keyboardImageCandidate) put("image_key_label", step.label)
                 }
                 val result = kotlinx.coroutines.withContext(KeyboardWindowTrace(index + 1, followUpAttempt, reuseMaps)) {
@@ -734,7 +752,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 if (cached != null) reusedKeySteps++
                 if (owner != null && submitted != null) {
                     if (visualKeyMaps.remember(owner, layoutId, step.label, VisualKeyMapCache.Entry(
-                            step.bounds, step.crop, node.keyboardImageCandidate))) mapsLearned++
+                            step.bounds, touchCrop, node.keyboardImageCandidate))) mapsLearned++
                     mapEntriesConfirmed++
                 }
                 if (step.label == "Space" && node.keyboardImageCandidate) imageFallbackSpaces++

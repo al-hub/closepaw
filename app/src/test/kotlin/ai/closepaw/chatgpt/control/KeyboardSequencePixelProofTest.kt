@@ -56,8 +56,10 @@ class KeyboardSequencePixelProofTest {
         val edgeMasked = proof(listOf(TapBounds(460, 2154, 560, 2309)))
         assertNotNull(edgeMasked.map(crop))
         assertFalse(OwnedPixelPolicy.contains(edgeMasked.disclosedRegions, node))
+        assertNull(KeyboardSequencePixelProof.failure(edgeMasked, crop, node, ime))
+        // Image-only key identity still depends on fully disclosed pixels.
         assertEquals(KeyboardSequencePixelProof.Failure.NODE_PIXELS_NOT_DISCLOSED,
-            KeyboardSequencePixelProof.failure(edgeMasked, crop, node, ime))
+            KeyboardSequencePixelProof.failure(edgeMasked, crop, node, ime, requireWholeNode = true))
     }
 
     @Test fun misregisteredImageToNodeAndImeGeometryAreSeparatelyRejected() {
@@ -69,4 +71,46 @@ class KeyboardSequencePixelProofTest {
             KeyboardSequencePixelProof.failure(proof(), TapBounds(145, 675, 168, 700), node,
                 TapBounds(0, 1798, 1440, 2220)))
     }
+    @Test fun ownedPartialNativeKeyCanUseCertifiedInteriorWithoutFullNodeDisclosure() {
+        // Reproduces the right-edge native key boundary from Galaxy v0.1.140,
+        // with the user-reviewed crop wholly inside an independently owned area.
+        val key = TapBounds(1221, 2354, 1339, 2509)
+        val crop = TapBounds(382, 741, 393, 755)
+        val partlyOwned = proof(listOf(TapBounds(1221, 2354, 1280, 2509)))
+        assertNotNull(partlyOwned.map(crop))
+        assertFalse(OwnedPixelPolicy.contains(partlyOwned.disclosedRegions, key))
+        assertNull(KeyboardSequencePixelProof.failure(partlyOwned, crop, key, ime))
+    }
+
+    @Test fun maskedProposalRecoversOwnedNativeInteriorButNotUnsafeArea() {
+        val key = TapBounds(1221, 2354, 1339, 2509)
+        val original = TapBounds(382, 741, 410, 765)
+        val partlyOwned = proof(listOf(TapBounds(1221, 2354, 1280, 2509)))
+        assertNull(partlyOwned.map(original))
+        val recovered = KeyboardSequencePixelProof.resolvedCrop(partlyOwned, original, key, ime, false)
+        assertNotNull(recovered)
+        assertNotEquals(original, recovered)
+        val mapped = partlyOwned.map(recovered!!)
+        assertNotNull(mapped)
+        assertTrue(key.contains(mapped!!))
+        assertTrue(OwnedPixelPolicy.contains(partlyOwned.disclosedRegions, mapped))
+        assertNull(KeyboardSequencePixelProof.failure(partlyOwned, recovered, key, ime))
+        assertNull(KeyboardSequencePixelProof.resolvedCrop(partlyOwned, original, key, ime, true))
+        // The center-safe interior is completely masked, despite small owned
+        // strips on the key's exposed border.
+        val borderOnly = proof(listOf(TapBounds(1221, 2354, 1232, 2509)))
+        assertNull(KeyboardSequencePixelProof.resolvedCrop(borderOnly, original, key, ime, false))
+    }
+
+    @Test fun neverMoveInvalidProposalIntoDifferentKeyOrUnownedWindow() {
+        val key = TapBounds(1221, 2354, 1339, 2509)
+        val partlyOwned = proof(listOf(TapBounds(1221, 2354, 1280, 2509)))
+        assertNull(KeyboardSequencePixelProof.resolvedCrop(
+            partlyOwned, TapBounds(350, 741, 370, 765), key, ime, false))
+        assertNull(KeyboardSequencePixelProof.resolvedCrop(
+            partlyOwned.copy(sourceDisplayId = 1), TapBounds(382, 741, 410, 765), key, ime, false))
+        assertNull(KeyboardSequencePixelProof.resolvedCrop(
+            proof(emptyList()), TapBounds(382, 741, 410, 765), key, ime, false))
+    }
+
 }

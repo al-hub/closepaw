@@ -56,12 +56,17 @@ class KeyboardPreflightRegressionTest {
             KeyboardSequencePixelProof.failure(p, node, node, TapBounds(0, 1798, 1440, 3120)))
     }
 
-    @Test fun disclosedCropAloneDoesNotProveEntirePhysicalNodePixels() {
+    @Test fun partialNativeCropDoesNotAuthorizeImageOnlyKeyIdentity() {
         val node = TapBounds(451, 2154, 569, 2309)
         val crop = TapBounds(145, 675, 168, 700)
         val partial = proof(listOf(TapBounds(460, 2154, 560, 2309)))
+        // The uniquely identified native node may use an owned patch, but a
+        // key inferred from image pixels still requires full disclosure.
+        assertNull(KeyboardSequencePixelProof.failure(
+            partial, crop, node, TapBounds(0, 1798, 1440, 3120)))
         assertEquals(KeyboardSequencePixelProof.Failure.NODE_PIXELS_NOT_DISCLOSED,
-            KeyboardSequencePixelProof.failure(partial, crop, node, TapBounds(0, 1798, 1440, 3120)))
+            KeyboardSequencePixelProof.failure(
+                partial, crop, node, TapBounds(0, 1798, 1440, 3120), requireWholeNode = true))
         val full = proof(listOf(TapBounds(0, 1798, 1440, 3120)))
         assertNull(KeyboardSequencePixelProof.failure(full, crop, node, TapBounds(0, 1798, 1440, 3120)))
     }

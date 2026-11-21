@@ -52,6 +52,8 @@ class VisualKeyMapSequenceTest {
         var wrongEffectFor: String? = null
         var changeTargetAfter: String? = null
         var maskNextImage = false
+        var partiallyMaskedNativeVowel = false
+        var fullyMaskedNativeVowel = false
         val touched = mutableListOf<String>()
         var captures = 0
         var nativeChecks = 0
@@ -131,10 +133,15 @@ class VisualKeyMapSequenceTest {
 
         override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof {
             captures++
-            val regions = if (maskNextImage) {
-                maskNextImage = false
-                listOf(TapBounds(0, 0, 240, 30))
-            } else listOf(frameBounds)
+            val regions = when {
+                maskNextImage -> {
+                    maskNextImage = false
+                    listOf(TapBounds(0, 0, 240, 30))
+                }
+                fullyMaskedNativeVowel -> listOf(TapBounds(0, 0, 45, 150), TapBounds(80, 0, 1200, 150))
+                partiallyMaskedNativeVowel -> listOf(TapBounds(0, 0, 70, 150), TapBounds(80, 0, 1200, 150))
+                else -> listOf(frameBounds)
+            }
             val proof = VisualTargetProof(ScreenImage(1200, 150, "image/jpeg", byteArrayOf(1),
                 ScreenImageSource.ACCESSIBILITY_SCREENSHOT), "pixels", frameBounds, "context",
                 System.currentTimeMillis(), scope = "keyboard", sourceWindowId = 20, sourceImeWindowId = 20,
@@ -252,6 +259,30 @@ class VisualKeyMapSequenceTest {
         assertEquals(1, f.captures) // Excludes the native adapter's independent live pixel checks.
         assertEquals(6, f.nativeChecks)
         assertEquals(JsonPrimitive(5), result.data["reused_key_steps"])
+    }
+
+    @Test fun maskedNativeKeyRecoversWithoutRepeatingEarlierConfirmedKeys() = runBlocking {
+        val f = Fixture().apply { partiallyMaskedNativeVowel = true }
+        val result = f.run("가 나 ")
+        assertTrue(result.summary, result.success)
+        assertEquals("가 나 ", f.currentEditor().text)
+        assertEquals(4, f.currentEditor().selectionEnd)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
+        assertEquals(JsonPrimitive(6), result.data["completed_keys"])
+        assertEquals(JsonPrimitive(1), result.data["pre_touch_retries"])
+        assertEquals(JsonPrimitive(1), result.data["partial_crop_recoveries"])
+        assertEquals(JsonPrimitive(false), result.data["outcome_unknown"])
+    }
+
+    @Test fun maskedWholeNativeKeyStillBlocksBeforeAnyTouch() = runBlocking {
+        val f = Fixture().apply { fullyMaskedNativeVowel = true }
+        val result = f.run("가 나 ")
+        assertFalse(result.success)
+        assertEquals("keyboard_sequence_pixels_unverified", result.summary)
+        assertEquals(JsonPrimitive(0), result.data["completed_keys"])
+        assertEquals(JsonPrimitive(false), result.data["action_attempted"])
+        assertEquals(JsonPrimitive(false), result.data["outcome_unknown"])
+        assertTrue(f.touched.isEmpty())
     }
 
     @Test fun preTouchRefusalRenewsOnceThenTypesOnlyUnsentKeys() = runBlocking {
