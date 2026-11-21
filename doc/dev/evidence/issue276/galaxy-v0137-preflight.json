@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "sanitized_manual_observation",
+  "immutable_release": {
+    "version": "0.1.137",
+    "code": 138,
+    "source_commit": "a29096709e25322bf2bd65a489fc7b78e4ba6e19"
+  },
+  "github_comment": "https://github.com/al-hub/closepaw/issues/147#issuecomment-7054284144",
+  "caveats": [
+    "No raw screenshot, opaque screen identifiers, user browser history or IME buffer stored.",
+    "The original exact submitted image_rect is absent because no visual key sequence was submitted.",
+    "The actual native cursor proof and full owned pixel region rectangles were not observed.",
+    "This fixture is regression metadata only; it cannot authorize Android touch or claim OEM pass."
+  ],
+  "before_editor_tap": {
+    "foreground_package": "com.android.chrome",
+    "selected_window_id": 8464,
+    "chrome_editor": {
+      "resource_id": "com.android.chrome:id/url_bar",
+      "focused": true,
+      "selected": true,
+      "editable": true,
+      "text": "",
+      "raw_selection_start": -1,
+      "raw_selection_end": -1
+    },
+    "keyboard": {
+      "package_name": "com.samsung.android.honeyboard",
+      "ime_window_id": 8411,
+      "input_target_verified": true,
+      "selection_source": "bound_empty_editor"
+    },
+    "image": {
+      "kind": "keyboard",
+      "image_width": 443,
+      "image_height": 960,
+      "source_width": 1440,
+      "source_height": 3120,
+      "window_bounds": [
+        0,
+        0,
+        1440,
+        3120
+      ],
+      "ime_bounds": [
+        0,
+        1798,
+        1440,
+        3120
+      ],
+      "exact_owned_pixel_regions": null
+    },
+    "physical_key_candidates": [
+      {
+        "label": "ㄱ",
+        "node_id": 273,
+        "screen_bounds": [
+          451,
+          2154,
+          569,
+          2309
+        ],
+        "image_rect": null
+      },
+      {
+        "label": "ㅏ",
+        "node_id": 302,
+        "screen_bounds": [
+          1081,
+          2354,
+          1199,
+          2509
+        ],
+        "image_rect": null
+      },
+      {
+        "label": "ㄴ",
+        "node_id": 290,
+        "screen_bounds": [
+          241,
+          2354,
+          359,
+          2509
+        ],
+        "image_rect": null
+      },
+      {
+        "label": "Space",
+        "node_id": 332,
+        "screen_bounds": [
+          503,
+          2754,
+          1059,
+          2909
+        ],
+        "image_rect": null
+      }
+    ],
+    "cursor_native_proof": null,
+    "actual_sequence_request_submitted": false
+  },
+  "after_editor_tap": {
+    "native_action": "tap on already focused empty url_bar",
+    "action_attempted": true,
+    "effect_unknown": false,
+    "selected_window_id": 8492,
+    "extra_window_id": 8493,
+    "floating_toolbar_labels": [
+      "글쓰기 툴",
+      "붙여넣기",
+      "클립보드"
+    ],
+    "keyboard_input_target_verified": false,
+    "keyboard_selection_source": "unverified",
+    "actual_sequence_request_submitted": false
+  },
+  "cleanup": {
+    "settings_revision_before": 115,
+    "settings_revision_temporary": 116,
+    "settings_revision_restored": 117,
+    "original_settings_equivalent": true,
+    "control_session": "ended",
+    "projection_lease_last_observed": "active",
+    "user_reported_projection_stopped": true,
+    "independent_projection_stop_readback": false
+  },
+  "verdict": {
+    "six_key_typing": "NOT_ATTEMPTED",
+    "physical_touches": 0,
+    "mixed_trials": "NOT_ATTEMPTED",
+    "pixel_failure_stage": "NOT_OBSERVED",
+    "measured_speed": "NOT_MEASURED"
+  }
+}
