@@ -668,4 +668,27 @@ class VisualKeyMapSequenceTest {
         assertEquals(JsonPrimitive(false), stopped.data["outcome_unknown"])
         assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
     }
+
+    @Test fun verifiedMultiChunkGoalSharesOneRecoveryBudgetAcrossSequences() = runBlocking {
+        val f = Fixture()
+        var prefix = ""
+        for (segment in listOf("가 ", "나", "바")) {
+            f.fallbackRefusal = "ㅏ"
+            val result = f.run(segment, prefix.ifEmpty { null })
+            assertTrue(result.summary, result.success)
+            prefix += segment
+            assertEquals(prefix, f.currentEditor().text)
+            assertEquals(JsonPrimitive(1), result.data["pre_touch_retries"])
+        }
+        val deliveredBefore = f.touched.toList()
+        f.fallbackRefusal = "ㅏ"
+        val stopped = f.run("가", prefix)
+        assertFalse(stopped.success)
+        assertEquals(JsonPrimitive(3), stopped.data["recovery_budget_total"])
+        assertEquals(JsonPrimitive(0), stopped.data["pre_touch_retries"])
+        assertEquals(JsonPrimitive(false), stopped.data["outcome_unknown"])
+        assertEquals(JsonPrimitive(1), stopped.data["completed_keys"])
+        assertEquals(deliveredBefore + "ㄱ", f.touched)
+        assertEquals(prefix + "ㄱ", f.currentEditor().text)
+    }
 }

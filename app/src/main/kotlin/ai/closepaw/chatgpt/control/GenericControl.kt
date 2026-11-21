@@ -150,6 +150,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     private data class KeyboardCheckpoint(val session: String, val epoch: Long, val consent: Long,
         val frame: ControlFrame)
     private var keyboardCheckpoint: KeyboardCheckpoint? = null
+    // A verified continuation of one editor goal shares its recovery budget
+    // across multiple <=6-key sequences. A genuinely new empty-editor goal
+    // or a different session/consent gets a fresh ledger.
+    private data class SequenceRecoveryBudget(
+        val session: String, val epoch: Long, val consent: Long, var used: Int = 0)
+    private var sequenceRecoveryBudget: SequenceRecoveryBudget? = null
     private fun checkpointFrame(frame: ControlFrame): ControlFrame? {
         val field = frame.inputTarget ?: return null
         val identityNodes = frame.nodes.filter {
@@ -164,7 +170,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
     private var chainActions = 0
     private var noProgress = 0
     fun invalidate(clearSelections: Boolean = false) {
-        pendingTerminal = null; keyboardCheckpoint = null; visualKeyMaps.clear()
+        pendingTerminal = null; keyboardCheckpoint = null; sequenceRecoveryBudget = null; visualKeyMaps.clear()
         VisualImageCache.remove(current?.frame?.visual?.id); current = null; port.invalidate()
         if (clearSelections) port.clearSelections()
     }
@@ -368,13 +374,16 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var displayWindowRechecks = 0
         var observationRetryReason: String? = null
         var preTouchRetries = 0
+        var sharedRecoveryBudget: SequenceRecoveryBudget? = null
         var partialCropRecoveries = 0
         var initialProofRenewals = 0
         var initialProofReason: String? = null
         var initialProofAgeMs: Long? = null
         // One shared budget for every pre-dispatch recovery within the request.
         fun claimPreTouchRetry(): Boolean {
-            if (preTouchRetries >= 3) return false
+            val budget = sharedRecoveryBudget ?: return false
+            if (budget.used >= 3) return false
+            budget.used++
             preTouchRetries++
             return true
         }
@@ -383,6 +392,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var pixelFailureKey: Int? = null
         fun JsonObjectBuilder.metrics() {
             put("pre_touch_retries", preTouchRetries)
+            sharedRecoveryBudget?.let { put("recovery_budget_total", it.used) }
             put("partial_crop_recoveries", partialCropRecoveries)
             put("initial_proof_renewals", initialProofRenewals)
             initialProofReason?.let { put("initial_proof_reason_code", it) }
@@ -433,6 +443,14 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             session.id == input["session_id"]?.jsonPrimitive?.content && session.epoch == anchorEpoch
         val consent = ai.closepaw.security.ImageRevocationAuthority.currentEpoch
         fun sameImageConsent() = ai.closepaw.security.ImageRevocationAuthority.currentEpoch == consent
+        val continuingGoal = input["expected_prefix"]?.jsonPrimitive?.contentOrNull != null
+        val oldBudget = sequenceRecoveryBudget
+        sharedRecoveryBudget = if (continuingGoal && oldBudget != null &&
+            oldBudget.session == session.id && oldBudget.epoch == session.epoch &&
+            oldBudget.consent == consent) oldBudget
+        else SequenceRecoveryBudget(session.id, session.epoch, consent).also {
+            sequenceRecoveryBudget = it
+        }
         var firstProof = original.frame.visual ?: return stop("keyboard_visual_required")
         initialProofAgeMs = now() - firstProof.at
         val sourceFailure = firstProof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)
