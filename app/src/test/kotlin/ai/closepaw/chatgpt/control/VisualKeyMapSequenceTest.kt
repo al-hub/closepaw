@@ -49,6 +49,7 @@ class VisualKeyMapSequenceTest {
         private var windowVersion = 1L
         private var rejectedProofId: String? = null
         var keyOffset = 0
+        var keyNodeIdRevision = 0
         var touchContext = "verified touch region"
         fun replaceEditor() { editor = editor.copy(nativeEditorId = "different-editor") }
         var fallbackRefusal: String? = null
@@ -85,7 +86,7 @@ class VisualKeyMapSequenceTest {
                 bounds = "165 82 325 112", sourceWindowId = 20, sourcePackage = imePackage,
                 className = "android.view.ViewGroup", keyboardImageCandidate = true, visualKeyChildCount = 0)
             val x = i * 40 + 5 + keyOffset
-            return ControlNode(i + 3, text = label, keyboardKey = label, clickable = true, textEntryKey = true,
+            return ControlNode(i + 3 + keyNodeIdRevision, text = label, keyboardKey = label, clickable = true, textEntryKey = true,
                 bounds = "$x 45 ${x + 35} 75", sourceWindowId = 20, sourcePackage = imePackage,
                 visualKeyCandidate = true, visualKeyChildCount = 0)
         }
@@ -643,6 +644,29 @@ class VisualKeyMapSequenceTest {
         assertEquals("가 나 ", f.currentEditor().text)
     }
 
+    @Test fun expiredImageRebindsOnlyEquivalentPhysicalKeyWhenNativeNodeIdsChange() = runBlocking {
+        val f = Fixture().apply {
+            initialProofAgeMs = 12_000L
+            onNextSequenceCapture = { keyNodeIdRevision = 1000 }
+        }
+        val result = f.run("가 나 ")
+        assertTrue(result.summary, result.success)
+        assertEquals(JsonPrimitive(1), result.data["pre_touch_retries"])
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
+        assertEquals("가 나 ", f.currentEditor().text)
+        assertEquals(4, f.currentEditor().selectionEnd)
+
+        // ID churn never authorizes a changed key rectangle.
+        val changed = Fixture().apply {
+            initialProofAgeMs = 12_000L
+            onNextSequenceCapture = { keyNodeIdRevision = 1000; keyOffset = 5 }
+        }
+        val refused = changed.run("가 나 ")
+        assertEquals("keyboard_sequence_environment_changed", refused.summary)
+        assertEquals(JsonPrimitive(false), refused.data["action_attempted"])
+        assertTrue(changed.touched.isEmpty())
+    }
+
     @Test fun initialRebuildCannotCrossEditorIdentityAndWrongImageIdCannotBeRebound() = runBlocking {
         val replaced = Fixture().apply {
             initialProofAgeMs = 12_000L
@@ -693,6 +717,7 @@ class VisualKeyMapSequenceTest {
         assertEquals(JsonPrimitive(false), stopped.data["outcome_unknown"])
         assertEquals(JsonPrimitive(1), stopped.data["completed_keys"])
         assertEquals(deliveredBefore + "ㄱ", f.touched)
-        assertEquals(prefix + "ㄱ", f.currentEditor().text)
+        // A Korean final consonant composes into the preceding syllable ("바" + ㄱ = "박").
+        assertEquals(HangulKeyComposer.append(prefix, "ㄱ"), f.currentEditor().text)
     }
 }

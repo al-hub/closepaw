@@ -457,6 +457,17 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             sequenceRecoveryBudget = it
         }
         var firstProof = original.frame.visual ?: return stop("keyboard_visual_required")
+        // Node IDs are observation-local. Only a fully identified physical key
+        // at the same owned IME location can be rebound to a fresh observation.
+        val recertifiedNodeIds = mutableMapOf<Int, Int>()
+        fun samePhysicalCandidate(a: ControlNode, b: ControlNode) =
+            a.bounds == b.bounds && a.sourceWindowId == b.sourceWindowId &&
+            a.sourcePackage == b.sourcePackage && a.keyboardKey == b.keyboardKey &&
+            a.text == b.text && a.description == b.description &&
+            a.className == b.className && a.visualKeyCandidate == b.visualKeyCandidate &&
+            a.keyboardImageCandidate == b.keyboardImageCandidate &&
+            a.visualKeyChildCount == b.visualKeyChildCount && a.clickable == b.clickable &&
+            a.textEntryKey == b.textEntryKey
         initialProofAgeMs = now() - firstProof.at
         val sourceFailure = firstProof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)
         initialProofReason = when {
@@ -541,8 +552,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     newProof.image.height != anchorProof.image.height ||
                     now() - newProof.at !in 0L..10_000L || !newProof.sourceDisclosureAllowed() ||
                     VisualKeyboardPolicy.proofOwnerRefusal(newProof, anchorIme) != null ||
-                    newCandidates != anchorCandidates || !imageOnlyUnchanged)
+                    newCandidates.size != anchorCandidates.size ||
+                    !anchorCandidates.zip(newCandidates).all { (a, b) -> samePhysicalCandidate(a, b) } ||
+                    !imageOnlyUnchanged)
                     return stop("keyboard_sequence_environment_changed")
+                // The original image's node IDs are never reused as dispatch authority.
+                // Rebind only explicitly proposed, unique keys after full recertification.
+                recertifiedNodeIds.putAll(anchorCandidates.zip(newCandidates).associate { (a, b) -> a.id to b.id })
                 original = newer
                 firstProof = newProof
                 break
@@ -624,7 +640,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 val entry = submitted[i] as? JsonObject ?: return stop("keyboard_sequence_step_invalid")
                 if (entry["label"]?.jsonPrimitive?.content != label) return stop("keyboard_sequence_literal_only")
                 val id = entry["node_id"]?.jsonPrimitive?.intOrNull ?: return stop("keyboard_sequence_step_invalid")
-                node = original.frame.nodes.singleOrNull { it.id == id }
+                val liveId = if (recertifiedNodeIds.isEmpty()) id
+                    else recertifiedNodeIds[id] ?: return stop("keyboard_sequence_candidate_undisclosed")
+                node = original.frame.nodes.singleOrNull { it.id == liveId }
                     ?: return stop("keyboard_sequence_candidate_undisclosed")
                 val raw = entry["image_rect"] as? JsonArray ?: return stop("keyboard_sequence_step_invalid")
                 if (raw.size != 4) return stop("keyboard_sequence_step_invalid")
