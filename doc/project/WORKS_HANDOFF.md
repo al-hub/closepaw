@@ -1,3 +1,12 @@
+<!-- cp147-v0137-installed-ready-20261121 -->
+## #147 v0.1.137/code138 — signed release, Galaxy installed; one-shot typing acceptance pending (2026-11-21 KST)
+
+- [PR #275](https://github.com/al-hub/closepaw/pull/275) squash merged; exact signed/tag source `a29096709e25322bf2bd65a489fc7b78e4ba6e19`. PR [Security](https://github.com/al-hub/closepaw/actions/runs/44838874791)/[UI](https://github.com/al-hub/closepaw/actions/runs/44838874756) and main [Security](https://github.com/al-hub/closepaw/actions/runs/44840309701)/[UI](https://github.com/al-hub/closepaw/actions/runs/44840309904) successful. Subsequent [signed/public verification](https://github.com/al-hub/closepaw/actions/runs/44841996483) SUCCESS. First signing attempt was correctly gated before UI completion.
+- [Immutable v0.1.137](https://github.com/al-hub/closepaw/releases/tag/v0.1.137): signed APK and SHA file; APK SHA-256 `b02f858047faca477f46fbd47b4422f64d42de349d658933e9ffad126527b223`, package `ai.closepaw`, code138, original signer, v3 true. Annotated tag resolves to exact release source.
+- Single Galaxy install request `cp147-v0137-install-20261121-01`/task `e7d300f2-e411-42ff-a0c1-61da0ce3e09e`, Android session `2054281328`; after replacement durable installed/current and independent get_status both `0.1.137/code138`. No reinstall/reset/retry.
+- After update, native control session `ended` and projection `not_active`; no typing test or new UI session. Existing diagnostic code distinguishes `image_rect` geometry/masked crop/out-of-node/out-of-IME/whole-key-unowned reasons without weakening any touch checks.
+- [Full evidence and next physical test handoff](https://github.com/al-hub/closepaw/issues/147#issuecomment-7053916607). One guarded 6-key `ㄱ→ㅏ→Space→ㄴ→ㅏ→Space` then independent exact `가 나 `/caret4/4 only after new explicit request and any Android approval; following mixed-text three runs only if passed. #147 OPEN, performance improvement still unmeasured.
+
 <!-- cp147-v0131-signed-handoff -->
 ## #147 v0.1.131 signed release — 2026-11-20 KST
 
