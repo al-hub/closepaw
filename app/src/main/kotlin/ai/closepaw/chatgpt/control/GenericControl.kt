@@ -248,6 +248,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         return OperationResult(data = buildJsonObject {
             frame.visual?.let { put("visual", it.metadata()) }
+            if (keyboardSequenceLabels != null) put("keyboard_preflight",
+                KeyboardPreflightDiagnostic.describe(frame, keyboardSequenceLabels, candidates))
             put("observation_id", observation.id); put("observed_at_ms", observation.at); put("expires_in_ms", 60_000)
             frame.keyboard?.let { put("keyboard", buildJsonObject {
                 put("window_id", it.windowId); put("package_name", it.packageName); put("input_method_id", it.inputMethodId)
