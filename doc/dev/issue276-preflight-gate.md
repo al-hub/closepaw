@@ -16,6 +16,33 @@ Evidence:
 - [Sanitized metadata fixture](evidence/issue276/galaxy-v0137-preflight.json)
 - [Original #147 six-key acceptance runbook](issue147-guarded-key-map-acceptance.md)
 
+## Verified finding: raw -1/-1 does not negate a proven IME binding
+
+In the actual Android source, `AndroidControlPort.captureFrame` calls
+`KeyboardCursorBinding.prove` to read `InputConnection.getSurroundingText`
+and, **only if the native sample and stable editor/generation checks pass**,
+stores a **separate effective input target** with zero caret and
+`keyboardCursorGeneration`. The exposed raw accessibility node can still
+carry `-1/-1`: `ControlFrame.nodes` and `ControlFrame.inputTarget`
+are deliberately different objects.
+
+Therefore `keyboard.selection_source=bound_empty_editor` is positive native
+zero-caret proof **for that snapshot**, not a reason to tap a focused Chrome
+URL bar a second time. The physical keyboard still needs a fresh visual,
+the actual image_rect, ownership and native-boundary rechecks. The unused
+additional tap on 2026-11-21 opened the floating toolbar and invalidated
+the keyboard input target; **do not treat that disturbance as an intrinsic
+failure of keyboard pixel mapping**.
+
+With this PR, `android.screen.observe(include_image=true,image_scope=keyboard,
+keyboard_sequence_labels=...)` adds a `keyboard_preflight` snapshot:
+`cursor_source`, `effective_empty_caret_zero_verified`, status and
+a categorical refusal (including `popup_window_selected`). A
+`REVIEW_READY / image_rect_review_required` result is **not PASS or
+touch permission**; `touch_authorized=false` always. The actual image
+and touch-geometry must still be examined by the caller. This uses the
+existing observation operation, not a new control API.
+
 ## Low-cost off-device gate (current PR)
 
 Run the production-policy JVM regressions **without a phone, release or signing**:
@@ -71,7 +98,7 @@ own additional cases; do not duplicate or relax them.
 
 ## Shipping gate and cost controls
 
-- No production code changed in this first PR. Do not bump APK, merge to main,
+- A minimal **read-only observation diagnosis** is added; physical dispatch, native guards and typing permissions are unchanged. Do not bump APK, merge to main,
   release, install or start device control just to run this fixture.
 - Green JVM tests + PR Security/UI gates mean **offline policy regression PASS**,
   not that native cursor binding or Galaxy typing has been fixed.
