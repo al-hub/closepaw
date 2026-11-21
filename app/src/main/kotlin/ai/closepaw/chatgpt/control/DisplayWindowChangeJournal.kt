@@ -17,6 +17,10 @@ internal class DisplayWindowChangeJournal(private val nowNs: () -> Long = System
         CHROME("chrome"), SAMSUNG_IME("samsung_ime"), CLOSEPAW("closepaw"), SYSTEM("system"),
         OTHER("other"), UNKNOWN("unknown"),
     }
+    // Diagnostic only. An ID match never authorizes a touch or exempts a window event.
+    enum class WindowMatch(val code: String) {
+        APPLICATION("application"), IME("ime"), OTHER("other"), UNKNOWN("unknown"),
+    }
 
     companion object {
         private const val CAPACITY = 16
@@ -31,12 +35,37 @@ internal class DisplayWindowChangeJournal(private val nowNs: () -> Long = System
     }
 
     data class Mark(val generation: Long, val startedNs: Long, val keyIndex: Int, val readAttempt: Int)
-    private data class Entry(val generation: Long, val atNs: Long, val type: Type, val owner: Owner)
+    private data class Entry(val generation: Long, val atNs: Long, val type: Type, val owner: Owner,
+        val windowMatch: WindowMatch, val windowChangeMask: Int, val unknownChangeBits: Boolean,
+        val displayClass: String)
     private val entries = ArrayDeque<Entry>()
+    private var knownApplicationWindow = -1
+    private var knownImeWindow = -1
+    private var knownAtNs = -1L
+    // Only previously admitted native window identities are remembered privately. Never log their IDs.
+    @Synchronized fun observeKnownWindows(applicationWindow: Int, imeWindow: Int?) {
+        if (applicationWindow < 0) return
+        knownApplicationWindow = applicationWindow
+        knownImeWindow = imeWindow?.takeIf { it >= 0 } ?: -1
+        knownAtNs = nowNs()
+    }
 
-    @Synchronized fun record(generation: Long, type: Type, owner: Owner) {
+    @Synchronized fun record(generation: Long, type: Type, owner: Owner,
+        eventWindowId: Int = -1, windowChanges: Int = 0, eventDisplayId: Int = -1) {
+        val at = nowNs()
+        // Stale or absent evidence remains unknown; never infer harmlessness from a category.
+        val match = when {
+            eventWindowId < 0 || knownAtNs < 0 || at < knownAtNs ||
+                at - knownAtNs > 30_000_000_000L -> WindowMatch.UNKNOWN
+            eventWindowId == knownApplicationWindow -> WindowMatch.APPLICATION
+            eventWindowId == knownImeWindow -> WindowMatch.IME
+            else -> WindowMatch.OTHER
+        }
+        val mask = if (type == Type.WINDOWS_CHANGED) windowChanges else 0
         if (entries.size >= CAPACITY) entries.removeFirst()
-        entries.addLast(Entry(generation, nowNs(), type, owner))
+        entries.addLast(Entry(generation, at, type, owner, match,
+            mask and 0x7ff, mask and 0x7ff.inv() != 0,
+            when { eventDisplayId < 0 -> "unknown"; eventDisplayId == 0 -> "default"; else -> "other" }))
     }
 
     @Synchronized fun summarize(mark: Mark, throughGeneration: Long): JsonObject {
@@ -53,6 +82,11 @@ internal class DisplayWindowChangeJournal(private val nowNs: () -> Long = System
                     put("after_action_source_check_ms", ms(event.atNs - mark.startedNs))
                     put("type", event.type.code)
                     put("reported_owner", event.owner.code)
+                    put("event_window_match", event.windowMatch.code)
+                    // Only the documented window-change bitset; never a raw window ID or package.
+                    put("window_change_mask", event.windowChangeMask)
+                    put("unknown_change_bits", event.unknownChangeBits)
+                    put("event_display_class", event.displayClass)
                 })
             })
         }
