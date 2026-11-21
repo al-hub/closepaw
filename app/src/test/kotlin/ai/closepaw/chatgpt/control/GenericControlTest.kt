@@ -819,7 +819,8 @@ class GenericControlTest {
         val blockedRetry = control.visualKeySequence(request(observeRequested().data))
         assertFalse(blockedRetry.success)
         assertFalse(blockedRetry.data.getValue("action_attempted").jsonPrimitive.boolean)
-        assertEquals(2, refusals)
+        assertEquals(4, refusals) // Initial refusal plus three safe retries.
+        assertEquals(3, blockedRetry.data.getValue("pre_touch_retries").jsonPrimitive.int)
         port.beforeWrite = null
 
         port.frame = originalFrame
@@ -894,7 +895,7 @@ class GenericControlTest {
     }
 
     @Test fun followUpImageFailurePreservesReasonWithoutReplayingFirstKey() = runBlocking {
-        for ((reason, expectedReads) in listOf("screen_share_revoked" to 1, "visual_post_screen_changed" to 2)) {
+        for ((reason, expectedReads) in listOf("screen_share_revoked" to 1, "visual_post_screen_changed" to 4)) {
             val fixture = FollowUpImageFixture()
             var followUpReads = 0
             fixture.port.denyVisual = { if (fixture.touched.isNotEmpty()) { followUpReads++; reason } else null }
@@ -957,7 +958,7 @@ class GenericControlTest {
         assertNotEquals(node(34, 31, 30), node(44, 42, 40))
     }
 
-    @Test fun keyboardPostCheckCorrelatesBothDeniedReadsWithoutReplayingTheKey() = runBlocking {
+    @Test fun keyboardPostCheckCapsAtThreeRetriesWithoutReplayingTheKey() = runBlocking {
         val fixture = FollowUpImageFixture()
         fixture.port.denyVisual = { if (fixture.touched.isNotEmpty()) "visual_post_screen_changed" else null }
         var reads = 0
@@ -974,10 +975,11 @@ class GenericControlTest {
         assertEquals(listOf("n"), fixture.touched)
         assertFalse(result.data.getValue("outcome_unknown").jsonPrimitive.boolean)
         val diagnostics = result.data.getValue("keyboard_post_check_refusals").jsonArray.map { it.jsonObject }
-        assertEquals(listOf(2, 2), diagnostics.map { it.getValue("key_index").jsonPrimitive.int })
-        assertEquals(listOf(1, 2), diagnostics.map { it.getValue("read_attempt").jsonPrimitive.int })
+        assertEquals(listOf(2, 2, 2, 2), diagnostics.map { it.getValue("key_index").jsonPrimitive.int })
+        assertEquals(listOf(1, 2, 3, 4), diagnostics.map { it.getValue("read_attempt").jsonPrimitive.int })
+        assertEquals(3, result.data.getValue("pre_touch_retries").jsonPrimitive.int)
         assertTrue(diagnostics.all { it.getValue("read_elapsed_ms").jsonPrimitive.long >= 0L })
-        assertEquals(listOf("window_identity", "full_fingerprint"),
+        assertEquals(listOf("window_identity", "full_fingerprint", "full_fingerprint", "full_fingerprint"),
             diagnostics.map { it.getValue("change").jsonObject.getValue("source").jsonPrimitive.content })
     }
 
@@ -1004,7 +1006,7 @@ class GenericControlTest {
         }
     }
 
-    @Test fun followUpObservationSharesTheSingleDispatchRetryBudget() = runBlocking {
+    @Test fun followUpObservationSharesTheBoundedThreeRetryBudget() = runBlocking {
         val fixture = FollowUpImageFixture()
         var firstRefusal = true
         var followUpReads = 0
@@ -1023,8 +1025,9 @@ class GenericControlTest {
         val result = fixture.run()
         assertFalse(result.success)
         assertEquals("visual_post_screen_changed", result.data["observation_reason_code"]?.jsonPrimitive?.content)
-        assertNull(result.data["observation_retry_reason_code"])
-        assertEquals(1, followUpReads)
+        assertEquals("visual_post_screen_changed", result.data["observation_retry_reason_code"]?.jsonPrimitive?.content)
+        assertEquals(3, followUpReads)
+        assertEquals(3, result.data.getValue("pre_touch_retries").jsonPrimitive.int)
         assertEquals(listOf("n"), fixture.touched)
     }
 

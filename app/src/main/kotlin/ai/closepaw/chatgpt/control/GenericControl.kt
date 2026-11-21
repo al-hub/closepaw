@@ -366,10 +366,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var usedFallback = false
         var displayWindowRecheckKey: Int? = null
         var observationRetryReason: String? = null
+        var preTouchRetries = 0
         // Categorical proof failure only. Never retain pixels, text or geometry.
         var pixelFailureStage: String? = null
         var pixelFailureKey: Int? = null
         fun JsonObjectBuilder.metrics() {
+            put("pre_touch_retries", preTouchRetries)
             if (!reuseMaps) return
             put("reused_key_steps", reusedKeySteps)
             put("key_map_hits", mapHits)
@@ -552,7 +554,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             return Observation(UUID.randomUUID().toString(), now(), fresh.copy(nodes = listOf(candidate)), session.epoch, fresh)
         }
         data class InvalidatedDisplayProof(val id: String, val generation: Long)
-        var retryUsed = false
+        // Count recoverable read/no-touch dispatch failures across the ENTIRE request.
+        // Normal per-key image renewal does not consume a retry. Ambiguous touches never retry.
+        fun claimPreTouchRetry(): Boolean {
+            if (preTouchRetries >= 3) return false
+            preTouchRetries++
+            return true
+        }
         var refresh = false
         for ((index, step) in planned.withIndex()) {
             var followUpAttempt = 0
@@ -590,8 +598,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         // and share the request budget with pre-touch dispatch refusals.
                         // The next iteration still verifies the editor, value/caret, key
                         // geometry and live pixels before it can dispatch the pending step.
-                        if (!retryUsed && reason == "visual_post_screen_changed" && sessionCurrent()) {
-                            retryUsed = true
+                        if (reason == "visual_post_screen_changed" && sessionCurrent() &&
+                            sameImageConsent() && claimPreTouchRetry()) {
                             observationRetryReason = reason
                             continue
                         }
@@ -668,8 +676,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         // Share the bounded request budget with other pre-touch retries.
                         // Do not rescue a lost callback or reuse the invalidated image.
                         if (nativeDisplayInvalidation && reuseMaps && port.validatesAtNativeBoundary &&
-                            !retryUsed && sessionCurrent() && sameImageConsent()) {
-                            retryUsed = true
+                            recheckOf == null && sessionCurrent() && sameImageConsent() &&
+                            claimPreTouchRetry()) {
                             displayWindowRecheckKey = index + 1
                             recheckOf = InvalidatedDisplayProof(proof.id, proof.displayGeneration)
                             usedFallback = true
@@ -677,13 +685,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                             continue
                         }
                         if (cached != null && reason in setOf("screen_changed", "visual_pixels_or_geometry_changed",
-                                "visual_revalidation_failed")) {
+                                "visual_revalidation_failed") && claimPreTouchRetry()) {
                             usedFallback = true
                             refresh = true
                             continue
                         }
-                        if (!retryUsed && reason == "screen_changed") {
-                            retryUsed = true
+                        if (reason == "screen_changed" && sessionCurrent() &&
+                            sameImageConsent() && claimPreTouchRetry()) {
                             refresh = true
                             continue
                         }

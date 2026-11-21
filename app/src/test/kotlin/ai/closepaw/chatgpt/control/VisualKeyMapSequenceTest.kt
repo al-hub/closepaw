@@ -28,6 +28,7 @@ class VisualKeyMapSequenceTest {
         var otherRegion = "other"
         var layoutRevision = "original"
         var suggestionMotion = false
+        var captionChangeAtNativeSpace = false
         fun moveCaret() { editor = editor.copy(selectionStart = 0, selectionEnd = 0) }
         var allowed = true
         var rejectFourthOnce = false
@@ -144,8 +145,12 @@ class VisualKeyMapSequenceTest {
 
         override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
             nativeChecks++
+            if (captionChangeAtNativeSpace && editor.text == "가" && node?.keyboardImageCandidate == true) {
+                captionChangeAtNativeSpace = false
+                alternativeCaption++
+            }
             val fresh = capture()
-            val refusal = GenericControlActionPolicy.refusal(frame, fresh, "visual_key")
+            val refusal = KeyboardVisualPostCheck.nativeSequenceRefusal(frame, fresh, "visual_key", true)
             if (refusal != null) return ControlEffect(false, false, refusal)
             if (rejectFourthOnce && editor.text == "가 " && node?.keyboardKey == "ㄴ") {
                 rejectFourthOnce = false
@@ -408,6 +413,25 @@ class VisualKeyMapSequenceTest {
         }
     }
 
+    @Test fun nativeGuardAllowsOnlyStationarySuggestionCaptionChange() = runBlocking {
+        val f = Fixture(chrome = true).apply { captionChangeAtNativeSpace = true }
+        val result = f.run("가 나 ")
+        assertTrue(result.summary, result.success)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
+        assertEquals("가 나 ", f.currentEditor().text)
+        assertEquals(4, f.currentEditor().selectionEnd)
+        val before = f.capture()
+        f.alternativeCaption++
+        assertEquals("screen_changed", GenericControlActionPolicy.refusal(before, f.capture(), "visual_key"))
+        assertNull(KeyboardVisualPostCheck.nativeSequenceRefusal(before, f.capture(), "visual_key", true))
+        assertEquals("screen_changed", KeyboardVisualPostCheck.nativeSequenceRefusal(before, f.capture(), "visual_key", false))
+        f.suggestionMotion = true
+        assertEquals("screen_changed", KeyboardVisualPostCheck.nativeSequenceRefusal(before, f.capture(), "visual_key", true))
+        f.suggestionMotion = false
+        f.otherRegion = "new-overlay"
+        assertEquals("screen_changed", KeyboardVisualPostCheck.nativeSequenceRefusal(before, f.capture(), "visual_key", true))
+    }
+
     private fun pendingFifth(refusals: Int = 1) = Fixture(chrome = true).apply {
         fallbackRefusal = "Space"
         fifthSourceRefusals = refusals
@@ -510,14 +534,15 @@ class VisualKeyMapSequenceTest {
         assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), ended.touched)
     }
 
-    @Test fun windowRecheckSharesThePriorPreTouchRetryBudget() = runBlocking {
+    @Test fun windowRecheckStillWorksAfterEarlierPreTouchRetryWithinBudget() = runBlocking {
         val f = pendingFifth().apply { rejectFourthOnce = true }
         val result = f.run("가 나 ")
-        assertEquals(VISUAL_SOURCE_REFUSED, result.summary)
-        assertEquals(JsonPrimitive(4), result.data["completed_keys"])
-        assertNull(result.data["display_window_recheck_key"])
+        assertTrue(result.summary, result.success)
+        assertEquals(JsonPrimitive(6), result.data["completed_keys"])
+        assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
+        assertEquals(JsonPrimitive(3), result.data["pre_touch_retries"])
         assertEquals(1, f.fifthSourceRefusalsSeen)
-        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
     }
 
 }
