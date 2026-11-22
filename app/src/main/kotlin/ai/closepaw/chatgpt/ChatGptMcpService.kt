@@ -30,6 +30,8 @@ import kotlinx.coroutines.withContext
 class ChatGptMcpService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val started = AtomicBoolean(false)
+    private val localMcpPort = McpLocalRouting.port(BuildConfig.APPLICATION_ID)
+    private val localOnlyCandidate = McpLocalRouting.isCaptureCandidate(BuildConfig.APPLICATION_ID)
     private lateinit var server: McpHttpServer
     private lateinit var tunnel: TunnelProvider
     private lateinit var reconnect: TunnelReconnectController
@@ -49,7 +51,7 @@ class ChatGptMcpService : Service() {
         val readApp = ReadAppTool { app -> synchronized(readLock) { reader.read(app) } }
         val operations = AndroidOperationRuntime(this, scope, readApp, executionSettings)
         server = McpHttpServer(
-            port = McpHttpServer.DEFAULT_PORT,
+            port = localMcpPort,
             mcpPath = executionSettings.endpointPath(),
             handler = McpJsonRpcHandler(
                 runtimeInfoEnabled = true,
@@ -99,7 +101,7 @@ class ChatGptMcpService : Service() {
                 when (status) {
                     TunnelStatus.Stopped -> updateState { current ->
                         if (connectionActive()) ChatGptConnectionState(
-                            running = true, phase = "Local MCP ready", error = current.error,
+                            running = true, phase = if (localOnlyCandidate) "Debug local MCP ready" else "Local MCP ready", error = current.error,
                         ) else current
                     }
                     TunnelStatus.Starting -> updateState { current ->
@@ -166,8 +168,11 @@ class ChatGptMcpService : Service() {
         if (!started.compareAndSet(false, true)) return
         try {
             server.start()
-            updateState(ChatGptConnectionState(running = true, phase = "Local MCP ready"))
-            reconnect.start(McpHttpServer.DEFAULT_PORT)
+            updateState(ChatGptConnectionState(running = true,
+                phase = if (localOnlyCandidate) "Debug local MCP ready" else "Local MCP ready"))
+            // Keep the separately installed debug candidate reachable only on-device.
+            // Never start a second public or secure tunnel from a test APK.
+            if (!localOnlyCandidate) reconnect.start(localMcpPort)
         } catch (error: Exception) {
             started.set(false)
             server.stop()
