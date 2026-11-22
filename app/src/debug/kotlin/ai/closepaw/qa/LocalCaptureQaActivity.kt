@@ -98,6 +98,8 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }
         text("Approve setup first. Arm ONE run, then open the selected blank fixture and show Samsung keyboard for at least 10 seconds. Pause/X/end, lock, service loss or projection changes stop the run. No automatic retry. Returning to this page shows the historical result.")
         button("Arm one run · wait up to 10 minutes") { arm() }
+        text("DEBUG INPUT QA: A separate locally armed first-pass (not the screen-only CAPTURE_PASS). After Android access/sharing approval, arm once and open a NEW empty Chrome editor with Samsung keyboard. Each semantic physical key and final text/caret are independently checked. Stops without replay on unknown effects; no submission. Repeat/mixed suites are not yet implemented.")
+        button("Arm guarded six-key first-pass · wait for Chrome") { armOneStop() }
         button("Cancel my waiting run", guarded = false) { job?.cancel() }
         button("View historical local result") { showResult("local") }
         button("Compare same-source local / ADB contract") { compare() }
@@ -153,6 +155,34 @@ class LocalCaptureQaActivity : ComponentActivity() {
             } finally {
                 if (!isDestroyed) {
                     guardedButtons.forEach { it.isEnabled = true }; fixture.isEnabled = true; scope.isEnabled = true; save.isEnabled = true
+                }
+            }
+        }
+    }
+    private fun armOneStop() {
+        if (job?.isActive == true) return
+        previewIfReadyClear()
+        report.text = "New Debug physical-input run requested; historical capture PASS is not input PASS."
+        guardedButtons.forEach { it.isEnabled = false }
+        fixture.isEnabled = false; scope.isEnabled = false; save.isEnabled = false
+        job = lifecycleScope.launch {
+            try {
+                val result = withContext(Dispatchers.Default) {
+                    DebugOneStopQa.run(this@LocalCaptureQaActivity) { state ->
+                        runOnUiThread { if (!isDestroyed) status.text = state }
+                    }
+                }
+                report.text = result.toString()
+                status.text = "Debug six-key: " + result.getValue("outcome").jsonPrimitive.content +
+                    " (" + result.getValue("reason").jsonPrimitive.content + ")"
+            } catch (_: CancellationException) {
+                if (!isDestroyed) status.text = "Debug run cancelled; no input replay authorized."
+            } catch (_: Exception) {
+                if (!isDestroyed) status.text = "Debug QA failed; no PASS claimed."
+            } finally {
+                if (!isDestroyed) {
+                    guardedButtons.forEach { it.isEnabled = true }
+                    fixture.isEnabled = true; scope.isEnabled = true; save.isEnabled = true
                 }
             }
         }
