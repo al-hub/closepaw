@@ -204,13 +204,13 @@ jobs:
           import pathlib, re, sys
           raw = pathlib.Path('build/capture-candidate/public-signer-output.txt').read_text()
           lines = [line for line in raw.splitlines()
-                   if re.search(r'signer\\s*#?\\s*1\\s+certificate\\s+sha[- ]?256\\s+digest\\s*:', line, re.I)]
+                   if re.search(r'signer\s*#?\s*1\s+certificate\s+sha[- ]?256\s+digest\s*:', line, re.I)]
           other_signers = [line for line in raw.splitlines()
-                           if re.search(r'signer\\s*#?\\s*[2-9]\\b', line, re.I)]
+                           if re.search(r'signer\s*#?\s*[2-9]\b', line, re.I)]
           if len(lines) != 1 or other_signers:
               sys.exit('Exactly one Signer #1 SHA-256 certificate digest required')
-          tail = re.split(r'\\bdigest\\s*:', lines[0], maxsplit=1, flags=re.I)[-1].strip()
-          digest = re.sub(r'[:\\s]', '', tail).lower()
+          tail = re.split(r'\bdigest\s*:', lines[0], maxsplit=1, flags=re.I)[-1].strip()
+          digest = re.sub(r'[:\s]', '', tail).lower()
           if not re.fullmatch('[0-9a-f]{64}', digest):
               sys.exit('Signer SHA-256 digest did not normalize to 64 hex digits')
           print(digest)
