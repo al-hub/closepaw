@@ -621,6 +621,13 @@ class VisualKeyMapSequenceTest {
         assertEquals(3, f.currentEditor().selectionEnd)
         assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
 
+        // A supplied prefix which differs from the confirmed editor state
+        // must refuse before even one additional physical key is sent.
+        val wrongPrefix = f.run("ㅏ ", prefix = "가 ㄷ")
+        assertEquals("keyboard_sequence_prefix_unverified", wrongPrefix.summary)
+        assertEquals(JsonPrimitive(false), wrongPrefix.data["action_attempted"])
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+
         // The remaining suffix is a separate, explicitly prefix-verified
         // action under the SAME session/consent and the SAME exhausted ledger.
         // It may proceed only if its fresh native proof needs no further retry.
