@@ -2,6 +2,20 @@
 
 Status: **DESIGN/PREFLIGHT ONLY** (2026-11-22 KST). No Google Play Console registration or upload has been confirmed; no Play-distributed Debug APK has been installed. No release, app source, production signing key, Android security setting, or device data change is authorized by this document.
 
+## 2026-11-22 follow-up: Play Console access and Accessibility policy check
+
+**Policy check result: HIGH-RISK / NO APPROVAL.** This is a technical assessment of Google's documented rules and the repository's published behavior, not a review decision issued by Google.
+
+- Exact release-source [README.md](https://github.com/al-hub/closepaw/blob/dd89604a111de9c33d04c21f97ede5c903db5d41/README.md) describes an autonomous, natural-language, cross-app **AI phone-use agent**, including a ReAct loop, agent skills and physical accessibility-driven UI operation. It explicitly calls ClosePaw an `autonomous AI agent` near the safety disclaimer. [AndroidManifest.xml](https://github.com/al-hub/closepaw/blob/dd89604a111de9c33d04c21f97ede5c903db5d41/app/src/main/AndroidManifest.xml) exposes an AccessibilityService; [agent_accessibility_config.xml](https://github.com/al-hub/closepaw/blob/dd89604a111de9c33d04c21f97ede5c903db5d41/app/src/main/res/xml/agent_accessibility_config.xml) enables gesture dispatch and screenshot/window-content access. These are source facts, not a Google policy verdict.
+- The current [Google AccessibilityService API policy](https://support.google.com/googleplay/android-developer/answer/10964491?hl=ko) prohibits Accessibility API uses allowing apps to autonomously initiate, plan and execute actions or decisions; it distinguishes static human-defined rule-based automation. An `isAccessibilityTool=true` exception is only for verified disability-oriented accessibility tools, not a general assistant/automation app. User initiation and user-visible pause/consent help with safety but alone do **not** establish that the app's dynamic decision-making fits the allowed exception.
+- For non-accessibility-tool apps, in-app **prominent disclosure and explicit consent** plus an Accessibility declaration and review are required. These obligations do not override the independent **autonomous-operation prohibition**.
+- The public README points to a `ai.closepaw` closed-testing group/link, but those are unverified public pointers; they prove neither a logged-in user's Play Console owner/uploader role nor registration/testing eligibility of `ai.closepaw.capturecandidate`. Private Play Console account/app state could not be read with available authenticated tools. Direct Play listing/testing pages could not be independently opened from public browsing in this check.
+- [Official Internal App Sharing](https://support.google.com/googleplay/android-developer/answer/9844679?hl=ko) does support debuggable APKs, repeated version codes and a stable Google-managed test signer, but uploaded artifacts are distinct from test-track releases, and testers must have permission to access the listing. **Technical upload capability is not policy compliance or install approval.**
+
+**Updated decision:** internal app sharing is now a *conditional*, **not recommended-for-execution-yet** path. Do not upload the present AI-agent APK under a claimed policy exemption or alter disclosure to misrepresent its behavior. First obtain accountable Play developer access and a written policy-fit determination for the actual autonomous operations. If that cannot be supported, choose a non-Play compliant developer QA distribution and a dedicated stable QA signing identity (separate from the production signer); investigate the Play Protect classification through Google's official developer guidance/appeal instead of bypassing the OS block. This does not authorize current blocked APK installation by ADB/shell.
+
+**What remains unverified:** authorized Console account/app registration, any actual Google policy review/approval, Google-managed QA test certificate for this package, OS-approved installation, independent Debug connectivity and #147 physical typing. **No Play upload, GitHub Secrets change, stable key provisioning, app-code modification, new Release or phone action performed.**
+
 ## Goal and immutable baseline
 
 Keep production `ai.closepaw` at installed `v0.1.144/code145` (source `dd89604a111de9c33d04c21f97ede5c903db5d41`, release APK SHA256 `48a972ae9cbc8076a506e999e8fc0ae2c666f5c49b2b2b244a947a132b437952`). Test side by side only as `ai.closepaw.capturecandidate`, version `0.1.144-capturecandidate/code145`, exact same application source. The QA build [run 44974673644](https://github.com/al-hub/closepaw/actions/runs/44974673644), [artifact 14735360607](https://github.com/al-hub/closepaw/actions/runs/44974673644/artifacts/14735360607), APK SHA256 `0121d6b26c8ef2d996e0a48938fd60326f337aa90b5ba5572d4aa499a9919fb9` is verified **before** distribution, but on-device File Viewer installation was denied by Play Protect.
@@ -17,7 +31,7 @@ Keep production `ai.closepaw` at installed `v0.1.144/code145` (source `dd89604a1
 
 **Do not attempt shell/ADB installs to override an explicit Play Protect block.** Historical developer ADB success is not an approved workaround for the current security decision. Do not turn off Play Protect, change package/signature to impersonate production, or reuse a user-approved device accessibility session for a different package.
 
-## Preferred evaluation lane: Google Play Internal App Sharing
+## Conditional evaluation lane: Google Play Internal App Sharing (policy and access gate open)
 
 Official [Google help](https://support.google.com/googleplay/android-developer/answer/9844679?hl=en):
 - Accepts **debuggable APK** and repeated **versionCode** values; re-signs every upload with a **per-app persistent Google-managed internal-app-sharing test certificate**. Upload source APK signer may differ each CI run; the **Play-delivered signer** must remain constant for the same registered app.
@@ -42,7 +56,8 @@ Official [Google help](https://support.google.com/googleplay/android-developer/a
 - [x] Historical same-phone Termux/A DB-only separate Debug install and local capture evidence located. It is **not** evidence of current Play compliance.
 - [x] Official Internal App Sharing certificate persistence and API automation mechanism documented.
 - [ ] Developer confirms authorized Play Console for this exact candidate package and valid internal-app-sharing uploader/tester configuration.
-- [ ] Developer policy review for AccessibilityService autonomous operation, disclosure, and REQUEST_INSTALL_PACKAGES completed.
+- [x] Public policy/source preflight: current autonomous AI-agent description carries **high compliance risk** under AccessibilityService policy; **not approved** for Play upload.
+- [ ] Formal policy-fit resolution for actual AccessibilityService autonomy, user disclosure, and REQUEST_INSTALL_PACKAGES completed.
 - [ ] Official compliant upload of the **same exact-source** APK, Play-issued signer/download URL obtained, and explicit APK source mapping recorded.
 - [ ] OS-approved Play app install completed on Galaxy; preserve `ai.closepaw`, independently verify candidate source/package/code/certificate.
 - [ ] Prove candidate-bound independent accessibility/service/control connector. The production MCP endpoint is **not** candidate evidence.
