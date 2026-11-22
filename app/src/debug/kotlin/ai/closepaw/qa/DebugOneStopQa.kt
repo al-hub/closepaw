@@ -73,8 +73,23 @@ internal object DebugOneStopQa {
             a.sourceWindowId == b.sourceWindowId && first.packageName == later.packageName
     }
 
+    private fun reportFile(context: Context) = File(context.filesDir, "debug-qa/one-stop-result.json")
+
+    /** Read-only persisted checkpoint, never an authorization or replay token. */
+    fun lastResult(context: Context): JsonObject? {
+        if (!BuildConfig.DEBUG || context.packageName != CaptureQaAcceptance.CANDIDATE) return null
+        val file = reportFile(context)
+        if (!file.isFile || file.length() !in 1L..64_000L) return null
+        return runCatching { Json.parseToJsonElement(file.readText()).jsonObject }.getOrNull()
+            ?.takeIf { item ->
+                item["source_commit"]?.jsonPrimitive?.content == BuildConfig.CAPTURE_QA_SOURCE_SHA &&
+                    item["suite"]?.jsonPrimitive?.content == "six_key_first_pass" &&
+                    item["fixture_package"]?.jsonPrimitive?.content == CHROME
+            }
+    }
+
     private fun write(context: Context, result: JsonObject) {
-        val file = File(context.cacheDir, "capture-qa/one-stop/result.json")
+        val file = reportFile(context)
         file.parentFile?.mkdirs()
         val atomic = AtomicFile(file)
         val stream = atomic.startWrite()
