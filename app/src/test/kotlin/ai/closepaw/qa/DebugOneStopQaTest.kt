@@ -1,5 +1,7 @@
 package ai.closepaw.qa
 
+import ai.closepaw.chatgpt.control.ControlFrame
+import ai.closepaw.chatgpt.control.ControlNode
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -20,6 +22,24 @@ class DebugOneStopQaTest {
     @Test fun canonicalMixedBenchmarkCannotDrift() {
         assertEquals("오늘 회의는 zoom으로 3시에 시작, 자료는 2개.", DebugOneStopQa.MIXED_29)
         assertEquals(29, DebugOneStopQa.MIXED_29.length)
+    }
+
+    @Test fun blankChromeOmniboxRejectsPasswordContentAndAmbiguity() {
+        val safe = ControlNode(id = 7, resourceId = "com.android.chrome:id/url_bar",
+            sourcePackage = "com.android.chrome", editable = true, clickable = true,
+            enabled = true, empty = true, text = "")
+        fun frame(nodes: List<ControlNode>, pkg: String = "com.android.chrome") =
+            ControlFrame(pkg, 42, "fingerprint", nodes)
+        assertEquals(7, DebugOneStopQa.blankOmnibox(frame(listOf(safe)))?.id)
+        assertNull(DebugOneStopQa.blankOmnibox(frame(listOf(safe.copy(password = true)))))
+        assertNull(DebugOneStopQa.blankOmnibox(frame(listOf(safe.copy(text = "existing")))))
+        assertNull(DebugOneStopQa.blankOmnibox(frame(listOf(safe.copy(empty = false)))))
+        assertNull(DebugOneStopQa.blankOmnibox(frame(listOf(safe, safe.copy(id = 8)))))
+        assertNull(DebugOneStopQa.blankOmnibox(frame(listOf(safe), "other.app")))
+        assertNull(DebugOneStopQa.blankOmnibox(frame(listOf(safe.copy(
+            resourceId = "com.android.chrome:id/search_suggestion")))))
+        assertNull(DebugOneStopQa.blankOmnibox(frame(listOf(safe)).copy(truncated = true)))
+        assertNull(DebugOneStopQa.blankOmnibox(frame(listOf(safe)).copy(reason = "permission_revoked")))
     }
 
     @Test fun deniedUnknownOrUnattemptedKeyIsNeverAdvancedOrReplayed() {
