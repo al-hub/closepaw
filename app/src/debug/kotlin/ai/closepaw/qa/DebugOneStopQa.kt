@@ -82,6 +82,7 @@ internal object DebugOneStopQa {
         val settings = McpExecutionSettings(context)
         var verifiedKeys = 0
         var attempts = 0
+        var setupClickAttempts = 0
         var uncertain = false
         var stage = "preflight"
         val started = SystemClock.elapsedRealtime()
@@ -98,6 +99,7 @@ internal object DebugOneStopQa {
             put("reason", reason)
             put("completed_keys", verifiedKeys)
             put("touch_attempts", attempts)
+            put("editor_focus_click_attempts", setupClickAttempts)
             put("outcome_unknown", uncertain)
             put("goal_verified", outcome == "PASS" && verifiedKeys == SixKey.labels.size)
             put("elapsed_ms", SystemClock.elapsedRealtime() - started)
@@ -169,7 +171,47 @@ internal object DebugOneStopQa {
             port.activity(true)
             stage = "editor_preflight"
             checkpoint("native_preflight")
-            val first = port.capture()
+            var first = port.capture()
+            // An unselected Chrome omnibox can be blank without an active IME.
+            // Focus at most one real, uniquely exposed *empty* Chrome editor
+            // through the same GenericControl accessibility action route.
+            if (first.reason == null && first.packageName == CHROME &&
+                first.keyboard?.packageName != SAMSUNG_IME) {
+                val initial = control.observe()
+                if (!initial.success) return stop("chrome_editor_observation_refused")
+                val candidate = (initial.data["nodes"] as? JsonArray)
+                    ?.mapNotNull { it as? JsonObject }
+                    ?.filter {
+                        it["editable"]?.jsonPrimitive?.booleanOrNull == true &&
+                        it["clickable"]?.jsonPrimitive?.booleanOrNull == true &&
+                        it["enabled"]?.jsonPrimitive?.booleanOrNull == true &&
+                        it["password"]?.jsonPrimitive?.booleanOrNull != true &&
+                        it["empty"]?.jsonPrimitive?.booleanOrNull == true &&
+                        it["resource_id"]?.jsonPrimitive?.content?.endsWith(":id/url_bar") == true
+                    }.orEmpty()
+                if (candidate.size != 1) return stop("unique_blank_chrome_omnibox_unavailable")
+                val observationId = initial.data["observation_id"]?.jsonPrimitive?.content
+                    ?: return stop("chrome_editor_observation_id_missing")
+                val nodeId = candidate.single()["node_id"]?.jsonPrimitive?.intOrNull
+                    ?: return stop("chrome_editor_node_id_missing")
+                stage = "chrome_editor_focus_dispatch"
+                checkpoint("one_native_accessibility_focus_click")
+                val focused = control.action(buildJsonObject {
+                    put("action", "click")
+                    put("session_id", session.id)
+                    put("observation_id", observationId)
+                    put("node_id", nodeId)
+                })
+                val attempted = focused.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
+                if (attempted) setupClickAttempts++
+                if (!focused.success) {
+                    uncertain = attempted || focused.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
+                    return stop("chrome_editor_focus_unconfirmed")
+                }
+                first = port.capture()
+                stage = "editor_preflight"
+                checkpoint("chrome_editor_focus_observed")
+            }
             val target = first.inputTarget
             if (first.reason != null || first.truncated || first.navigationOnly ||
                 first.packageName != CHROME || first.keyboard?.packageName != SAMSUNG_IME ||
