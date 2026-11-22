@@ -42,7 +42,7 @@ jobs:
           GITHUB_SHA: 'dd89604a111de9c33d04c21f97ede5c903db5d41'
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = 'dd89604a111de9c33d04c21f97ede5c903db5d41'
           bash scripts/ci-gradle.sh issue147-historical-smoke :app:testDebugUnitTest -PclosepawCaptureCandidate=true \
             --tests 'ai.closepaw.tool.action.ClickExecutorTest' \
             --tests 'ai.closepaw.tool.action.TypeExecutorTest' \
