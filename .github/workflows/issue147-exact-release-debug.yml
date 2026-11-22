@@ -1,0 +1,72 @@
+name: "Issue 147 exact release source Debug (isolated QA)"
+on:
+  push:
+    branches:
+      - qa/147-v0144-exact-source-debug-20261122
+permissions:
+  contents: read
+jobs:
+  build-capture-debug:
+    if: github.ref == 'refs/heads/qa/147-v0144-exact-source-debug-20261122'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout IMMUTABLE release application source
+        uses: actions/checkout@v4
+        with:
+          ref: 'dd89604a111de9c33d04c21f97ede5c903db5d41'
+          persist-credentials: false
+      - name: Verify exact release source and versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 'dd89604a111de9c33d04c21f97ede5c903db5d41'
+          grep -qx 'VERSION_NAME=0.1.144' gradle.properties
+          grep -qx 'VERSION_CODE=145' gradle.properties
+          echo "EXACT_APPLICATION_SOURCE=$(git rev-parse HEAD)"
+          echo "WORKFLOW_COMMIT=${{ github.sha }}"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: never
+      - name: Build dedicated side-by-side debug app and test APK
+        env:
+          GITHUB_SHA: 'dd89604a111de9c33d04c21f97ede5c903db5d41'
+        run: bash scripts/ci-gradle.sh capture-candidate :app:stageCaptureCandidate -PclosepawCaptureCandidate=true
+      - name: Verify package, version, source and signing metadata
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: 'dd89604a111de9c33d04c21f97ede5c903db5d41'
+        run: |
+          set -euo pipefail
+          apk=build/capture-candidate/candidate-app.apk
+          tests=build/capture-candidate/candidate-tests.apk
+          test -s "$apk" && test -s "$tests"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          aapt="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -1)"
+          apksigner="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -1)"
+          "$aapt" dump badging "$apk" > build/capture-candidate/manifest.txt
+          grep -q "^package: name='ai.closepaw.capturecandidate' versionCode='145' versionName='0.1.144-capturecandidate'" build/capture-candidate/manifest.txt
+          grep -q '^application-debuggable' build/capture-candidate/manifest.txt
+          ! grep -q '^application-testOnly' build/capture-candidate/manifest.txt
+          grep -q "native-code: 'arm64-v8a'" build/capture-candidate/manifest.txt
+          "$aapt" dump xmltree "$apk" AndroidManifest.xml > build/capture-candidate/manifest-tree.txt
+          grep -q 'ai.closepaw.qa.LocalCaptureQaActivity' build/capture-candidate/manifest-tree.txt
+          "$apksigner" verify --verbose --print-certs "$apk" > build/capture-candidate/signing.txt
+          printf '%s\n' "$EXPECTED_SOURCE_SHA" > build/capture-candidate/source.txt
+          printf 'workflow_run=%s\nworkflow_commit=%s\napplication_source=%s\n' "${{ github.run_id }}" "${{ github.sha }}" "$EXPECTED_SOURCE_SHA" > build/capture-candidate/build-provenance.txt
+          sha256sum "$apk" "$tests" > build/capture-candidate/sha256.txt
+      - name: Upload Debug only (no production release/install)
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue147-exact-v0144-debug-${{ github.run_id }}
+          path: build/capture-candidate/
+          if-no-files-found: error
+          retention-days: 14
