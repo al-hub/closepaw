@@ -12,7 +12,7 @@ class McpLocalRoutingTest {
     }
 
     @Test fun candidateUsesDedicatedLocalPortAndNoTunnel() {
-        assertEquals(18427, McpLocalRouting.port("ai.closepaw.capturecandidate"))
+        assertEquals(18428, McpLocalRouting.port("ai.closepaw.capturecandidate"))
         assertTrue(McpLocalRouting.isCaptureCandidate("ai.closepaw.capturecandidate"))
     }
 
