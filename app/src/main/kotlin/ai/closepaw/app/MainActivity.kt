@@ -206,6 +206,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Candidate-only, launcher-owned QA entry. Keep the real QA Activity
+        // non-exported; never add a system/ADB permission bypass or a release
+        // entry point. The internal settings button explicitly opts out so it
+        // can still display this standard MainActivity for legitimate grants.
+        if (BuildConfig.DEBUG && packageName == "ai.closepaw.capturecandidate" &&
+            !intent.getBooleanExtra("closepaw_debug_qa_show_main", false)) {
+            startActivity(Intent().setClassName(packageName, "ai.closepaw.qa.LocalCaptureQaActivity"))
+            finish()
+            return
+        }
         intentPayloadConsumed = savedInstanceState?.getBoolean(KEY_INTENT_PAYLOAD_CONSUMED, false) ?: false
         pendingGoalForConfirmation = savedInstanceState?.getString(KEY_PENDING_GOAL_CONFIRMATION)
         settingsState = AppSettingsState.create(applicationContext)
