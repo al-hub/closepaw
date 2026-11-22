@@ -77,7 +77,10 @@ class LocalCaptureQaActivity : ComponentActivity() {
         text("Candidate only. No ADB, LLM key or network is needed. Use only a NEW blank Chrome tab or NEW empty Notes editor with Samsung keyboard. Notifications/other overlays may be visible. No typing, taps or submissions are dispatched to fixtures.")
         status = text("Setup not checked")
         button("Refresh setup") { refreshSetup() }
-        button("Main settings / app access / screen control") { startActivity(Intent(this, MainActivity::class.java)) }
+        button("Main settings / app access / screen control") {
+            startActivity(Intent(this, MainActivity::class.java)
+                .putExtra("closepaw_debug_qa_show_main", true))
+        }
         button("Accessibility settings (local approval)") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
         button("Overlay settings (local approval)") {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
