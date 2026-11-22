@@ -150,15 +150,29 @@ jobs:
           test -s build/capture-candidate/candidate-tests.apk
           aapt="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -1)"
           "$aapt" dump badging build/capture-candidate/candidate-app.apk > build/capture-candidate/manifest.txt
-          grep -q "^package: name='ai.closepaw.capturecandidate'" build/capture-candidate/manifest.txt
-          grep -q '^application-debuggable' build/capture-candidate/manifest.txt
+          if ! grep -q "^package: name='ai.closepaw.capturecandidate'" build/capture-candidate/manifest.txt; then
+            grep '^package:' build/capture-candidate/manifest.txt >&2 || true
+            echo 'Candidate package identity mismatch' >&2
+            exit 1
+          fi
+          if ! grep -q '^application-debuggable' build/capture-candidate/manifest.txt; then
+            echo 'Candidate is not debuggable' >&2
+            exit 1
+          fi
           if grep -q '^application-testOnly' build/capture-candidate/manifest.txt; then
             echo 'Candidate app is testOnly; ordinary installation would fail' >&2
             exit 1
           fi
-          grep -q "native-code: 'arm64-v8a'" build/capture-candidate/manifest.txt
+          if ! grep -q "native-code: 'arm64-v8a'" build/capture-candidate/manifest.txt; then
+            grep '^native-code:' build/capture-candidate/manifest.txt >&2 || true
+            echo 'Candidate APK is missing arm64 native support' >&2
+            exit 1
+          fi
           "$aapt" dump xmltree build/capture-candidate/candidate-app.apk AndroidManifest.xml > build/capture-candidate/manifest-tree.txt
-          grep -q 'ai.closepaw.qa.LocalCaptureQaActivity' build/capture-candidate/manifest-tree.txt
+          if ! grep -q 'ai.closepaw.qa.LocalCaptureQaActivity' build/capture-candidate/manifest-tree.txt; then
+            echo 'Candidate nonexported QA entry is missing from manifest' >&2
+            exit 1
+          fi
           apksigner="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -1)"
           test -x "$apksigner"
           actual="$("$apksigner" verify --print-certs build/capture-candidate/candidate-app.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1 | tr '[:upper:]' '[:lower:]')"
