@@ -177,6 +177,16 @@ internal object DebugOneStopQa {
             // through the same GenericControl accessibility action route.
             if (first.reason == null && first.packageName == CHROME &&
                 first.keyboard?.packageName != SAMSUNG_IME) {
+                // Password/empty status are intentionally not disclosed in
+                // public node JSON. Obtain those restrictions from the native
+                // complete frame before selecting a single disclosed node ID.
+                val nativeCandidates = first.nodes.filter { node ->
+                    node.editable && node.clickable && node.enabled && !node.password &&
+                        node.empty && node.text.isEmpty() &&
+                        node.sourcePackage == CHROME && node.resourceId.endsWith(":id/url_bar")
+                }
+                if (nativeCandidates.size != 1) return stop("unique_blank_chrome_omnibox_unavailable")
+                val permitted = nativeCandidates.single()
                 val initial = control.observe()
                 if (!initial.success) return stop("chrome_editor_observation_refused")
                 val candidate = (initial.data["nodes"] as? JsonArray)
@@ -185,11 +195,12 @@ internal object DebugOneStopQa {
                         it["editable"]?.jsonPrimitive?.booleanOrNull == true &&
                         it["clickable"]?.jsonPrimitive?.booleanOrNull == true &&
                         it["enabled"]?.jsonPrimitive?.booleanOrNull == true &&
-                        it["password"]?.jsonPrimitive?.booleanOrNull != true &&
-                        it["empty"]?.jsonPrimitive?.booleanOrNull == true &&
-                        it["resource_id"]?.jsonPrimitive?.content?.endsWith(":id/url_bar") == true
+                        it["text"]?.jsonPrimitive?.content == "" &&
+                        it["resource_id"]?.jsonPrimitive?.content == permitted.resourceId &&
+                        it["class_name"]?.jsonPrimitive?.content == permitted.className &&
+                        it["bounds"]?.jsonPrimitive?.content == permitted.bounds
                     }.orEmpty()
-                if (candidate.size != 1) return stop("unique_blank_chrome_omnibox_unavailable")
+                if (candidate.size != 1) return stop("unique_blank_chrome_omnibox_changed")
                 val observationId = initial.data["observation_id"]?.jsonPrimitive?.content
                     ?: return stop("chrome_editor_observation_id_missing")
                 val nodeId = candidate.single()["node_id"]?.jsonPrimitive?.intOrNull
