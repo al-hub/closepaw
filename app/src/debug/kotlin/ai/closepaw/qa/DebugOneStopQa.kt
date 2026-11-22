@@ -49,6 +49,17 @@ internal object DebugOneStopQa {
     private const val CHROME = "com.android.chrome"
     private const val SAMSUNG_IME = "com.samsung.android.honeyboard"
 
+    /** Native full-frame choice, not a guess from bounded public node JSON. */
+    internal fun blankOmnibox(frame: ControlFrame): ai.closepaw.chatgpt.control.ControlNode? {
+        if (frame.reason != null || frame.truncated || frame.navigationOnly ||
+            frame.packageName != CHROME) return null
+        return frame.nodes.filter { node ->
+            node.editable && node.clickable && node.enabled && !node.password &&
+                node.empty && node.text.isEmpty() && node.sourcePackage == CHROME &&
+                node.resourceId.endsWith(":id/url_bar")
+        }.singleOrNull()
+    }
+
     private fun sameEditor(first: ControlFrame, later: ControlFrame): Boolean {
         val a = first.inputTarget ?: return false
         val b = later.inputTarget ?: return false
@@ -180,13 +191,8 @@ internal object DebugOneStopQa {
                 // Password/empty status are intentionally not disclosed in
                 // public node JSON. Obtain those restrictions from the native
                 // complete frame before selecting a single disclosed node ID.
-                val nativeCandidates = first.nodes.filter { node ->
-                    node.editable && node.clickable && node.enabled && !node.password &&
-                        node.empty && node.text.isEmpty() &&
-                        node.sourcePackage == CHROME && node.resourceId.endsWith(":id/url_bar")
-                }
-                if (nativeCandidates.size != 1) return stop("unique_blank_chrome_omnibox_unavailable")
-                val permitted = nativeCandidates.single()
+                val permitted = blankOmnibox(first)
+                    ?: return stop("unique_blank_chrome_omnibox_unavailable")
                 val initial = control.observe()
                 if (!initial.success) return stop("chrome_editor_observation_refused")
                 val candidate = (initial.data["nodes"] as? JsonArray)
