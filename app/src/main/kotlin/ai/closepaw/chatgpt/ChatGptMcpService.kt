@@ -281,7 +281,8 @@ class ChatGptMcpService : Service() {
             if (!ChatGptConnectionSettings(context).enabled) return@withContext
             val configured = runCatching { SecureMcpTunnelConfigStore(context).load() != null }.getOrDefault(false)
             synchronized(Companion) {
-                if (ChatGptAutoConnectPolicy.shouldRestore(configured, ChatGptConnectionSettings(context).enabled)) {
+                if (ChatGptAutoConnectPolicy.shouldRestore(configured, ChatGptConnectionSettings(context).enabled,
+                        localOnlyCandidate = McpLocalRouting.isCaptureCandidate(BuildConfig.APPLICATION_ID))) {
                     requestConnectionStart("auto_connect_blocked") { requestStart(context) }
                 }
             }
