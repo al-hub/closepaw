@@ -58,9 +58,16 @@ def installed_apk():
     remote = paths[0].removeprefix("package:")
     if not remote.endswith("/base.apk"):
         raise RuntimeError("invalid installed APK path")
-    built = Path("app/build/outputs/apk/debug/app-debug.apk").resolve()
-    if not built.is_file() or built.stat().st_size < 1000:
-        raise RuntimeError("assembled fixture debug APK is missing")
+    # ABI-injected CI builds may name the APK app-x86_64-debug.apk rather
+    # than app-debug.apk. Discover *one* assembled app APK, not androidTest,
+    # instead of inventing a path or pulling gigabytes back from the emulator.
+    root = Path("app/build/outputs/apk")
+    choices = sorted(p.resolve() for p in root.rglob("*.apk")
+                     if "debug" in p.parts and "androidTest" not in p.parts
+                     and p.is_file() and p.stat().st_size > 1000)
+    if len(choices) != 1:
+        raise RuntimeError("expected exactly one assembled fixture debug APK, found " + str(len(choices)))
+    built = choices[0]
     local_hash = hashlib.sha256(built.read_bytes()).hexdigest()
     remote_line = adb("shell", "sha256sum", remote, timeout=90)
     remote_hash = remote_line.split(maxsplit=1)[0] if remote_line else ""
