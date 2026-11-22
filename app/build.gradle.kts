@@ -38,6 +38,17 @@ android {
     // we fall back to null and the release variant simply won't be signed —
     // debug builds use Android's default debug keystore and are unaffected.
     signingConfigs {
+        // Candidate-only identity. CI restores this *separate* protected key; the
+        // production keystore and ordinary debug variant remain untouched.
+        create("qaDebug") {
+            val path = System.getenv("QA_DEBUG_KEYSTORE_PATH")
+            if (!path.isNullOrBlank() && file(path).isFile) {
+                storeFile = file(path)
+                storePassword = System.getenv("QA_DEBUG_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("QA_DEBUG_KEY_ALIAS")
+                keyPassword = System.getenv("QA_DEBUG_KEY_PASSWORD")
+            }
+        }
         create("release") {
             val keystorePath = System.getenv("KEYSTORE_PATH")
             if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
@@ -58,6 +69,17 @@ android {
             if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
                 applicationIdSuffix = ".capturecandidate"
                 versionNameSuffix = "-capturecandidate"
+                // Stable signer is mandatory for CI candidate packaging; a
+                // missing key must never silently become another throwaway key.
+                val qaSigning = signingConfigs.getByName("qaDebug")
+                if (providers.environmentVariable("CI").orNull == "true") {
+                    require(qaSigning.storeFile != null) { "qa_debug_signing_key_required" }
+                    require(!qaSigning.storePassword.isNullOrBlank() &&
+                        !qaSigning.keyAlias.isNullOrBlank() && !qaSigning.keyPassword.isNullOrBlank()) {
+                        "qa_debug_signing_credentials_required"
+                    }
+                }
+                if (qaSigning.storeFile != null) signingConfig = qaSigning
                 manifestPlaceholders["closepawAppLabel"] = "ClosePaw DEBUG"
                 manifestPlaceholders["captureQaEnabled"] = "true"
                 ndk { abiFilters += "arm64-v8a" }
