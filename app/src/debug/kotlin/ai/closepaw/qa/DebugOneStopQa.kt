@@ -6,6 +6,7 @@ import ai.closepaw.chatgpt.McpExecutionSettings
 import ai.closepaw.chatgpt.control.AndroidControlPort
 import ai.closepaw.chatgpt.control.ControlScreenLease
 import ai.closepaw.chatgpt.control.ControlSession
+import ai.closepaw.chatgpt.control.ControlFrame
 import ai.closepaw.chatgpt.control.GenericControl
 import ai.closepaw.chatgpt.control.HangulKeyComposer
 import ai.closepaw.platform.virtualdisplay.ProjectionImageTransport
@@ -42,8 +43,24 @@ internal object DebugOneStopQa {
             verified && attempted && !unknown
     }
 
+    // Canonical #147 benchmark table (not the conflicting older candidate
+    // sentence in the issue's historical progress section).
+    internal const val MIXED_29 = "오늘 회의는 zoom으로 3시에 시작, 자료는 2개."
     private const val CHROME = "com.android.chrome"
     private const val SAMSUNG_IME = "com.samsung.android.honeyboard"
+
+    private fun sameEditor(first: ControlFrame, later: ControlFrame): Boolean {
+        val a = first.inputTarget ?: return false
+        val b = later.inputTarget ?: return false
+        val identity = when {
+            !a.nativeEditorId.isNullOrBlank() -> a.nativeEditorId == b.nativeEditorId
+            a.resourceId.isNotBlank() -> a.resourceId == b.resourceId
+            else -> a.bounds.isNotBlank() && a.bounds == b.bounds && a.parent == b.parent
+        }
+        return identity && first.windowId == later.windowId &&
+            a.className == b.className && a.sourcePackage == b.sourcePackage &&
+            a.sourceWindowId == b.sourceWindowId && first.packageName == later.packageName
+    }
 
     private fun write(context: Context, result: JsonObject) {
         val file = File(context.cacheDir, "capture-qa/one-stop/result.json")
@@ -153,6 +170,7 @@ internal object DebugOneStopQa {
                 stage = "key_" + (index + 1) + "_preflight"
                 checkpoint("fresh_keyboard_observation")
                 val before = port.capture()
+                if (!sameEditor(first, before)) return stop("editor_identity_changed")
                 val field = before.inputTarget
                 if (before.reason != null || before.packageName != CHROME ||
                     before.keyboard?.packageName != SAMSUNG_IME || field == null ||
@@ -185,6 +203,10 @@ internal object DebugOneStopQa {
                 if (!SixKey.mayContinue(attempted, unknown, action.success))
                     return stop(action.data["reason_code"]?.jsonPrimitive?.content ?: "key_effect_unconfirmed")
                 val after = port.capture()
+                if (!sameEditor(first, after)) {
+                    uncertain = true
+                    return stop("editor_identity_after_touch_unverified")
+                }
                 val post = after.inputTarget
                 if (after.reason != null || after.packageName != CHROME || post == null ||
                     !SixKey.matches(post.text, post.selectionStart, post.selectionEnd, index + 1)) {
@@ -198,6 +220,10 @@ internal object DebugOneStopQa {
             stage = "six_key_final"
             val final = port.capture()
             val field = final.inputTarget
+            if (!sameEditor(first, final)) {
+                uncertain = attempts > 0
+                return stop("final_editor_identity_unverified")
+            }
             if (final.reason != null || final.packageName != CHROME || field == null ||
                 !SixKey.matches(field.text, field.selectionStart, field.selectionEnd, 6)) {
                 uncertain = attempts > 0
