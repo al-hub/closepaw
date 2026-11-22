@@ -116,6 +116,29 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           cache-cleanup: never
+      - name: Restore protected persistent candidate signing identity
+        env:
+          QA_DEBUG_KEYSTORE_BASE64: ${{ secrets.CLOSEPAW_QA_DEBUG_KEYSTORE_BASE64 }}
+          QA_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.CLOSEPAW_QA_DEBUG_KEYSTORE_PASSWORD }}
+          QA_DEBUG_KEY_ALIAS: ${{ secrets.CLOSEPAW_QA_DEBUG_KEY_ALIAS }}
+          QA_DEBUG_KEY_PASSWORD: ${{ secrets.CLOSEPAW_QA_DEBUG_KEY_PASSWORD }}
+          QA_DEBUG_CERT_SHA256: ${{ vars.CLOSEPAW_QA_DEBUG_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$QA_DEBUG_KEYSTORE_BASE64" ] || [ -z "$QA_DEBUG_KEYSTORE_PASSWORD" ] ||
+             [ -z "$QA_DEBUG_KEY_ALIAS" ] || [ -z "$QA_DEBUG_KEY_PASSWORD" ] ||
+             [ -z "$QA_DEBUG_CERT_SHA256" ]; then
+            echo 'Protected QA signing identity or pinned certificate is not configured; candidate publication blocked.' >&2
+            exit 1
+          fi
+          keyfile="$RUNNER_TEMP/closepaw-qa-debug.jks"
+          umask 077
+          printf '%s' "$QA_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$keyfile"
+          test -s "$keyfile"
+          chmod 600 "$keyfile"
+          printf 'QA_DEBUG_KEYSTORE_PATH=%s\n' "$keyfile" >> "$GITHUB_ENV"
+          printf 'QA_DEBUG_KEYSTORE_PASSWORD=%s\nQA_DEBUG_KEY_ALIAS=%s\nQA_DEBUG_KEY_PASSWORD=%s\nQA_DEBUG_CERT_SHA256=%s\n' \
+            "$QA_DEBUG_KEYSTORE_PASSWORD" "$QA_DEBUG_KEY_ALIAS" "$QA_DEBUG_KEY_PASSWORD" "$QA_DEBUG_CERT_SHA256" >> "$GITHUB_ENV"
       - name: Build side-by-side debug capture candidate and its test APK
         # Public candidate ndk.abiFilters limits packaging. No IDE-injected ABI
         # build: the app APK must install with the ordinary Android installer.
@@ -136,6 +159,16 @@ jobs:
           grep -q "native-code: 'arm64-v8a'" build/capture-candidate/manifest.txt
           "$aapt" dump xmltree build/capture-candidate/candidate-app.apk AndroidManifest.xml > build/capture-candidate/manifest-tree.txt
           grep -q 'ai.closepaw.qa.LocalCaptureQaActivity' build/capture-candidate/manifest-tree.txt
+          apksigner="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -1)"
+          test -x "$apksigner"
+          actual="$("$apksigner" verify --print-certs build/capture-candidate/candidate-app.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1 | tr '[:upper:]' '[:lower:]')"
+          expected="$(printf '%s' "$QA_DEBUG_CERT_SHA256" | tr '[:upper:]' '[:lower:]')"
+          test -n "$actual"
+          if [ "$actual" != "$expected" ]; then
+            echo 'QA signer differs from pinned certificate; candidate artifact blocked.' >&2
+            exit 1
+          fi
+          printf 'qa_debug_cert_sha256=%s\n' "$actual" > build/capture-candidate/signing-identity.txt
           printf '%s\n' "$GITHUB_SHA" > build/capture-candidate/source.txt
           sha256sum build/capture-candidate/candidate-app.apk build/capture-candidate/candidate-tests.apk > build/capture-candidate/sha256.txt
       - uses: actions/upload-artifact@v4
