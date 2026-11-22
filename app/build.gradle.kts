@@ -156,6 +156,20 @@ android {
     }
 }
 
+// Stage the exact ABI-aware debug package installed by AGP in emulator CI.
+// Never guess an APK filename or pull a multi-hundred-MB installed base.apk.
+// The consuming script still independently verifies on-device SHA-256.
+androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) { variant ->
+    tasks.register<org.gradle.api.tasks.Sync>("stagePackageReplacementFixture") {
+        from(variant.artifacts.get(SingleArtifact.APK)) {
+            include("*.apk")
+            rename { "base.apk" }
+        }
+        duplicatesStrategy = org.gradle.api.file.DuplicatesStrategy.FAIL
+        into(rootProject.layout.buildDirectory.dir("package-replacement-input"))
+    }
+}
+
 // AGP may place IDE/ABI-optimized APKs outside outputs/apk. Consume its public
 // artifact providers, never infer a deployable file from a conventional path.
 if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
