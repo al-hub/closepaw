@@ -36,6 +36,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           cache-cleanup: never
+      - name: Historical QA input/capture smoke (JVM only; not physical typing)
+        shell: bash
+        env:
+          GITHUB_SHA: 'dd89604a111de9c33d04c21f97ede5c903db5d41'
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          bash scripts/ci-gradle.sh issue147-historical-smoke :app:testDebugUnitTest -PclosepawCaptureCandidate=true \
+            --tests 'ai.closepaw.tool.action.ClickExecutorTest' \
+            --tests 'ai.closepaw.tool.action.TypeExecutorTest' \
+            --tests 'ai.closepaw.platform.virtualdisplay.ScreenObservationConsentTest'
+          echo "HISTORICAL_QA_SMOKE=JVM_PASS_ONLY_NO_DEVICE_INSTALL"
       - name: Build dedicated side-by-side debug app and test APK
         env:
           GITHUB_SHA: 'dd89604a111de9c33d04c21f97ede5c903db5d41'
