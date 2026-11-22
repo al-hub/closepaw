@@ -11,6 +11,9 @@ internal class KeyboardScanDiagnostics {
     private var clickable = 0
     private var textEntry = 0
     private var recognized = 0
+    // Counts only: not native touch authority and never inferred from geometry.
+    private var caseSwitchSemanticNodes = 0
+    private var caseSwitchNativeRecognized = 0
     private val classes = linkedMapOf<String, Int>()
     private val candidates = mutableListOf<JsonObject>()
     fun record(text: String, description: String, className: String, isVisible: Boolean,
@@ -23,8 +26,17 @@ internal class KeyboardScanDiagnostics {
         if (canClick) clickable++
         if (textEntryKey) textEntry++
         if (accepted) recognized++
-        if (!enabled || candidates.size >= 40) return
+        if (!enabled) return
         val semantic = KeyboardKeyPolicy.identify(text, description, className, true, true) ?: return
+        // Count allowlisted case-switch labels across the FULL traversal. The
+        // presented candidate list is capped at 40, often before the bottom row.
+        // No role is inferred from a missing/anonymous native label.
+        if (semantic.kind == KeyboardKeyPolicy.Kind.LAYOUT &&
+            semantic.label.lowercase() in setOf("shift", "caps lock", "⇧", "⇪")) {
+            caseSwitchSemanticNodes++
+            if (accepted) caseSwitchNativeRecognized++
+        }
+        if (candidates.size >= 40) return
         candidates.add(buildJsonObject {
             put("label", semantic.label); put("class", className.take(100))
             put("clickable", canClick); put("text_entry_key", textEntryKey); put("recognized", accepted)
@@ -33,6 +45,8 @@ internal class KeyboardScanDiagnostics {
     fun json() = buildJsonObject {
         put("visited", visited); put("visible", visible); put("clickable", clickable)
         put("text_entry_keys", textEntry); put("recognized_keys", recognized)
+        put("case_switch_semantic_nodes", caseSwitchSemanticNodes)
+        put("case_switch_native_recognized", caseSwitchNativeRecognized)
         put("classes", buildJsonObject { classes.forEach { (name, count) -> put(name, count) } })
         put("diagnostic_only", true); put("candidates", JsonArray(candidates))
     }

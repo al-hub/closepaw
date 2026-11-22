@@ -12,6 +12,7 @@ class KeyboardLayoutInputTest {
         var frozen = false
         var shiftMissing = false
         var shiftNotTextEntry = false
+        var noTextEntryKeys = false
         var duplicateShift = false
         var field = ControlNode(1, resourceId = "app:id/input", className = "EditText", bounds = "0 0 100 50",
             editable = true, focused = true, focusable = true, selectionStart = 0, selectionEnd = 0,
@@ -24,7 +25,7 @@ class KeyboardLayoutInputTest {
             val present = if (shiftMissing) labels.filterNot { it == "Shift" } else labels
             if (duplicateShift && "Shift" in present) present + "Shift" else present
         }.mapIndexed { i, label -> ControlNode(i + 2, text = label, keyboardKey = label,
-            clickable = true, textEntryKey = label != "Shift" || !shiftNotTextEntry,
+            clickable = true, textEntryKey = !noTextEntryKeys && (label != "Shift" || !shiftNotTextEntry),
             sourceWindowId = 2, sourcePackage = "ime") }
         override suspend fun capture() = ControlFrame("app", 1, "$layout:${field.text}", listOf(field) + keys(),
             keyboard = ControlKeyboard(2, "ime", "ime/.Input"), inputTargetId = 1, inputTarget = field, touchContext = "geometry")
@@ -55,6 +56,20 @@ class KeyboardLayoutInputTest {
         assertTrue(result.toString(), result.success); assertEquals("A1!", port.field.text)
         assertEquals(5, port.calls); assertEquals(JsonPrimitive(2), result.data["layout_steps"])
     }
+    @Test fun noNativeTextEntryKeysFailsWithoutAttemptingAnyKey() = runBlocking {
+        // A physical Galaxy IME scan reported zero native text-entry keys in
+        // 147 nodes while English lowercase QWERTY was visibly displayed.
+        // This is a synthetic failure-boundary fixture, not a native dump.
+        val port = Port().apply { noTextEntryKeys = true }
+        val result = type(port)
+        assertFalse(result.summary, result.success)
+        assertEquals("keyboard_keys_not_uniquely_observed", result.summary)
+        assertEquals(0, port.calls)
+        assertEquals("", port.field.text)
+        assertEquals(JsonPrimitive(false), result.data["action_attempted"])
+        assertEquals(JsonPrimitive(false), result.data["outcome_unknown"])
+    }
+
     @Test fun shiftMissingOrUntrustedCannotBeGuessedFromAnotherLayoutKey() = runBlocking {
         // The production Galaxy stopped before uppercase Z. The existing happy-path
         // fixture always exposed Shift as isTextEntryKey=true, so it could not
