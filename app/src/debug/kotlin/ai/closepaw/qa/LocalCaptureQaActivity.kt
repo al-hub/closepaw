@@ -98,8 +98,9 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }
         text("Approve setup first. Arm ONE run, then open the selected blank fixture and show Samsung keyboard for at least 10 seconds. Pause/X/end, lock, service loss or projection changes stop the run. No automatic retry. Returning to this page shows the historical result.")
         button("Arm one run · wait up to 10 minutes") { arm() }
-        text("DEBUG INPUT QA: A separate locally armed first-pass (not the screen-only CAPTURE_PASS). After Android access/sharing approval, arm once and open a NEW empty Chrome editor with Samsung keyboard. Each semantic physical key and final text/caret are independently checked. Stops without replay on unknown effects; no submission. Repeat/mixed suites are not yet implemented.")
-        button("Arm guarded six-key first-pass · wait for Chrome") { armOneStop() }
+        text("DEBUG INPUT QA: Separate from read-only CAPTURE_PASS. Once Android access/sharing is approved, arm locally; the candidate opens Chrome automatically and focuses only a uniquely verified empty Chrome address editor. Never overwrites existing content. Each physical key and final caret are checked; UNKNOWN stops without replay. Repeat/mixed suites remain pending.")
+        button("Arm guarded six-key first-pass · auto-open Chrome") { armOneStop() }
+        button("View saved Debug six-key checkpoint", guarded = false) { showOneStopResult() }
         button("Cancel my waiting run", guarded = false) { job?.cancel() }
         button("View historical local result") { showResult("local") }
         button("Compare same-source local / ADB contract") { compare() }
@@ -159,6 +160,12 @@ class LocalCaptureQaActivity : ComponentActivity() {
             }
         }
     }
+    private fun showOneStopResult() {
+        val checkpoint = DebugOneStopQa.lastResult(this)
+        report.text = if (checkpoint == null) "No matching-source saved Debug six-key checkpoint."
+            else "PRIVATE DEBUG QA HISTORY, not a live input result.\\n" + checkpoint.toString()
+    }
+
     private fun armOneStop() {
         if (job?.isActive == true) return
         previewIfReadyClear()
