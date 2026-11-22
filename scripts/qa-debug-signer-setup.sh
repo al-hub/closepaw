@@ -61,7 +61,15 @@ base64 -w0 "$keystore" | gh secret set CLOSEPAW_QA_DEBUG_KEYSTORE_BASE64 --repo 
 printf '%s' "$QA_SIGN_PASS" | gh secret set CLOSEPAW_QA_DEBUG_KEYSTORE_PASSWORD --repo "$repo"
 printf '%s' "$alias_name" | gh secret set CLOSEPAW_QA_DEBUG_KEY_ALIAS --repo "$repo"
 printf '%s' "$QA_SIGN_PASS" | gh secret set CLOSEPAW_QA_DEBUG_KEY_PASSWORD --repo "$repo"
-gh variable set CLOSEPAW_QA_DEBUG_CERT_SHA256 --body "$fingerprint" --repo "$repo"
+# Some owner WSL hosts run gh releases without the "variable" subcommand.
+# The standard REST repository Actions variable API is supported there.
+if gh api "repos/${repo}/actions/variables/CLOSEPAW_QA_DEBUG_CERT_SHA256" >/dev/null 2>&1; then
+  gh api -X PATCH "repos/${repo}/actions/variables/CLOSEPAW_QA_DEBUG_CERT_SHA256" \
+    -f name=CLOSEPAW_QA_DEBUG_CERT_SHA256 -f value="$fingerprint" >/dev/null
+else
+  gh api -X POST "repos/${repo}/actions/variables" \
+    -f name=CLOSEPAW_QA_DEBUG_CERT_SHA256 -f value="$fingerprint" >/dev/null
+fi
 unset QA_SIGN_PASS
 printf '\nFixed signer configured. Back up the local private keystore OFF the repo securely.\n'
 printf 'Compare installed ai.closepaw.capturecandidate signer before any update.\n'
