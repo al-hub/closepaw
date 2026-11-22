@@ -10,6 +10,9 @@ class KeyboardLayoutInputTest {
         var layout = 0
         var calls = 0
         var frozen = false
+        var shiftMissing = false
+        var shiftNotTextEntry = false
+        var duplicateShift = false
         var field = ControlNode(1, resourceId = "app:id/input", className = "EditText", bounds = "0 0 100 50",
             editable = true, focused = true, focusable = true, selectionStart = 0, selectionEnd = 0,
             sourceWindowId = 1, sourcePackage = "app")
@@ -17,8 +20,12 @@ class KeyboardLayoutInputTest {
             0 -> listOf("a", "Shift", "?123")
             1 -> listOf("A", "Shift", "?123")
             else -> listOf("1", "!", "abc")
-        }).mapIndexed { i, label -> ControlNode(i + 2, text = label, keyboardKey = label,
-            clickable = true, textEntryKey = true, sourceWindowId = 2, sourcePackage = "ime") }
+        }).let { labels ->
+            val present = if (shiftMissing) labels.filterNot { it == "Shift" } else labels
+            if (duplicateShift && "Shift" in present) present + "Shift" else present
+        }.mapIndexed { i, label -> ControlNode(i + 2, text = label, keyboardKey = label,
+            clickable = true, textEntryKey = label != "Shift" || !shiftNotTextEntry,
+            sourceWindowId = 2, sourcePackage = "ime") }
         override suspend fun capture() = ControlFrame("app", 1, "$layout:${field.text}", listOf(field) + keys(),
             keyboard = ControlKeyboard(2, "ime", "ime/.Input"), inputTargetId = 1, inputTarget = field, touchContext = "geometry")
         override suspend fun apps(filter: String) = JsonArray(emptyList())
@@ -47,6 +54,27 @@ class KeyboardLayoutInputTest {
         val port = Port(); val result = type(port)
         assertTrue(result.toString(), result.success); assertEquals("A1!", port.field.text)
         assertEquals(5, port.calls); assertEquals(JsonPrimitive(2), result.data["layout_steps"])
+    }
+    @Test fun shiftMissingOrUntrustedCannotBeGuessedFromAnotherLayoutKey() = runBlocking {
+        // The production Galaxy stopped before uppercase Z. The existing happy-path
+        // fixture always exposed Shift as isTextEntryKey=true, so it could not
+        // distinguish an absent, non-text-entry, or ambiguous native Shift.
+        // These are synthetic failure boundaries, NOT observed Galaxy node facts.
+        for ((scenario, configure) in listOf<Pair<String, Port.() -> Unit>>(
+            "missing" to { shiftMissing = true },
+            "not_text_entry" to { shiftNotTextEntry = true },
+            "ambiguous" to { duplicateShift = true },
+        )) {
+            val port = Port().apply(configure)
+            val result = type(port)
+            assertFalse("$scenario: ${result.summary}", result.success)
+            assertEquals("$scenario: preflight must reject before touching any key",
+                "keyboard_keys_not_uniquely_observed", result.summary)
+            assertEquals("$scenario: unexpected native key operation", 0, port.calls)
+            assertEquals("", port.field.text)
+            assertEquals(JsonPrimitive(false), result.data["action_attempted"])
+            assertEquals(JsonPrimitive(false), result.data["outcome_unknown"])
+        }
     }
     @Test fun acknowledgedButUnchangedLayoutStopsBeforeAnyLiteralOrRetry() = runBlocking {
         val port = Port().apply { frozen = true }; val result = type(port)
