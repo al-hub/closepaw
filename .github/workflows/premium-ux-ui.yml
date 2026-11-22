@@ -211,76 +211,7 @@ jobs:
           for line in raw.splitlines():
               match = re.search(
                   r'^\s*(?:(?:V[123]\s+)?Signer(?:\s*#\s*1)?\s*:?\s*)'
-                  r'certificate\s+SHA-256\s+digest\s*:\s*([0-9a-fA-F:\s]+)\s*
-          PY
-          )"
-          expected="$(printf '%s' "$QA_DEBUG_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
-          if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]; then echo 'Pinned QA signer digest invalid' >&2; exit 1; fi
-          if [ "$actual" != "$expected" ]; then
-            echo 'QA signer differs from pinned certificate; candidate artifact blocked.' >&2
-            exit 1
-          fi
-          printf 'qa_debug_cert_sha256=%s\n' "$actual" > build/capture-candidate/signing-identity.txt
-          printf '%s\n' "$GITHUB_SHA" > build/capture-candidate/source.txt
-          sha256sum build/capture-candidate/candidate-app.apk build/capture-candidate/candidate-tests.apk > build/capture-candidate/sha256.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: capture-candidate-${{ github.sha }}
-          path: build/capture-candidate
-          if-no-files-found: error
-          retention-days: 7
-
-  package-replacement-api37:
-    # BLOCKED: run42909197801 cannot find platforms;android-37. No unsupported retries.
-    if: false
-    # The physical handset now reports Android17/API37; keep the existing API35
-    # UI gate and test the unchanged update-receiver boundary separately here.
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-          log-accepted-android-sdk-licenses: false
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-cleanup: never
-      - name: Compile isolated debug replacement fixture
-        run: bash scripts/ci-gradle.sh replacement37-compile :app:assembleDebug :app:assembleDebugAndroidTest -Pandroid.injected.build.abi=x86_64
-      - name: Enable hardware acceleration
-        run: |
-          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
-      - name: Actual package replacement on API37
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 37
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          disk-size: 3072M
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            bash scripts/ci-gradle.sh replacement37-install :app:installDebug :app:installDebugAndroidTest -Pandroid.injected.build.abi=x86_64
-            python3 scripts/qa-package-replacement.py
-      - name: Upload API37 replacement evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-replacement-api37-${{ github.run_id }}
-          path: |
-            build/package-replacement
-            build/ci-metrics
-          if-no-files-found: warn
-          retention-days: 14
-,
+                  r'certificate\s+SHA-256\s+digest\s*:\s*([0-9a-fA-F:\s]+)\s*$',
                   line, re.I)
               if match:
                   candidates.append(re.sub(r'[:\s]', '', match.group(1)).lower())
