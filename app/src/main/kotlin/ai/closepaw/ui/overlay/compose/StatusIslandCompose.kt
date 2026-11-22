@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import ai.closepaw.BuildConfig
 import ai.closepaw.protocol.compactThought
 import ai.closepaw.ui.capsule.surface.StatusPawGlyph
 import ai.closepaw.ui.theme.ClosePawMotion
@@ -100,7 +101,8 @@ fun StatusIslandCompose(
                 contentDescription = if (userAction != null) userAction else "Status: $text"
             },
         shape = shape,
-        color = MaterialTheme.colorScheme.surface,
+        // Debug-only orange surface: immediately distinguish the live floating island.
+        color = if (BuildConfig.DEBUG) Color(0xFFFFD3A0) else MaterialTheme.colorScheme.surface,
         shadowElevation = 4.dp,
         tonalElevation = 0.dp,
     ) {
@@ -112,6 +114,13 @@ fun StatusIslandCompose(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(spacing.sm)
         ) {
+            if (BuildConfig.DEBUG) {
+                Text(
+                    text = "DEBUG",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF8B3600),
+                )
+            }
             StatusPawGlyph(
                 color = dotColor,
                 size = 14.dp,

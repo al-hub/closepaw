@@ -1,5 +1,7 @@
 package ai.closepaw.ui.chat.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -16,11 +18,14 @@ import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ai.closepaw.ui.theme.PageMasthead
+import ai.closepaw.BuildConfig
 
 /**
  * ChatHeader — Bound Edition running head.
@@ -64,6 +69,17 @@ fun ChatHeader(
             title = "ClosePaw",
             modifier = Modifier.weight(1f),
             trailingSlot = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (BuildConfig.DEBUG) {
+                        Text(
+                            text = "DEBUG",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF8B3600),
+                            modifier = Modifier
+                                .background(Color(0xFFFFD3A0), RoundedCornerShape(5.dp))
+                                .padding(horizontal = 5.dp, vertical = 3.dp),
+                        )
+                    }
                 if (showNewChatButton && onNewChatClick != null) {
                     IconButton(
                         onClick = onNewChatClick,
@@ -78,6 +94,7 @@ fun ChatHeader(
                     }
                 } else {
                     Spacer(modifier = Modifier.size(48.dp))
+                }
                 }
             },
         )

@@ -51,12 +51,14 @@ android {
 
     buildTypes {
         debug {
+            // Every debug build is visually branded; no production resource is changed.
+            manifestPlaceholders["closepawAppLabel"] = "ClosePaw DEBUG"
             buildConfigField("String", "CAPTURE_QA_SOURCE_SHA", "\"${providers.environmentVariable("GITHUB_SHA").orNull ?: "unavailable"}\"")
             // Opt-in side-by-side physical capture acceptance, never a production update.
             if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
                 applicationIdSuffix = ".capturecandidate"
                 versionNameSuffix = "-capturecandidate"
-                manifestPlaceholders["closepawAppLabel"] = "ClosePaw Capture Candidate"
+                manifestPlaceholders["closepawAppLabel"] = "ClosePaw DEBUG"
                 manifestPlaceholders["captureQaEnabled"] = "true"
                 ndk { abiFilters += "arm64-v8a" }
             }
