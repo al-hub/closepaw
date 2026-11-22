@@ -17,6 +17,16 @@ class ChatGptAutoConnectTest {
 
     @Test fun explicitStopSurvivesActivityResumeAndBootRestore() {
         assertFalse(ChatGptAutoConnectPolicy.shouldRestore(configured = true, enabled = false))
+        assertFalse(ChatGptAutoConnectPolicy.shouldRestore(configured = false, enabled = false, localOnlyCandidate = true))
+    }
+
+    @Test fun optedInCaptureCandidateRestoresLocalOnlyButProductionStillRequiresConfig() {
+        assertTrue(ChatGptAutoConnectPolicy.shouldRestore(
+            configured = false, enabled = true, localOnlyCandidate = true))
+        assertFalse(ChatGptAutoConnectPolicy.shouldRestore(
+            configured = false, enabled = true, localOnlyCandidate = false))
+        assertTrue(ChatGptAutoConnectPolicy.shouldRestore(
+            configured = true, enabled = true, localOnlyCandidate = false))
     }
 
     @Test fun processFailureRetriesAndDuplicateStartDoesNotCreateAnotherLoop() = runTest {
