@@ -65,5 +65,10 @@ gh variable set CLOSEPAW_QA_DEBUG_CERT_SHA256 --body "$fingerprint" --repo "$rep
 unset QA_SIGN_PASS
 printf '\nFixed signer configured. Back up the local private keystore OFF the repo securely.\n'
 printf 'Compare installed ai.closepaw.capturecandidate signer before any update.\n'
-printf 'Run candidate CI after owner reviews this PR workflow; do not auto-install.\n'
+printf 'The user executing this command authorizes candidate-only CI signing.\n'
+printf 'Triggering candidate workflow for reviewed QA branch; no handset install.\n'
+gh workflow run premium-ux-ui.yml --repo "$repo" \
+  --ref 'test/147-orange-debug-candidate-20261122' \
+  --field build_capture_candidate=true
 printf 'Workflow: https://github.com/al-hub/closepaw/actions/workflows/premium-ux-ui.yml\n'
+printf 'Candidate artifact must pass exact-source Security/UI, identity and signer checks before install.\n'
