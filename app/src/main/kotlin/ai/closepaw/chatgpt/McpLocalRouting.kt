@@ -8,7 +8,7 @@ package ai.closepaw.chatgpt
  */
 internal object McpLocalRouting {
     private const val CAPTURE_CANDIDATE_PACKAGE = "ai.closepaw.capturecandidate"
-    private const val CAPTURE_CANDIDATE_PORT = 18427
+    private const val CAPTURE_CANDIDATE_PORT = 18428
 
     fun isCaptureCandidate(packageName: String): Boolean =
         packageName == CAPTURE_CANDIDATE_PACKAGE
