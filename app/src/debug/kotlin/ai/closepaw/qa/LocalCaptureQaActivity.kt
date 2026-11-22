@@ -27,6 +27,8 @@ import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -44,6 +46,10 @@ class LocalCaptureQaActivity : ComponentActivity() {
     private lateinit var preview: ImageView
     private val guardedButtons = mutableListOf<Button>()
     private var job: Job? = null
+    // Only an explicit local 'Arm guarded six-key' action may set this latch.
+    // It never survives Activity destruction or a denied/cancelled OS consent.
+    private var armedAfterConsent = false
+    private var consentHandoffJob: Job? = null
     private var bitmap: Bitmap? = null
 
     private val consent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -51,9 +57,39 @@ class LocalCaptureQaActivity : ComponentActivity() {
         val id = UUID.randomUUID().toString()
         val granted = result.resultCode == Activity.RESULT_OK && result.data != null
         when (gate.onDecision(granted, id.takeIf { granted })) {
-            is ProjectionConsentState.Granted -> MediaProjectionCaptureService.startFromConsent(this, result.resultCode, result.data!!, id)
-            is ProjectionConsentState.Denied -> status.text = "Observation approval denied; no run started."
-            else -> gate.onCancelled()
+            is ProjectionConsentState.Granted -> {
+                MediaProjectionCaptureService.startFromConsent(this, result.resultCode, result.data!!, id)
+                if (armedAfterConsent) {
+                    consentHandoffJob?.cancel()
+                    consentHandoffJob = lifecycleScope.launch {
+                        // The OS approval callback precedes foreground-service lease publication.
+                        // Bounded passive observation; never synthesize another approval or click.
+                        val ready = withTimeoutOrNull(10_000L) {
+                            while (armedAfterConsent && !isDestroyed && !isFinishing) {
+                                if (ProjectionImageTransport.active()?.screenObservationAllowed() == true)
+                                    return@withTimeoutOrNull true
+                                delay(125L)
+                            }
+                            false
+                        } == true
+                        if (ready && armedAfterConsent && !isDestroyed && !isFinishing) {
+                            armedAfterConsent = false
+                            runGuardedSixKeyNow()
+                        } else {
+                            armedAfterConsent = false
+                            if (!isDestroyed) status.text = "Approved projection not ready; no QA input was started."
+                        }
+                    }
+                }
+            }
+            is ProjectionConsentState.Denied -> {
+                armedAfterConsent = false
+                status.text = "Observation approval denied; no run started."
+            }
+            else -> {
+                armedAfterConsent = false
+                gate.onCancelled()
+            }
         }
         refreshSetup()
     }
@@ -105,7 +141,9 @@ class LocalCaptureQaActivity : ComponentActivity() {
         text("DEBUG INPUT QA: Separate from read-only CAPTURE_PASS. Once Android access/sharing is approved, arm locally; the candidate opens Chrome automatically and focuses only a uniquely verified empty Chrome address editor. Never overwrites existing content. Each physical key and final caret are checked; UNKNOWN stops without replay. Repeat/mixed suites remain pending.")
         button("Arm guarded six-key first-pass · auto-open Chrome") { armOneStop() }
         button("View saved Debug six-key checkpoint", guarded = false) { showOneStopResult() }
-        button("Cancel my waiting run", guarded = false) { job?.cancel() }
+        button("Cancel my waiting run", guarded = false) {
+            armedAfterConsent = false; consentHandoffJob?.cancel(); job?.cancel()
+        }
         button("View historical local result") { showResult("local") }
         button("Compare same-source local / ADB contract") { compare() }
         button("Export selected historical result ZIP (may contain saved pixels)") { export() }
@@ -130,23 +168,30 @@ class LocalCaptureQaActivity : ComponentActivity() {
     override fun onDestroy() {
         ai.closepaw.chatgpt.control.ControlDiagnostics.record(
             "debug_qa_activity", if (job?.isActive == true) "destroyed_with_run" else "destroyed_idle")
+        armedAfterConsent = false; consentHandoffJob?.cancel()
         job?.cancel(); previewIfReadyClear(); super.onDestroy()
     }
     private fun refreshSetup() {
         if (!::status.isInitialized) return
         status.text = "Setup: ${CaptureQaAcceptance.setup(this)}; observation=${ProjectionImageTransport.active()?.screenObservationAllowed() == true}; qa_busy=${CaptureQaAcceptance.isRunning()}"
     }
-    private fun requestObservation() {
-        if (Build.VERSION.SDK_INT < 34) { status.text = "Android 14+ required"; return }
+    private fun requestObservation(): Boolean {
+        if (Build.VERSION.SDK_INT < 34) { status.text = "Android 14+ required"; return false }
         val gate = MediaProjectionCaptureService.consentGate
         if (gate.state == ProjectionConsentState.Consumed) {
             status.text = "Stop existing sharing using the SYSTEM sharing indicator first; this screen never upgrades a live share."
-            return
+            return false
         }
-        if (!gate.onRequestStarted(screenObservation = true)) { status.text = "Existing approval round preserved"; return }
-        try {
-            consent.launch(getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay()))
-        } catch (_: Exception) { gate.onCancelled(); status.text = "Android approval request unavailable" }
+        if (!gate.onRequestStarted(screenObservation = true)) {
+            status.text = "Existing approval round preserved"; return false
+        }
+        return try {
+            consent.launch(getSystemService(MediaProjectionManager::class.java)
+                .createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay()))
+            true
+        } catch (_: Exception) {
+            gate.onCancelled(); status.text = "Android approval request unavailable"; false
+        }
     }
     private fun selectedFixture() = CaptureQaAcceptance.fixtures[fixture.selectedItemPosition]
     private fun selectedScope() = CaptureQaAcceptance.scopes[scope.selectedItemPosition]
@@ -182,7 +227,21 @@ class LocalCaptureQaActivity : ComponentActivity() {
     }
 
     private fun armOneStop() {
-        if (job?.isActive == true) return
+        if (job?.isActive == true || armedAfterConsent || consentHandoffJob?.isActive == true) return
+        if (ProjectionImageTransport.active()?.screenObservationAllowed() != true) {
+            armedAfterConsent = true
+            if (requestObservation()) {
+                status.text = "Approve Android screen sharing; guarded six-key QA will continue automatically."
+            } else {
+                armedAfterConsent = false
+            }
+            return
+        }
+        runGuardedSixKeyNow()
+    }
+
+    private fun runGuardedSixKeyNow() {
+        if (job?.isActive == true || isDestroyed || isFinishing) return
         previewIfReadyClear()
         report.text = "New Debug physical-input run requested; historical capture PASS is not input PASS."
         guardedButtons.forEach { it.isEnabled = false }

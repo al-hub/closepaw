@@ -170,6 +170,7 @@ internal object DebugOneStopQa {
         var uncertain = false
         var stage = "preflight"
         var preflightFacts: EditorPreflightFacts? = null
+        var nativePreflightRefusal: String? = null
         val started = SystemClock.elapsedRealtime()
         fun result(outcome: String, reason: String) = buildJsonObject {
             put("schema_version", 1)
@@ -190,6 +191,10 @@ internal object DebugOneStopQa {
             put("elapsed_ms", SystemClock.elapsedRealtime() - started)
             put("repetitions_completed", if (outcome == "PASS") 1 else 0)
             preflightFacts?.let { put("editor_preflight_checks", it.redactedJson()) }
+            // A native fixed reason code only: never store Chrome content, package text or pixels.
+            nativePreflightRefusal?.takeIf {
+                it.length in 1..80 && it.matches(Regex("[a-z0-9_]+"))
+            }?.let { put("native_preflight_refusal", it) }
         }
         fun checkpoint(why: String) {
             write(context, result("IN_PROGRESS", why))
@@ -258,6 +263,14 @@ internal object DebugOneStopQa {
             stage = "editor_preflight"
             checkpoint("native_preflight")
             var first = port.capture()
+            nativePreflightRefusal = first.reason
+            // A Chrome activity handoff can briefly have no active accessibility root.
+            // One passive resample before any click/key; never retry a native safety refusal.
+            if (first.reason == "active_root_missing") {
+                delay(250L)
+                first = port.capture()
+                nativePreflightRefusal = first.reason
+            }
             preflightFacts = editorPreflightFacts(first)
             // An unselected Chrome omnibox can be blank without an active IME.
             // Focus at most one real, uniquely exposed *empty* Chrome editor
@@ -302,6 +315,7 @@ internal object DebugOneStopQa {
                     return stop("chrome_editor_focus_unconfirmed")
                 }
                 first = port.capture()
+                nativePreflightRefusal = first.reason
                 preflightFacts = editorPreflightFacts(first)
                 stage = "editor_preflight"
                 checkpoint("chrome_editor_focus_observed")
