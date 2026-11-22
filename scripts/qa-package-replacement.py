@@ -48,20 +48,30 @@ def healthy(url):
 
 
 def installed_apk():
-    # AGP installs its exact selected variant first. Ask Android for the installed
-    # base APK instead of assuming a Gradle output path on the runner.
+    # CI installs the assembled debug APK before this fixture. The host build
+    # already has those exact bytes. Avoid copying a large APK back over the
+    # emulator ADB link, which previously failed at 67% (run 45016428695).
+    # Verify the installed on-device base APK is byte-identical via SHA-256.
     paths = adb("shell", "pm", "path", PACKAGE).splitlines()
     if len(paths) != 1 or not paths[0].startswith("package:/data/app/"):
         raise RuntimeError("expected one installed fixture base APK")
     remote = paths[0].removeprefix("package:")
-    if not remote.endswith(".apk"):
+    if not remote.endswith("/base.apk"):
         raise RuntimeError("invalid installed APK path")
-    staged = Path("build/package-replacement-input/base.apk").resolve()
-    staged.parent.mkdir(parents=True, exist_ok=True)
-    adb("pull", remote, str(staged))
-    evidence["fixture_apk_bytes"] = staged.stat().st_size
-    evidence["fixture_apk_sha256"] = hashlib.sha256(staged.read_bytes()).hexdigest()
-    return str(staged)
+    built = Path("app/build/outputs/apk/debug/app-debug.apk").resolve()
+    if not built.is_file() or built.stat().st_size < 1000:
+        raise RuntimeError("assembled fixture debug APK is missing")
+    local_hash = hashlib.sha256(built.read_bytes()).hexdigest()
+    remote_line = adb("shell", "sha256sum", remote, timeout=90)
+    remote_hash = remote_line.split(maxsplit=1)[0] if remote_line else ""
+    if len(remote_hash) != 64 or any(ch not in "0123456789abcdefABCDEF" for ch in remote_hash):
+        raise RuntimeError("installed fixture hash cannot be verified")
+    if remote_hash.lower() != local_hash:
+        raise RuntimeError("installed fixture differs from assembled debug APK")
+    evidence["fixture_apk_bytes"] = built.stat().st_size
+    evidence["fixture_apk_sha256"] = local_hash
+    evidence["fixture_apk_identity"] = "device_base_sha256_matches_local_assembled"
+    return str(built)
 
 
 def diagnostics(stage):
