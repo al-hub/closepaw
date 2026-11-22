@@ -10,11 +10,16 @@ class DebugOneStopQaTest {
         for (i in expected.indices) {
             assertTrue(DebugOneStopQa.SixKey.matches(expected[i], expected[i].length,
                 expected[i].length, i))
-            assertFalse(DebugOneStopQa.SixKey.matches(expected[i], 0, 0, i).takeIf { i > 0 } ?: false)
+            if (i > 0) assertFalse(DebugOneStopQa.SixKey.matches(expected[i], 0, 0, i))
         }
         assertFalse(DebugOneStopQa.SixKey.matches("가 나", 3, 3, 6))
         assertFalse(DebugOneStopQa.SixKey.matches("가 나 ", 3, 3, 6))
         assertFalse(DebugOneStopQa.SixKey.matches("가 나  ", 5, 5, 6))
+    }
+
+    @Test fun canonicalMixedBenchmarkCannotDrift() {
+        assertEquals("오늘 회의는 zoom으로 3시에 시작, 자료는 2개.", DebugOneStopQa.MIXED_29)
+        assertEquals(29, DebugOneStopQa.MIXED_29.length)
     }
 
     @Test fun deniedUnknownOrUnattemptedKeyIsNeverAdvancedOrReplayed() {
