@@ -119,6 +119,12 @@ android {
             // Force extraction at install time so applicationInfo.nativeLibraryDir contains
             // a real executable file, matching the proven Android MCP tunnel pattern.
             useLegacyPackaging = true
+            // Conscrypt 2.5.2 ships a 4KiB-aligned JNI ELF. Only the isolated
+            // capture candidate omits it: the QA path does not perform ADB pairing.
+            // Production and ordinary debug continue shipping the dependency.
+            if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
+                excludes += "**/libconscrypt_jni.so"
+            }
         }
         resources {
             excludes += "META-INF/DEPENDENCIES"

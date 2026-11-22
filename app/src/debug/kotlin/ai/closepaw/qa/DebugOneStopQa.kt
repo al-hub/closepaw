@@ -49,6 +49,64 @@ internal object DebugOneStopQa {
     private const val CHROME = "com.android.chrome"
     private const val SAMSUNG_IME = "com.samsung.android.honeyboard"
 
+    /** Content-free native readiness facts; these do not relax native action guards. */
+    internal data class EditorPreflightFacts(
+        val frameReady: Boolean, val complete: Boolean, val navigationSafe: Boolean,
+        val chromeForeground: Boolean, val keyboardPresent: Boolean, val samsungIme: Boolean,
+        val keyboardReadAllowed: Boolean, val keyboardInteractAllowed: Boolean,
+        val editorPresent: Boolean, val chromeEditorOwned: Boolean,
+        val editorFocused: Boolean, val editorEditable: Boolean,
+        val nonPassword: Boolean, val editorEmpty: Boolean, val selectionAtOrigin: Boolean,
+    ) {
+        fun redactedJson() = buildJsonObject {
+            put("frame_ready", frameReady); put("frame_complete", complete)
+            put("navigation_safe", navigationSafe); put("chrome_foreground", chromeForeground)
+            put("keyboard_present", keyboardPresent); put("samsung_ime", samsungIme)
+            put("keyboard_read_allowed", keyboardReadAllowed)
+            put("keyboard_interact_allowed", keyboardInteractAllowed)
+            put("editor_present", editorPresent); put("chrome_editor_owned", chromeEditorOwned)
+            put("editor_focused", editorFocused); put("editor_editable", editorEditable)
+            put("non_password", nonPassword); put("editor_empty", editorEmpty)
+            put("selection_at_origin", selectionAtOrigin)
+        }
+    }
+
+    internal fun editorPreflightFacts(frame: ControlFrame): EditorPreflightFacts {
+        val keyboard = frame.keyboard
+        val editor = frame.inputTarget
+        return EditorPreflightFacts(
+            frameReady = frame.reason == null, complete = !frame.truncated,
+            navigationSafe = !frame.navigationOnly, chromeForeground = frame.packageName == CHROME,
+            keyboardPresent = keyboard != null, samsungIme = keyboard?.packageName == SAMSUNG_IME,
+            keyboardReadAllowed = keyboard?.readAllowed == true,
+            keyboardInteractAllowed = keyboard?.interactAllowed == true,
+            editorPresent = editor != null, chromeEditorOwned = editor?.sourcePackage == CHROME,
+            editorFocused = editor?.focused == true, editorEditable = editor?.editable == true,
+            nonPassword = editor != null && !editor.password,
+            editorEmpty = editor?.text?.isEmpty() == true,
+            selectionAtOrigin = editor?.selectionStart == 0 && editor.selectionEnd == 0,
+        )
+    }
+
+    internal fun editorPreflightReason(f: EditorPreflightFacts): String? = when {
+        !f.frameReady -> "preflight_frame_unavailable"
+        !f.complete -> "preflight_frame_truncated"
+        !f.navigationSafe -> "preflight_navigation_only"
+        !f.chromeForeground -> "preflight_chrome_not_foreground"
+        !f.keyboardPresent -> "preflight_keyboard_missing"
+        !f.samsungIme -> "preflight_samsung_ime_missing"
+        !f.keyboardReadAllowed -> "preflight_keyboard_read_denied"
+        !f.keyboardInteractAllowed -> "preflight_keyboard_interact_denied"
+        !f.editorPresent -> "preflight_editor_missing"
+        !f.chromeEditorOwned -> "preflight_editor_owner_mismatch"
+        !f.editorFocused -> "preflight_editor_not_focused"
+        !f.editorEditable -> "preflight_editor_not_editable"
+        !f.nonPassword -> "preflight_password_editor"
+        !f.editorEmpty -> "preflight_editor_not_empty"
+        !f.selectionAtOrigin -> "preflight_selection_not_origin"
+        else -> null
+    }
+
     /** Native full-frame choice, not a guess from bounded public node JSON. */
     internal fun blankOmnibox(frame: ControlFrame): ai.closepaw.chatgpt.control.ControlNode? {
         if (frame.reason != null || frame.truncated || frame.navigationOnly ||
@@ -111,6 +169,7 @@ internal object DebugOneStopQa {
         var setupClickAttempts = 0
         var uncertain = false
         var stage = "preflight"
+        var preflightFacts: EditorPreflightFacts? = null
         val started = SystemClock.elapsedRealtime()
         fun result(outcome: String, reason: String) = buildJsonObject {
             put("schema_version", 1)
@@ -130,6 +189,7 @@ internal object DebugOneStopQa {
             put("goal_verified", outcome == "PASS" && verifiedKeys == SixKey.labels.size)
             put("elapsed_ms", SystemClock.elapsedRealtime() - started)
             put("repetitions_completed", if (outcome == "PASS") 1 else 0)
+            preflightFacts?.let { put("editor_preflight_checks", it.redactedJson()) }
         }
         fun checkpoint(why: String) {
             write(context, result("IN_PROGRESS", why))
@@ -198,6 +258,7 @@ internal object DebugOneStopQa {
             stage = "editor_preflight"
             checkpoint("native_preflight")
             var first = port.capture()
+            preflightFacts = editorPreflightFacts(first)
             // An unselected Chrome omnibox can be blank without an active IME.
             // Focus at most one real, uniquely exposed *empty* Chrome editor
             // through the same GenericControl accessibility action route.
@@ -241,16 +302,14 @@ internal object DebugOneStopQa {
                     return stop("chrome_editor_focus_unconfirmed")
                 }
                 first = port.capture()
+                preflightFacts = editorPreflightFacts(first)
                 stage = "editor_preflight"
                 checkpoint("chrome_editor_focus_observed")
             }
-            val target = first.inputTarget
-            if (first.reason != null || first.truncated || first.navigationOnly ||
-                first.packageName != CHROME || first.keyboard?.packageName != SAMSUNG_IME ||
-                first.keyboard?.readAllowed != true || first.keyboard?.interactAllowed != true ||
-                target == null || !target.focused || !target.editable || target.password ||
-                !SixKey.matches(target.text, target.selectionStart, target.selectionEnd, 0))
-                return stop("empty_chrome_samsung_editor_unverified")
+            // Independent reason codes and booleans are written before any key dispatch.
+            val diagnosed = editorPreflightFacts(first)
+            preflightFacts = diagnosed
+            editorPreflightReason(diagnosed)?.let { return stop(it) }
 
             for ((index, label) in SixKey.labels.withIndex()) {
                 currentCoroutineContext().ensureActive()

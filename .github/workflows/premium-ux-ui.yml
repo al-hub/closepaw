@@ -143,6 +143,10 @@ jobs:
         # Public candidate ndk.abiFilters limits packaging. No IDE-injected ABI
         # build: the app APK must install with the ordinary Android installer.
         run: bash scripts/ci-gradle.sh capture-candidate :app:stageCaptureCandidate -PclosepawCaptureCandidate=true
+      - name: Verify 16KB native ELF and APK-entry alignment
+        run: |
+          python3 -m unittest discover -s scripts/tests -p 'test_native_page_size.py'
+          python3 scripts/check_native_page_size.py build/capture-candidate/candidate-app.apk
       - name: Verify candidate identity and record exact-source integrity
         run: |
           set -euo pipefail

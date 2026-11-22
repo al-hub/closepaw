@@ -60,6 +60,7 @@ class LocalCaptureQaActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record("debug_qa_activity", "created")
         if (!BuildConfig.DEBUG || packageName != CaptureQaAcceptance.CANDIDATE) { finish(); return }
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 36, 24, 24) }
         column.setOnApplyWindowInsetsListener { view, insets ->
@@ -116,8 +117,19 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }
         refreshSetup()
     }
-    override fun onResume() { super.onResume(); if (::status.isInitialized && job?.isActive != true) refreshSetup() }
+    override fun onResume() {
+        super.onResume()
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record("debug_qa_activity", "resumed")
+        if (::status.isInitialized && job?.isActive != true) refreshSetup()
+    }
+    override fun onStop() {
+        // Do not stop the independent OS-approved projection when Chrome opens.
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record("debug_qa_activity", "stopped")
+        super.onStop()
+    }
     override fun onDestroy() {
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record(
+            "debug_qa_activity", if (job?.isActive == true) "destroyed_with_run" else "destroyed_idle")
         job?.cancel(); previewIfReadyClear(); super.onDestroy()
     }
     private fun refreshSetup() {

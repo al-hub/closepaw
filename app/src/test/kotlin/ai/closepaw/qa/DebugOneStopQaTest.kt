@@ -42,6 +42,36 @@ class DebugOneStopQaTest {
         assertNull(DebugOneStopQa.blankOmnibox(frame(listOf(safe)).copy(reason = "permission_revoked")))
     }
 
+
+    @Test fun preflightHasIndependentNonSensitiveFailureReasons() {
+        val ok = DebugOneStopQa.EditorPreflightFacts(
+            true, true, true, true, true, true, true, true,
+            true, true, true, true, true, true, true)
+        assertNull(DebugOneStopQa.editorPreflightReason(ok))
+        val cases = listOf(
+            "preflight_frame_unavailable" to ok.copy(frameReady = false),
+            "preflight_frame_truncated" to ok.copy(complete = false),
+            "preflight_navigation_only" to ok.copy(navigationSafe = false),
+            "preflight_chrome_not_foreground" to ok.copy(chromeForeground = false),
+            "preflight_keyboard_missing" to ok.copy(keyboardPresent = false),
+            "preflight_samsung_ime_missing" to ok.copy(samsungIme = false),
+            "preflight_keyboard_read_denied" to ok.copy(keyboardReadAllowed = false),
+            "preflight_keyboard_interact_denied" to ok.copy(keyboardInteractAllowed = false),
+            "preflight_editor_missing" to ok.copy(editorPresent = false),
+            "preflight_editor_owner_mismatch" to ok.copy(chromeEditorOwned = false),
+            "preflight_editor_not_focused" to ok.copy(editorFocused = false),
+            "preflight_editor_not_editable" to ok.copy(editorEditable = false),
+            "preflight_password_editor" to ok.copy(nonPassword = false),
+            "preflight_editor_not_empty" to ok.copy(editorEmpty = false),
+            "preflight_selection_not_origin" to ok.copy(selectionAtOrigin = false),
+        )
+        cases.forEach { (reason, facts) ->
+            assertEquals(reason, DebugOneStopQa.editorPreflightReason(facts))
+        }
+        assertEquals(15, cases.size)
+        assertFalse(ok.redactedJson().toString().contains("text"))
+    }
+
     @Test fun deniedUnknownOrUnattemptedKeyIsNeverAdvancedOrReplayed() {
         val p = DebugOneStopQa.SixKey
         assertTrue(p.mayContinue(attempted = true, unknown = false, verified = true))
