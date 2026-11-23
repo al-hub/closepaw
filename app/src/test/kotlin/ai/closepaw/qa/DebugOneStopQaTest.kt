@@ -72,6 +72,16 @@ class DebugOneStopQaTest {
         assertFalse(ok.redactedJson().toString().contains("text"))
     }
 
+    @Test fun transientReadOnlyCaptureCanResampleButSecurityRefusalsCannot() {
+        val canRetry = DebugOneStopQa::readOnlyResampleReason
+        assertTrue(canRetry("active_root_missing"))
+        assertTrue(canRetry("secure_window_changed"))
+        listOf(null, "secure_window", "secure_window_probe_failed",
+            "secure_window_probe_throttled", "device_locked",
+            "screen_share_revoked", "generic_control_disabled",
+            "preflight_frame_truncated").forEach { assertFalse(canRetry(it)) }
+    }
+
     @Test fun deniedUnknownOrUnattemptedKeyIsNeverAdvancedOrReplayed() {
         val p = DebugOneStopQa.SixKey
         assertTrue(p.mayContinue(attempted = true, unknown = false, verified = true))

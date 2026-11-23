@@ -107,6 +107,11 @@ internal object DebugOneStopQa {
         else -> null
     }
 
+    /** A fresh full native security scan is allowed once for a transient invalid window.
+     * Never retry a proven secure window, an unknown failure, or any dispatched action. */
+    internal fun readOnlyResampleReason(reason: String?): Boolean =
+        reason == "active_root_missing" || reason == "secure_window_changed"
+
     /** Native full-frame choice, not a guess from bounded public node JSON. */
     internal fun blankOmnibox(frame: ControlFrame): ai.closepaw.chatgpt.control.ControlNode? {
         if (frame.reason != null || frame.truncated || frame.navigationOnly ||
@@ -260,14 +265,20 @@ internal object DebugOneStopQa {
                 return stop("explicit_session_start_refused")
             active = true
             port.activity(true)
+            // Chrome's accessibility window can be replaced during the first resume
+            // animation. Let the foreground settle before a fresh full security scan.
+            delay(350L)
+            if (!allowed()) return stop("control_authority_revoked")
             stage = "editor_preflight"
             checkpoint("native_preflight")
             var first = port.capture()
             nativePreflightRefusal = first.reason
-            // A Chrome activity handoff can briefly have no active accessibility root.
-            // One passive resample before any click/key; never retry a native safety refusal.
-            if (first.reason == "active_root_missing") {
-                delay(250L)
+            // Invalid window references are common immediately after Chrome resumes.
+            // A single *new complete native security probe* is allowed, not an
+            // action retry or reuse of the failed security verdict.
+            if (readOnlyResampleReason(first.reason)) {
+                delay(350L)
+                if (!allowed()) return stop("control_authority_revoked")
                 first = port.capture()
                 nativePreflightRefusal = first.reason
             }
@@ -277,6 +288,11 @@ internal object DebugOneStopQa {
             // through the same GenericControl accessibility action route.
             if (first.reason == null && first.packageName == CHROME &&
                 first.keyboard?.packageName != SAMSUNG_IME) {
+                // An incomplete browser tree can never authorize a safe native
+                // focus click. Report the actual refusal rather than mislabeling
+                // it as an absent empty Chrome omnibox.
+                if (first.truncated) return stop("preflight_frame_truncated")
+                if (first.navigationOnly) return stop("preflight_navigation_only")
                 // Password/empty status are intentionally not disclosed in
                 // public node JSON. Obtain those restrictions from the native
                 // complete frame before selecting a single disclosed node ID.
