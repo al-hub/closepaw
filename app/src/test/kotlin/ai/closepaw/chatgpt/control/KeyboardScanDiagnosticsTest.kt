@@ -19,6 +19,30 @@ class KeyboardScanDiagnosticsTest {
         assertFalse(result.toString().contains("private"))
         assertNull(KeyboardKeyPolicy.identify("a", "", "android.widget.Button", true, false))
     }
+    @Test fun caseSwitchEvidenceCountsFullScanNotOnlyFirstFortyCandidates() {
+        val scan = KeyboardScanDiagnostics()
+        repeat(45) { scan.record("a", "", "android.widget.TextView", true, true, false, false, false) }
+        scan.record("Shift", "", "android.view.ViewGroup", true, true, false, false, false)
+        scan.record("⇧", "", "android.view.ViewGroup", true, true, false, false, false)
+        scan.record("Caps lock", "", "android.widget.Button", true, true, true, true, true)
+        val result = scan.json()
+        assertEquals(40, result.getValue("candidates").jsonArray.size)
+        assertEquals(3, result.getValue("case_switch_semantic_nodes").jsonPrimitive.int)
+        assertEquals(1, result.getValue("case_switch_native_recognized").jsonPrimitive.int)
+        assertNull(KeyboardKeyPolicy.identify("Shift", "", "android.view.ViewGroup", false, false))
+        assertTrue(result.getValue("diagnostic_only").jsonPrimitive.boolean)
+    }
+
+    @Test fun missingCaseSwitchLabelIsNotGuessedFromAnAnonymousWrapper() {
+        val scan = KeyboardScanDiagnostics()
+        scan.record("", "", "android.view.ViewGroup", true, true, false, false, false)
+        scan.record("q", "", "android.widget.TextView", true, true, false, false, false)
+        val result = scan.json()
+        assertEquals(0, result.getValue("case_switch_semantic_nodes").jsonPrimitive.int)
+        assertEquals(0, result.getValue("case_switch_native_recognized").jsonPrimitive.int)
+        assertEquals(0, result.getValue("text_entry_keys").jsonPrimitive.int)
+    }
+
     @Test fun candidateOutputIsBounded() {
         val scan = KeyboardScanDiagnostics()
         repeat(100) { scan.record("a", "", "Button", true, true, true, false, false) }
