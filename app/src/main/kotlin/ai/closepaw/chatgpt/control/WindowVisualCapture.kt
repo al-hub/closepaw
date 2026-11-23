@@ -104,8 +104,10 @@ internal object WindowVisualCapture {
                 val source = bitmap ?: return@withContext failure("screenshot_bitmap_copy_failed")
                 val coordinates = geometry?.frame ?: window
                 if (source.width != coordinates.right-coordinates.left || source.height != coordinates.bottom-coordinates.top) {
-                    recordGeometryMismatch(service, if (display) "display" else "window",
-                        source.width, source.height, coordinates)
+                    // Local-authority geometry is private and may not enter shared diagnostics.
+                    if (captureRefusal == null)
+                        recordGeometryMismatch(service, if (display) "display" else "window",
+                            source.width, source.height, coordinates)
                     return@withContext failure("screenshot_buffer_geometry_mismatch")
                 }
                 if (source.width.toLong()*source.height > 8_000_000) return@withContext failure("screenshot_pixel_limit")
@@ -244,7 +246,9 @@ internal object WindowVisualCapture {
             val buffer=captured.hardwareBuffer
             val width=buffer.width;val height=buffer.height
             if(minimumUptimeMs < 0 && (width!=bounds.right-bounds.left || height!=bounds.bottom-bounds.top)) {
-                recordGeometryMismatch(service, "isolated_window", buffer.width, buffer.height, bounds)
+                // Local-authority geometry is private and may not enter shared diagnostics.
+                if (captureRefusal == null)
+                    recordGeometryMismatch(service, "isolated_window", buffer.width, buffer.height, bounds)
                 return PixelResult(reason="screenshot_buffer_geometry_mismatch")
             }
             if(width<=0 || height<=0 || width.toLong()*height>8_000_000) return PixelResult(reason="screenshot_pixel_limit")
