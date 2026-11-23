@@ -475,7 +475,8 @@ internal object DebugOneStopQa {
             put("input_method_package", SAMSUNG_IME)
             put("suite", "six_key_first_pass")
             put("stage", stage)
-            put("last_safe_checkpoint", stage)
+            put("last_safe_checkpoint", if (verifiedKeys == 0) "before_first_key" else
+                "key_" + verifiedKeys + "_confirmed")
             put("outcome", outcome)
             put("reason", reason)
             put("completed_keys", verifiedKeys)
