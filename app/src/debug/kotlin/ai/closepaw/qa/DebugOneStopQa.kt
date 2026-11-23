@@ -207,6 +207,8 @@ internal object DebugOneStopQa {
         val fullFrame: Boolean, val chromeNodeCount: Int, val urlBarCount: Int,
         val searchBoxCount: Int, val clickableCount: Int, val editableCount: Int,
         val enabledCount: Int, val passwordCount: Int, val blankCount: Int,
+        val menuIdCount: Int, val menuClickableCount: Int, val menuEnabledCount: Int,
+        val menuEligibleCount: Int, val menuForeignOwnerCount: Int,
     ) {
         fun redactedJson() = buildJsonObject {
             put("full_frame", fullFrame); put("chrome_owned_nodes", chromeNodeCount)
@@ -215,6 +217,11 @@ internal object DebugOneStopQa {
             put("enabled_matches", enabledCount); put("password_matches", passwordCount)
             put("blank_matches", blankCount)
             put("duplicate_candidates", urlBarCount + searchBoxCount > 1)
+            put("menu_id_matches", menuIdCount)
+            put("menu_clickable_matches", menuClickableCount)
+            put("menu_enabled_matches", menuEnabledCount)
+            put("menu_eligible_matches", menuEligibleCount)
+            put("menu_foreign_owner_or_window_matches", menuForeignOwnerCount)
         }
     }
 
@@ -224,10 +231,18 @@ internal object DebugOneStopQa {
         val bars = owned.filter { it.resourceId == "$CHROME:id/url_bar" }
         val search = owned.filter { it.resourceId == "$CHROME:id/search_box_text" }
         val candidates = bars + search
+        val menuId = "$CHROME:id/menu_button"
+        val menu = owned.filter { it.resourceId == menuId }
+        val foreignMenu = frame.nodes.count {
+            it.resourceId == menuId &&
+                (it.sourcePackage != CHROME || it.sourceWindowId != frame.windowId)
+        }
         return ChromeSelectorFacts(safeChromeFrame(frame), owned.size, bars.size, search.size,
             candidates.count { it.clickable }, candidates.count { it.editable },
             candidates.count { it.enabled }, candidates.count { it.password },
-            candidates.count { it.empty && it.text.isEmpty() })
+            candidates.count { it.empty && it.text.isEmpty() },
+            menu.size, menu.count { it.clickable }, menu.count { it.enabled },
+            menu.count { it.clickable && it.enabled && !it.password }, foreignMenu)
     }
 
     /** Verified Chrome tab-switcher accessibility role; read-only counter. */
@@ -539,6 +554,12 @@ internal object DebugOneStopQa {
         }
     }
 
+    /** Same device clock domains as Android logcat -v epoch. No app content. */
+    internal fun deviceClockEvidence(epochMs: Long, elapsedRealtimeMs: Long) = buildJsonObject {
+        put("epoch_ms", epochMs)
+        put("elapsed_realtime_ms", elapsedRealtimeMs)
+    }
+
     suspend fun run(context: Context, status: (String) -> Unit, diagnosticOnly: Boolean = false,
                     batchId: String? = null): JsonObject {
         require(BuildConfig.DEBUG && context.packageName == CaptureQaAcceptance.CANDIDATE)
@@ -557,15 +578,23 @@ internal object DebugOneStopQa {
         fun recordStep(stepId: String, statusCode: String, reasonCode: String,
                        details: JsonObject = buildJsonObject {}) {
             if (stepEvents.size >= 20) return
+            val sequence = stepEvents.size + 1
+            val eventEpochMs = System.currentTimeMillis()
+            val eventElapsedMs = SystemClock.elapsedRealtime()
             stepEvents += buildJsonObject {
-                put("sequence", stepEvents.size + 1)
+                put("sequence", sequence)
                 put("run_id", runId)
+                put("device_clock", deviceClockEvidence(eventEpochMs, eventElapsedMs))
                 put("step_id", safeCode(stepId))
                 put("status", safeCode(statusCode.lowercase()).uppercase())
                 put("reason_code", safeCode(reasonCode))
                 put("elapsed_ms", SystemClock.elapsedRealtime() - eventStartElapsedMs)
                 put("facts", details)
             }
+            // ADB logcat correlation marker. Never log frame content, URLs,
+            // keyboard labels, pixels, coordinates or any arbitrary error string.
+            android.util.Log.i("ClosePawQaClock",
+                "run_id=$runId seq=$sequence epoch_ms=$eventEpochMs elapsed_realtime_ms=$eventElapsedMs")
         }
         var verifiedKeys = 0
         var attempts = 0
@@ -606,6 +635,8 @@ internal object DebugOneStopQa {
             put("version_name", BuildConfig.VERSION_NAME)
             put("version_code", BuildConfig.VERSION_CODE)
             put("started_at_epoch_ms", startedEpochMs)
+            put("started_at_elapsed_realtime_ms", started)
+            put("device_clock_contract", "android_epoch_ms_plus_elapsed_realtime_ms")
             if (outcome != "IN_PROGRESS") put("ended_at_epoch_ms", System.currentTimeMillis())
             put("fixture_package", CHROME)
             put("input_method_package", SAMSUNG_IME)
