@@ -13,6 +13,7 @@ import ai.closepaw.platform.virtualdisplay.ProjectionImageTransport
 import android.content.Context
 import android.os.SystemClock
 import android.util.AtomicFile
+import android.view.accessibility.AccessibilityWindowInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -116,6 +117,83 @@ internal object DebugOneStopQa {
         reason == "active_root_missing" || reason == "secure_window_changed" ||
             reason == "screen_changed"
 
+
+
+    /** P0 regression: Chromium can report a Chrome root before its ACTIVE+FOCUSED
+     * AccessibilityWindowInfo settles. Native secure-window refusal remains fatal.
+     * This gate permits ONLY fresh read-only captures; never action replay. */
+    internal fun mayResampleChromeTransition(reason: String?, chromeRoot: Boolean, reads: Int): Boolean =
+        reads in 1..2 && (readOnlyResampleReason(reason) ||
+            (reason == "foreground_application_required" && chromeRoot))
+
+    /** Content-free facts from the *same* OS window identity that native
+     * ControlWindowPolicy requires, for diagnosing foreground transition races.
+     * Never saved: URLs, editor text, node bounds, pixels, or another app's name. */
+    internal data class ChromeWindowFacts(
+        val chromeRoot: Boolean, val rootWindowFound: Boolean,
+        val applicationWindow: Boolean, val active: Boolean, val focused: Boolean,
+        val chromeOwned: Boolean, val rootPresent: Boolean, val pictureInPicture: Boolean,
+    ) {
+        fun redactedJson() = buildJsonObject {
+            put("chrome_root", chromeRoot)
+            put("root_window_found", rootWindowFound)
+            put("application_window", applicationWindow)
+            put("active", active)
+            put("focused", focused)
+            put("chrome_owned", chromeOwned)
+            put("accessibility_root_present", rootPresent)
+            put("picture_in_picture", pictureInPicture)
+        }
+    }
+
+    private suspend fun chromeWindowFacts(): ChromeWindowFacts = withContext(Dispatchers.Main) {
+        val service = AgentService.instance
+        val node = service?.rootInActiveWindow
+        val rootWindowId = node?.windowId
+        val chromeRoot = try { node?.packageName?.toString() == CHROME } finally { node?.recycle() }
+        val window = service?.windows.orEmpty().singleOrNull { it.id == rootWindowId }
+        val windowRoot = window?.root
+        val chromeOwned = try { windowRoot?.packageName?.toString() == CHROME }
+            finally { windowRoot?.recycle() }
+        ChromeWindowFacts(chromeRoot, window != null,
+            window?.type == AccessibilityWindowInfo.TYPE_APPLICATION,
+            window?.isActive == true, window?.isFocused == true,
+            chromeOwned, windowRoot != null, window?.isInPictureInPictureMode == true)
+    }
+
+    internal data class ChromeCaptureSample(
+        val frame: ControlFrame, val reads: Int, val recoveryReads: Int,
+        val firstRefusal: String?, val windowFactsAtRefusal: ChromeWindowFacts?,
+    )
+
+    /** Three full native reads TOTAL per preflight boundary (initial + two
+     * renewals). Every renewal must still have the user's live authority;
+     * even an apparent success is freshly validated by normal native guards. */
+    internal suspend fun captureChromeTransition(
+        capture: suspend () -> ControlFrame,
+        inspect: suspend () -> ChromeWindowFacts,
+        allowed: () -> Boolean,
+        pause: suspend () -> Unit,
+        onRetry: (String) -> Unit = {},
+    ): ChromeCaptureSample {
+        var frame = capture()
+        var reads = 1
+        var retries = 0
+        val firstRefusal = frame.reason
+        var facts: ChromeWindowFacts? = null
+        while (frame.reason != null && allowed()) {
+            facts = inspect()
+            val reason = frame.reason ?: break
+            if (!mayResampleChromeTransition(reason, facts.chromeRoot, reads)) break
+            onRetry(reason)
+            pause()
+            if (!allowed()) break
+            frame = capture()
+            reads++
+            retries++
+        }
+        return ChromeCaptureSample(frame, reads, retries, firstRefusal, facts)
+    }
 
     /** Native complete Chrome frame only; no content or URL is exported. */
     private fun safeChromeFrame(frame: ControlFrame): Boolean =
@@ -225,6 +303,9 @@ internal object DebugOneStopQa {
         val newTabVerified: Boolean = false, val newTabEvidence: String = "none",
         val navigationClicks: Int = 0,
         val focusClicks: Int = 0, val unknown: Boolean = false,
+        val chromeReadCount: Int = 0, val chromeRecoveryReads: Int = 0,
+        val firstChromeRefusal: String? = null,
+        val foregroundFactsAtRefusal: ChromeWindowFacts? = null,
     )
 
     private suspend fun prepareChromeEditor(
@@ -240,19 +321,35 @@ internal object DebugOneStopQa {
         var navigationClicks = 0
         var focusClicks = 0
         var unknown = false
+        var chromeReadCount = 0
+        var chromeRecoveryReads = 0
+        var firstChromeRefusal: String? = null
+        var foregroundFactsAtRefusal: ChromeWindowFacts? = null
         fun result(frame: ControlFrame? = null, failure: String? = null) = ChromeReady(
             frame, failure, nativeRefusal, diagnostics, tabsBefore, tabsAfter,
-            newTabVerified, newTabEvidence, navigationClicks, focusClicks, unknown)
+            newTabVerified, newTabEvidence, navigationClicks, focusClicks, unknown,
+            chromeReadCount, chromeRecoveryReads, firstChromeRefusal, foregroundFactsAtRefusal)
 
-        // Fresh read; only a transient invalid window may be resampled once.
-        var first = port.capture()
-        nativeRefusal = first.reason
-        if (readOnlyResampleReason(first.reason)) {
-            delay(350L)
-            if (!allowed()) return result(failure = "control_authority_revoked")
-            first = port.capture()
-            nativeRefusal = first.reason
+        suspend fun settleChromeTransition(): ControlFrame {
+            val sample = captureChromeTransition(
+                capture = { port.capture() },
+                inspect = { chromeWindowFacts() },
+                allowed = allowed,
+                pause = { delay(350L) },
+                onRetry = { onPhase("chrome_foreground_read_only_retry") },
+            )
+            chromeReadCount += sample.reads
+            chromeRecoveryReads += sample.recoveryReads
+            if (firstChromeRefusal == null) firstChromeRefusal = sample.firstRefusal
+            sample.windowFactsAtRefusal?.let { foregroundFactsAtRefusal = it }
+            nativeRefusal = sample.frame.reason
+            return sample.frame
         }
+
+        // A Chrome root can appear before its native window is active/focused.
+        // The read-only bounded settle gate does NOT authorize an action.
+        var first = settleChromeTransition()
+        if (!allowed()) return result(failure = "control_authority_revoked")
         diagnostics = chromeSelectorFacts(first)
         if (first.reason != null) return result(failure = "preflight_frame_unavailable")
         if (first.truncated) return result(failure = "preflight_frame_truncated")
@@ -347,14 +444,8 @@ internal object DebugOneStopQa {
                 return result(failure = "chrome_editor_focus_unconfirmed")
             delay(350L)
             if (!allowed()) return result(failure = "control_authority_revoked")
-            first = port.capture()
-            nativeRefusal = first.reason
-            if (readOnlyResampleReason(first.reason)) {
-                delay(350L)
-                if (!allowed()) return result(failure = "control_authority_revoked")
-                first = port.capture()
-                nativeRefusal = first.reason
-            }
+            first = settleChromeTransition()
+            if (!allowed()) return result(failure = "control_authority_revoked")
             diagnostics = chromeSelectorFacts(first)
         }
         onPhase("editor_preflight")
@@ -461,6 +552,10 @@ internal object DebugOneStopQa {
         var newChromeTabCount: Int? = null
         var newChromeTabVerified = false
         var navigationClickAttempts = 0
+        var chromeReadCount = 0
+        var chromeRecoveryReads = 0
+        var firstChromeRefusal: String? = null
+        var foregroundFactsAtRefusal: ChromeWindowFacts? = null
         val started = SystemClock.elapsedRealtime()
         val startedEpochMs = System.currentTimeMillis()
         var newTabEvidence = "none"
@@ -493,6 +588,12 @@ internal object DebugOneStopQa {
             put("projection_active", ProjectionImageTransport.active()?.screenObservationAllowed() == true)
             put("control_session_state", AgentService.instance?.remoteControlSession?.state?.name ?: "unavailable")
             put("recovery_attempts", 0)
+            put("chrome_preflight_read_count", chromeReadCount)
+            put("chrome_preflight_read_only_recoveries", chromeRecoveryReads)
+            firstChromeRefusal?.takeIf {
+                it.length in 1..80 && it.matches(Regex("[a-z0-9_]+"))
+            }?.let { put("first_chrome_capture_refusal", it) }
+            foregroundFactsAtRefusal?.let { put("chrome_window_facts_at_refusal", it.redactedJson()) }
             put("actual_keys_dispatched", attempts)
             // Only proven benchmark prefixes, never arbitrary Chrome/user contents.
             put("confirmed_text", SixKey.expected(verifiedKeys))
@@ -576,6 +677,10 @@ internal object DebugOneStopQa {
                 checkpoint("guarded_chrome_preparation")
             }
             nativePreflightRefusal = prepared.nativeRefusal
+            chromeReadCount = prepared.chromeReadCount
+            chromeRecoveryReads = prepared.chromeRecoveryReads
+            firstChromeRefusal = prepared.firstChromeRefusal
+            foregroundFactsAtRefusal = prepared.foregroundFactsAtRefusal
             chromeSelectorDiagnostics = prepared.diagnostics
             priorChromeTabCount = prepared.tabsBefore
             newChromeTabCount = prepared.tabsAfter
