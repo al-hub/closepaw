@@ -43,6 +43,61 @@ class DebugOneStopQaTest {
     }
 
 
+    @Test fun chromeNtpPreFocusSelectorIsUniqueBlankOwnedAndSafe() {
+        val ntp = ControlNode(id = 24, resourceId = "com.android.chrome:id/search_box_text",
+            sourcePackage = "com.android.chrome", sourceWindowId = 42, editable = false,
+            clickable = true, enabled = true, text = "", empty = true)
+        fun frame(vararg nodes: ControlNode) = ControlFrame("com.android.chrome", 42, "f", nodes.toList())
+        assertEquals(24, DebugOneStopQa.blankOmnibox(frame(ntp))?.id)
+        assertNull(DebugOneStopQa.blankOmnibox(frame(ntp.copy(text = "old", empty = false))))
+        assertNull(DebugOneStopQa.blankOmnibox(frame(ntp.copy(password = true))))
+        assertNull(DebugOneStopQa.blankOmnibox(frame(ntp.copy(sourceWindowId = 77))))
+        assertNull(DebugOneStopQa.blankOmnibox(frame(ntp.copy(sourcePackage = "other.app"))))
+        assertNull(DebugOneStopQa.blankOmnibox(frame(ntp, ntp.copy(id = 25))))
+        assertNull(DebugOneStopQa.blankOmnibox(frame(ntp.copy(resourceId = "com.android.chrome:id/search_suggestion"))))
+        val facts = DebugOneStopQa.chromeSelectorFacts(frame(ntp))
+        assertEquals(1, facts.searchBoxCount)
+        assertEquals(0, facts.editableCount)
+        assertFalse(facts.redactedJson().toString().contains("old"))
+    }
+
+    @Test fun onlyProvenNewTabMenuItemMayBeSelected() {
+        val button = ControlNode(id = 10, resourceId = "com.android.chrome:id/menu_button",
+            sourcePackage = "com.android.chrome", sourceWindowId = 42, clickable = true)
+        val item = ControlNode(id = 16, resourceId = "com.android.chrome:id/new_tab_menu_id",
+            sourcePackage = "com.android.chrome", sourceWindowId = 42, clickable = true)
+        val label = ControlNode(id = 18, parent = 16, resourceId = "com.android.chrome:id/menu_item_text",
+            sourcePackage = "com.android.chrome", sourceWindowId = 42, text = "새 탭")
+        fun frame(vararg nodes: ControlNode) = ControlFrame("com.android.chrome", 42, "f", nodes.toList())
+        assertEquals(10, DebugOneStopQa.chromeMenuButton(frame(button))?.id)
+        assertEquals(16, DebugOneStopQa.chromeNewTabMenuItem(frame(item, label))?.id)
+        assertNull(DebugOneStopQa.chromeNewTabMenuItem(frame(item)))
+        assertNull(DebugOneStopQa.chromeNewTabMenuItem(frame(item, label.copy(text = "새 시크릿 탭"))))
+        assertNull(DebugOneStopQa.chromeNewTabMenuItem(frame(item.copy(password = true), label)))
+        assertNull(DebugOneStopQa.chromeNewTabMenuItem(frame(item, label, item.copy(id = 20))))
+        assertNull(DebugOneStopQa.chromeMenuButton(frame(button.copy(sourceWindowId = 77))))
+    }
+
+    @Test fun tabCounterIncrementAndBlankNtpAreIndependentProof() {
+        val tab = ControlNode(id = 1, resourceId = "com.android.chrome:id/tab_switcher_button",
+            sourcePackage = "com.android.chrome", sourceWindowId = 42, clickable = true,
+            description = "8개 탭 보기")
+        val ntp = ControlNode(id = 2, resourceId = "com.android.chrome:id/search_box_text",
+            sourcePackage = "com.android.chrome", sourceWindowId = 42, clickable = true, text = "", empty = true)
+        fun frame(vararg nodes: ControlNode) = ControlFrame("com.android.chrome", 42, "f", nodes.toList())
+        val after = frame(tab, ntp)
+        assertEquals(8, DebugOneStopQa.chromeTabCount(after))
+        assertTrue(DebugOneStopQa.verifiedBlankNewTab(7, after))
+        assertFalse(DebugOneStopQa.verifiedBlankNewTab(8, after))
+        assertFalse(DebugOneStopQa.verifiedBlankNewTab(6, after))
+        assertFalse(DebugOneStopQa.verifiedBlankNewTab(7, frame(tab, ntp.copy(text = "old", empty = false))))
+        assertFalse(DebugOneStopQa.verifiedBlankNewTab(7, frame(tab, ntp, ntp.copy(id = 4))))
+        assertFalse(DebugOneStopQa.verifiedBlankNewTab(7, after.copy(reason = "secure_window")))
+        assertFalse(DebugOneStopQa.verifiedBlankNewTab(7, after.copy(truncated = true)))
+        assertNull(DebugOneStopQa.chromeTabCount(frame(tab.copy(description = "wrong"))))
+        assertNull(DebugOneStopQa.chromeTabCount(frame(tab.copy(description = "8 tabs 9"))))
+    }
+
     @Test fun preflightHasIndependentNonSensitiveFailureReasons() {
         val ok = DebugOneStopQa.EditorPreflightFacts(
             true, true, true, true, true, true, true, true,
