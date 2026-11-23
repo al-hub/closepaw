@@ -79,6 +79,9 @@ class LocalCaptureQaActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         ai.closepaw.chatgpt.control.ControlDiagnostics.record("debug_qa_activity", "created")
         if (!BuildConfig.DEBUG || packageName != CaptureQaAcceptance.CANDIDATE) { finish(); return }
+        // Preserve the user's *pending* local arm across an OS consent Activity
+        // recreation; never invent an approval or automatically re-arm after death.
+        armedAfterConsent = savedInstanceState?.getBoolean("qa_pending_user_arm", false) == true
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 36, 24, 24) }
         column.setOnApplyWindowInsetsListener { view, insets ->
             val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
@@ -144,12 +147,21 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }
         refreshSetup()
     }
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("qa_pending_user_arm", armedAfterConsent)
+        super.onSaveInstanceState(outState)
+    }
     override fun onResume() {
         super.onResume()
         ai.closepaw.chatgpt.control.ControlDiagnostics.record("debug_qa_activity", "resumed")
         if (::status.isInitialized && job?.isActive != true) refreshSetup()
         if (::report.isInitialized && !DebugQaRunnerService.isRunning()) {
-            DebugOneStopQa.lastBatchResult(this)?.let { report.text = "Saved independent QA batch (not a live session):\n" + it.toString() }
+            DebugOneStopQa.lastBatchResult(this)?.let {
+                val state = it["state"]?.jsonPrimitive?.content.orEmpty()
+                report.text = "Saved QA batch: " +
+                    (if (state == "IN_PROGRESS") "INTERRUPTED (not auto-resumed)" else state) +
+                    "\n" + it.toString()
+            }
         }
     }
     override fun onStop() {
