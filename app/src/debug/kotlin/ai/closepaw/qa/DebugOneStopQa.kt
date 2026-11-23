@@ -452,7 +452,7 @@ internal object DebugOneStopQa {
         return result(frame = first)
     }
 
-    private fun sameEditor(first: ControlFrame, later: ControlFrame): Boolean {
+    internal fun sameEditor(first: ControlFrame, later: ControlFrame): Boolean {
         val a = first.inputTarget ?: return false
         val b = later.inputTarget ?: return false
         val identity = when {
@@ -746,33 +746,11 @@ internal object DebugOneStopQa {
                 diagnosticDurationMs += SystemClock.elapsedRealtime() - observationStart
                 keyEvidence += DebugKeyboardEvidence.fromObservation(
                     observed.data, observed.success, listOf(label))
-                // One fresh native read on candidate/observation refusal, only
-                // while original user-approved control authority remains live.
-                // Never retry an attempted or UNKNOWN key.
-                suspend fun inspectRefusal() {
-                    if (!allowed() || uncertain) {
-                        afterFailureStatus = "skipped_authority_or_uncertainty"
-                        return
-                    }
-                    afterFailureStatus = "native_follow_up_failed"
-                    try {
-                        val fresh = port.capture()
-                        diagnosticReadCount++
-                        val next = fresh.inputTarget
-                        afterFailureEvidence = DebugKeyboardEvidence.fromFollowUp(
-                            fresh, sameEditor(first, fresh),
-                            next != null && SixKey.matches(
-                                next.text, next.selectionStart, next.selectionEnd, index))
-                        afterFailureStatus = if (!allowed()) "authority_revoked_during_follow_up"
-                            else "captured_read_only"
-                    } catch (cancel: CancellationException) {
-                        throw cancel
-                    } catch (_: Exception) {
-                        afterFailureStatus = "native_follow_up_failed"
-                    }
-                }
+                // Observation refusal may be a protected screen: no extra read.
                 if (!observed.success) {
-                    inspectRefusal()
+                    // A native observation refusal may mean a protected screen,
+                    // lock or revoked authority: stop immediately, no extra read.
+                    afterFailureStatus = "skipped_refused_observation"
                     return stop("keyboard_observation_refused")
                 }
                 val observationId = observed.data["observation_id"]?.jsonPrimitive?.content
@@ -782,7 +760,11 @@ internal object DebugOneStopQa {
                         it["enabled"]?.jsonPrimitive?.booleanOrNull == true }
                     .orEmpty()
                 if (matches.size != 1) {
-                    inspectRefusal()
+                    val followUp = DebugKeyboardEvidence.inspectAmbiguousCandidates(
+                        capture = { port.capture() }, baseline = first, keyIndex = index, allowed = allowed)
+                    afterFailureStatus = followUp.status
+                    afterFailureEvidence = followUp.evidence
+                    diagnosticReadCount += followUp.reads
                     return stop("unique_physical_key_not_proven")
                 }
                 val nodeId = matches.single()["node_id"]?.jsonPrimitive?.intOrNull

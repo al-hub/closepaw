@@ -71,6 +71,26 @@ class DebugKeyboardEvidenceTest {
         }))
     }
 
+    @Test fun followUpNeverStartsWithoutAuthorityAndNeverInputs() =
+        kotlinx.coroutines.runBlocking {
+            val baseline = ControlFrame("com.android.chrome", 42, "baseline", emptyList())
+            var captures = 0
+            val blocked = DebugKeyboardEvidence.inspectAmbiguousCandidates(
+                capture = { captures++; baseline }, baseline = baseline, keyIndex = 0,
+                allowed = { false })
+            assertEquals(0, captures)
+            assertEquals(0, blocked.reads)
+            assertNull(blocked.evidence)
+
+            val accepted = DebugKeyboardEvidence.inspectAmbiguousCandidates(
+                capture = { captures++; baseline }, baseline = baseline, keyIndex = 0,
+                allowed = { true })
+            assertEquals(1, captures)
+            assertEquals(1, accepted.reads)
+            assertEquals("captured_read_only", accepted.status)
+            assertFalse(accepted.evidence!!.getValue("touch_attempted").jsonPrimitive.boolean)
+        }
+
     @Test fun followUpDoesNotTurnPassiveNativeReadIntoKeyAuthority() {
         val frame = ControlFrame("com.android.chrome", 42, "PRIVATE_NATIVE_FINGERPRINT",
             emptyList(), reason = "foreground_application_required")
