@@ -97,12 +97,14 @@ internal object DebugPostFailureProbes {
                                 val observed = control.observe(includeImage = true,
                                     imageScope = "keyboard",
                                     keyboardSequenceLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
+                                // Keep the original parent refusal while the redacted facts
+                                // retain the separately sanitized native reason_code.
+                                val evidence = DebugKeyboardEvidence.fromObservation(observed.data,
+                                    observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
                                 DebugContinuousReadOnly.Finding("keyboard_candidates",
                                     if (observed.success) "PASS" else "FAILED",
                                     if (observed.success) "redacted_candidate_counts_observed"
-                                    else "keyboard_observation_refused",
-                                    DebugKeyboardEvidence.fromObservation(observed.data,
-                                        observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space")))
+                                    else "keyboard_observation_refused", evidence)
                             }
                         }
                     },
