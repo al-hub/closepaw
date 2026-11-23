@@ -110,7 +110,10 @@ internal object DebugOneStopQa {
     /** A fresh full native security scan is allowed once for a transient invalid window.
      * Never retry a proven secure window, an unknown failure, or any dispatched action. */
     internal fun readOnlyResampleReason(reason: String?): Boolean =
-        reason == "active_root_missing" || reason == "secure_window_changed"
+        // A root/window change during traversal is a read-only race, not an
+        // authorization to replay any action. Only one fresh capture is allowed.
+        reason == "active_root_missing" || reason == "secure_window_changed" ||
+            reason == "screen_changed"
 
 
     /** Native complete Chrome frame only; no content or URL is exported. */
