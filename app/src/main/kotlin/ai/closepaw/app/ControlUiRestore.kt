@@ -2,6 +2,8 @@ package ai.closepaw.app
 
 import kotlinx.coroutines.delay
 
+private const val VISIBILITY_RESTORE_BUDGET_MS = 8_000L
+
 /**
  * SCREEN_ON/USER_PRESENT may precede KeyguardManager's unlocked state on OEM devices.
  * Retry visibility only, within a fixed budget; this never starts/resumes a session or command.
@@ -19,9 +21,10 @@ internal class ControlUiRestore(
         val started = now()
         record("trigger", 0)
         var requested = false
-        // Backoff could miss a late OEM unlock for up to 1s. Keep the same bounded
-        // visibility-only budget, but check cheap keyguard state once per frame.
-        // No polling survives screen-off/disposal and no session is resumed here.
+        // Screen-on can precede a slow keyguard dismissal by several seconds.
+        // Poll each frame for the first second, then every 50ms within a fixed
+        // visibility-only budget. Screen-off cancels the job; a stale/ended
+        // session is rejected by eligible() and never resumed.
         while (true) {
             if (!eligible()) { record("ineligible", now() - started); return false }
             if (!unlocked()) {
@@ -36,9 +39,10 @@ internal class ControlUiRestore(
                 if (attached()) { record("attached", now() - started); return true }
                 record("attachment_wait", now() - started)
             }
-            val remaining = 2_000L - (now() - started)
+            val elapsed = now() - started
+            val remaining = VISIBILITY_RESTORE_BUDGET_MS - elapsed
             if (remaining <= 0) break
-            delay(minOf(16L, remaining))
+            delay(minOf(if (elapsed < 1_000L) 16L else 50L, remaining))
         }
         record("timeout", now() - started)
         return false
