@@ -333,8 +333,9 @@ internal object DebugOneStopQa {
         }
         first = newTabFrame ?: return result(failure = "new_blank_chrome_tab_unverified")
         tabsAfter = chromeTabCount(first)
-        newTabVerified = true
-        newTabEvidence = if (previousCount != null && tabsAfter != null)
+        // Count-less NTP is safe to edit but is not independent tab-count proof.
+        newTabVerified = previousCount != null && tabsAfter == previousCount + 1
+        newTabEvidence = if (newTabVerified)
             "tab_count_increment_and_blank_ntp" else "confirmed_new_tab_command_and_blank_ntp"
 
         // Pre-focus non-editable NTP search box is allowed only in this proven
