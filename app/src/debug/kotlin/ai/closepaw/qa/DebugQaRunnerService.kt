@@ -110,6 +110,7 @@ class DebugQaRunnerService : Service() {
         }
         if (intent?.action == ACTION_CANCEL) {
             job?.cancel()
+            if (job == null) stopSelfResult(startId)
             return START_NOT_STICKY
         }
         if (intent?.action != ACTION_RUN || !running.compareAndSet(false, true))
@@ -172,7 +173,9 @@ class DebugQaRunnerService : Service() {
             } finally {
                 running.set(false)
                 stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelfResult(startId)
+                // A later explicit Stop intent may have a newer startId; this
+                // runner owns the service until its bounded work is finished.
+                stopSelf()
             }
         }
         return START_NOT_STICKY
