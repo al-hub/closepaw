@@ -2,10 +2,64 @@ package ai.closepaw.qa
 
 import ai.closepaw.chatgpt.control.ControlFrame
 import ai.closepaw.chatgpt.control.ControlNode
+import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 
 class DebugOneStopQaTest {
+    @Test fun debugNativeRefusalPreservesSafeCodeAndRedactsUntrustedDetails() {
+        val wanted = listOf("ㄱ", "ㅏ", "ㄴ", "Space")
+        val valid = buildJsonObject {
+            put("reason_code", "visual_keyboard_policy_denied")
+            put("raw_url", "https://private.invalid/token")
+        }
+        val failure = DebugKeyboardEvidence.fromObservation(valid, false, wanted)
+        assertEquals("visual_keyboard_policy_denied",
+            failure["native_refusal_reason"]?.jsonPrimitive?.content)
+        assertFalse(failure.toString().contains("private.invalid"))
+        assertEquals("unavailable", DebugKeyboardEvidence.fromObservation(
+            buildJsonObject {}, false, wanted)["native_refusal_reason"]?.jsonPrimitive?.content)
+        for (bad in listOf("PRIVATE_TOKEN", "https://secret.example", "contains spaces",
+                           "a".repeat(81))) {
+            val evidence = DebugKeyboardEvidence.fromObservation(
+                buildJsonObject { put("reason_code", bad) }, false, wanted)
+            assertEquals("unavailable", evidence["native_refusal_reason"]?.jsonPrimitive?.content)
+            assertFalse(evidence.toString().contains(bad))
+        }
+        val success = DebugKeyboardEvidence.fromObservation(valid, true, wanted)
+        assertFalse(success.containsKey("native_refusal_reason"))
+        assertEquals("unavailable", DebugKeyboardEvidence.nativeRefusalReason(
+            buildJsonObject { put("reason_code", 42) }))
+    }
+
+    @Test fun chromeMenuEvidenceCountsWithoutChangingSafeSelector() {
+        val id = "com.android.chrome:id/menu_button"
+        val menu = ControlNode(id = 10, resourceId = id, sourcePackage = "com.android.chrome",
+            sourceWindowId = 42, clickable = true, enabled = true)
+        fun frame(vararg nodes: ControlNode) =
+            ControlFrame("com.android.chrome", 42, "f", nodes.toList())
+        val absent = DebugOneStopQa.chromeSelectorFacts(frame())
+        assertEquals(0, absent.menuIdCount)
+        assertEquals(0, absent.menuEligibleCount)
+        assertNull(DebugOneStopQa.chromeMenuButton(frame()))
+        val foreign = menu.copy(id = 11, sourceWindowId = 43)
+        val disabled = menu.copy(id = 12, enabled = false)
+        val facts = DebugOneStopQa.chromeSelectorFacts(frame(disabled, foreign))
+        assertEquals(1, facts.menuIdCount)
+        assertEquals(0, facts.menuEligibleCount)
+        assertEquals(1, facts.menuForeignOwnerCount)
+        assertNull(DebugOneStopQa.chromeMenuButton(frame(disabled, foreign)))
+        assertNotNull(DebugOneStopQa.chromeMenuButton(frame(menu)))
+        assertFalse(facts.redactedJson().toString().contains("sourcePackage"))
+    }
+
+    @Test fun debugClockUsesTwoExplicitDeviceDomainsWithoutUserData() {
+        val facts = DebugOneStopQa.deviceClockEvidence(1800000123456L, 1234567L)
+        assertEquals(1800000123456L, facts["epoch_ms"]?.jsonPrimitive?.long)
+        assertEquals(1234567L, facts["elapsed_realtime_ms"]?.jsonPrimitive?.long)
+        assertEquals(2, facts.size)
+    }
+
     @Test fun sixKeyCompositionAndIndependentCaretAreExact() {
         val expected = listOf("", "ㄱ", "가", "가 ", "가 ㄴ", "가 나", "가 나 ")
         assertEquals(expected, (0..6).map(DebugOneStopQa.SixKey::expected))
