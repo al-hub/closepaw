@@ -245,6 +245,13 @@ internal object DebugOneStopQa {
             menu.count { it.clickable && it.enabled && !it.password }, foreignMenu)
     }
 
+    /** No navigation or editing in diagnostic mode when a complete, fresh
+     * native frame already proves a Chrome-owned, focused, empty 0/0 editor.
+     * Six-key mode still requires creating a fresh new tab first. */
+    internal fun mayUseExistingBlankEditorForReadOnly(
+        facts: EditorPreflightFacts, diagnosticOnly: Boolean): Boolean =
+        diagnosticOnly && editorPreflightReason(facts) == null
+
     /** Verified Chrome tab-switcher accessibility role; read-only counter. */
     internal fun chromeTabCount(frame: ControlFrame): Int? {
         if (!safeChromeFrame(frame)) return null
@@ -325,7 +332,7 @@ internal object DebugOneStopQa {
 
     private suspend fun prepareChromeEditor(
         port: AndroidControlPort, control: GenericControl, session: ControlSession,
-        allowed: () -> Boolean, onPhase: (String) -> Unit,
+        allowed: () -> Boolean, diagnosticOnly: Boolean, onPhase: (String) -> Unit,
     ): ChromeReady {
         var nativeRefusal: String? = null
         var diagnostics: ChromeSelectorFacts? = null
@@ -411,7 +418,14 @@ internal object DebugOneStopQa {
             return effect.success && !actionUnknown
         }
 
-        // Preserve every existing tab: create one new tab through verified Chrome UI.
+        // This branch is strictly read-only, so there is no reason to navigate
+        // away from an already empty, safe Chrome editor. It cannot authorize keys.
+        if (mayUseExistingBlankEditorForReadOnly(editorPreflightFacts(first), diagnosticOnly)) {
+            newTabEvidence = "existing_empty_editor_read_only"
+            return result(frame = first)
+        }
+
+        // Input mode always preserves every existing tab and requires a new one.
         val previousCount = chromeTabCount(first)
         tabsBefore = previousCount
         val menu = chromeMenuButton(first)
@@ -766,7 +780,7 @@ internal object DebugOneStopQa {
             if (!allowed()) return stop("control_authority_revoked")
             stage = "editor_preflight"
             checkpoint("native_preflight")
-            val prepared = prepareChromeEditor(port, control, session, allowed) { phase ->
+            val prepared = prepareChromeEditor(port, control, session, allowed, diagnosticOnly) { phase ->
                 stage = phase
                 checkpoint("guarded_chrome_preparation")
             }
@@ -839,7 +853,8 @@ internal object DebugOneStopQa {
                     keyboardSequenceLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
                 diagnosticDurationMs += SystemClock.elapsedRealtime() - diagnosticStart
                 keyEvidence += DebugKeyboardEvidence.fromObservation(
-                    observed.data, observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
+                    observed.data, observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"),
+                    if (observed.success) null else port.debugDisplayPlanRefusal())
                 if (!observed.success) return stop("structure_observation_refused")
                 stage = "structure_diagnostic_saved"
                 qaState = "DIAGNOSTICS_COMPLETE"

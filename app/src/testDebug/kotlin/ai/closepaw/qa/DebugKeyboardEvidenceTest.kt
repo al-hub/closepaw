@@ -71,6 +71,23 @@ class DebugKeyboardEvidenceTest {
         }))
     }
 
+    @Test fun displayPlanStageIsFixedCodeOnlyAndNeverOverwritesNativeRefusal() {
+        val data = buildJsonObject { put("reason_code", "display_surface_unverified") }
+        val detail = DebugKeyboardEvidence.fromObservation(data, false, listOf("ㄱ"),
+            "display_ime_window_unverified")
+        assertEquals("display_surface_unverified",
+            detail.getValue("native_refusal_reason").jsonPrimitive.content)
+        assertEquals("display_ime_window_unverified",
+            detail.getValue("display_plan_refusal").jsonPrimitive.content)
+        val unsafe = DebugKeyboardEvidence.fromObservation(data, false, listOf("ㄱ"),
+            "https://private.invalid/secret")
+        assertFalse(unsafe.containsKey("display_plan_refusal"))
+        assertFalse(unsafe.toString().contains("private.invalid"))
+        assertFalse(DebugKeyboardEvidence.fromObservation(data, true, listOf("ㄱ"),
+            "display_ime_window_unverified").containsKey("display_plan_refusal"))
+        assertNull(DebugKeyboardEvidence.safeDisplayRefusal("unexpected_private_field"))
+    }
+
     @Test fun followUpNeverStartsWithoutAuthorityAndNeverInputs() =
         kotlinx.coroutines.runBlocking {
             val baseline = ControlFrame("com.android.chrome", 42, "baseline", emptyList())

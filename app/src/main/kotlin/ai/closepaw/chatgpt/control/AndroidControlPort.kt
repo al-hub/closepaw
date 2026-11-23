@@ -330,22 +330,40 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     override suspend fun visualScreenObserve(frame: ControlFrame): VisualTargetProof? = captureVisual(frame, "screen_observe")
     private data class DisplayPlan(val bounds: TapBounds, val rotation: Int, val region: Region,
         val appBounds: String, val imeBounds: String, val surfaces: List<IsolatedVisualSurface>)
+    // Debug-only fixed stage code; never contains pixels, coordinates, window titles or user content.
+    // The production visualFailure() remains unchanged and the release variant never records it.
+    private var displayPlanRefusalCode: String? = null
+    internal fun debugDisplayPlanRefusal(): String? =
+        if (ai.closepaw.BuildConfig.DEBUG) displayPlanRefusalCode else null
+
     private fun displayPlan(service: AgentService, frame: ControlFrame, keyboardOnly: Boolean = false): DisplayPlan? {
-        if (Build.VERSION.SDK_INT < 34) return null
-        val display = context.getSystemService(DisplayManager::class.java).getDisplay(android.view.Display.DEFAULT_DISPLAY) ?: return null
+        if (ai.closepaw.BuildConfig.DEBUG) displayPlanRefusalCode = null
+        fun reject(code: String): DisplayPlan? {
+            if (ai.closepaw.BuildConfig.DEBUG) displayPlanRefusalCode = code
+            return null
+        }
+        if (Build.VERSION.SDK_INT < 34) return reject("display_platform_unsupported")
+        val display = context.getSystemService(DisplayManager::class.java)
+            .getDisplay(android.view.Display.DEFAULT_DISPLAY) ?: return reject("display_default_display_missing")
         val size = android.graphics.Point(); display.getRealSize(size)
         val windows = service.windows.orEmpty()
         try {
             val selected = controlledWindows(service,frame.foregroundWindowId,frame.packageName,windows)
-            if (selected.selection.reason != null || selected.signature != frame.windowContext) return null
+            if (selected.selection.reason != null || selected.signature != frame.windowContext)
+                return reject("display_window_identity_mismatch")
             val owned = (selected.selection.members + listOfNotNull(frame.keyboard?.windowId)).toSet()
-            val captureOwners = if (keyboardOnly) setOf(frame.keyboard?.windowId ?: return null) else owned
+            val captureOwners = if (keyboardOnly)
+                setOf(frame.keyboard?.windowId ?: return reject("display_ime_window_unverified")) else owned
             val content = windows.filter { it.type != AccessibilityWindowInfo.TYPE_SYSTEM &&
                 !(it.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY && service.ownsRemoteControlIndicatorWindow(it.id)) }
-            if (windows.any { it.displayId != android.view.Display.DEFAULT_DISPLAY || it.isInPictureInPictureMode } ||
-                DisplayCapturePolicy.refusal(size.x>0 && size.y>0 && frame.touchContext.isNotEmpty(),display.displayId,display.rotation,content.map { it.id },owned) != null) return null
-            val app = windows.singleOrNull { it.id == frame.windowId } ?: return null
-            if (touchContext(service,app,windows) != frame.touchContext) return null
+            if (windows.any { it.displayId != android.view.Display.DEFAULT_DISPLAY || it.isInPictureInPictureMode })
+                return reject("display_window_multidisplay_or_pip")
+            if (DisplayCapturePolicy.refusal(size.x>0 && size.y>0 && frame.touchContext.isNotEmpty(),display.displayId,display.rotation,content.map { it.id },owned) != null)
+                return reject("display_window_ownership_policy_denied")
+            val app = windows.singleOrNull { it.id == frame.windowId }
+                ?: return reject("display_app_window_unverified")
+            if (touchContext(service,app,windows) != frame.touchContext)
+                return reject("display_touch_context_changed")
             // Keep only OS-reported visible owned regions; system UI and our control
             // overlays are also subtracted, so notifications/controls never leak.
             val visible = Region()
@@ -353,7 +371,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val region=Region(); w.getRegionInScreen(region); visible.op(region,Region.Op.UNION)
             }
             val ime = windows.singleOrNull { it.id == frame.keyboard?.windowId }
-            if (keyboardOnly && ime?.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD) return null
+            if (keyboardOnly && ime?.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD)
+                return reject("display_ime_window_unverified")
             for (w in windows.filter { it.id !in captureOwners && (!keyboardOnly || it.layer >= ime!!.layer) }) {
                 val decoration=service.remoteDecorationScreenshotMask(w.id)
                 if (decoration!=null) visible.op(decoration,Region.Op.DIFFERENCE)
@@ -363,7 +382,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             // interactive-window list omits its passive full-screen surface.
             service.remoteKnownDecorationScreenshotMask()?.let { visible.op(it,Region.Op.DIFFERENCE) }
             visible.op(Rect(0,0,size.x,size.y),Region.Op.INTERSECT)
-            if (visible.isEmpty) return null
+            if (visible.isEmpty) return reject("display_visible_region_empty")
             val surfaces=mutableListOf<IsolatedVisualSurface>()
             val remaining=Region(visible)
             // Highest owned window supplies overlapping pixels. The complete
@@ -372,12 +391,15 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val region=Region();w.getRegionInScreen(region);region.op(remaining,Region.Op.INTERSECT)
                 if(!region.isEmpty) {
                     val parts=mutableListOf<TapBounds>();val iterator=RegionIterator(region);val rect=Rect()
-                    while(iterator.next(rect)) { if(parts.size>=256) return null; parts.add(bounds(rect)) }
+                    while(iterator.next(rect)) {
+                        if(parts.size>=256) return reject("display_surface_region_too_complex")
+                        parts.add(bounds(rect))
+                    }
                     surfaces.add(IsolatedVisualSurface(w.id,bounds(windowBounds(w)),parts))
                     remaining.op(region,Region.Op.DIFFERENCE)
                 }
             }
-            if(!remaining.isEmpty || surfaces.isEmpty()) return null
+            if(!remaining.isEmpty || surfaces.isEmpty()) return reject("display_surface_isolation_failed")
             return DisplayPlan(TapBounds(0,0,size.x,size.y),display.rotation,visible,windowBounds(app).flattenToString(),
                 ime?.let { windowBounds(it).flattenToString() }.orEmpty(),surfaces)
         } finally { windows.forEach { runCatching { it.recycle() } } }

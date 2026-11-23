@@ -65,7 +65,8 @@ internal object DebugSixKeyExecution {
             val observed = control.observe(includeImage = true, imageScope = "keyboard",
                 keyboardKeyExact = label)
             observationMs += SystemClock.elapsedRealtime() - started
-            evidence += DebugKeyboardEvidence.fromObservation(observed.data, observed.success, listOf(label))
+            evidence += DebugKeyboardEvidence.fromObservation(observed.data, observed.success,
+                listOf(label), if (observed.success) null else port.debugDisplayPlanRefusal())
             if (!observed.success) {
                 // A refusal could mean protected content or revoked consent.
                 // Do not collect another frame after that refusal.

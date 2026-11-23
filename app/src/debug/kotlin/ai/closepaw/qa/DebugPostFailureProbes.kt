@@ -100,7 +100,8 @@ internal object DebugPostFailureProbes {
                                 // Keep the original parent refusal while the redacted facts
                                 // retain the separately sanitized native reason_code.
                                 val evidence = DebugKeyboardEvidence.fromObservation(observed.data,
-                                    observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
+                                    observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"),
+                                    if (observed.success) null else port.debugDisplayPlanRefusal())
                                 DebugContinuousReadOnly.Finding("keyboard_candidates",
                                     if (observed.success) "PASS" else "FAILED",
                                     if (observed.success) "redacted_candidate_counts_observed"

@@ -22,7 +22,19 @@ internal object DebugKeyboardEvidence {
         return safeReason(reason?.takeIf { it.isString }?.content)
     }
 
-    fun fromObservation(data: JsonObject, succeeded: Boolean, wanted: List<String>): JsonObject {
+    private val fixedDisplayRefusals = setOf(
+        "display_platform_unsupported", "display_default_display_missing",
+        "display_window_identity_mismatch", "display_ime_window_unverified",
+        "display_window_multidisplay_or_pip", "display_window_ownership_policy_denied",
+        "display_app_window_unverified", "display_touch_context_changed",
+        "display_visible_region_empty", "display_surface_region_too_complex",
+        "display_surface_isolation_failed",
+    )
+
+    internal fun safeDisplayRefusal(code: String?): String? = code?.takeIf { it in fixedDisplayRefusals }
+
+    fun fromObservation(data: JsonObject, succeeded: Boolean, wanted: List<String>,
+        displayPlanRefusal: String? = null): JsonObject {
         val labels = wanted.filter { it in allowedLabels }.distinct()
         val nodes = (data["nodes"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
         val scan = (data["keyboard"] as? JsonObject)?.get("scan") as? JsonObject
@@ -35,7 +47,10 @@ internal object DebugKeyboardEvidence {
             put("source", "single_observation_redacted")
             put("requested_keys", JsonArray(labels.map(::JsonPrimitive)))
             put("observation_succeeded", succeeded)
-            if (!succeeded) put("native_refusal_reason", nativeRefusalReason(data))
+            if (!succeeded) {
+                put("native_refusal_reason", nativeRefusalReason(data))
+                safeDisplayRefusal(displayPlanRefusal)?.let { put("display_plan_refusal", it) }
+            }
             put("full_scan_available", scan != null)
             put("full_scan_visited", scan?.get("visited")?.jsonPrimitive?.intOrNull ?: -1)
             put("scan_list_limit", scan?.get("candidate_list_limit")?.jsonPrimitive?.intOrNull ?: -1)

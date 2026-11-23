@@ -32,6 +32,28 @@ class DebugOneStopQaTest {
             buildJsonObject { put("reason_code", 42) }))
     }
 
+    @Test fun diagnosticOnlyCanObserveExistingVerifiedBlankEditorWithoutChromeMenu() {
+        val valid = DebugOneStopQa.EditorPreflightFacts(
+            frameReady = true, complete = true, navigationSafe = true,
+            chromeForeground = true, keyboardPresent = true, samsungIme = true,
+            keyboardReadAllowed = true, keyboardInteractAllowed = true,
+            editorPresent = true, chromeEditorOwned = true, editorFocused = true,
+            editorEditable = true, nonPassword = true, editorEmpty = true,
+            selectionAtOrigin = true)
+        assertTrue(DebugOneStopQa.mayUseExistingBlankEditorForReadOnly(valid, true))
+        assertFalse(DebugOneStopQa.mayUseExistingBlankEditorForReadOnly(valid, false))
+        assertFalse(DebugOneStopQa.mayUseExistingBlankEditorForReadOnly(
+            valid.copy(editorEmpty = false), true))
+        assertFalse(DebugOneStopQa.mayUseExistingBlankEditorForReadOnly(
+            valid.copy(nonPassword = false), true))
+        assertFalse(DebugOneStopQa.mayUseExistingBlankEditorForReadOnly(
+            valid.copy(chromeForeground = false), true))
+        assertFalse(DebugOneStopQa.mayUseExistingBlankEditorForReadOnly(
+            valid.copy(selectionAtOrigin = false), true))
+        assertFalse(DebugOneStopQa.mayUseExistingBlankEditorForReadOnly(
+            valid.copy(complete = false), true))
+    }
+
     @Test fun chromeMenuEvidenceCountsWithoutChangingSafeSelector() {
         val id = "com.android.chrome:id/menu_button"
         val menu = ControlNode(id = 10, resourceId = id, sourcePackage = "com.android.chrome",
