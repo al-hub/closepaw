@@ -539,10 +539,34 @@ internal object DebugOneStopQa {
         }
     }
 
-    suspend fun run(context: Context, status: (String) -> Unit, diagnosticOnly: Boolean = false): JsonObject {
+    suspend fun run(context: Context, status: (String) -> Unit, diagnosticOnly: Boolean = false,
+                    batchId: String? = null): JsonObject {
         require(BuildConfig.DEBUG && context.packageName == CaptureQaAcceptance.CANDIDATE)
         val runId = UUID.randomUUID().toString()
         val settings = McpExecutionSettings(context)
+        val stepEvents = mutableListOf<JsonObject>()
+        var qaState = "SESSION_ACTIVE"
+        var sessionReference = "not_started"
+        var eventStartElapsedMs = SystemClock.elapsedRealtime()
+        var firstFailureCode: String? = null
+        var failureCount = 0
+        var postFailureStepCount = 0
+        fun safeCode(code: String): String =
+            code.takeIf { it.length in 1..80 && it.matches(Regex("[a-z0-9_]+")) }
+                ?: "unavailable"
+        fun recordStep(stepId: String, statusCode: String, reasonCode: String,
+                       details: JsonObject = buildJsonObject {}) {
+            if (stepEvents.size >= 20) return
+            stepEvents += buildJsonObject {
+                put("sequence", stepEvents.size + 1)
+                put("run_id", runId)
+                put("step_id", safeCode(stepId))
+                put("status", safeCode(statusCode.lowercase()).uppercase())
+                put("reason_code", safeCode(reasonCode))
+                put("elapsed_ms", SystemClock.elapsedRealtime() - eventStartElapsedMs)
+                put("facts", details)
+            }
+        }
         var verifiedKeys = 0
         var attempts = 0
         var setupClickAttempts = 0
@@ -570,6 +594,14 @@ internal object DebugOneStopQa {
         fun result(outcome: String, reason: String) = buildJsonObject {
             put("schema_version", 3)
             put("run_id", runId)
+            put("batch_id", batchId ?: runId)
+            put("session_id", sessionReference)
+            put("qa_state", qaState)
+            put("failure_count", failureCount)
+            firstFailureCode?.let { put("first_failure_code", it) }
+            put("step_events", JsonArray(stepEvents))
+            put("post_failure_step_count", postFailureStepCount)
+            put("cause_confidence", "UNVERIFIED")
             put("source_commit", BuildConfig.CAPTURE_QA_SOURCE_SHA)
             put("version_name", BuildConfig.VERSION_NAME)
             put("version_code", BuildConfig.VERSION_CODE)
@@ -626,17 +658,33 @@ internal object DebugOneStopQa {
                 it.length in 1..80 && it.matches(Regex("[a-z0-9_]+"))
             }?.let { put("native_preflight_refusal", it) }
         }
+        fun publishLive() {
+            atomicWrite(File(context.filesDir, "debug-qa/live-state.json"), buildJsonObject {
+                put("schema_version", 1)
+                put("run_id", runId)
+                put("state", qaState)
+                put("stage", safeCode(stage))
+                put("error_count", failureCount)
+                put("error_code", firstFailureCode ?: "none")
+                put("updated_at_epoch_ms", System.currentTimeMillis())
+            })
+            status(qaState + ": " + safeCode(stage) + " errors=" + failureCount)
+        }
         fun checkpoint(why: String) {
             write(context, result("IN_PROGRESS", why))
-            status("Debug six-key: " + stage + ", verified=" + verifiedKeys + "/6, attempts=" + attempts)
+            publishLive()
         }
-        fun stop(why: String) = result(if (uncertain) "UNKNOWN" else "BLOCKED", why)
-            .also { write(context, it) }
+        fun stop(why: String): JsonObject {
+            if (qaState != "PERMISSION_REVOKED") qaState = "SESSION_STOPPED"
+            return result(if (uncertain) "UNKNOWN" else "BLOCKED", why)
+                .also { write(context, it); publishLive() }
+        }
 
         if (CaptureQaAcceptance.setup(context) != "ready") return stop("debug_qa_setup_required")
         if (!settings.enabled) return stop("debug_connection_not_enabled")
         val service = AgentService.instance ?: return stop("accessibility_permission_missing")
         val session = service.remoteControlSession
+        sessionReference = session.id
         if (session.state !in setOf(ControlSession.State.IDLE, ControlSession.State.ENDED))
             return stop("another_control_session_active")
         val approvedProjection = ProjectionImageTransport.active()
@@ -704,11 +752,126 @@ internal object DebugOneStopQa {
             navigationClickAttempts = prepared.navigationClicks
             setupClickAttempts = prepared.focusClicks
             uncertain = prepared.unknown
-            val first = prepared.frame ?: return stop(prepared.failure ?: "chrome_preparation_refused")
+            // Ordinary Chrome-setup failure does not terminate a live, user-approved
+            // diagnostic session before independent, bounded READ-ONLY probes.
+            suspend fun continueAfterFailure(reason: String): JsonObject {
+                firstFailureCode = safeCode(reason)
+                failureCount++
+                recordStep("chrome_preparation", "FAILED", reason,
+                    chromeSelectorDiagnostics?.redactedJson() ?: buildJsonObject {})
+                val liveChrome = allowed() && chromeWindowFacts().chromeRoot
+                if (!DebugContinuousReadOnly.mayInspect(
+                        reason, diagnosticOnly, uncertain, allowed(), liveChrome)) {
+                    recordStep("independent_diagnostics", "DEPENDENCY_BLOCKED",
+                        "unsafe_or_ineligible")
+                    return stop(reason)
+                }
+                qaState = "STEP_FAILED_CONTINUING"
+                stage = "post_failure_read_only"
+                checkpoint("first_failure_preserved")
+                var followUpFrame: ControlFrame? = null
+                val probes = listOf(
+                    DebugContinuousReadOnly.Probe("projection_control") {
+                        DebugContinuousReadOnly.Finding("projection_control", "PASS",
+                            "approved_session_live", buildJsonObject {
+                                put("projection_active", approvedProjection.screenObservationAllowed())
+                                put("session_active", session.state == ControlSession.State.ACTIVE)
+                                put("accessibility_active", AgentService.instance === service)
+                            })
+                    },
+                    DebugContinuousReadOnly.Probe("chrome_window") {
+                        val window = chromeWindowFacts()
+                        DebugContinuousReadOnly.Finding("chrome_window",
+                            if (window.chromeRoot && window.chromeOwned && window.applicationWindow)
+                                "PASS" else "PERMISSION_REVOKED",
+                            if (window.chromeRoot && window.chromeOwned && window.applicationWindow)
+                                "chrome_window_observed" else "chrome_owner_unverified",
+                            window.redactedJson())
+                    },
+                    DebugContinuousReadOnly.Probe("chrome_tree") {
+                        val fresh = port.capture()
+                        val refusal = fresh.reason
+                        when {
+                            refusal != null && (refusal.contains("secure") ||
+                                refusal.contains("lock") || refusal.contains("permission")) ->
+                                DebugContinuousReadOnly.Finding("chrome_tree", "PERMISSION_REVOKED",
+                                    "native_security_refusal")
+                            refusal != null ->
+                                DebugContinuousReadOnly.Finding("chrome_tree", "FAILED",
+                                    "native_capture_refused")
+                            fresh.packageName != CHROME || fresh.navigationOnly ->
+                                DebugContinuousReadOnly.Finding("chrome_tree", "PERMISSION_REVOKED",
+                                    "chrome_owner_unverified")
+                            else -> {
+                                followUpFrame = fresh
+                                DebugContinuousReadOnly.Finding("chrome_tree",
+                                    if (fresh.truncated) "NOT_OBSERVABLE" else "PASS",
+                                    if (fresh.truncated) "native_tree_incomplete"
+                                    else "chrome_tree_observed",
+                                    chromeSelectorFacts(fresh).redactedJson())
+                            }
+                        }
+                    },
+                    DebugContinuousReadOnly.Probe("samsung_ime") {
+                        val frame = followUpFrame
+                        when {
+                            frame == null -> DebugContinuousReadOnly.Finding("samsung_ime",
+                                "DEPENDENCY_BLOCKED", "chrome_tree_unavailable")
+                            frame.keyboard == null -> DebugContinuousReadOnly.Finding("samsung_ime",
+                                "NOT_OBSERVABLE", "keyboard_not_visible")
+                            else -> DebugContinuousReadOnly.Finding("samsung_ime", "PASS",
+                                "ime_structure_observed",
+                                editorPreflightFacts(frame).redactedJson())
+                        }
+                    },
+                    DebugContinuousReadOnly.Probe("keyboard_candidates") {
+                        val frame = followUpFrame
+                        when {
+                            frame == null -> DebugContinuousReadOnly.Finding("keyboard_candidates",
+                                "DEPENDENCY_BLOCKED", "chrome_tree_unavailable")
+                            frame.truncated || frame.navigationOnly || frame.inputTarget?.password == true ->
+                                DebugContinuousReadOnly.Finding("keyboard_candidates",
+                                    "DEPENDENCY_BLOCKED", "unsafe_or_incomplete_frame")
+                            frame.keyboard == null -> DebugContinuousReadOnly.Finding("keyboard_candidates",
+                                "NOT_OBSERVABLE", "keyboard_not_visible")
+                            frame.inputTarget?.text?.isNotEmpty() != false ->
+                                DebugContinuousReadOnly.Finding("keyboard_candidates",
+                                    "DEPENDENCY_BLOCKED", "empty_editor_not_verified")
+                            else -> {
+                                val observed = control.observe(includeImage = true,
+                                    imageScope = "keyboard",
+                                    keyboardSequenceLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
+                                DebugContinuousReadOnly.Finding("keyboard_candidates",
+                                    if (observed.success) "PASS" else "FAILED",
+                                    if (observed.success) "redacted_candidate_counts_observed"
+                                    else "keyboard_observation_refused",
+                                    DebugKeyboardEvidence.fromObservation(observed.data,
+                                        observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space")))
+                            }
+                        }
+                    },
+                )
+                DebugContinuousReadOnly.collect(probes, allowed) { finding ->
+                    postFailureStepCount++
+                    recordStep(finding.stepId, finding.status, finding.reason, finding.details)
+                    stage = finding.stepId
+                    qaState = if (finding.status == "PERMISSION_REVOKED")
+                        "PERMISSION_REVOKED" else "STEP_FAILED_CONTINUING"
+                    checkpoint("independent_read_only_step")
+                }
+                if (qaState != "PERMISSION_REVOKED") {
+                    qaState = "DIAGNOSTICS_COMPLETE"
+                    stage = "post_failure_complete"
+                    checkpoint("independent_read_only_complete")
+                }
+                return stop(reason)
+            }
+            val first = prepared.frame
+                ?: return continueAfterFailure(prepared.failure ?: "chrome_preparation_refused")
             // Independent reason codes and booleans are written before any key dispatch.
             val diagnosed = editorPreflightFacts(first)
             preflightFacts = diagnosed
-            editorPreflightReason(diagnosed)?.let { return stop(it) }
+            editorPreflightReason(diagnosed)?.let { return continueAfterFailure(it) }
 
             // Explicit first-run mode: a single combined accessibility + visual
             // observation, without dispatching any typing keys. Chrome setup
@@ -725,7 +888,10 @@ internal object DebugOneStopQa {
                     observed.data, observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
                 if (!observed.success) return stop("structure_observation_refused")
                 stage = "structure_diagnostic_saved"
-                return result("DIAGNOSTIC_COMPLETE", "no_key_evidence_captured").also { write(context, it) }
+                qaState = "DIAGNOSTICS_COMPLETE"
+                recordStep("structure_diagnostic", "PASS", "no_key_evidence_captured")
+                return result("DIAGNOSTIC_COMPLETE", "no_key_evidence_captured")
+                    .also { write(context, it); publishLive() }
             }
 
             val execution = DebugSixKeyExecution.run(

@@ -88,7 +88,8 @@ class DebugQaRunnerService : Service() {
             NotificationChannel(CHANNEL, "ClosePaw DEBUG QA", NotificationManager.IMPORTANCE_LOW))
     }
 
-    private fun notification(): Notification {
+    private fun notification(message: String = "User-approved local test · results saved on device",
+                             error: Boolean = false): Notification {
         val viewIntent = PendingIntent.getActivity(this, 14701,
             Intent(this, LocalCaptureQaActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -97,8 +98,10 @@ class DebugQaRunnerService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setContentTitle("ClosePaw DEBUG · guarded QA")
-            .setContentText("User-approved local test · results saved on device")
+            .setContentTitle(if (error) "ClosePaw DEBUG · QA errors, session continuing"
+                else "ClosePaw DEBUG · guarded QA")
+            .setContentText(message.take(96))
+            .setColor(if (error) android.graphics.Color.RED else android.graphics.Color.rgb(210, 109, 18))
             .setOngoing(true)
             .setContentIntent(viewIntent)
             .addAction(Notification.Action.Builder(null, "Stop QA", cancelIntent).build())
@@ -151,7 +154,14 @@ class DebugQaRunnerService : Service() {
                 for (index in 0 until (if (diagnosticOnly) 1 else DebugQaBatchPolicy.REPETITIONS)) {
                     // Each run creates and independently verifies a NEW empty Chrome
                     // editor. Never replay a partially attempted key or a failed run.
-                    val result = DebugOneStopQa.run(applicationContext, { }, diagnosticOnly)
+                    val result = DebugOneStopQa.run(applicationContext, { progress ->
+                        runCatching {
+                            getSystemService(NotificationManager::class.java).notify(
+                                NOTIFICATION_ID, notification(progress,
+                                    error = progress.contains("errors=") &&
+                                        !progress.endsWith("errors=0")))
+                        }
+                    }, diagnosticOnly, batchId)
                     results += result
                     DebugOneStopQa.saveBatch(applicationContext, batchId, "IN_PROGRESS", results, diagnosticOnly)
                     if (diagnosticOnly) {

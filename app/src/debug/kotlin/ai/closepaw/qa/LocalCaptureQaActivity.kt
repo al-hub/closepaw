@@ -129,8 +129,8 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }
         text("Approve setup first. Read-only capture remains one run. The separate guarded INPUT QA uses its own foreground runner. Stop/pause, lock, service loss or projection revocation stop it; no unverified key is replayed.")
         button("Arm one run · wait up to 10 minutes") { arm() }
-        text("DEBUG QA: first choose one no-key structural diagnosis to capture Samsung key counts and image-source state. It may safely open and focus a NEW blank Chrome tab, but never types. Review stored evidence before separately choosing six-key input. Both jobs survive voice/activity exit; consent and native guards remain required.")
-        button("Arm ONE no-key structural diagnosis · auto-open Chrome") { armOneStop(diagnosticOnly = true) }
+        text("CONTINUOUS DEBUG QA: one approved no-key session; Chrome setup failures are saved and followed by bounded independent read-only window/IME/image probes while consent is valid. Red error indicator does not mean session stopped. No text or keys are entered. See notification for current phase; Stop QA is always available.")
+        button("Arm ONE continuous no-key diagnosis · auto-open Chrome") { armOneStop(diagnosticOnly = true) }
         button("Arm guarded six-key first-pass · auto-open Chrome") { armOneStop(diagnosticOnly = false) }
         button("Revoke Samsung keyboard interaction · Debug only", guarded = false) {
             if (DebugImeInteractConsent.updateFromLocalConsent(this, grant = false)) {
@@ -240,8 +240,8 @@ class LocalCaptureQaActivity : ComponentActivity() {
     private fun showOneStopResult() {
         val checkpoint = DebugOneStopQa.lastResult(this)
         val batch = DebugOneStopQa.lastBatchResult(this)
-        report.text = if (checkpoint == null && batch == null) "No matching-source saved Debug six-key checkpoint."
-            else "PRIVATE DEBUG QA HISTORY, not a live input result.\n" +
+        report.text = if (checkpoint == null && batch == null) "No matching-source saved Debug QA checkpoint."
+            else "PRIVATE DEBUG QA HISTORY; stage events and causal status are evidence, not input success.\n" +
                 "Batch: " + (batch?.toString() ?: "none") + "\nLast run: " +
                 (checkpoint?.toString() ?: "none")
     }

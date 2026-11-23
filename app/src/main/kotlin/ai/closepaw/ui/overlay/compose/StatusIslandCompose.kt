@@ -19,6 +19,18 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -59,6 +71,27 @@ fun StatusIslandCompose(
     val spacing = MaterialTheme.closePaw.spacing
     val reducedMotion = ClosePawMotion.reducedMotion()
     val localView = LocalView.current
+    val appContext = LocalContext.current.applicationContext
+    var debugQaErrors by remember { mutableIntStateOf(0) }
+    if (BuildConfig.DEBUG) {
+        // Red marker only, not a changing accessibility-tree transcription of
+        // QA steps. Read the private tiny status file off the UI thread.
+        LaunchedEffect(appContext) {
+            while (isActive) {
+                debugQaErrors = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val file = File(appContext.filesDir, "debug-qa/live-state.json")
+                        if (!file.isFile || file.length() !in 1L..2048L) return@runCatching 0
+                        val state = Json.parseToJsonElement(file.readText()).jsonObject
+                        val updated = state["updated_at_epoch_ms"]?.jsonPrimitive?.longOrNull ?: 0L
+                        if (System.currentTimeMillis() - updated !in 0L..20_000L) 0
+                        else (state["error_count"]?.jsonPrimitive?.intOrNull ?: 0).coerceIn(0, 99)
+                    }.getOrDefault(0)
+                }
+                delay(1000L)
+            }
+        }
+    }
     Surface(
         modifier = modifier
             .minimumInteractiveComponentSize()
@@ -120,6 +153,13 @@ fun StatusIslandCompose(
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF8B3600),
                 )
+                if (debugQaErrors > 0) {
+                    Text(
+                        text = "●" + debugQaErrors,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFB00020),
+                    )
+                }
             }
             StatusPawGlyph(
                 color = dotColor,
