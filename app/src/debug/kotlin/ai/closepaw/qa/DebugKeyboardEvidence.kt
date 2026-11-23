@@ -16,6 +16,12 @@ internal object DebugKeyboardEvidence {
         value?.takeIf { it.length in 1..80 && it.matches(Regex("[a-z0-9_]+")) }
             ?: "unavailable"
 
+    /** Persist only a fixed-shape native code, never arbitrary error text or image metadata. */
+    internal fun nativeRefusalReason(data: JsonObject): String {
+        val reason = data["reason_code"] as? JsonPrimitive
+        return safeReason(reason?.takeIf { it.isString }?.content)
+    }
+
     fun fromObservation(data: JsonObject, succeeded: Boolean, wanted: List<String>): JsonObject {
         val labels = wanted.filter { it in allowedLabels }.distinct()
         val nodes = (data["nodes"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
@@ -29,6 +35,7 @@ internal object DebugKeyboardEvidence {
             put("source", "single_observation_redacted")
             put("requested_keys", JsonArray(labels.map(::JsonPrimitive)))
             put("observation_succeeded", succeeded)
+            if (!succeeded) put("native_refusal_reason", nativeRefusalReason(data))
             put("full_scan_available", scan != null)
             put("full_scan_visited", scan?.get("visited")?.jsonPrimitive?.intOrNull ?: -1)
             put("scan_list_limit", scan?.get("candidate_list_limit")?.jsonPrimitive?.intOrNull ?: -1)
