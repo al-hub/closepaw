@@ -69,6 +69,7 @@ class LocalCaptureQaActivity : ComponentActivity() {
             is ProjectionConsentState.Denied -> {
                 armedAfterConsent = false
                 pendingDiagnosticOnly = false
+                DebugQaRunnerService.approvalDenied(this)
                 status.text = "Observation approval denied; no run started."
             }
             else -> {
@@ -203,6 +204,7 @@ class LocalCaptureQaActivity : ComponentActivity() {
             status.text = "Existing approval round preserved"; return false
         }
         return try {
+            DebugQaRunnerService.waitingForObservationApproval(this)
             consent.launch(getSystemService(MediaProjectionManager::class.java)
                 .createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay()))
             true

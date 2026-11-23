@@ -75,6 +75,28 @@ class DebugOneStopQaTest {
         assertFalse(facts.redactedJson().toString().contains("sourcePackage"))
     }
 
+    @Test fun chromeSemanticMenuFallbackRequiresUniqueOwnedExactControl() {
+        val menu = ControlNode(id = 71, resourceId = "", description = "More options",
+            sourcePackage = "com.android.chrome", sourceWindowId = 42,
+            clickable = true, enabled = true)
+        val frame = ControlFrame("com.android.chrome", 42, "fingerprint", listOf(menu))
+        assertEquals(71, DebugOneStopQa.chromeMenuButton(frame)?.id)
+        assertNull(DebugOneStopQa.chromeMenuButton(frame.copy(nodes = listOf(menu, menu.copy(id = 72)))))
+        assertNull(DebugOneStopQa.chromeMenuButton(frame.copy(nodes = listOf(
+            menu.copy(description = "New Incognito tab")))))
+        assertNull(DebugOneStopQa.chromeMenuButton(frame.copy(nodes = listOf(
+            menu.copy(sourceWindowId = 9)))))
+        assertNull(DebugOneStopQa.chromeMenuButton(frame.copy(nodes = listOf(
+            menu.copy(enabled = false)))))
+        val regular = menu.copy(id = 73, description = "New tab")
+        assertEquals(73, DebugOneStopQa.chromeNewTabMenuItem(
+            frame.copy(nodes = listOf(regular)))?.id)
+        assertNull(DebugOneStopQa.chromeNewTabMenuItem(
+            frame.copy(nodes = listOf(regular, regular.copy(id = 74)))))
+        assertNull(DebugOneStopQa.chromeNewTabMenuItem(
+            frame.copy(nodes = listOf(regular.copy(description = "New Incognito tab")))))
+    }
+
     @Test fun debugClockUsesTwoExplicitDeviceDomainsWithoutUserData() {
         val facts = DebugOneStopQa.deviceClockEvidence(1800000123456L, 1234567L)
         assertEquals(1800000123456L, facts["epoch_ms"]?.jsonPrimitive?.long)

@@ -267,24 +267,41 @@ internal object DebugOneStopQa {
 
     internal fun chromeMenuButton(frame: ControlFrame): ai.closepaw.chatgpt.control.ControlNode? {
         if (!safeChromeFrame(frame)) return null
-        return ownedChromeNodes(frame).singleOrNull {
-            it.resourceId == "$CHROME:id/menu_button" && it.clickable && it.enabled && !it.password
-        }
+        val eligible = ownedChromeNodes(frame).filter { it.clickable && it.enabled && !it.password }
+        // Native resource ID remains preferred. Chrome versions can omit the ID
+        // while exposing a unique, explicitly named accessibility control.
+        val byId = eligible.filter { it.resourceId == "$CHROME:id/menu_button" }
+        if (byId.isNotEmpty()) return byId.singleOrNull()
+        return eligible.filter {
+            it.description.trim() in setOf("More options", "더보기")
+        }.singleOrNull()
     }
 
     /** Never select incognito, tab group, history or delete command. */
     internal fun chromeNewTabMenuItem(frame: ControlFrame): ai.closepaw.chatgpt.control.ControlNode? {
         if (!safeChromeFrame(frame)) return null
         val owned = ownedChromeNodes(frame)
-        val item = owned.singleOrNull {
+        val labels = setOf("새 탭", "New tab")
+        val identified = owned.filter {
             it.resourceId == "$CHROME:id/new_tab_menu_id" &&
                 it.clickable && it.enabled && !it.password
-        } ?: return null
-        val labels = owned.filter {
-            it.parent == item.id && it.resourceId == "$CHROME:id/menu_item_text" &&
-                it.text in setOf("새 탭", "New tab") && !it.password
         }
-        return item.takeIf { labels.size == 1 }
+        if (identified.isNotEmpty()) {
+            val item = identified.singleOrNull() ?: return null
+            return item.takeIf { candidate ->
+                owned.count {
+                    it.parent == candidate.id && it.resourceId == "$CHROME:id/menu_item_text" &&
+                        it.text in labels && !it.password
+                } == 1
+            }
+        }
+        // In Chrome versions without resource IDs, accept ONLY the uniquely
+        // named enabled regular New Tab command (not Incognito or tab groups).
+        // The caller opens a verified Chrome menu first and re-observes it.
+        return owned.filter {
+            it.clickable && it.enabled && !it.password &&
+                (it.text.trim() in labels || it.description.trim() in labels)
+        }.singleOrNull()
     }
 
     /** Only after the tab count independently proves a newly created tab. */

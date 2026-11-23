@@ -22,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import android.os.SystemClock
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -73,21 +75,31 @@ fun StatusIslandCompose(
     val localView = LocalView.current
     val appContext = LocalContext.current.applicationContext
     var debugQaErrors by remember { mutableIntStateOf(0) }
+    var debugQaStatus by remember { mutableStateOf(DebugQaIslandStatus.UNKNOWN) }
     if (BuildConfig.DEBUG) {
         // Red marker only, not a changing accessibility-tree transcription of
         // QA steps. Read the private tiny status file off the UI thread.
         LaunchedEffect(appContext) {
             while (isActive) {
-                debugQaErrors = withContext(Dispatchers.IO) {
-                    runCatching {
+                val displayState = withContext(Dispatchers.IO) {
+                    val nowEpoch = System.currentTimeMillis()
+                    val nowElapsed = SystemClock.elapsedRealtime()
+                    val errors = runCatching {
                         val file = File(appContext.filesDir, "debug-qa/live-state.json")
                         if (!file.isFile || file.length() !in 1L..2048L) return@runCatching 0
                         val state = Json.parseToJsonElement(file.readText()).jsonObject
                         val updated = state["updated_at_epoch_ms"]?.jsonPrimitive?.longOrNull ?: 0L
-                        if (System.currentTimeMillis() - updated !in 0L..20_000L) 0
+                        if (nowEpoch - updated !in 0L..20_000L) 0
                         else (state["error_count"]?.jsonPrimitive?.intOrNull ?: 0).coerceIn(0, 99)
                     }.getOrDefault(0)
+                    val live = runCatching {
+                        val file = File(appContext.filesDir, "debug-qa/runner-status.json")
+                        if (!file.isFile || file.length() !in 1L..2048L) null else file.readText()
+                    }.getOrNull()
+                    errors to DebugQaIslandStatusPolicy.decode(live, nowElapsed, nowEpoch)
                 }
+                debugQaErrors = displayState.first
+                debugQaStatus = displayState.second
                 delay(1000L)
             }
         }
@@ -149,9 +161,13 @@ fun StatusIslandCompose(
         ) {
             if (BuildConfig.DEBUG) {
                 Text(
-                    text = "DEBUG",
+                    text = "DEBUG · QA " + debugQaStatus.state +
+                        (debugQaStatus.stage?.let { " · " + it.replace('_', ' ').take(24) } ?: ""),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF8B3600),
+                    maxLines = 1,
+                    modifier = Modifier.widthIn(max = 195.dp),
+                    overflow = TextOverflow.Ellipsis,
                 )
                 if (debugQaErrors > 0) {
                     Text(
