@@ -521,7 +521,9 @@ internal object DebugOneStopQa {
         val session = service.remoteControlSession
         if (session.state !in setOf(ControlSession.State.IDLE, ControlSession.State.ENDED))
             return stop("another_control_session_active")
-        if (ProjectionImageTransport.active() == null) return stop("android_observation_approval_required")
+        val approvedProjection = ProjectionImageTransport.active()
+        if (approvedProjection?.screenObservationAllowed() != true)
+            return stop("android_observation_approval_required")
 
         // Chrome was opened by the physically visible QA Activity immediately
         // after starting the foreground runner. A background FGS must NOT try to
@@ -533,7 +535,8 @@ internal object DebugOneStopQa {
         while (SystemClock.elapsedRealtime() < deadline) {
             currentCoroutineContext().ensureActive()
             if (AgentService.instance !== service || !settings.genericControlEnabled ||
-                ProjectionImageTransport.active() == null)
+                ProjectionImageTransport.active() !== approvedProjection ||
+                !approvedProjection.screenObservationAllowed())
                 return stop("authority_changed_during_preflight")
             if (session.state !in setOf(ControlSession.State.IDLE, ControlSession.State.ENDED))
                 return stop("session_changed_during_preflight")
@@ -549,7 +552,8 @@ internal object DebugOneStopQa {
         var active = false
         val allowed: () -> Boolean = {
             AgentService.instance === service && settings.enabled && settings.genericControlEnabled &&
-                ProjectionImageTransport.active() != null &&
+                ProjectionImageTransport.active() === approvedProjection &&
+                approvedProjection.screenObservationAllowed() &&
                 session.explicit && session.state == ControlSession.State.ACTIVE
         }
         val port = AndroidControlPort(context, runtime = settings.runtimeControl, allowed = allowed)
