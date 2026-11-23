@@ -26,6 +26,16 @@ class ControlUiRestoreTest {
         assertTrue(events.last().second in 80L..150L)
     }
 
+    @Test fun slowKeyguardUnlockAfterTwoSecondsStillRestoresWithoutNewEvent() = runTest {
+        var calls = 0
+        val events = mutableListOf<String>()
+        assertTrue(ControlUiRestore({ currentTime }, { currentTime >= 3_200L }, { true },
+            { calls++ }, { calls > 0 }, { code, _ -> events += code }).run())
+        assertEquals(1, calls)
+        assertTrue("bounded slow-unlock recovery", currentTime in 3_200L..3_270L)
+        assertEquals("attached", events.last())
+    }
+
     @Test fun endedOrReplacedSessionNeverRestoresFromAnOldTrigger() = runTest {
         var calls = 0
         val result = ControlUiRestore({ currentTime }, { currentTime >= 100 }, { currentTime < 80 },
@@ -37,7 +47,7 @@ class ControlUiRestoreTest {
         val events = mutableListOf<String>()
         assertFalse(ControlUiRestore({ currentTime }, { true }, { true }, {}, { false },
             { code, _ -> events += code }).run())
-        assertTrue(currentTime <= 2_000)
+        assertTrue(currentTime <= 8_000)
         assertEquals("timeout", events.last())
         assertFalse("attached" in events)
     }
