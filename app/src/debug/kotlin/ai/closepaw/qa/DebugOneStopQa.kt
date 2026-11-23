@@ -523,25 +523,12 @@ internal object DebugOneStopQa {
             return stop("another_control_session_active")
         if (ProjectionImageTransport.active() == null) return stop("android_observation_approval_required")
 
-        // The user has explicitly armed this local candidate QA screen.
-        // Launch only the already-known Chrome package. This is app launch,
-        // NOT text input, ADB injection, inferred URL navigation or a grant.
-        // Never modify an existing nonempty Chrome editor.
-        stage = "launch_chrome"
-        checkpoint("launching_known_chrome_package")
-        val launched = withContext(Dispatchers.Main) {
-            try {
-                val intent = context.packageManager.getLaunchIntentForPackage(CHROME)
-                    ?: return@withContext false
-                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
-                true
-            } catch (_: Exception) { false }
-        }
-        if (!launched) return stop("chrome_launch_unavailable")
+        // Chrome was opened by the physically visible QA Activity immediately
+        // after starting the foreground runner. A background FGS must NOT try to
+        // bypass Android background-activity-launch restrictions.
         stage = "await_chrome"
-        checkpoint("waiting_for_chrome_foreground")
-        val deadline = SystemClock.elapsedRealtime() + 600_000L
+        checkpoint("waiting_for_visible_activity_chrome_launch")
+        val deadline = SystemClock.elapsedRealtime() + 60_000L
         var foreground = false
         while (SystemClock.elapsedRealtime() < deadline) {
             currentCoroutineContext().ensureActive()
