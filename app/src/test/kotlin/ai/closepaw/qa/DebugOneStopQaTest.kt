@@ -26,7 +26,7 @@ class DebugOneStopQaTest {
 
     @Test fun blankChromeOmniboxRejectsPasswordContentAndAmbiguity() {
         val safe = ControlNode(id = 7, resourceId = "com.android.chrome:id/url_bar",
-            sourcePackage = "com.android.chrome", editable = true, clickable = true,
+            sourcePackage = "com.android.chrome", sourceWindowId = 42, editable = true, clickable = true,
             enabled = true, empty = true, text = "")
         fun frame(nodes: List<ControlNode>, pkg: String = "com.android.chrome") =
             ControlFrame(pkg, 42, "fingerprint", nodes)
