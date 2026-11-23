@@ -15,6 +15,7 @@ import android.os.SystemClock
 import android.util.AtomicFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -201,13 +202,28 @@ internal object DebugOneStopQa {
     internal fun verifiedBlankNewTab(priorTabCount: Int, frame: ControlFrame): Boolean =
         chromeTabCount(frame) == priorTabCount + 1 && blankOmnibox(frame) != null
 
+    /** A missing localized tab counter is not evidence of an unsafe editor.
+     * The user-approved New Tab command must have succeeded, and only the uniquely
+     * empty Chrome New Tab Page search box is accepted as a count-less fallback.
+     * Every actual touch still passes native authority and editor/caret guards. */
+    internal fun verifiedBlankAfterNewTabCommand(
+        prior: Int?, frame: ControlFrame, newTabCommandConfirmed: Boolean,
+    ): Boolean {
+        if (!newTabCommandConfirmed) return false
+        val after = chromeTabCount(frame)
+        if (prior != null && after != null) return verifiedBlankNewTab(prior, frame)
+        val target = blankOmnibox(frame) ?: return false
+        return target.resourceId == "$CHROME:id/search_box_text"
+    }
+
     /** Candidate-only preparation, separated from the key coroutine state machine.
      * Every action uses GenericControl's original native freshness/privacy guards. */
     private data class ChromeReady(
         val frame: ControlFrame? = null, val failure: String? = null,
         val nativeRefusal: String? = null, val diagnostics: ChromeSelectorFacts? = null,
         val tabsBefore: Int? = null, val tabsAfter: Int? = null,
-        val newTabVerified: Boolean = false, val navigationClicks: Int = 0,
+        val newTabVerified: Boolean = false, val newTabEvidence: String = "none",
+        val navigationClicks: Int = 0,
         val focusClicks: Int = 0, val unknown: Boolean = false,
     )
 
@@ -220,12 +236,13 @@ internal object DebugOneStopQa {
         var tabsBefore: Int? = null
         var tabsAfter: Int? = null
         var newTabVerified = false
+        var newTabEvidence = "none"
         var navigationClicks = 0
         var focusClicks = 0
         var unknown = false
         fun result(frame: ControlFrame? = null, failure: String? = null) = ChromeReady(
             frame, failure, nativeRefusal, diagnostics, tabsBefore, tabsAfter,
-            newTabVerified, navigationClicks, focusClicks, unknown)
+            newTabVerified, newTabEvidence, navigationClicks, focusClicks, unknown)
 
         // Fresh read; only a transient invalid window may be resampled once.
         var first = port.capture()
@@ -284,7 +301,6 @@ internal object DebugOneStopQa {
 
         // Preserve every existing tab: create one new tab through verified Chrome UI.
         val previousCount = chromeTabCount(first)
-            ?: return result(failure = "chrome_tab_count_unavailable")
         tabsBefore = previousCount
         val menu = chromeMenuButton(first)
             ?: return result(failure = "unique_chrome_menu_unavailable")
@@ -310,7 +326,7 @@ internal object DebugOneStopQa {
                 return result(failure = "new_tab_native_security_refusal")
             if (probe.truncated || probe.navigationOnly)
                 return result(failure = "new_tab_incomplete_frame")
-            if (verifiedBlankNewTab(previousCount, probe)) {
+            if (verifiedBlankAfterNewTabCommand(previousCount, probe, newTabCommandConfirmed = true)) {
                 newTabFrame = probe
                 break
             }
@@ -318,6 +334,8 @@ internal object DebugOneStopQa {
         first = newTabFrame ?: return result(failure = "new_blank_chrome_tab_unverified")
         tabsAfter = chromeTabCount(first)
         newTabVerified = true
+        newTabEvidence = if (previousCount != null && tabsAfter != null)
+            "tab_count_increment_and_blank_ntp" else "confirmed_new_tab_command_and_blank_ntp"
 
         // Pre-focus non-editable NTP search box is allowed only in this proven
         // new tab; post-focus editor, Samsung IME and 0/0 caret remain mandatory.
@@ -356,6 +374,39 @@ internal object DebugOneStopQa {
     }
 
     private fun reportFile(context: Context) = File(context.filesDir, "debug-qa/one-stop-result.json")
+    private fun batchFile(context: Context) = File(context.filesDir, "debug-qa/one-stop-batch.json")
+    internal fun lastBatchResult(context: Context): JsonObject? {
+        if (!BuildConfig.DEBUG || context.packageName != CaptureQaAcceptance.CANDIDATE) return null
+        val file = batchFile(context)
+        if (!file.isFile || file.length() !in 1L..64_000L) return null
+        return runCatching { Json.parseToJsonElement(file.readText()).jsonObject }.getOrNull()
+            ?.takeIf { it["source_commit"]?.jsonPrimitive?.content == BuildConfig.CAPTURE_QA_SOURCE_SHA }
+    }
+    internal fun saveBatch(context: Context, id: String, state: String, results: List<JsonObject>) {
+        require(BuildConfig.DEBUG && context.packageName == CaptureQaAcceptance.CANDIDATE)
+        val snapshot = buildJsonObject {
+            put("schema_version", 2); put("batch_id", id)
+            put("source_commit", BuildConfig.CAPTURE_QA_SOURCE_SHA)
+            put("version_name", BuildConfig.VERSION_NAME); put("version_code", BuildConfig.VERSION_CODE)
+            put("state", state); put("repetitions_requested", 3)
+            put("repetitions_completed", results.count { it["outcome"]?.jsonPrimitive?.content == "PASS" })
+            put("runs", JsonArray(results))
+            put("last_updated_epoch_ms", System.currentTimeMillis())
+        }
+        atomicWrite(batchFile(context), snapshot)
+    }
+    internal fun recordUnavailable(context: Context, reason: String) {
+        val snapshot = buildJsonObject {
+            put("schema_version", 2); put("run_id", UUID.randomUUID().toString())
+            put("source_commit", BuildConfig.CAPTURE_QA_SOURCE_SHA)
+            put("version_name", BuildConfig.VERSION_NAME); put("version_code", BuildConfig.VERSION_CODE)
+            put("fixture_package", CHROME); put("suite", "six_key_first_pass")
+            put("outcome", "BLOCKED"); put("reason", reason); put("completed_keys", 0)
+            put("touch_attempts", 0); put("recovery_attempts", 0)
+            put("ended_at_epoch_ms", System.currentTimeMillis())
+        }
+        write(context, snapshot)
+    }
 
     /** Read-only persisted checkpoint, never an authorization or replay token. */
     fun lastResult(context: Context): JsonObject? {
@@ -371,7 +422,16 @@ internal object DebugOneStopQa {
     }
 
     private fun write(context: Context, result: JsonObject) {
-        val file = reportFile(context)
+        atomicWrite(reportFile(context), result)
+        if (result["outcome"]?.jsonPrimitive?.content != "IN_PROGRESS") {
+            val id = result["run_id"]?.jsonPrimitive?.content.orEmpty()
+            if (id.matches(Regex("[a-f0-9-]{36}"))) {
+                atomicWrite(File(context.filesDir, "debug-qa/history/$id.json"), result)
+            }
+        }
+    }
+
+    private fun atomicWrite(file: File, result: JsonObject) {
         file.parentFile?.mkdirs()
         val atomic = AtomicFile(file)
         val stream = atomic.startWrite()
@@ -401,15 +461,21 @@ internal object DebugOneStopQa {
         var newChromeTabVerified = false
         var navigationClickAttempts = 0
         val started = SystemClock.elapsedRealtime()
+        val startedEpochMs = System.currentTimeMillis()
+        var newTabEvidence = "none"
         fun result(outcome: String, reason: String) = buildJsonObject {
             put("schema_version", 1)
             put("run_id", runId)
             put("source_commit", BuildConfig.CAPTURE_QA_SOURCE_SHA)
             put("version_name", BuildConfig.VERSION_NAME)
+            put("version_code", BuildConfig.VERSION_CODE)
+            put("started_at_epoch_ms", startedEpochMs)
+            if (outcome != "IN_PROGRESS") put("ended_at_epoch_ms", System.currentTimeMillis())
             put("fixture_package", CHROME)
             put("input_method_package", SAMSUNG_IME)
             put("suite", "six_key_first_pass")
             put("stage", stage)
+            put("last_safe_checkpoint", stage)
             put("outcome", outcome)
             put("reason", reason)
             put("completed_keys", verifiedKeys)
@@ -417,10 +483,22 @@ internal object DebugOneStopQa {
             put("editor_focus_click_attempts", setupClickAttempts)
             put("navigation_click_attempts", navigationClickAttempts)
             put("new_chrome_tab_verified", newChromeTabVerified)
+            put("new_chrome_tab_evidence", newTabEvidence)
             priorChromeTabCount?.let { put("chrome_tabs_before", it) }
             newChromeTabCount?.let { put("chrome_tabs_after", it) }
             chromeSelectorDiagnostics?.let { put("chrome_selector_diagnostics", it.redactedJson()) }
             put("outcome_unknown", uncertain)
+            put("projection_active", ProjectionImageTransport.active()?.screenObservationAllowed() == true)
+            put("control_session_state", AgentService.instance?.remoteControlSession?.state?.name ?: "unavailable")
+            put("recovery_attempts", 0)
+            put("actual_keys_dispatched", attempts)
+            // Only proven benchmark prefixes, never arbitrary Chrome/user contents.
+            put("confirmed_text", SixKey.expected(verifiedKeys))
+            put("confirmed_caret", SixKey.expected(verifiedKeys).length)
+            if (outcome == "PASS") {
+                put("final_text", SixKey.expected(6))
+                put("final_caret_start", 4); put("final_caret_end", 4)
+            }
             put("goal_verified", outcome == "PASS" && verifiedKeys == SixKey.labels.size)
             put("elapsed_ms", SystemClock.elapsedRealtime() - started)
             put("repetitions_completed", if (outcome == "PASS") 1 else 0)
@@ -509,6 +587,7 @@ internal object DebugOneStopQa {
             priorChromeTabCount = prepared.tabsBefore
             newChromeTabCount = prepared.tabsAfter
             newChromeTabVerified = prepared.newTabVerified
+            newTabEvidence = prepared.newTabEvidence
             navigationClickAttempts = prepared.navigationClicks
             setupClickAttempts = prepared.focusClicks
             uncertain = prepared.unknown
@@ -592,7 +671,7 @@ internal object DebugOneStopQa {
         } finally {
             control.invalidate()
             try { port.activity(false) } finally {
-                if (active) withContext(Dispatchers.Main) { session.end() }
+                if (active) withContext(NonCancellable + Dispatchers.Main) { session.end() }
                 ControlScreenLease.mutex.unlock()
             }
         }
