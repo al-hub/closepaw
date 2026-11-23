@@ -728,88 +728,27 @@ internal object DebugOneStopQa {
                 return result("DIAGNOSTIC_COMPLETE", "no_key_evidence_captured").also { write(context, it) }
             }
 
-            for ((index, label) in SixKey.labels.withIndex()) {
-                currentCoroutineContext().ensureActive()
-                if (!allowed()) return stop("control_authority_revoked")
-                stage = "key_" + (index + 1) + "_preflight"
-                checkpoint("fresh_keyboard_observation")
-                val before = port.capture()
-                if (!sameEditor(first, before)) return stop("editor_identity_changed")
-                val field = before.inputTarget
-                if (before.reason != null || before.packageName != CHROME ||
-                    before.keyboard?.packageName != SAMSUNG_IME || field == null ||
-                    !SixKey.matches(field.text, field.selectionStart, field.selectionEnd, index))
-                    return stop("editor_checkpoint_changed")
-                val observationStart = SystemClock.elapsedRealtime()
-                val observed = control.observe(includeImage = true, imageScope = "keyboard",
-                    keyboardKeyExact = label)
-                diagnosticDurationMs += SystemClock.elapsedRealtime() - observationStart
-                keyEvidence += DebugKeyboardEvidence.fromObservation(
-                    observed.data, observed.success, listOf(label))
-                // Observation refusal may be a protected screen: no extra read.
-                if (!observed.success) {
-                    // A native observation refusal may mean a protected screen,
-                    // lock or revoked authority: stop immediately, no extra read.
-                    afterFailureStatus = "skipped_refused_observation"
-                    return stop("keyboard_observation_refused")
-                }
-                val observationId = observed.data["observation_id"]?.jsonPrimitive?.content
-                    ?: return stop("observation_id_missing")
-                val matches = (observed.data["nodes"] as? JsonArray)?.mapNotNull { it as? JsonObject }
-                    ?.filter { it["keyboard_key"]?.jsonPrimitive?.content == label &&
-                        it["enabled"]?.jsonPrimitive?.booleanOrNull == true }
-                    .orEmpty()
-                if (matches.size != 1) {
-                    val followUp = DebugKeyboardEvidence.inspectAmbiguousCandidates(
-                        capture = { port.capture() }, baseline = first, keyIndex = index, allowed = allowed)
-                    afterFailureStatus = followUp.status
-                    afterFailureEvidence = followUp.evidence
-                    diagnosticReadCount += followUp.reads
-                    return stop("unique_physical_key_not_proven")
-                }
-                val nodeId = matches.single()["node_id"]?.jsonPrimitive?.intOrNull
-                    ?: return stop("physical_key_id_missing")
-                stage = "key_" + (index + 1) + "_dispatch"
-                checkpoint("one_guarded_key")
-                val action = control.action(buildJsonObject {
-                    put("action", "key")
-                    put("session_id", session.id)
-                    put("observation_id", observationId)
-                    put("node_id", nodeId)
-                })
-                val attempted = action.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
-                val unknown = action.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
-                if (attempted) attempts++
-                uncertain = uncertain || unknown
-                if (!SixKey.mayContinue(attempted, unknown, action.success))
-                    return stop(action.data["reason_code"]?.jsonPrimitive?.content ?: "key_effect_unconfirmed")
-                val after = port.capture()
-                if (!sameEditor(first, after)) {
-                    uncertain = true
-                    return stop("editor_identity_after_touch_unverified")
-                }
-                val post = after.inputTarget
-                if (after.reason != null || after.packageName != CHROME || post == null ||
-                    !SixKey.matches(post.text, post.selectionStart, post.selectionEnd, index + 1)) {
-                    uncertain = true
-                    return stop("independent_key_postcondition_failed")
-                }
-                verifiedKeys++
-                stage = "key_" + (index + 1) + "_confirmed"
-                checkpoint("independent_editor_confirmed")
+            val execution = DebugSixKeyExecution.run(
+                port, control, session, first, allowed,
+            ) { progress, reason ->
+                verifiedKeys = progress.verified
+                attempts = progress.attempts
+                uncertain = progress.uncertain
+                stage = progress.stage
+                checkpoint(reason)
             }
-            stage = "six_key_final"
-            val final = port.capture()
-            val field = final.inputTarget
-            if (!sameEditor(first, final)) {
-                uncertain = attempts > 0
-                return stop("final_editor_identity_unverified")
-            }
-            if (final.reason != null || final.packageName != CHROME || field == null ||
-                !SixKey.matches(field.text, field.selectionStart, field.selectionEnd, 6)) {
-                uncertain = attempts > 0
-                stop("six_key_final_read_unconfirmed")
-            } else result("PASS", "six_physical_keys_editor_and_caret_confirmed").also { write(context, it) }
+            verifiedKeys = execution.progress.verified
+            attempts = execution.progress.attempts
+            uncertain = execution.progress.uncertain
+            stage = execution.progress.stage
+            keyEvidence.addAll(execution.evidence)
+            diagnosticDurationMs += execution.observationElapsedMs
+            diagnosticReadCount += execution.followUpNativeReads
+            afterFailureStatus = execution.followUpStatus
+            afterFailureEvidence = execution.followUpEvidence
+            if (execution.failure != null) stop(execution.failure)
+            else result("PASS", "six_physical_keys_editor_and_caret_confirmed")
+                .also { write(context, it) }
         } catch (cancel: CancellationException) {
             uncertain = uncertain || stage.endsWith("_dispatch")
             stop("run_cancelled")
