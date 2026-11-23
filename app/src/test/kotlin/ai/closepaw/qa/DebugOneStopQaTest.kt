@@ -131,6 +131,7 @@ class DebugOneStopQaTest {
         val canRetry = DebugOneStopQa::readOnlyResampleReason
         assertTrue(canRetry("active_root_missing"))
         assertTrue(canRetry("secure_window_changed"))
+        assertTrue(canRetry("screen_changed")) // Read-only fresh scan, never a touch replay.
         listOf(null, "secure_window", "secure_window_probe_failed",
             "secure_window_probe_throttled", "device_locked",
             "screen_share_revoked", "generic_control_disabled",
