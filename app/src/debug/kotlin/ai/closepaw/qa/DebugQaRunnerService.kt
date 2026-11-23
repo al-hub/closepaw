@@ -51,18 +51,20 @@ class DebugQaRunnerService : Service() {
         private const val CHANNEL = "debug_qa_runner"
         private const val NOTIFICATION_ID = 14701
         private const val ACTION_RUN = "ai.closepaw.qa.RUN_USER_ARMED"
+        private const val ACTION_DIAG = "ai.closepaw.qa.DIAG_USER_ARMED"
         private const val ACTION_CANCEL = "ai.closepaw.qa.CANCEL_USER_ARMED"
         private val running = AtomicBoolean(false)
 
         fun isRunning(): Boolean = running.get()
 
         /** Call only from the physically visible local QA screen or its OS consent callback. */
-        fun start(context: Context): Boolean {
+        fun start(context: Context, diagnosticOnly: Boolean = false): Boolean {
             if (!BuildConfig.DEBUG || context.packageName != CaptureQaAcceptance.CANDIDATE ||
                 running.get()) return false
             return runCatching {
                 ContextCompat.startForegroundService(context,
-                    Intent(context, DebugQaRunnerService::class.java).setAction(ACTION_RUN))
+                    Intent(context, DebugQaRunnerService::class.java)
+                        .setAction(if (diagnosticOnly) ACTION_DIAG else ACTION_RUN))
                 true
             }.getOrDefault(false)
         }
@@ -113,7 +115,7 @@ class DebugQaRunnerService : Service() {
             if (job == null) stopSelfResult(startId)
             return START_NOT_STICKY
         }
-        if (intent?.action != ACTION_RUN || !running.compareAndSet(false, true))
+        if (intent?.action !in setOf(ACTION_RUN, ACTION_DIAG) || !running.compareAndSet(false, true))
             return START_NOT_STICKY
 
         try {
@@ -126,11 +128,12 @@ class DebugQaRunnerService : Service() {
             return START_NOT_STICKY
         }
 
+        val diagnosticOnly = intent?.action == ACTION_DIAG
         job = scope.launch {
             val batchId = UUID.randomUUID().toString()
             val results = mutableListOf<JsonObject>()
             try {
-                DebugOneStopQa.saveBatch(applicationContext, batchId, "IN_PROGRESS", results)
+                DebugOneStopQa.saveBatch(applicationContext, batchId, "IN_PROGRESS", results, diagnosticOnly)
                 // Consent callback can precede the independent projection service's
                 // lease publication. Wait here, NOT in the Activity lifecycle.
                 val ready = withTimeoutOrNull(12_000L) {
@@ -141,16 +144,20 @@ class DebugQaRunnerService : Service() {
                 if (!ready) {
                     DebugOneStopQa.recordUnavailable(applicationContext,
                         "android_observation_approval_required")
-                    DebugOneStopQa.saveBatch(applicationContext, batchId, "BLOCKED", results)
+                    DebugOneStopQa.saveBatch(applicationContext, batchId, "BLOCKED", results, diagnosticOnly)
                     return@launch
                 }
                 var blocked = false
-                for (index in 0 until DebugQaBatchPolicy.REPETITIONS) {
+                for (index in 0 until (if (diagnosticOnly) 1 else DebugQaBatchPolicy.REPETITIONS)) {
                     // Each run creates and independently verifies a NEW empty Chrome
                     // editor. Never replay a partially attempted key or a failed run.
-                    val result = DebugOneStopQa.run(applicationContext) { }
+                    val result = DebugOneStopQa.run(applicationContext, { }, diagnosticOnly)
                     results += result
-                    DebugOneStopQa.saveBatch(applicationContext, batchId, "IN_PROGRESS", results)
+                    DebugOneStopQa.saveBatch(applicationContext, batchId, "IN_PROGRESS", results, diagnosticOnly)
+                    if (diagnosticOnly) {
+                        blocked = result["outcome"]?.jsonPrimitive?.content != "DIAGNOSTIC_COMPLETE"
+                        break // Never interpret structural evidence as a typed six-key PASS.
+                    }
                     if (!DebugQaBatchPolicy.mayProceedAfter(result)) {
                         blocked = true
                         break
@@ -158,17 +165,17 @@ class DebugQaRunnerService : Service() {
                     if (index < DebugQaBatchPolicy.REPETITIONS - 1) delay(500L)
                 }
                 DebugOneStopQa.saveBatch(applicationContext, batchId,
-                    if (blocked) "BLOCKED" else "PASS", results)
+                    if (blocked) "BLOCKED" else if (diagnosticOnly) "DIAGNOSTIC_COMPLETE" else "PASS", results, diagnosticOnly)
             } catch (_: CancellationException) {
                 // The individual run records its non-replayable cancellation
                 // checkpoint. No service or process resurrection is attempted.
                 runCatching {
-                    DebugOneStopQa.saveBatch(applicationContext, batchId, "CANCELLED", results)
+                    DebugOneStopQa.saveBatch(applicationContext, batchId, "CANCELLED", results, diagnosticOnly)
                 }
             } catch (_: Exception) {
                 runCatching {
                     DebugOneStopQa.recordUnavailable(applicationContext, "debug_qa_service_failed")
-                    DebugOneStopQa.saveBatch(applicationContext, batchId, "FAILED", results)
+                    DebugOneStopQa.saveBatch(applicationContext, batchId, "FAILED", results, diagnosticOnly)
                 }
             } finally {
                 running.set(false)

@@ -474,13 +474,14 @@ internal object DebugOneStopQa {
         return runCatching { Json.parseToJsonElement(file.readText()).jsonObject }.getOrNull()
             ?.takeIf { it["source_commit"]?.jsonPrimitive?.content == BuildConfig.CAPTURE_QA_SOURCE_SHA }
     }
-    internal fun saveBatch(context: Context, id: String, state: String, results: List<JsonObject>) {
+    internal fun saveBatch(context: Context, id: String, state: String, results: List<JsonObject>, diagnosticOnly: Boolean = false) {
         require(BuildConfig.DEBUG && context.packageName == CaptureQaAcceptance.CANDIDATE)
         val snapshot = buildJsonObject {
             put("schema_version", 2); put("batch_id", id)
             put("source_commit", BuildConfig.CAPTURE_QA_SOURCE_SHA)
             put("version_name", BuildConfig.VERSION_NAME); put("version_code", BuildConfig.VERSION_CODE)
-            put("state", state); put("repetitions_requested", 3)
+            put("state", state); put("mode", if (diagnosticOnly) "structure_diagnostic" else "six_key_first_pass")
+            put("repetitions_requested", if (diagnosticOnly) 1 else 3)
             put("repetitions_completed", results.count { it["outcome"]?.jsonPrimitive?.content == "PASS" })
             put("runs", JsonArray(results))
             put("last_updated_epoch_ms", System.currentTimeMillis())
@@ -508,7 +509,9 @@ internal object DebugOneStopQa {
         return runCatching { Json.parseToJsonElement(file.readText()).jsonObject }.getOrNull()
             ?.takeIf { item ->
                 item["source_commit"]?.jsonPrimitive?.content == BuildConfig.CAPTURE_QA_SOURCE_SHA &&
-                    item["suite"]?.jsonPrimitive?.content == "six_key_first_pass" &&
+                    item["suite"]?.jsonPrimitive?.content?.let {
+                        it == "six_key_first_pass" || it == "structure_diagnostic"
+                    } == true &&
                     item["fixture_package"]?.jsonPrimitive?.content == CHROME
             }
     }
@@ -536,7 +539,7 @@ internal object DebugOneStopQa {
         }
     }
 
-    suspend fun run(context: Context, status: (String) -> Unit): JsonObject {
+    suspend fun run(context: Context, status: (String) -> Unit, diagnosticOnly: Boolean = false): JsonObject {
         require(BuildConfig.DEBUG && context.packageName == CaptureQaAcceptance.CANDIDATE)
         val runId = UUID.randomUUID().toString()
         val settings = McpExecutionSettings(context)
@@ -556,11 +559,16 @@ internal object DebugOneStopQa {
         var chromeRecoveryReads = 0
         var firstChromeRefusal: String? = null
         var foregroundFactsAtRefusal: ChromeWindowFacts? = null
+        val keyEvidence = mutableListOf<JsonObject>()
+        var afterFailureEvidence: JsonObject? = null
+        var afterFailureStatus = "not_required"
+        var diagnosticDurationMs = 0L
+        var diagnosticReadCount = 0
         val started = SystemClock.elapsedRealtime()
         val startedEpochMs = System.currentTimeMillis()
         var newTabEvidence = "none"
         fun result(outcome: String, reason: String) = buildJsonObject {
-            put("schema_version", 1)
+            put("schema_version", 3)
             put("run_id", runId)
             put("source_commit", BuildConfig.CAPTURE_QA_SOURCE_SHA)
             put("version_name", BuildConfig.VERSION_NAME)
@@ -569,7 +577,8 @@ internal object DebugOneStopQa {
             if (outcome != "IN_PROGRESS") put("ended_at_epoch_ms", System.currentTimeMillis())
             put("fixture_package", CHROME)
             put("input_method_package", SAMSUNG_IME)
-            put("suite", "six_key_first_pass")
+            put("suite", if (diagnosticOnly) "structure_diagnostic" else "six_key_first_pass")
+            put("diagnostic_only", diagnosticOnly)
             put("stage", stage)
             put("last_safe_checkpoint", if (verifiedKeys == 0) "before_first_key" else
                 "key_" + verifiedKeys + "_confirmed")
@@ -588,6 +597,12 @@ internal object DebugOneStopQa {
             put("projection_active", ProjectionImageTransport.active()?.screenObservationAllowed() == true)
             put("control_session_state", AgentService.instance?.remoteControlSession?.state?.name ?: "unavailable")
             put("recovery_attempts", 0)
+            put("diagnostic_observations", keyEvidence.size)
+            put("diagnostic_extra_native_reads", diagnosticReadCount)
+            put("diagnostic_elapsed_ms", diagnosticDurationMs)
+            put("post_failure_diagnostic_status", afterFailureStatus)
+            afterFailureEvidence?.let { put("post_failure_read_only", it) }
+            put("key_evidence", JsonArray(keyEvidence))
             put("chrome_preflight_read_count", chromeReadCount)
             put("chrome_preflight_read_only_recoveries", chromeRecoveryReads)
             firstChromeRefusal?.takeIf {
@@ -695,6 +710,24 @@ internal object DebugOneStopQa {
             preflightFacts = diagnosed
             editorPreflightReason(diagnosed)?.let { return stop(it) }
 
+            // Explicit first-run mode: a single combined accessibility + visual
+            // observation, without dispatching any typing keys. Chrome setup
+            // navigation/focus remains guarded and may create one blank tab.
+            if (diagnosticOnly) {
+                stage = "structure_diagnostic"
+                checkpoint("one_no_key_observation")
+                if (!allowed()) return stop("control_authority_revoked")
+                val diagnosticStart = SystemClock.elapsedRealtime()
+                val observed = control.observe(includeImage = true, imageScope = "keyboard",
+                    keyboardSequenceLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
+                diagnosticDurationMs += SystemClock.elapsedRealtime() - diagnosticStart
+                keyEvidence += DebugKeyboardEvidence.fromObservation(
+                    observed.data, observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
+                if (!observed.success) return stop("structure_observation_refused")
+                stage = "structure_diagnostic_saved"
+                return result("DIAGNOSTIC_COMPLETE", "no_key_evidence_captured").also { write(context, it) }
+            }
+
             for ((index, label) in SixKey.labels.withIndex()) {
                 currentCoroutineContext().ensureActive()
                 if (!allowed()) return stop("control_authority_revoked")
@@ -707,16 +740,51 @@ internal object DebugOneStopQa {
                     before.keyboard?.packageName != SAMSUNG_IME || field == null ||
                     !SixKey.matches(field.text, field.selectionStart, field.selectionEnd, index))
                     return stop("editor_checkpoint_changed")
+                val observationStart = SystemClock.elapsedRealtime()
                 val observed = control.observe(includeImage = true, imageScope = "keyboard",
                     keyboardKeyExact = label)
-                if (!observed.success) return stop("keyboard_observation_refused")
+                diagnosticDurationMs += SystemClock.elapsedRealtime() - observationStart
+                keyEvidence += DebugKeyboardEvidence.fromObservation(
+                    observed.data, observed.success, listOf(label))
+                // One fresh native read on candidate/observation refusal, only
+                // while original user-approved control authority remains live.
+                // Never retry an attempted or UNKNOWN key.
+                suspend fun inspectRefusal() {
+                    if (!allowed() || uncertain) {
+                        afterFailureStatus = "skipped_authority_or_uncertainty"
+                        return
+                    }
+                    afterFailureStatus = "native_follow_up_failed"
+                    try {
+                        val fresh = port.capture()
+                        diagnosticReadCount++
+                        val next = fresh.inputTarget
+                        afterFailureEvidence = DebugKeyboardEvidence.fromFollowUp(
+                            fresh, sameEditor(first, fresh),
+                            next != null && SixKey.matches(
+                                next.text, next.selectionStart, next.selectionEnd, index))
+                        afterFailureStatus = if (!allowed()) "authority_revoked_during_follow_up"
+                            else "captured_read_only"
+                    } catch (cancel: CancellationException) {
+                        throw cancel
+                    } catch (_: Exception) {
+                        afterFailureStatus = "native_follow_up_failed"
+                    }
+                }
+                if (!observed.success) {
+                    inspectRefusal()
+                    return stop("keyboard_observation_refused")
+                }
                 val observationId = observed.data["observation_id"]?.jsonPrimitive?.content
                     ?: return stop("observation_id_missing")
                 val matches = (observed.data["nodes"] as? JsonArray)?.mapNotNull { it as? JsonObject }
                     ?.filter { it["keyboard_key"]?.jsonPrimitive?.content == label &&
                         it["enabled"]?.jsonPrimitive?.booleanOrNull == true }
                     .orEmpty()
-                if (matches.size != 1) return stop("unique_physical_key_not_proven")
+                if (matches.size != 1) {
+                    inspectRefusal()
+                    return stop("unique_physical_key_not_proven")
+                }
                 val nodeId = matches.single()["node_id"]?.jsonPrimitive?.intOrNull
                     ?: return stop("physical_key_id_missing")
                 stage = "key_" + (index + 1) + "_dispatch"

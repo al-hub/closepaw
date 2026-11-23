@@ -49,6 +49,7 @@ class LocalCaptureQaActivity : ComponentActivity() {
     // Only an explicit local 'Arm guarded six-key' action may set this latch.
     // After OS consent, a separate foreground service owns the approved run.
     private var armedAfterConsent = false
+    private var pendingDiagnosticOnly = false
     private var bitmap: Bitmap? = null
 
     private val consent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -60,15 +61,19 @@ class LocalCaptureQaActivity : ComponentActivity() {
                 MediaProjectionCaptureService.startFromConsent(this, result.resultCode, result.data!!, id)
                 if (armedAfterConsent) {
                     armedAfterConsent = false
-                    runGuardedSixKeyNow()
+                    val diagnosticOnly = pendingDiagnosticOnly
+                    pendingDiagnosticOnly = false
+                    runGuardedSixKeyNow(diagnosticOnly)
                 }
             }
             is ProjectionConsentState.Denied -> {
                 armedAfterConsent = false
+                pendingDiagnosticOnly = false
                 status.text = "Observation approval denied; no run started."
             }
             else -> {
                 armedAfterConsent = false
+                pendingDiagnosticOnly = false
                 gate.onCancelled()
             }
         }
@@ -82,6 +87,8 @@ class LocalCaptureQaActivity : ComponentActivity() {
         // Preserve the user's *pending* local arm across an OS consent Activity
         // recreation; never invent an approval or automatically re-arm after death.
         armedAfterConsent = savedInstanceState?.getBoolean("qa_pending_user_arm", false) == true
+        pendingDiagnosticOnly = savedInstanceState?.getBoolean("qa_pending_diagnostic_only", false) == true &&
+            armedAfterConsent
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 36, 24, 24) }
         column.setOnApplyWindowInsetsListener { view, insets ->
             val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
@@ -122,8 +129,9 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }
         text("Approve setup first. Read-only capture remains one run. The separate guarded INPUT QA uses its own foreground runner. Stop/pause, lock, service loss or projection revocation stop it; no unverified key is replayed.")
         button("Arm one run · wait up to 10 minutes") { arm() }
-        text("DEBUG INPUT QA: user-approved local foreground job independent of this page and ChatGPT voice. Opens Chrome from this visible screen. Uses only verified blank Chrome editor; checks each physical key/caret, stops UNKNOWN without replay. Maximum 3 independent six-key runs; saved batch/history is available on return. Mixed benchmark remains pending.")
-        button("Arm guarded six-key first-pass · auto-open Chrome") { armOneStop() }
+        text("DEBUG QA: first choose one no-key structural diagnosis to capture Samsung key counts and image-source state. It may safely open and focus a NEW blank Chrome tab, but never types. Review stored evidence before separately choosing six-key input. Both jobs survive voice/activity exit; consent and native guards remain required.")
+        button("Arm ONE no-key structural diagnosis · auto-open Chrome") { armOneStop(diagnosticOnly = true) }
+        button("Arm guarded six-key first-pass · auto-open Chrome") { armOneStop(diagnosticOnly = false) }
         button("Revoke Samsung keyboard interaction · Debug only", guarded = false) {
             if (DebugImeInteractConsent.updateFromLocalConsent(this, grant = false)) {
                 refreshSetup()
@@ -132,9 +140,11 @@ class LocalCaptureQaActivity : ComponentActivity() {
                 status.text = "No matching Debug-only Samsung IME grant to revoke."
             }
         }
-        button("View saved Debug six-key checkpoint", guarded = false) { showOneStopResult() }
+        button("View saved Debug QA evidence", guarded = false) { showOneStopResult() }
+        button("Share redacted Debug QA JSON · no screenshots", guarded = false) { shareOneStopJson() }
         button("Cancel my waiting run", guarded = false) {
-            armedAfterConsent = false; job?.cancel(); DebugQaRunnerService.cancel(this)
+            armedAfterConsent = false; pendingDiagnosticOnly = false
+            job?.cancel(); DebugQaRunnerService.cancel(this)
         }
         button("View historical local result") { showResult("local") }
         button("Compare same-source local / ADB contract") { compare() }
@@ -149,6 +159,7 @@ class LocalCaptureQaActivity : ComponentActivity() {
     }
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("qa_pending_user_arm", armedAfterConsent)
+        outState.putBoolean("qa_pending_diagnostic_only", pendingDiagnosticOnly)
         super.onSaveInstanceState(outState)
     }
     override fun onResume() {
@@ -235,7 +246,41 @@ class LocalCaptureQaActivity : ComponentActivity() {
                 (checkpoint?.toString() ?: "none")
     }
 
-    private fun armOneStop() {
+    /** Explicit local export only: no pixels, user text, URLs or native node data.
+     * Debug private files remain separate from the production package. */
+    private fun shareOneStopJson() {
+        if (DebugQaRunnerService.isRunning()) {
+            status.text = "QA still running; sharing is available after the batch finishes."
+            return
+        }
+        val run = DebugOneStopQa.lastResult(this)
+        val batch = DebugOneStopQa.lastBatchResult(this)
+        if (run == null && batch == null) {
+            report.text = "No saved same-source Debug QA evidence to share."
+            return
+        }
+        try {
+            val exports = File(cacheDir, "capture-qa/exports").apply { mkdirs() }
+            val file = File(exports, "debug-qa-${UUID.randomUUID()}.json")
+            file.writeText(buildJsonObject {
+                put("format", "debug_qa_redacted_v1")
+                run?.let { put("last_run", it) }
+                batch?.let { put("last_batch", it) }
+            }.toString(), Charsets.UTF_8)
+            val uri = FileProvider.getUriForFile(this, "$packageName.captureqa", file)
+            startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = ClipData.newRawUri("Redacted Debug QA evidence", uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }, "Share Debug QA diagnostic JSON"))
+            status.text = "Redacted JSON prepared for user-selected sharing."
+        } catch (_: Exception) {
+            status.text = "Debug QA JSON sharing unavailable; no export claimed."
+        }
+    }
+
+    private fun armOneStop(diagnosticOnly: Boolean) {
         if (job?.isActive == true || armedAfterConsent || DebugQaRunnerService.isRunning()) return
         if (!DebugImeInteractConsent.selectedSamsungIme(this)) {
             status.text = "Samsung keyboard is not the OS-selected enabled IME; no QA action started."
@@ -246,12 +291,12 @@ class LocalCaptureQaActivity : ComponentActivity() {
             // or use ADB/shared-preferences modification as a substitute for consent.
             android.app.AlertDialog.Builder(this)
                 .setTitle("Samsung keyboard interaction · Debug only")
-                .setMessage("The separate ClosePaw DEBUG candidate needs your permission to touch Samsung keyboard keys for the guarded six-key test. This changes ONLY this candidate's Samsung IME runtime policy. It does not grant Android accessibility or screen sharing, which remain separately controlled. Existing Chrome content is never overwritten. You may revoke the Debug grant on this page.")
+                .setMessage("This candidate needs narrowly scoped Samsung keyboard interaction permission. Structural diagnosis does not type keys but still verifies the same native safety policy. Only the separate guarded six-key run attempts typing. Android accessibility and screen-sharing approvals remain separate. Existing Chrome content is not overwritten. You may revoke this Debug-only grant here.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Allow for Debug QA") { _, _ ->
                     if (DebugImeInteractConsent.updateFromLocalConsent(this, grant = true)) {
                         refreshSetup()
-                        armOneStop() // Continuation of the already-armed on-screen action.
+                        armOneStop(diagnosticOnly) // Continuation of the same local user choice.
                     } else {
                         status.text = "Debug IME consent refused: OS keyboard or existing policy does not permit a narrow grant."
                     }
@@ -260,17 +305,19 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }
         if (ProjectionImageTransport.active()?.screenObservationAllowed() != true) {
             armedAfterConsent = true
+            pendingDiagnosticOnly = diagnosticOnly
             if (requestObservation()) {
-                status.text = "Approve Android screen sharing; guarded six-key QA will continue automatically."
+                status.text = "Approve Android screen sharing; selected Debug QA mode will continue automatically."
             } else {
                 armedAfterConsent = false
+                pendingDiagnosticOnly = false
             }
             return
         }
-        runGuardedSixKeyNow()
+        runGuardedSixKeyNow(diagnosticOnly)
     }
 
-    private fun runGuardedSixKeyNow() {
+    private fun runGuardedSixKeyNow(diagnosticOnly: Boolean) {
         if (isDestroyed || isFinishing || DebugQaRunnerService.isRunning()) return
         // Launching an Activity from a background FGS is restricted on Android
         // 14+. The physically visible QA screen performs ONLY this launch.
@@ -281,13 +328,15 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }
         previewIfReadyClear()
         report.text = "Foreground Debug QA requested; saved results will survive this screen."
-        if (!DebugQaRunnerService.start(this)) {
+        if (!DebugQaRunnerService.start(this, diagnosticOnly)) {
             status.text = "Foreground Debug runner unavailable or already active."
             return
         }
         try {
             startActivity(chrome)
-            status.text = "Debug QA runs independently; returning here reads the saved batch."
+            status.text = if (diagnosticOnly)
+                "No-key diagnostic armed; return here for saved evidence."
+            else "Six-key QA armed; return here for saved evidence."
         } catch (_: Exception) {
             DebugQaRunnerService.cancel(this)
             status.text = "Chrome launch failed. No key input should be attempted."
