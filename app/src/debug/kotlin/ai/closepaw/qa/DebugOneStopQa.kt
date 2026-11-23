@@ -198,6 +198,147 @@ internal object DebugOneStopQa {
     internal fun verifiedBlankNewTab(priorTabCount: Int, frame: ControlFrame): Boolean =
         chromeTabCount(frame) == priorTabCount + 1 && blankOmnibox(frame) != null
 
+    /** Candidate-only preparation, separated from the key coroutine state machine.
+     * Every action uses GenericControl's original native freshness/privacy guards. */
+    private data class ChromeReady(
+        val frame: ControlFrame? = null, val failure: String? = null,
+        val nativeRefusal: String? = null, val diagnostics: ChromeSelectorFacts? = null,
+        val tabsBefore: Int? = null, val tabsAfter: Int? = null,
+        val newTabVerified: Boolean = false, val navigationClicks: Int = 0,
+        val focusClicks: Int = 0, val unknown: Boolean = false,
+    )
+
+    private suspend fun prepareChromeEditor(
+        port: AndroidControlPort, control: GenericControl, session: ControlSession,
+        allowed: () -> Boolean, onPhase: (String) -> Unit,
+    ): ChromeReady {
+        var nativeRefusal: String? = null
+        var diagnostics: ChromeSelectorFacts? = null
+        var tabsBefore: Int? = null
+        var tabsAfter: Int? = null
+        var newTabVerified = false
+        var navigationClicks = 0
+        var focusClicks = 0
+        var unknown = false
+        fun result(frame: ControlFrame? = null, failure: String? = null) = ChromeReady(
+            frame, failure, nativeRefusal, diagnostics, tabsBefore, tabsAfter,
+            newTabVerified, navigationClicks, focusClicks, unknown)
+
+        // Fresh read; only a transient invalid window may be resampled once.
+        var first = port.capture()
+        nativeRefusal = first.reason
+        if (readOnlyResampleReason(first.reason)) {
+            delay(350L)
+            if (!allowed()) return result(failure = "control_authority_revoked")
+            first = port.capture()
+            nativeRefusal = first.reason
+        }
+        diagnostics = chromeSelectorFacts(first)
+        if (first.reason != null) return result(failure = "preflight_frame_unavailable")
+        if (first.truncated) return result(failure = "preflight_frame_truncated")
+        if (first.navigationOnly) return result(failure = "preflight_navigation_only")
+        if (first.packageName != CHROME) return result(failure = "preflight_chrome_not_foreground")
+
+        /** One fresh observed native click; no coordinates, URL or synthetic text. */
+        suspend fun clickChromeNode(
+            frame: ControlFrame, target: ai.closepaw.chatgpt.control.ControlNode,
+            phase: String, editorFocus: Boolean = false,
+        ): Boolean {
+            if (!safeChromeFrame(frame) || target.sourcePackage != CHROME ||
+                target.sourceWindowId != frame.windowId || !target.clickable ||
+                !target.enabled || target.password) return false
+            val observed = control.observe()
+            if (!observed.success) return false
+            val matches = (observed.data["nodes"] as? JsonArray)
+                ?.mapNotNull { it as? JsonObject }
+                ?.filter {
+                    it["resource_id"]?.jsonPrimitive?.content == target.resourceId &&
+                        it["class_name"]?.jsonPrimitive?.content == target.className &&
+                        it["bounds"]?.jsonPrimitive?.content == target.bounds &&
+                        it["clickable"]?.jsonPrimitive?.booleanOrNull == true &&
+                        it["enabled"]?.jsonPrimitive?.booleanOrNull == true
+                }.orEmpty()
+            if (matches.size != 1) return false
+            val observationId = observed.data["observation_id"]?.jsonPrimitive?.content
+                ?: return false
+            val nodeId = matches.single()["node_id"]?.jsonPrimitive?.intOrNull
+                ?: return false
+            onPhase(phase)
+            val effect = control.action(buildJsonObject {
+                put("action", "click")
+                put("session_id", session.id)
+                put("observation_id", observationId)
+                put("node_id", nodeId)
+            })
+            val attempted = effect.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
+            if (attempted) {
+                if (editorFocus) focusClicks++ else navigationClicks++
+            }
+            val actionUnknown = effect.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
+            unknown = unknown || actionUnknown || (attempted && !effect.success)
+            return effect.success && !actionUnknown
+        }
+
+        // Preserve every existing tab: create one new tab through verified Chrome UI.
+        val previousCount = chromeTabCount(first)
+            ?: return result(failure = "chrome_tab_count_unavailable")
+        tabsBefore = previousCount
+        val menu = chromeMenuButton(first)
+            ?: return result(failure = "unique_chrome_menu_unavailable")
+        if (!clickChromeNode(first, menu, "chrome_menu_dispatch"))
+            return result(failure = "chrome_menu_unconfirmed")
+        val popup = port.capture()
+        nativeRefusal = popup.reason
+        val newTabCommand = chromeNewTabMenuItem(popup)
+            ?: return result(failure = "verified_new_tab_menu_unavailable")
+        if (!clickChromeNode(popup, newTabCommand, "chrome_new_tab_dispatch"))
+            return result(failure = "chrome_new_tab_unconfirmed")
+
+        // At most three passive probes and zero action replay.
+        onPhase("new_blank_tab_preflight")
+        var newTabFrame: ControlFrame? = null
+        for (read in 0..2) {
+            delay(if (read == 0) 350L else 250L)
+            if (!allowed()) return result(failure = "control_authority_revoked")
+            val probe = port.capture()
+            nativeRefusal = probe.reason
+            diagnostics = chromeSelectorFacts(probe)
+            if (probe.reason != null && !readOnlyResampleReason(probe.reason))
+                return result(failure = "new_tab_native_security_refusal")
+            if (probe.truncated || probe.navigationOnly)
+                return result(failure = "new_tab_incomplete_frame")
+            if (verifiedBlankNewTab(previousCount, probe)) {
+                newTabFrame = probe
+                break
+            }
+        }
+        first = newTabFrame ?: return result(failure = "new_blank_chrome_tab_unverified")
+        tabsAfter = chromeTabCount(first)
+        newTabVerified = true
+
+        // Pre-focus non-editable NTP search box is allowed only in this proven
+        // new tab; post-focus editor, Samsung IME and 0/0 caret remain mandatory.
+        val target = blankOmnibox(first)
+            ?: return result(failure = "unique_blank_chrome_omnibox_unavailable")
+        if (first.inputTarget == null || first.keyboard?.packageName != SAMSUNG_IME) {
+            if (!clickChromeNode(first, target, "chrome_editor_focus_dispatch", editorFocus = true))
+                return result(failure = "chrome_editor_focus_unconfirmed")
+            delay(350L)
+            if (!allowed()) return result(failure = "control_authority_revoked")
+            first = port.capture()
+            nativeRefusal = first.reason
+            if (readOnlyResampleReason(first.reason)) {
+                delay(350L)
+                if (!allowed()) return result(failure = "control_authority_revoked")
+                first = port.capture()
+                nativeRefusal = first.reason
+            }
+            diagnostics = chromeSelectorFacts(first)
+        }
+        onPhase("editor_preflight")
+        return result(frame = first)
+    }
+
     private fun sameEditor(first: ControlFrame, later: ControlFrame): Boolean {
         val a = first.inputTarget ?: return false
         val b = later.inputTarget ?: return false
@@ -356,122 +497,19 @@ internal object DebugOneStopQa {
             if (!allowed()) return stop("control_authority_revoked")
             stage = "editor_preflight"
             checkpoint("native_preflight")
-            var first = port.capture()
-            nativePreflightRefusal = first.reason
-            if (readOnlyResampleReason(first.reason)) {
-                delay(350L)
-                if (!allowed()) return stop("control_authority_revoked")
-                first = port.capture()
-                nativePreflightRefusal = first.reason
-            }
-            chromeSelectorDiagnostics = chromeSelectorFacts(first)
-            preflightFacts = editorPreflightFacts(first)
-            if (first.reason != null) return stop("preflight_frame_unavailable")
-            if (first.truncated) return stop("preflight_frame_truncated")
-            if (first.navigationOnly) return stop("preflight_navigation_only")
-            if (first.packageName != CHROME) return stop("preflight_chrome_not_foreground")
-
-            // Every click is observed freshly and checked again at the native boundary.
-            // Never use coordinates, injected URL text or an existing tab's editor.
-            suspend fun clickChromeNode(
-                frame: ControlFrame, target: ai.closepaw.chatgpt.control.ControlNode,
-                phase: String, editorFocus: Boolean = false,
-            ): Boolean {
-                if (!safeChromeFrame(frame) || target.sourcePackage != CHROME ||
-                    target.sourceWindowId != frame.windowId || !target.clickable ||
-                    !target.enabled || target.password) return false
-                val observed = control.observe()
-                if (!observed.success) return false
-                val matches = (observed.data["nodes"] as? JsonArray)
-                    ?.mapNotNull { it as? JsonObject }
-                    ?.filter {
-                        it["resource_id"]?.jsonPrimitive?.content == target.resourceId &&
-                            it["class_name"]?.jsonPrimitive?.content == target.className &&
-                            it["bounds"]?.jsonPrimitive?.content == target.bounds &&
-                            it["clickable"]?.jsonPrimitive?.booleanOrNull == true &&
-                            it["enabled"]?.jsonPrimitive?.booleanOrNull == true
-                    }.orEmpty()
-                if (matches.size != 1) return false
-                val observationId = observed.data["observation_id"]?.jsonPrimitive?.content
-                    ?: return false
-                val nodeId = matches.single()["node_id"]?.jsonPrimitive?.intOrNull
-                    ?: return false
+            val prepared = prepareChromeEditor(port, control, session, allowed) { phase ->
                 stage = phase
-                checkpoint("verified_native_chrome_click")
-                val effect = control.action(buildJsonObject {
-                    put("action", "click")
-                    put("session_id", session.id)
-                    put("observation_id", observationId)
-                    put("node_id", nodeId)
-                })
-                val attempted = effect.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
-                if (attempted) {
-                    if (editorFocus) setupClickAttempts++ else navigationClickAttempts++
-                }
-                val unknown = effect.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
-                uncertain = uncertain || unknown || (attempted && !effect.success)
-                return effect.success && !unknown
+                checkpoint("guarded_chrome_preparation")
             }
-
-            // Always open an independent tab, even when the restored tab appears blank.
-            val countBefore = chromeTabCount(first)
-                ?: return stop("chrome_tab_count_unavailable")
-            priorChromeTabCount = countBefore
-            val menu = chromeMenuButton(first)
-                ?: return stop("unique_chrome_menu_unavailable")
-            if (!clickChromeNode(first, menu, "chrome_menu_dispatch"))
-                return stop("chrome_menu_unconfirmed")
-            val menuFrame = port.capture()
-            nativePreflightRefusal = menuFrame.reason
-            val newTabCommand = chromeNewTabMenuItem(menuFrame)
-                ?: return stop("verified_new_tab_menu_unavailable")
-            if (!clickChromeNode(menuFrame, newTabCommand, "chrome_new_tab_dispatch"))
-                return stop("chrome_new_tab_unconfirmed")
-
-            // Three read-only probes maximum. A non-transient security refusal
-            // stops immediately; no repeated navigation clicks or physical keys.
-            stage = "new_blank_tab_preflight"
-            checkpoint("independent_new_tab_count_and_blankness")
-            var newTabFrame: ControlFrame? = null
-            for (read in 0..2) {
-                delay(if (read == 0) 350L else 250L)
-                if (!allowed()) return stop("control_authority_revoked")
-                val probe = port.capture()
-                nativePreflightRefusal = probe.reason
-                chromeSelectorDiagnostics = chromeSelectorFacts(probe)
-                if (probe.reason != null && !readOnlyResampleReason(probe.reason))
-                    return stop("new_tab_native_security_refusal")
-                if (probe.truncated || probe.navigationOnly)
-                    return stop("new_tab_incomplete_frame")
-                if (verifiedBlankNewTab(countBefore, probe)) {
-                    newTabFrame = probe
-                    break
-                }
-            }
-            first = newTabFrame ?: return stop("new_blank_chrome_tab_unverified")
-            newChromeTabCount = chromeTabCount(first)
-            newChromeTabVerified = true
-            preflightFacts = editorPreflightFacts(first)
-
-            val target = blankOmnibox(first)
-                ?: return stop("unique_blank_chrome_omnibox_unavailable")
-            if (first.inputTarget == null || first.keyboard?.packageName != SAMSUNG_IME) {
-                if (!clickChromeNode(first, target, "chrome_editor_focus_dispatch", editorFocus = true))
-                    return stop("chrome_editor_focus_unconfirmed")
-                delay(350L)
-                if (!allowed()) return stop("control_authority_revoked")
-                first = port.capture()
-                nativePreflightRefusal = first.reason
-                if (readOnlyResampleReason(first.reason)) {
-                    delay(350L)
-                    if (!allowed()) return stop("control_authority_revoked")
-                    first = port.capture()
-                    nativePreflightRefusal = first.reason
-                }
-                preflightFacts = editorPreflightFacts(first)
-                stage = "editor_preflight"
-                checkpoint("chrome_editor_focus_observed")
-            }
+            nativePreflightRefusal = prepared.nativeRefusal
+            chromeSelectorDiagnostics = prepared.diagnostics
+            priorChromeTabCount = prepared.tabsBefore
+            newChromeTabCount = prepared.tabsAfter
+            newChromeTabVerified = prepared.newTabVerified
+            navigationClickAttempts = prepared.navigationClicks
+            setupClickAttempts = prepared.focusClicks
+            uncertain = prepared.unknown
+            val first = prepared.frame ?: return stop(prepared.failure ?: "chrome_preparation_refused")
             // Independent reason codes and booleans are written before any key dispatch.
             val diagnosed = editorPreflightFacts(first)
             preflightFacts = diagnosed
