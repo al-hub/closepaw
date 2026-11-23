@@ -361,11 +361,23 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }, "Share selected historical QA evidence"))
     }
     private fun clear() {
+        if (DebugQaRunnerService.isRunning()) {
+            status.text = "Guarded Debug QA active; stop the local run before deleting stored results."
+            return
+        }
         try {
             when (CaptureQaAcceptance.deleteEvidence(this, ::revokeAndDelete)) {
                 null -> status.text = "QA engine busy; delete refused. Stop that run first."
                 false -> status.text = "Evidence deletion incomplete; no cleanup success claimed."
-                true -> { previewIfReadyClear(); report.text = "QA evidence deleted while the shared engine was idle." }
+                true -> {
+                    val privateResultsDeleted = File(filesDir, "debug-qa").let {
+                        !it.exists() || it.deleteRecursively()
+                    }
+                    previewIfReadyClear()
+                    report.text = if (privateResultsDeleted)
+                        "Capture and persistent Debug QA evidence deleted while both runners were idle."
+                    else "Capture evidence deleted; persistent Debug QA evidence deletion incomplete."
+                }
             }
         } catch (_: Exception) { status.text = "Evidence deletion failed; no cleanup success claimed." }
     }
