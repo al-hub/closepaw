@@ -140,6 +140,14 @@ class LocalCaptureQaActivity : ComponentActivity() {
         button("Arm one run · wait up to 10 minutes") { arm() }
         text("DEBUG INPUT QA: Separate from read-only CAPTURE_PASS. Once Android access/sharing is approved, arm locally; the candidate opens Chrome automatically and focuses only a uniquely verified empty Chrome address editor. Never overwrites existing content. Each physical key and final caret are checked; UNKNOWN stops without replay. Repeat/mixed suites remain pending.")
         button("Arm guarded six-key first-pass · auto-open Chrome") { armOneStop() }
+        button("Revoke Samsung keyboard interaction · Debug only", guarded = false) {
+            if (DebugImeInteractConsent.updateFromLocalConsent(this, grant = false)) {
+                refreshSetup()
+                status.text = "Debug-only Samsung IME interaction revoked. Native permission checks remain enforced."
+            } else {
+                status.text = "No matching Debug-only Samsung IME grant to revoke."
+            }
+        }
         button("View saved Debug six-key checkpoint", guarded = false) { showOneStopResult() }
         button("Cancel my waiting run", guarded = false) {
             armedAfterConsent = false; consentHandoffJob?.cancel(); job?.cancel()
@@ -173,7 +181,7 @@ class LocalCaptureQaActivity : ComponentActivity() {
     }
     private fun refreshSetup() {
         if (!::status.isInitialized) return
-        status.text = "Setup: ${CaptureQaAcceptance.setup(this)}; observation=${ProjectionImageTransport.active()?.screenObservationAllowed() == true}; qa_busy=${CaptureQaAcceptance.isRunning()}"
+        status.text = "Setup: ${CaptureQaAcceptance.setup(this)}; observation=${ProjectionImageTransport.active()?.screenObservationAllowed() == true}; qa_busy=${CaptureQaAcceptance.isRunning()}; samsung_ime_selected=${DebugImeInteractConsent.selectedSamsungIme(this)}; ime_interact_explicit=${DebugImeInteractConsent.explicitlyGranted(this)}"
     }
     private fun requestObservation(): Boolean {
         if (Build.VERSION.SDK_INT < 34) { status.text = "Android 14+ required"; return false }
@@ -228,6 +236,27 @@ class LocalCaptureQaActivity : ComponentActivity() {
 
     private fun armOneStop() {
         if (job?.isActive == true || armedAfterConsent || consentHandoffJob?.isActive == true) return
+        if (!DebugImeInteractConsent.selectedSamsungIme(this)) {
+            status.text = "Samsung keyboard is not the OS-selected enabled IME; no QA action started."
+            return
+        }
+        if (!DebugImeInteractConsent.explicitlyGranted(this)) {
+            // Local, physical user action only. Never silently grant this permission
+            // or use ADB/shared-preferences modification as a substitute for consent.
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Samsung keyboard interaction · Debug only")
+                .setMessage("The separate ClosePaw DEBUG candidate needs your permission to touch Samsung keyboard keys for the guarded six-key test. This changes ONLY this candidate's Samsung IME runtime policy. It does not grant Android accessibility or screen sharing, which remain separately controlled. Existing Chrome content is never overwritten. You may revoke the Debug grant on this page.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Allow for Debug QA") { _, _ ->
+                    if (DebugImeInteractConsent.updateFromLocalConsent(this, grant = true)) {
+                        refreshSetup()
+                        armOneStop() // Continuation of the already-armed on-screen action.
+                    } else {
+                        status.text = "Debug IME consent refused: OS keyboard or existing policy does not permit a narrow grant."
+                    }
+                }.show()
+            return
+        }
         if (ProjectionImageTransport.active()?.screenObservationAllowed() != true) {
             armedAfterConsent = true
             if (requestObservation()) {
