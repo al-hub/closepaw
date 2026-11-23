@@ -607,6 +607,42 @@ class VisualKeyMapSequenceTest {
         assertEquals(3, f.currentEditor().selectionEnd)
     }
 
+    @Test fun confirmedFourOfSixCanResumeOnlyUnsentSuffixWithinExhaustedGoalBudget() = runBlocking {
+        // Reproduce the Galaxy v0.1.144 4/6 split with three no-touch
+        // recovery charges. This fixture has *known* editor identity, text,
+        // caret, IME layout, and native proof. Never blindly replay the prefix.
+        val f = pendingFifth(refusals = 3)
+        val interrupted = f.run("가 나 ")
+        assertFalse(interrupted.summary, interrupted.success)
+        assertEquals(JsonPrimitive(4), interrupted.data["completed_keys"])
+        assertEquals(JsonPrimitive(3), interrupted.data["pre_touch_retries"])
+        assertEquals(JsonPrimitive(false), interrupted.data["outcome_unknown"])
+        assertEquals("가 ㄴ", f.currentEditor().text)
+        assertEquals(3, f.currentEditor().selectionEnd)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+
+        // A supplied prefix which differs from the confirmed editor state
+        // must refuse before even one additional physical key is sent.
+        val wrongPrefix = f.run("ㅏ ", prefix = "가 ㄷ")
+        assertEquals("keyboard_sequence_prefix_unverified", wrongPrefix.summary)
+        assertEquals(JsonPrimitive(false), wrongPrefix.data["action_attempted"])
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+
+        // The remaining suffix is a separate, explicitly prefix-verified
+        // action under the SAME session/consent and the SAME exhausted ledger.
+        // It may proceed only if its fresh native proof needs no further retry.
+        val resumed = f.run("ㅏ ", prefix = "가 ㄴ")
+        assertTrue("verified suffix: ${resumed.summary}", resumed.success)
+        assertEquals(JsonPrimitive(2), resumed.data["completed_keys"])
+        assertEquals(JsonPrimitive(0), resumed.data["pre_touch_retries"])
+        assertEquals(JsonPrimitive(3), resumed.data["recovery_budget_total"])
+        assertEquals(JsonPrimitive(false), resumed.data["outcome_unknown"])
+        assertEquals("가 나 ", f.currentEditor().text)
+        assertEquals(4, f.currentEditor().selectionStart)
+        assertEquals(4, f.currentEditor().selectionEnd)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
+    }
+
     @Test fun repeatedWindowRecertificationStillBlocksChangedEditorAndGesture() = runBlocking {
         for (change in listOf<Fixture.() -> Unit>(
             { replaceEditor() },

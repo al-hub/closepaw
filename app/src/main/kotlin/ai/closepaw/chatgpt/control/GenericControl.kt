@@ -596,6 +596,19 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val plan = UnifiedInputPolicy.plan(editor, text, "keyboard", if (prefix == null) "empty" else "insert", false)
         if (plan.refusal != null) return stop(plan.refusal)
         val labels = HangulKeyComposer.labels(text)
+        // A verified continuation may begin inside a still-composing Hangul
+        // syllable (e.g. "가 ㄴ" + the physical ㅏ,Space keys -> "가 나 ").
+        // The generic insertion planner validates permissions/selection but
+        // concatenates literal request text; use the same per-key Hangul
+        // predictor as the native post-check for this sequence's final echo.
+        // No inferred effect is accepted: every key and the final editor/caret
+        // are still independently verified against the live IME.
+        val expectedFinalText = if (prefix == null) plan.resultText else
+            labels.fold(editor.text) { current, label ->
+                if (label == "Space") current + " " else HangulKeyComposer.append(current, label)
+            }
+        if (expectedFinalText.length > 2000 || InputPayloadPolicy.sensitive(expectedFinalText))
+            return stop("sensitive_input_refused")
         val submitted = input["steps"] as? JsonArray
         if (!reuseMaps && submitted == null) return stop("keyboard_steps_required")
         if (labels.size !in (if (reuseMaps) 1 else 2)..6 || submitted != null && submitted.size != labels.size)
@@ -911,8 +924,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val result = finalFrame.inputTarget
         if (!sessionCurrent() || !KeyboardEditorContinuity.sameFocusedEditor(lastVerified, finalFrame,
                 allowAnonymousResize = true) || !KeyboardEditorContinuity.sameValue(lastVerified, finalFrame) ||
-            result == null || result.text != plan.resultText ||
-            result.selectionStart != plan.resultText.length || result.selectionEnd != plan.resultText.length)
+            result == null || result.text != expectedFinalText ||
+            result.selectionStart != expectedFinalText.length || result.selectionEnd != expectedFinalText.length)
             return stop("keyboard_final_text_unconfirmed", unknown = touched)
         // The final read, not the earlier transient postcondition, owns the next observation.
         publish(finalFrame)
