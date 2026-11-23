@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.intOrNull
 
 /**
  * Explicitly armed, candidate-only foreground QA runner. The OS-approved
@@ -34,6 +35,17 @@ import kotlinx.serialization.json.jsonPrimitive
  * START_NOT_STICKY: process/service death is NOT permission to replay touches,
  * restart a projection, or resume a partially attempted key.
  */
+/** An UNKNOWN, blocked, or only partially verified run is never repeated. */
+internal object DebugQaBatchPolicy {
+    const val REPETITIONS = 3
+    fun mayProceedAfter(result: JsonObject): Boolean =
+        result["outcome"]?.jsonPrimitive?.content == "PASS" &&
+            result["goal_verified"]?.jsonPrimitive?.content == "true" &&
+            result["completed_keys"]?.jsonPrimitive?.intOrNull == 6 &&
+            result["touch_attempts"]?.jsonPrimitive?.intOrNull == 6 &&
+            result["outcome_unknown"]?.jsonPrimitive?.content == "false"
+}
+
 class DebugQaRunnerService : Service() {
     companion object {
         private const val CHANNEL = "debug_qa_runner"
@@ -132,17 +144,17 @@ class DebugQaRunnerService : Service() {
                     return@launch
                 }
                 var blocked = false
-                for (index in 0 until 3) {
+                for (index in 0 until DebugQaBatchPolicy.REPETITIONS) {
                     // Each run creates and independently verifies a NEW empty Chrome
                     // editor. Never replay a partially attempted key or a failed run.
                     val result = DebugOneStopQa.run(applicationContext) { }
                     results += result
                     DebugOneStopQa.saveBatch(applicationContext, batchId, "IN_PROGRESS", results)
-                    if (result["outcome"]?.jsonPrimitive?.content != "PASS") {
+                    if (!DebugQaBatchPolicy.mayProceedAfter(result)) {
                         blocked = true
                         break
                     }
-                    if (index < 2) delay(500L)
+                    if (index < DebugQaBatchPolicy.REPETITIONS - 1) delay(500L)
                 }
                 DebugOneStopQa.saveBatch(applicationContext, batchId,
                     if (blocked) "BLOCKED" else "PASS", results)
