@@ -871,7 +871,8 @@ internal object DebugOneStopQa {
                 diagnosticDurationMs += SystemClock.elapsedRealtime() - diagnosticStart
                 keyEvidence += DebugKeyboardEvidence.fromObservation(
                     observed.data, observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"),
-                    if (observed.success) null else port.debugDisplayPlanRefusal())
+                    if (observed.success) null else port.debugDisplayPlanRefusal(),
+                    if (observed.success) null else port.debugDisplayWindowCensus())
                 if (!observed.success) return stop("structure_observation_refused")
                 stage = "structure_diagnostic_saved"
                 qaState = "DIAGNOSTICS_COMPLETE"

@@ -88,6 +88,34 @@ class DebugKeyboardEvidenceTest {
         assertNull(DebugKeyboardEvidence.safeDisplayRefusal("unexpected_private_field"))
     }
 
+    @Test fun rejectedWindowCensusIsBoundedRedactedAndNeverAuthorizesTouch() {
+        val row = ai.closepaw.chatgpt.control.CensusRow(
+            ai.closepaw.chatgpt.control.CensusKind.ACCESSIBILITY_OVERLAY,
+            ai.closepaw.chatgpt.control.CensusOwner.UNOWNED, true,
+            ai.closepaw.chatgpt.control.CensusLayer.ABOVE, false, false, false)
+        val census = ai.closepaw.chatgpt.control.DisplayWindowCensus(70, 69, 1, 2, List(70) { row })
+        val data = buildJsonObject { put("reason_code", "display_surface_unverified") }
+        val evidence = DebugKeyboardEvidence.fromObservation(data, false, listOf("ㄱ"),
+            "display_unowned_window", census)
+        val report = evidence.getValue("display_window_census").jsonObject
+        assertEquals(1, report.getValue("duplicate_content_ids").jsonPrimitive.int)
+        assertEquals(2, report.getValue("unowned_content_windows").jsonPrimitive.int)
+        assertTrue(report.getValue("rows_truncated").jsonPrimitive.boolean)
+        val windows = report.getValue("windows").jsonArray
+        assertEquals(64, windows.size)
+        assertEquals("unowned", windows.first().jsonObject.getValue("ownership").jsonPrimitive.content)
+        assertFalse(evidence.getValue("native_touch_authorized_by_diagnostic").jsonPrimitive.boolean)
+        assertFalse(DebugKeyboardEvidence.fromObservation(data, true, listOf("ㄱ"),
+            "display_unowned_window", census).containsKey("display_window_census"))
+        assertFalse(DebugKeyboardEvidence.fromObservation(data, false, listOf("ㄱ"),
+            "display_geometry_unverified", census).containsKey("display_window_census"))
+        assertFalse(DebugKeyboardEvidence.fromObservation(buildJsonObject { put("reason_code", "screen_changed") },
+            false, listOf("ㄱ"), "display_unowned_window", census).containsKey("display_window_census"))
+        for (field in listOf("package_name", "window_id", "title", "node_id", "pixels", "coordinates")) {
+            assertFalse(report.toString().contains(field))
+        }
+    }
+
     @Test fun displayCapturePolicyReasonIsRecordedWithoutInputAuthorityOrPrivateData() {
         val data = buildJsonObject { put("reason_code", "display_surface_unverified") }
         for (reason in listOf("display_geometry_unverified", "display_unowned_window")) {

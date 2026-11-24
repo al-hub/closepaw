@@ -333,11 +333,17 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     // Debug-only fixed stage code; never contains pixels, coordinates, window titles or user content.
     // The production visualFailure() remains unchanged and the release variant never records it.
     private var displayPlanRefusalCode: String? = null
+    private var displayWindowCensus: DisplayWindowCensus? = null
+    internal fun debugDisplayWindowCensus(): DisplayWindowCensus? =
+        if (ai.closepaw.BuildConfig.DEBUG) displayWindowCensus else null
     internal fun debugDisplayPlanRefusal(): String? =
         if (ai.closepaw.BuildConfig.DEBUG) displayPlanRefusalCode else null
 
     private fun displayPlan(service: AgentService, frame: ControlFrame, keyboardOnly: Boolean = false): DisplayPlan? {
-        if (ai.closepaw.BuildConfig.DEBUG) displayPlanRefusalCode = null
+        if (ai.closepaw.BuildConfig.DEBUG) {
+            displayPlanRefusalCode = null
+            displayWindowCensus = null
+        }
         fun reject(code: String): DisplayPlan? {
             if (ai.closepaw.BuildConfig.DEBUG) displayPlanRefusalCode = code
             return null
@@ -362,6 +368,46 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 size.x > 0 && size.y > 0 && frame.touchContext.isNotEmpty(),
                 display.displayId, display.rotation, content.map { it.id }, owned)
             if (displayPolicyRefusal != null) {
+                if (ai.closepaw.BuildConfig.DEBUG && displayPolicyRefusal == "display_unowned_window") {
+                    // Reuse this rejected snapshot; diagnostics cannot grant authority or change the refusal.
+                    displayWindowCensus = runCatching {
+                        val ime = windows.singleOrNull {
+                            it.id == frame.keyboard?.windowId && it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD
+                        }
+                        val imeBounds = ime?.let { windowBounds(it) }
+                        val ids = content.map { it.id }
+                        DisplayWindowCensus(
+                            total = windows.size, content = ids.size,
+                            duplicates = ids.size - ids.distinct().size,
+                            unowned = ids.count { it !in owned },
+                            rows = windows.take(DisplayWindowCensus.MAX_ROWS).map { w ->
+                                val included = content.any { it === w }
+                                val kind = when (w.type) {
+                                    AccessibilityWindowInfo.TYPE_APPLICATION -> CensusKind.APPLICATION
+                                    AccessibilityWindowInfo.TYPE_INPUT_METHOD -> CensusKind.INPUT_METHOD
+                                    AccessibilityWindowInfo.TYPE_SYSTEM -> CensusKind.SYSTEM
+                                    AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY -> CensusKind.ACCESSIBILITY_OVERLAY
+                                    else -> CensusKind.OTHER
+                                }
+                                val owner = when {
+                                    !included && kind == CensusKind.SYSTEM -> CensusOwner.SYSTEM_EXCLUDED
+                                    !included && kind == CensusKind.ACCESSIBILITY_OVERLAY -> CensusOwner.CURRENT_CONTROL_OVERLAY
+                                    w.id in owned && w.id == frame.keyboard?.windowId -> CensusOwner.OWNED_IME
+                                    w.id in owned -> CensusOwner.OWNED_APP
+                                    else -> CensusOwner.UNOWNED
+                                }
+                                val layer = when {
+                                    ime == null -> CensusLayer.UNKNOWN
+                                    w.layer < ime.layer -> CensusLayer.BELOW
+                                    w.layer > ime.layer -> CensusLayer.ABOVE
+                                    else -> CensusLayer.SAME
+                                }
+                                CensusRow(kind, owner, included, layer,
+                                    imeBounds?.let { Rect.intersects(windowBounds(w), it) },
+                                    w.isActive, w.isFocused)
+                            })
+                    }.getOrNull()
+                }
                 // Do not relax any capture guard. Only the private Debug QA record
                 // distinguishes geometry failure from an unowned/duplicate window.
                 return reject(if (ai.closepaw.BuildConfig.DEBUG) displayPolicyRefusal
@@ -416,6 +462,10 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         onCertifiedFrame: ((ControlFrame) -> Unit)? = null): VisualTargetProof? {
         fun fail(code: String): VisualTargetProof? { visualFailureReason=code; return null }
         visualFailureReason="visual_observation_unavailable"
+        if (ai.closepaw.BuildConfig.DEBUG) {
+            displayPlanRefusalCode = null
+            displayWindowCensus = null
+        }
         val observationOnly = scope == "screen_observe"
         val nativeKeyboardDisplay = scope == "keyboard"
         val projectionDisplay = scope == "display" || observationOnly

@@ -10,6 +10,17 @@ internal object DisplayCapturePolicy {
         else -> null
     }
 }
+// Redacted local Debug metadata: deliberately contains no IDs, package strings,
+// titles, pixel values, absolute layers or coordinates. Not an authority token.
+internal enum class CensusKind { APPLICATION, INPUT_METHOD, SYSTEM, ACCESSIBILITY_OVERLAY, OTHER }
+internal enum class CensusOwner { SYSTEM_EXCLUDED, CURRENT_CONTROL_OVERLAY, OWNED_IME, OWNED_APP, UNOWNED }
+internal enum class CensusLayer { UNKNOWN, BELOW, ABOVE, SAME }
+internal data class CensusRow(val kind: CensusKind, val owner: CensusOwner, val included: Boolean,
+    val imeLayer: CensusLayer, val overlapsImeBounds: Boolean?, val active: Boolean, val focused: Boolean)
+internal data class DisplayWindowCensus(val total: Int, val content: Int, val duplicates: Int,
+    val unowned: Int, val rows: List<CensusRow>) {
+    companion object { const val MAX_ROWS = 64 }
+}
 internal object VisualCaptureFailure {
     fun native(code: Int): String = when(code) {
         1 -> "screenshot_internal_error"
