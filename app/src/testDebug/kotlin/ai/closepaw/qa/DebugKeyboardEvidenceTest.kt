@@ -88,6 +88,19 @@ class DebugKeyboardEvidenceTest {
         assertNull(DebugKeyboardEvidence.safeDisplayRefusal("unexpected_private_field"))
     }
 
+    @Test fun displayCapturePolicyReasonIsRecordedWithoutInputAuthorityOrPrivateData() {
+        val data = buildJsonObject { put("reason_code", "display_surface_unverified") }
+        for (reason in listOf("display_geometry_unverified", "display_unowned_window")) {
+            val evidence = DebugKeyboardEvidence.fromObservation(data, false, listOf("ㄱ"), reason)
+            assertEquals(reason, evidence.getValue("display_plan_refusal").jsonPrimitive.content)
+            assertEquals("display_surface_unverified",
+                evidence.getValue("native_refusal_reason").jsonPrimitive.content)
+            assertFalse(evidence.getValue("native_touch_authorized_by_diagnostic").jsonPrimitive.boolean)
+            assertFalse(evidence.toString().contains("node_id"))
+            assertFalse(evidence.toString().contains("bounds"))
+        }
+    }
+
     @Test fun followUpNeverStartsWithoutAuthorityAndNeverInputs() =
         kotlinx.coroutines.runBlocking {
             val baseline = ControlFrame("com.android.chrome", 42, "baseline", emptyList())

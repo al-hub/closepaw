@@ -358,8 +358,15 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 !(it.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY && service.ownsRemoteControlIndicatorWindow(it.id)) }
             if (windows.any { it.displayId != android.view.Display.DEFAULT_DISPLAY || it.isInPictureInPictureMode })
                 return reject("display_window_multidisplay_or_pip")
-            if (DisplayCapturePolicy.refusal(size.x>0 && size.y>0 && frame.touchContext.isNotEmpty(),display.displayId,display.rotation,content.map { it.id },owned) != null)
-                return reject("display_window_ownership_policy_denied")
+            val displayPolicyRefusal = DisplayCapturePolicy.refusal(
+                size.x > 0 && size.y > 0 && frame.touchContext.isNotEmpty(),
+                display.displayId, display.rotation, content.map { it.id }, owned)
+            if (displayPolicyRefusal != null) {
+                // Do not relax any capture guard. Only the private Debug QA record
+                // distinguishes geometry failure from an unowned/duplicate window.
+                return reject(if (ai.closepaw.BuildConfig.DEBUG) displayPolicyRefusal
+                    else "display_window_ownership_policy_denied")
+            }
             val app = windows.singleOrNull { it.id == frame.windowId }
                 ?: return reject("display_app_window_unverified")
             if (touchContext(service,app,windows) != frame.touchContext)

@@ -26,6 +26,7 @@ internal object DebugKeyboardEvidence {
         "display_platform_unsupported", "display_default_display_missing",
         "display_window_identity_mismatch", "display_ime_window_unverified",
         "display_window_multidisplay_or_pip", "display_window_ownership_policy_denied",
+        "display_geometry_unverified", "display_unowned_window",
         "display_app_window_unverified", "display_touch_context_changed",
         "display_visible_region_empty", "display_surface_region_too_complex",
         "display_surface_isolation_failed",
