@@ -180,6 +180,11 @@ androidComponents.onVariants(androidComponents.selector().withBuildType("debug")
 // artifact providers, never infer a deployable file from a conventional path.
 if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
     androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) { variant ->
+        // Keep the side-by-side candidate updateable without changing the release version.
+        variant.outputs.forEach { output ->
+            output.versionCode.set(161)
+            output.versionName.set("0.1.160-capturecandidate")
+        }
         val testVariant = requireNotNull(variant.androidTest)
         tasks.register<org.gradle.api.tasks.Sync>("stageCaptureCandidate") {
             from(variant.artifacts.get(SingleArtifact.APK)) {

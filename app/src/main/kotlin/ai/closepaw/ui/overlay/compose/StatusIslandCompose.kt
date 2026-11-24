@@ -96,7 +96,9 @@ fun StatusIslandCompose(
                         val file = File(appContext.filesDir, "debug-qa/runner-status.json")
                         if (!file.isFile || file.length() !in 1L..2048L) null else file.readText()
                     }.getOrNull()
-                    errors to DebugQaIslandStatusPolicy.decode(live, nowElapsed, nowEpoch)
+                    val qaStatus = DebugQaIslandStatusPolicy.decode(
+                        live, nowElapsed, nowEpoch, android.os.Process.getStartElapsedRealtime())
+                    (if (qaStatus.state in setOf("RUNNING", "WAITING")) errors else 0) to qaStatus
                 }
                 debugQaErrors = displayState.first
                 debugQaStatus = displayState.second
@@ -161,8 +163,12 @@ fun StatusIslandCompose(
         ) {
             if (BuildConfig.DEBUG) {
                 Text(
-                    text = "DEBUG · QA " + debugQaStatus.state +
-                        (debugQaStatus.stage?.let { " · " + it.replace('_', ' ').take(24) } ?: ""),
+                    text = "DEBUG · QA " + debugQaStatus.state.replace("DIAGNOSTIC_COMPLETE", "DIAG DONE") +
+                        when (debugQaStatus.export) {
+                            "SAVED" -> " · JSON saved"
+                            "FAILED" -> " · JSON failed"
+                            else -> debugQaStatus.stage?.let { " · " + it.replace('_', ' ').take(24) }.orEmpty()
+                        },
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF8B3600),
                     maxLines = 1,

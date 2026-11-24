@@ -32,6 +32,22 @@ class DebugQaIslandStatusPolicyTest {
             snapshot("COMPLETED"), 80_000L, 170_000L).state)
     }
 
+    @Test fun terminalResultAndExportFailureAreVisibleTogether() {
+        val value = snapshot("DIAGNOSTIC_COMPLETE").dropLast(1) + ""","export":"FAILED"}"""
+        val status = DebugQaIslandStatusPolicy.decode(value, 11_000L, 101_000L)
+        assertEquals("DIAGNOSTIC_COMPLETE", status.state)
+        assertEquals("FAILED", status.export)
+        assertEquals("DENIED", DebugQaIslandStatusPolicy.decode(
+            snapshot("DENIED"), 11_000L, 101_000L).state)
+        assertEquals(DebugQaIslandStatus.UNKNOWN, DebugQaIslandStatusPolicy.decode(value, 100_000L, 190_000L))
+    }
+
+    @Test fun previousProcessCannotShowAnActiveQaRequest() {
+        val value = snapshot("WAITING").dropLast(1) + ""","process_start_elapsed_ms":7000}"""
+        assertEquals("WAITING", DebugQaIslandStatusPolicy.decode(value, 11_000L, 101_000L, 7000L).state)
+        assertEquals("INTERRUPTED", DebugQaIslandStatusPolicy.decode(value, 11_000L, 101_000L, 10500L).state)
+    }
+
     @Test fun corruptedOrForgedPayloadCannotShowRunningOrArbitraryStage() {
         assertEquals("UNKNOWN", DebugQaIslandStatusPolicy.decode(
             null, 11_000L, 101_000L).state)

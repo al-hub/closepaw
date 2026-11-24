@@ -9,6 +9,7 @@ import ai.closepaw.chatgpt.control.ControlSession
 import ai.closepaw.chatgpt.control.ControlFrame
 import ai.closepaw.chatgpt.control.GenericControl
 import ai.closepaw.chatgpt.control.HangulKeyComposer
+import ai.closepaw.platform.virtualdisplay.ProjectionImageLease
 import ai.closepaw.platform.virtualdisplay.ProjectionImageTransport
 import android.content.Context
 import android.os.SystemClock
@@ -520,33 +521,25 @@ internal object DebugOneStopQa {
         return runCatching { Json.parseToJsonElement(file.readText()).jsonObject }.getOrNull()
             ?.takeIf { it["source_commit"]?.jsonPrimitive?.content == BuildConfig.CAPTURE_QA_SOURCE_SHA }
     }
-    internal fun saveBatch(context: Context, id: String, state: String, results: List<JsonObject>, diagnosticOnly: Boolean = false) {
+    internal fun saveBatch(context: Context, id: String, state: String, reason: String,
+                           results: List<JsonObject>, run: DebugQaApprovedRun) {
         require(BuildConfig.DEBUG && context.packageName == CaptureQaAcceptance.CANDIDATE)
         val snapshot = buildJsonObject {
-            put("schema_version", 2); put("batch_id", id)
+            put("schema_version", 3); put("batch_id", id)
             put("source_commit", BuildConfig.CAPTURE_QA_SOURCE_SHA)
             put("version_name", BuildConfig.VERSION_NAME); put("version_code", BuildConfig.VERSION_CODE)
-            put("state", state); put("mode", if (diagnosticOnly) "structure_diagnostic" else "six_key_first_pass")
-            put("repetitions_requested", if (diagnosticOnly) 1 else 3)
+            put("state", state); put("reason", reason)
+            put("request_id", run.request.id); put("mode", run.request.mode.code)
+            put("projection_consent", run.consent.name)
+            put("service_action", run.request.mode.action)
+            put("service_admission", DebugQaAdmissionOutcome.ACCEPTED.name)
+            put("repetitions_requested", run.request.mode.repetitions)
             put("repetitions_completed", results.count { it["outcome"]?.jsonPrimitive?.content == "PASS" })
             put("runs", JsonArray(results))
             put("last_updated_epoch_ms", System.currentTimeMillis())
         }
         atomicWrite(batchFile(context), snapshot)
     }
-    internal fun recordUnavailable(context: Context, reason: String) {
-        val snapshot = buildJsonObject {
-            put("schema_version", 2); put("run_id", UUID.randomUUID().toString())
-            put("source_commit", BuildConfig.CAPTURE_QA_SOURCE_SHA)
-            put("version_name", BuildConfig.VERSION_NAME); put("version_code", BuildConfig.VERSION_CODE)
-            put("fixture_package", CHROME); put("suite", "six_key_first_pass")
-            put("outcome", "BLOCKED"); put("reason", reason); put("completed_keys", 0)
-            put("touch_attempts", 0); put("recovery_attempts", 0)
-            put("ended_at_epoch_ms", System.currentTimeMillis())
-        }
-        write(context, snapshot)
-    }
-
     /** Read-only persisted checkpoint, never an authorization or replay token. */
     fun lastResult(context: Context): JsonObject? {
         if (!BuildConfig.DEBUG || context.packageName != CaptureQaAcceptance.CANDIDATE) return null
@@ -591,8 +584,9 @@ internal object DebugOneStopQa {
         put("elapsed_realtime_ms", elapsedRealtimeMs)
     }
 
-    suspend fun run(context: Context, status: (String) -> Unit, diagnosticOnly: Boolean = false,
-                    batchId: String? = null): JsonObject {
+    suspend fun run(context: Context, status: (String) -> Unit, request: DebugQaRunRequest,
+                    batchId: String, approvedProjection: ProjectionImageLease): JsonObject {
+        val diagnosticOnly = request.mode.diagnosticOnly
         require(BuildConfig.DEBUG && context.packageName == CaptureQaAcceptance.CANDIDATE)
         val runId = UUID.randomUUID().toString()
         val settings = McpExecutionSettings(context)
@@ -654,7 +648,8 @@ internal object DebugOneStopQa {
         fun result(outcome: String, reason: String) = buildJsonObject {
             put("schema_version", 3)
             put("run_id", runId)
-            put("batch_id", batchId ?: runId)
+            put("batch_id", batchId)
+            put("request_id", request.id)
             put("session_id", sessionReference)
             put("qa_state", qaState)
             put("failure_count", failureCount)
@@ -749,8 +744,7 @@ internal object DebugOneStopQa {
         sessionReference = session.id
         if (session.state !in setOf(ControlSession.State.IDLE, ControlSession.State.ENDED))
             return stop("another_control_session_active")
-        val approvedProjection = ProjectionImageTransport.active()
-        if (approvedProjection?.screenObservationAllowed() != true)
+        if (ProjectionImageTransport.active() !== approvedProjection || !approvedProjection.screenObservationAllowed())
             return stop("android_observation_approval_required")
 
         // Chrome was opened by the physically visible QA Activity immediately
@@ -896,8 +890,8 @@ internal object DebugOneStopQa {
                     if (observed.success) {
                         stage = "structure_diagnostic_saved"
                         qaState = "DIAGNOSTICS_COMPLETE"
-                        recordStep("structure_diagnostic", "PASS", "no_key_evidence_captured")
-                        return result("DIAGNOSTIC_COMPLETE", "no_key_evidence_captured")
+                        recordStep("structure_diagnostic", "PASS", "structural_key_evidence_captured_without_input")
+                        return result("DIAGNOSTIC_COMPLETE", "structural_key_evidence_captured_without_input")
                             .also { write(context, it); publishLive() }
                     }
                     if (firstFailureCode == null) firstFailureCode = reason
