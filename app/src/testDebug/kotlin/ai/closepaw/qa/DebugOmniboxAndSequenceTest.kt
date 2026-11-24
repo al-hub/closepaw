@@ -3,6 +3,10 @@ package ai.closepaw.qa
 import ai.closepaw.chatgpt.control.ControlFrame
 import ai.closepaw.chatgpt.control.ControlKeyboard
 import ai.closepaw.chatgpt.control.ControlNode
+import ai.closepaw.chatgpt.control.ControlWindow
+import ai.closepaw.chatgpt.control.ControlWindowRecord
+import ai.closepaw.chatgpt.control.ControlWindowRect
+import ai.closepaw.chatgpt.control.ControlWindowSnapshot
 import ai.closepaw.chatgpt.control.TapBounds
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
@@ -70,6 +74,44 @@ class DebugOmniboxAndSequenceTest {
     private val newTabItem = node(4, "new_tab_menu_id", clickable = true)
     private val newTabLabel = node(5, "menu_item_text", parent = 4, text = "새 탭")
 
+    private val defaultChromeBounds = ControlWindowRect(0, 0, 1080, 2340)
+    private val defaultImeBounds = ControlWindowRect(0, 1450, 1080, 2214)
+
+    private fun snapshotOf(
+        windowId: Int = 13300,
+        pkg: String = chrome,
+        withIme: Boolean = false,
+        chromeBounds: ControlWindowRect = defaultChromeBounds,
+        chromeLayer: Int = 0,
+        chromePip: Boolean = false,
+        imeBounds: ControlWindowRect = defaultImeBounds,
+        extraRecords: List<ControlWindowRecord> = emptyList(),
+        totalCountOverride: Int? = null,
+    ): ControlWindowSnapshot {
+        val records = mutableListOf(
+            ControlWindowRecord(
+                ControlWindow(windowId, 0, chromeLayer, true, true, true, pkg, hasRoot = true, pictureInPicture = chromePip),
+                ControlWindowRecord.TYPE_APPLICATION,
+                chromeBounds,
+            ),
+        )
+        if (withIme) {
+            records += ControlWindowRecord(
+                ControlWindow(keyboard.windowId, 0, 1, false, false, false, "", hasRoot = false),
+                ControlWindowRecord.TYPE_INPUT_METHOD,
+                imeBounds,
+            )
+        }
+        records += extraRecords
+        val sorted = records.sortedBy { it.window.id }
+        return ControlWindowSnapshot(
+            foregroundWindowId = windowId,
+            selectedWindowId = windowId,
+            totalWindowCount = totalCountOverride ?: sorted.size,
+            records = sorted,
+        )
+    }
+
     private fun frame(
         vararg nodes: ControlNode,
         editor: ControlNode? = null,
@@ -77,25 +119,30 @@ class DebugOmniboxAndSequenceTest {
         windowId: Int = 13300,
         foregroundWindowId: Int = windowId,
         configRev: Long = 139L,
-        windowContext: String = "ctx-13300",
+        windowSnapshot: ControlWindowSnapshot? = snapshotOf(windowId = windowId, withIme = withIme),
+        windowContext: String? = null,
         pkg: String = chrome,
         reason: String? = null,
         truncated: Boolean = false,
         navigationOnly: Boolean = false,
-    ) = ControlFrame(
-        packageName = pkg,
-        windowId = windowId,
-        foregroundWindowId = foregroundWindowId,
-        configurationRevision = configRev,
-        windowContext = windowContext,
-        fingerprint = "fp-$windowId",
-        nodes = nodes.toList(),
-        reason = reason,
-        truncated = truncated,
-        navigationOnly = navigationOnly,
-        inputTarget = editor,
-        keyboard = if (withIme) keyboard else null,
-    )
+    ): ControlFrame {
+        val kb = if (withIme) keyboard else null
+        return ControlFrame(
+            packageName = pkg,
+            windowId = windowId,
+            foregroundWindowId = foregroundWindowId,
+            configurationRevision = configRev,
+            windowContext = windowContext ?: windowSnapshot?.windowContext(kb) ?: "ctx-$windowId",
+            fingerprint = "fp-$windowId",
+            nodes = nodes.toList(),
+            reason = reason,
+            truncated = truncated,
+            navigationOnly = navigationOnly,
+            inputTarget = editor,
+            keyboard = kb,
+            windowSnapshot = windowSnapshot,
+        )
+    }
 
     private fun chromeFacts() = DebugOneStopQa.ChromeWindowFacts(
         true, true, true, true, true, true, true, false,
@@ -518,5 +565,223 @@ class DebugOmniboxAndSequenceTest {
         assertFalse(DebugOneStopQa.guardedBackObservationMatches(base, obs(withKb = false)))
         // Back not in navigation_actions -> refused!
         assertFalse(DebugOneStopQa.guardedBackObservationMatches(base, obs(nav = listOf("home", "open_app"))))
+    }
+
+    @Test fun p0a_code163RealisticImeOnlyWindowContextTransitionAllowsBack2AndRecovers() = runBlocking {
+        // Reproduces #147 comment 7130825343 (code163): 61/61/61/93 Chrome nodes, IME true/true/true/false,
+        // using real ControlWindowSnapshot -> operationHash windowContext binding (including AOSP IME
+        // occlusion vertical restoration [0,0,1080,1450] -> [0,0,1080,2214] and dense -1 status bar shift).
+        val statusBefore = ControlWindowRecord(
+            ControlWindow(500, 0, 2, false, false, false, "com.android.systemui", hasRoot = true),
+            ControlWindowRecord.TYPE_SYSTEM, ControlWindowRect(0, 0, 1080, 90),
+        )
+        val statusAfter = statusBefore.copy(window = statusBefore.window.copy(layer = 1))
+        val snapWithIme = snapshotOf(
+            withIme = true,
+            chromeBounds = ControlWindowRect(0, 0, 1080, 1450),
+            imeBounds = ControlWindowRect(0, 1450, 1080, 2214),
+            extraRecords = listOf(statusBefore),
+        )
+        val snapAfterIme = snapshotOf(
+            withIme = false,
+            chromeBounds = ControlWindowRect(0, 0, 1080, 2214),
+            extraRecords = listOf(statusAfter),
+        )
+
+        val sample61 = frame(blankFocusedUrl, suggestions, *Array(59) { node(100 + it) },
+            editor = blankFocusedUrl, withIme = true, windowSnapshot = snapWithIme)
+        val sample93 = frame(blankFocusedUrl, suggestions, *Array(91) { node(200 + it) },
+            editor = blankFocusedUrl, withIme = false, windowSnapshot = snapAfterIme)
+        val restored = frame(ntp, menu, counter(10), editor = null, withIme = false, windowSnapshot = snapAfterIme)
+        val popup = frame(newTabItem, newTabLabel, withIme = false, windowSnapshot = snapAfterIme)
+        val newTabNtp = frame(ntp, counter(11), editor = null, withIme = false, windowSnapshot = snapAfterIme)
+        val readyFocused = frame(blankFocusedUrl, counter(11), editor = blankFocusedUrl, withIme = true, windowSnapshot = snapWithIme)
+
+        assertNotEquals(sample61.windowContext, sample93.windowContext)
+        assertTrue(DebugOneStopQa.chromeSelectorFacts(sample61).omniboxSuggestionsPresent)
+        assertTrue(DebugOneStopQa.chromeSelectorFacts(sample61).redactedJson()["omnibox_suggestions_present"]?.jsonPrimitive?.boolean == true)
+        assertNull(DebugOneStopQa.chromeBackContextRefusal(sample61, sample93))
+
+        val frames = ArrayDeque(listOf(sample61, sample61, sample61, sample93, restored, popup, newTabNtp, readyFocused))
+        var backs = 0
+        val ready = DebugOneStopQa.prepareChromeEditorWithSeam(
+            capture = { frames.removeFirst() },
+            inspectWindow = { chromeFacts() },
+            clickNode = { _, _, _ -> DebugOneStopQa.ChromeActionOutcome(true, true, false) },
+            dispatchBack = { _, _ -> backs++; DebugOneStopQa.ChromeActionOutcome(true, true, false) },
+            allowed = { true },
+            diagnosticOnly = false,
+            onPhase = {},
+            pause = {},
+        )
+
+        assertNull(ready.failure)
+        assertEquals(2, backs)
+        assertEquals(2, ready.omniboxBackAttempts)
+        assertEquals(2, ready.backStepFacts.size)
+        assertEquals(true, ready.backStepFacts[0]["window_context_changed"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(true, ready.backStepFacts[0]["ime_before"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(false, ready.backStepFacts[0]["ime_after"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(true, ready.backStepFacts[1]["toolbar_restored"]?.jsonPrimitive?.booleanOrNull)
+        assertTrue(ready.newTabVerified)
+        assertEquals(10, ready.tabsBefore)
+        assertEquals(11, ready.tabsAfter)
+
+        // Redaction proof: zero raw bounds, window IDs, package names, or hashes in emitted JSON facts.
+        val emitted = JsonArray(ready.backStepFacts).toString() +
+            DebugOneStopQa.chromeSelectorFacts(sample61).redactedJson().toString()
+        for (secret in listOf("13300", "13301", "1450", "2214", "1080", chrome, sample61.windowContext)) {
+            assertFalse("Must never leak $secret in redacted JSON", emitted.contains(secret))
+        }
+    }
+
+    @Test fun p0a_rejectsPipTypePackageArbitraryBoundsOverlayOrUnrestoredBack2() = runBlocking {
+        val statusWin = ControlWindow(500, 0, 2, false, false, false, "com.android.systemui", hasRoot = true)
+        val statusRec = ControlWindowRecord(statusWin, ControlWindowRecord.TYPE_SYSTEM, ControlWindowRect(0, 0, 1080, 90))
+        val statusAfterRec = ControlWindowRecord(statusWin.copy(layer = 1), ControlWindowRecord.TYPE_SYSTEM, ControlWindowRect(0, 0, 1080, 90))
+
+        val beforeSnap = snapshotOf(
+            withIme = true,
+            chromeBounds = ControlWindowRect(0, 0, 1080, 1450),
+            imeBounds = ControlWindowRect(0, 1450, 1080, 2214),
+            extraRecords = listOf(statusRec),
+        )
+        val beforeIme = frame(
+            blankFocusedUrl, suggestions,
+            editor = blankFocusedUrl, withIme = true,
+            windowSnapshot = beforeSnap,
+        )
+
+        // 1) PiP false -> true during IME dismissal -> REFUSED
+        val pipAfter = frame(
+            blankFocusedUrl, suggestions, editor = blankFocusedUrl, withIme = false,
+            windowSnapshot = snapshotOf(
+                withIme = false, chromeBounds = ControlWindowRect(0, 0, 1080, 2214),
+                chromePip = true, extraRecords = listOf(statusAfterRec),
+            ),
+        )
+        assertEquals("chrome_pip_detected", DebugOneStopQa.chromeBackContextRefusal(beforeIme, pipAfter))
+
+        // 2) Non-IME window type changed (TYPE_SYSTEM -> TYPE_ACCESSIBILITY_OVERLAY) -> REFUSED
+        val typeChangedAfter = frame(
+            blankFocusedUrl, suggestions, editor = blankFocusedUrl, withIme = false,
+            windowSnapshot = snapshotOf(
+                withIme = false, chromeBounds = ControlWindowRect(0, 0, 1080, 2214),
+                extraRecords = listOf(statusAfterRec.copy(windowType = 4)),
+            ),
+        )
+        assertEquals("window_type_changed", DebugOneStopQa.chromeBackContextRefusal(beforeIme, typeChangedAfter))
+
+        // 3) Target window packageName changed in snapshot -> REFUSED
+        val pkgChangedAfter = frame(
+            blankFocusedUrl, suggestions, editor = blankFocusedUrl, withIme = false,
+            windowSnapshot = snapshotOf(
+                pkg = "com.evil.browser", withIme = false,
+                chromeBounds = ControlWindowRect(0, 0, 1080, 2214),
+                extraRecords = listOf(statusAfterRec),
+            ),
+        )
+        assertEquals("window_package_changed", DebugOneStopQa.chromeBackContextRefusal(beforeIme, pkgChangedAfter))
+
+        // 4) Arbitrary Chrome bounds change (split-screen / shift / beyond IME span) -> REFUSED
+        val splitScreenAfter = frame(
+            blankFocusedUrl, suggestions, editor = blankFocusedUrl, withIme = false,
+            windowSnapshot = snapshotOf(
+                withIme = false, chromeBounds = ControlWindowRect(0, 0, 540, 2214),
+                extraRecords = listOf(statusAfterRec),
+            ),
+        )
+        assertEquals("chrome_window_bounds_changed", DebugOneStopQa.chromeBackContextRefusal(beforeIme, splitScreenAfter))
+
+        // 5) Other non-IME window bounds drift -> REFUSED
+        val statusBoundsAfter = frame(
+            blankFocusedUrl, suggestions, editor = blankFocusedUrl, withIme = false,
+            windowSnapshot = snapshotOf(
+                withIme = false, chromeBounds = ControlWindowRect(0, 0, 1080, 2214),
+                extraRecords = listOf(statusAfterRec.copy(bounds = ControlWindowRect(0, 0, 1080, 400))),
+            ),
+        )
+        assertEquals("non_ime_window_bounds_changed", DebugOneStopQa.chromeBackContextRefusal(beforeIme, statusBoundsAfter))
+
+        // 6) Spawned non-IME overlay window 99999 -> REFUSED
+        val withNewOverlay = frame(
+            blankFocusedUrl, suggestions, editor = blankFocusedUrl, withIme = false,
+            windowSnapshot = snapshotOf(
+                withIme = false, chromeBounds = ControlWindowRect(0, 0, 1080, 2214),
+                extraRecords = listOf(
+                    statusAfterRec,
+                    ControlWindowRecord(
+                        ControlWindow(99999, 0, 3, false, false, false, "", hasRoot = false),
+                        4, ControlWindowRect(0, 0, 1080, 2340),
+                    ),
+                ),
+            ),
+        )
+        assertEquals("unexpected_window_added", DebugOneStopQa.chromeBackContextRefusal(beforeIme, withNewOverlay))
+
+        // 7) Missing / truncated / signature-mismatched snapshot -> FAIL CLOSED
+        assertEquals("window_snapshot_missing", DebugOneStopQa.chromeBackContextRefusal(
+            beforeIme.copy(windowSnapshot = null),
+            frame(blankFocusedUrl, suggestions, editor = blankFocusedUrl, withIme = false),
+        ))
+        val validAfterSnap = snapshotOf(withIme = false, chromeBounds = ControlWindowRect(0, 0, 1080, 2214), extraRecords = listOf(statusAfterRec))
+        assertEquals("window_snapshot_signature_mismatch", DebugOneStopQa.chromeBackContextRefusal(
+            beforeIme,
+            frame(blankFocusedUrl, suggestions, editor = blankFocusedUrl, withIme = false,
+                windowSnapshot = validAfterSnap, windowContext = "stale-or-tampered-hash"),
+        ))
+        assertEquals("window_snapshot_truncated", DebugOneStopQa.chromeBackContextRefusal(
+            beforeIme,
+            frame(blankFocusedUrl, suggestions, editor = blankFocusedUrl, withIme = false,
+                windowSnapshot = snapshotOf(withIme = false, extraRecords = listOf(statusAfterRec), totalCountOverride = 65)),
+        ))
+
+        // 8) Non-blank webpage after Back #1 or Back #2 -> REFUSED
+        val switchedToWebpage = frame(
+            blankFocusedUrl.copy(text = "https://example.com", empty = false, focused = false),
+            menu, counter(10), editor = null, withIme = false, windowSnapshot = validAfterSnap,
+        )
+        assertEquals("unexpected_post_back_chrome_state", DebugOneStopQa.chromeBackContextRefusal(beforeIme, switchedToWebpage))
+
+        // 9) Back #2 that fails to restore toolbar (still focused omnibox, no menu) -> BLOCKED immediately
+        val afterImeStillFocused = frame(
+            blankFocusedUrl, suggestions, editor = blankFocusedUrl, withIme = false, windowSnapshot = validAfterSnap,
+        )
+        assertEquals(
+            "unexpected_post_back_chrome_state",
+            DebugOneStopQa.chromeBackContextRefusal(afterImeStillFocused, afterImeStillFocused, requireToolbarRestored = true),
+        )
+        val back2NotRestoredFrames = ArrayDeque(listOf(beforeIme, beforeIme, beforeIme, afterImeStillFocused, afterImeStillFocused))
+        var back2Count = 0
+        val blockedBack2 = DebugOneStopQa.prepareChromeEditorWithSeam(
+            capture = { back2NotRestoredFrames.removeFirst() },
+            inspectWindow = { chromeFacts() },
+            clickNode = { _, _, _ -> DebugOneStopQa.ChromeActionOutcome(true, true, false) },
+            dispatchBack = { _, _ -> back2Count++; DebugOneStopQa.ChromeActionOutcome(true, true, false) },
+            allowed = { true },
+            diagnosticOnly = false,
+            onPhase = {},
+            pause = {},
+        )
+        assertEquals("chrome_omnibox_back_context_changed", blockedBack2.failure)
+        assertEquals("unexpected_post_back_chrome_state", blockedBack2.backContextRefusalDetail)
+        assertEquals(2, back2Count)
+
+        // 10) End-to-end: spawned overlay during Back #1 blocks before Back #2 with explicit detail
+        val frames = ArrayDeque(listOf(beforeIme, beforeIme, beforeIme, withNewOverlay))
+        var backs = 0
+        val blocked = DebugOneStopQa.prepareChromeEditorWithSeam(
+            capture = { frames.removeFirst() },
+            inspectWindow = { chromeFacts() },
+            clickNode = { _, _, _ -> DebugOneStopQa.ChromeActionOutcome(true, true, false) },
+            dispatchBack = { _, _ -> backs++; DebugOneStopQa.ChromeActionOutcome(true, true, false) },
+            allowed = { true },
+            diagnosticOnly = false,
+            onPhase = {},
+            pause = {},
+        )
+        assertEquals("chrome_omnibox_back_context_changed", blocked.failure)
+        assertEquals("unexpected_window_added", blocked.backContextRefusalDetail)
+        assertEquals(1, backs)
     }
 }

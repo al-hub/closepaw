@@ -235,6 +235,7 @@ internal object DebugOneStopQa {
         val menuEligibleCount: Int, val menuForeignOwnerCount: Int,
         val menuSemanticCount: Int, val tabSwitcherCount: Int,
         val focusedUrlBarCount: Int, val keyboardPresent: Boolean,
+        val omniboxSuggestionsPresent: Boolean = false,
     ) {
         fun redactedJson() = buildJsonObject {
             put("full_frame", fullFrame); put("chrome_owned_nodes", chromeNodeCount)
@@ -252,6 +253,7 @@ internal object DebugOneStopQa {
             put("tab_switcher_id_matches", tabSwitcherCount)
             put("focused_url_bar_matches", focusedUrlBarCount)
             put("keyboard_present", keyboardPresent)
+            put("omnibox_suggestions_present", omniboxSuggestionsPresent)
         }
     }
 
@@ -275,7 +277,8 @@ internal object DebugOneStopQa {
             menu.count { it.clickable && it.enabled && !it.password }, foreignMenu,
             owned.count { it.description.trim() in menuDescriptions },
             owned.count { it.resourceId == "$CHROME:id/tab_switcher_button" },
-            bars.count { it.focused }, frame.keyboard != null)
+            bars.count { it.focused }, frame.keyboard != null,
+            owned.any { it.resourceId == "$CHROME:id/omnibox_suggestions_dropdown" })
     }
 
     /** No navigation or editing in diagnostic mode when a complete, fresh
@@ -370,10 +373,59 @@ internal object DebugOneStopQa {
             before.windowId == after.windowId &&
             before.configurationRevision == after.configurationRevision
 
+    /**
+     * Post-Back blank-surface gate. Android Accessibility API exposes no native Chrome tab ID
+     * while the omnibox is focused (tab_switcher_button is hidden), so this gate never claims
+     * independent tab-ID proof: it strictly refuses non-blank webpages and requires a restored
+     * blank toolbar when [requireToolbarRestored] is true (after Back #2). Any key input still
+     * requires opening and verifying a fresh New Tab afterwards.
+     */
+    private fun isValidPostBackChromeState(
+        after: ControlFrame,
+        requireToolbarRestored: Boolean = false,
+    ): Boolean {
+        val blankToolbarRestored = chromeMenuButton(after) != null && blankOmnibox(after) != null
+        return if (requireToolbarRestored) blankToolbarRestored
+        else blankToolbarRestored || isGuardedBlankFocusedOmnibox(after)
+    }
+
+    /**
+     * Classifies post-Back Chrome context continuity using internal-only ControlWindowSnapshot
+     * cryptographically bound to ControlFrame.windowContext (covering every signature input:
+     * projected ControlWindow including PiP/package/layer, windowType, and screen bounds).
+     * Pre-dispatch checks remain unchanged and require exact windowContext + full-screen fingerprint.
+     * Post-dispatch, Back without IME dismissal strictly requires identical windowContext and snapshot.
+     */
+    internal fun chromeBackContextRefusal(
+        before: ControlFrame,
+        after: ControlFrame,
+        requireToolbarRestored: Boolean = false,
+    ): String? {
+        if (!sameChromeWindow(before, after)) return "chrome_window_or_revision_changed"
+        if (before.foregroundWindowId != before.windowId || after.foregroundWindowId != after.windowId)
+            return "foreground_window_changed"
+        if (isIncognitoChromeWindow(after)) return "incognito_window_detected"
+        if (before.windowContext.isBlank() || after.windowContext.isBlank()) return "window_context_missing"
+        val bKb = before.keyboard
+        val aKb = after.keyboard
+        return when {
+            bKb != null && aKb == null -> {
+                ControlWindowContinuity.imeDismissalRefusal(before, after, bKb.windowId, CHROME)
+                    ?: if (isValidPostBackChromeState(after, requireToolbarRestored)) null
+                    else "unexpected_post_back_chrome_state"
+            }
+            aKb != null && aKb != bKb -> "unexpected_ime_transition"
+            before.windowContext == after.windowContext -> {
+                ControlWindowContinuity.exactSnapshotRefusal(before, after, CHROME)
+                    ?: if (isValidPostBackChromeState(after, requireToolbarRestored)) null
+                    else "unexpected_post_back_chrome_state"
+            }
+            else -> "unexpected_window_context_change"
+        }
+    }
+
     internal fun sameChromeBackContext(before: ControlFrame, after: ControlFrame): Boolean =
-        sameChromeWindow(before, after) &&
-            before.foregroundWindowId == after.foregroundWindowId &&
-            before.windowContext == after.windowContext
+        chromeBackContextRefusal(before, after) == null
 
     internal fun hasChromeOmniboxSuggestions(frame: ControlFrame): Boolean =
         safeChromeFrame(frame) && ownedChromeNodes(frame).any {
@@ -480,6 +532,8 @@ internal object DebugOneStopQa {
         val foregroundFactsAtRefusal: ChromeWindowFacts? = null,
         val toolbarSamples: List<ChromeSelectorFacts> = emptyList(),
         val omniboxBackAttempts: Int = 0,
+        val backContextRefusalDetail: String? = null,
+        val backStepFacts: List<JsonObject> = emptyList(),
     )
 
     internal suspend fun prepareChromeEditorWithSeam(
@@ -507,11 +561,13 @@ internal object DebugOneStopQa {
         var foregroundFactsAtRefusal: ChromeWindowFacts? = null
         val toolbarSamples = mutableListOf<ChromeSelectorFacts>()
         var omniboxBackAttempts = 0
+        var backContextRefusalDetail: String? = null
+        val backStepFacts = mutableListOf<JsonObject>()
         fun result(frame: ControlFrame? = null, failure: String? = null) = ChromeReady(
             frame, failure, nativeRefusal, diagnostics, tabsBefore, tabsAfter,
             newTabVerified, newTabEvidence, navigationClicks, focusClicks, unknown,
             chromeReadCount, chromeRecoveryReads, firstChromeRefusal, foregroundFactsAtRefusal,
-            toolbarSamples, omniboxBackAttempts)
+            toolbarSamples, omniboxBackAttempts, backContextRefusalDetail, backStepFacts)
 
         suspend fun settleChromeTransition(seekToolbar: Boolean = false): ControlFrame {
             val sample = captureChromeTransition(
@@ -587,16 +643,40 @@ internal object DebugOneStopQa {
                     navigationClicks++
                 }
                 unknown = unknown || outcome.unknown || (outcome.attempted && !outcome.confirmed)
-                if (!outcome.confirmed || outcome.unknown)
+                if (!outcome.confirmed || outcome.unknown) {
+                    backStepFacts += buildJsonObject {
+                        put("step", step)
+                        put("attempted", outcome.attempted)
+                        put("confirmed", outcome.confirmed)
+                        put("unknown", outcome.unknown)
+                        put("ime_before", beforeBack.keyboard != null)
+                    }
                     return result(failure = "chrome_omnibox_back_unconfirmed")
+                }
                 pause(350L)
                 if (!allowed()) return result(failure = "control_authority_revoked")
                 val afterBack = settleChromeTransition(seekToolbar = false)
                 if (!allowed()) return result(failure = "control_authority_revoked")
                 diagnostics = chromeSelectorFacts(afterBack)
                 toolbarSamples += diagnostics
-                if (!sameChromeBackContext(beforeBack, afterBack))
+                val contextRefusal = chromeBackContextRefusal(
+                    beforeBack, afterBack, requireToolbarRestored = (step == 2),
+                )
+                backStepFacts += buildJsonObject {
+                    put("step", step)
+                    put("attempted", outcome.attempted)
+                    put("confirmed", outcome.confirmed)
+                    put("unknown", outcome.unknown)
+                    put("ime_before", beforeBack.keyboard != null)
+                    put("ime_after", afterBack.keyboard != null)
+                    put("window_context_changed", beforeBack.windowContext != afterBack.windowContext)
+                    put("toolbar_restored", chromeMenuButton(afterBack) != null)
+                    contextRefusal?.let { put("context_refusal", it) }
+                }
+                if (contextRefusal != null) {
+                    backContextRefusalDetail = contextRefusal
                     return result(failure = "chrome_omnibox_back_context_changed")
+                }
                 first = afterBack
                 if (chromeMenuButton(first) != null) break
                 priorBackFrame = beforeBack
@@ -921,6 +1001,8 @@ internal object DebugOneStopQa {
         var newChromeTabVerified = false
         var navigationClickAttempts = 0
         var chromeOmniboxBackAttempts = 0
+        var chromeBackContextRefusalDetail: String? = null
+        var chromeBackStepFacts: List<JsonObject> = emptyList()
         var chromeReadCount = 0
         var chromeRecoveryReads = 0
         var firstChromeRefusal: String? = null
@@ -966,6 +1048,9 @@ internal object DebugOneStopQa {
             put("editor_focus_click_attempts", setupClickAttempts)
             put("navigation_click_attempts", navigationClickAttempts)
             put("chrome_omnibox_back_attempts", chromeOmniboxBackAttempts)
+            chromeBackContextRefusalDetail?.let { put("chrome_omnibox_back_context_refusal", safeReasonCode(it)) }
+            if (chromeBackStepFacts.isNotEmpty())
+                put("chrome_omnibox_back_events", JsonArray(chromeBackStepFacts))
             put("new_chrome_tab_verified", newChromeTabVerified)
             put("new_chrome_tab_evidence", newTabEvidence)
             priorChromeTabCount?.let { put("chrome_tabs_before", it) }
@@ -1105,6 +1190,8 @@ internal object DebugOneStopQa {
             newTabEvidence = prepared.newTabEvidence
             navigationClickAttempts = prepared.navigationClicks
             chromeOmniboxBackAttempts = prepared.omniboxBackAttempts
+            chromeBackContextRefusalDetail = prepared.backContextRefusalDetail
+            chromeBackStepFacts = prepared.backStepFacts
             setupClickAttempts = prepared.focusClicks
             uncertain = prepared.unknown
             // Ordinary Chrome-setup failure does not terminate a live, user-approved

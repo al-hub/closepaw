@@ -155,7 +155,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             readAllowed = packageAllowed(inputMethod.packageName, operation = "read"),
             interactAllowed = packageAllowed(inputMethod.packageName, operation = "interact"))
         service.remoteDisplayJournal.observeKnownWindows(selected.selection.target, window.id)
-        return selected.copy(signature = operationHash(selected.signature + "\n" + keyboard.toString()), keyboard = keyboard)
+        return selected.copy(
+            signature = selected.snapshot?.windowContext(keyboard)
+                ?: operationHash(selected.signature + "\n" + keyboard.toString()),
+            keyboard = keyboard,
+        )
     }
     private val context = context.applicationContext
     private val classifier = AppClassifierHolder.get(this.context)
@@ -962,7 +966,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 keyboardDiagnostics = selected.keyboard?.takeIf { it.readAllowed }?.let { keyboardScan.json() },
                 keyboardCaptionSlots = keyboardCaptionSlots,
                 keyboardSuggestionGeometry = if (code == null && !truncated) suggestionGeometry.orEmpty() else emptyList(),
-                keyboardVisualFingerprintParts = keyboardVisualParts)
+                keyboardVisualFingerprintParts = keyboardVisualParts,
+                windowSnapshot = selected.snapshot)
             block(EmptyOwnedSurfacePolicy.restrict(frame,
                 selected.selection.members.size > 1 && root.windowId in selected.selection.members &&
                     window.id in selected.selection.members), native)

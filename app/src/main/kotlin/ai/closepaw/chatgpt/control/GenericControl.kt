@@ -86,7 +86,8 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val navigationOnly: Boolean = false,
     val keyboardCaptionSlots: List<KeyboardCaptionSlot> = emptyList(),
     val keyboardSuggestionGeometry: List<ImeGeometryNode> = emptyList(),
-    val keyboardVisualFingerprintParts: KeyboardVisualFingerprintParts? = null)
+    val keyboardVisualFingerprintParts: KeyboardVisualFingerprintParts? = null,
+    val windowSnapshot: ControlWindowSnapshot? = null)
 /** Logical identity is supplied only by a complete, guarded native application identity scan. */
 internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expected != null && reason == null &&
     (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
