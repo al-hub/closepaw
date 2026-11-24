@@ -7,6 +7,7 @@ import ai.closepaw.chatgpt.control.AndroidControlPort
 import ai.closepaw.chatgpt.control.ControlScreenLease
 import ai.closepaw.chatgpt.control.ControlSession
 import ai.closepaw.chatgpt.control.ControlFrame
+import ai.closepaw.chatgpt.control.ControlWindowContinuity
 import ai.closepaw.chatgpt.control.GenericControl
 import ai.closepaw.chatgpt.control.HangulKeyComposer
 import ai.closepaw.platform.virtualdisplay.ProjectionImageLease
