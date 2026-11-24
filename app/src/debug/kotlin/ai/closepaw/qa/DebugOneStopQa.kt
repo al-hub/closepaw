@@ -51,6 +51,12 @@ internal object DebugOneStopQa {
     internal const val MIXED_29 = "오늘 회의는 zoom으로 3시에 시작, 자료는 2개."
     private const val CHROME = "com.android.chrome"
     private const val SAMSUNG_IME = "com.samsung.android.honeyboard"
+    private val INCOGNITO_WINDOW_INDICATOR_IDS = setOf(
+        "$CHROME:id/incognito_badge",
+        "$CHROME:id/incognito_ntp_container",
+        "$CHROME:id/new_tab_incognito_container",
+        "$CHROME:id/incognito_tab_indicator",
+    )
 
     /** Content-free native readiness facts; these do not relax native action guards. */
     internal data class EditorPreflightFacts(
@@ -364,10 +370,105 @@ internal object DebugOneStopQa {
             before.windowId == after.windowId &&
             before.configurationRevision == after.configurationRevision
 
+    internal fun sameChromeBackContext(before: ControlFrame, after: ControlFrame): Boolean =
+        sameChromeWindow(before, after) &&
+            before.foregroundWindowId == after.foregroundWindowId &&
+            before.windowContext == after.windowContext
+
+    internal fun hasChromeOmniboxSuggestions(frame: ControlFrame): Boolean =
+        safeChromeFrame(frame) && ownedChromeNodes(frame).any {
+            it.resourceId == "$CHROME:id/omnibox_suggestions_dropdown"
+        }
+
+    /** Ordinary NTP may expose a '새 시크릿 탭' button; require active incognito window indicators only. */
+    internal fun isIncognitoChromeWindow(frame: ControlFrame): Boolean =
+        ownedChromeNodes(frame).any { it.resourceId in INCOGNITO_WINDOW_INDICATOR_IDS }
+
+    /** Strict gate for guarded Back normalization: ordinary Chrome, no toolbar/menu,
+     * single blank focused editable url_bar with no user draft, and same foreground window. */
+    internal fun isGuardedBlankFocusedOmnibox(frame: ControlFrame): Boolean {
+        if (!safeChromeFrame(frame) || frame.windowId != frame.foregroundWindowId) return false
+        if (isIncognitoChromeWindow(frame)) return false
+        if (chromeMenuButton(frame) != null || chromeTabCount(frame) != null) return false
+        val owned = ownedChromeNodes(frame)
+        if (owned.any { it.resourceId == "$CHROME:id/search_box_text" }) return false
+        val bar = owned.filter { it.resourceId == "$CHROME:id/url_bar" }.singleOrNull() ?: return false
+        if (!bar.focused || !bar.editable || !bar.enabled || bar.password || !bar.empty || bar.text.isNotEmpty())
+            return false
+        val editor = frame.inputTarget
+        if (frame.keyboard != null && editor == null) return false
+        if (editor != null && (editor.sourcePackage != CHROME || editor.sourceWindowId != frame.windowId ||
+                editor.resourceId != "$CHROME:id/url_bar" || !editor.focused || !editor.editable ||
+                editor.password || editor.text.isNotEmpty())) return false
+        return true
+    }
+
+    /** Back #1 requires active IME or open omnibox suggestions dropdown.
+     * Back #2 requires a verified distinct state transition: IME hidden by Back #1
+     * on the same Chrome window/revision/context with blank focused omnibox + suggestions retained. */
+    internal fun mayDispatchGuardedOmniboxBack(
+        frame: ControlFrame, priorBackFrame: ControlFrame? = null,
+    ): Boolean {
+        if (!isGuardedBlankFocusedOmnibox(frame)) return false
+        return if (priorBackFrame == null) {
+            frame.keyboard != null || hasChromeOmniboxSuggestions(frame)
+        } else {
+            sameChromeBackContext(priorBackFrame, frame) &&
+                priorBackFrame.keyboard != null && frame.keyboard == null &&
+                hasChromeOmniboxSuggestions(frame)
+        }
+    }
+
+    internal data class ChromeActionOutcome(
+        val confirmed: Boolean, val attempted: Boolean, val unknown: Boolean,
+    )
+
+    /** Revalidates guarded-omnibox invariants on the exact fresh observation used for Back. */
+    internal fun guardedBackObservationMatches(frame: ControlFrame, observed: JsonObject): Boolean {
+        if (!isGuardedBlankFocusedOmnibox(frame)) return false
+        val expectedBar = ownedChromeNodes(frame)
+            .filter { it.resourceId == "$CHROME:id/url_bar" }.singleOrNull() ?: return false
+        val navActions = (observed["navigation_actions"] as? JsonArray)
+            ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
+        if (observed["observation_id"]?.jsonPrimitive?.contentOrNull.isNullOrBlank() ||
+            observed["output_truncated"]?.jsonPrimitive?.booleanOrNull != false ||
+            observed["security_scan_complete"]?.jsonPrimitive?.booleanOrNull != true ||
+            observed["truncated"]?.jsonPrimitive?.booleanOrNull != false ||
+            observed["navigation_only"]?.jsonPrimitive?.booleanOrNull != false ||
+            observed["node_actions_allowed"]?.jsonPrimitive?.booleanOrNull != true ||
+            observed["package_name"]?.jsonPrimitive?.contentOrNull != CHROME ||
+            observed["window_id"]?.jsonPrimitive?.intOrNull != frame.windowId ||
+            observed["foreground_window_id"]?.jsonPrimitive?.intOrNull != frame.windowId ||
+            observed["configuration_revision"]?.jsonPrimitive?.longOrNull != frame.configurationRevision ||
+            "back" !in navActions) return false
+        val observedKeyboard = observed["keyboard"] as? JsonObject
+        val expectedKeyboard = frame.keyboard
+        if (expectedKeyboard != null) {
+            if (observedKeyboard == null ||
+                observedKeyboard["window_id"]?.jsonPrimitive?.intOrNull != expectedKeyboard.windowId ||
+                observedKeyboard["package_name"]?.jsonPrimitive?.contentOrNull != expectedKeyboard.packageName)
+                return false
+        } else if (observedKeyboard != null) {
+            return false
+        }
+        val bars = (observed["nodes"] as? JsonArray)
+            ?.mapNotNull { it as? JsonObject }
+            ?.filter {
+                it["source_window_id"]?.jsonPrimitive?.intOrNull == frame.windowId &&
+                    it["resource_id"]?.jsonPrimitive?.contentOrNull == "$CHROME:id/url_bar"
+            }.orEmpty()
+        val liveBar = bars.singleOrNull() ?: return false
+        return liveBar["focused"]?.jsonPrimitive?.booleanOrNull == true &&
+            liveBar["editable"]?.jsonPrimitive?.booleanOrNull == true &&
+            liveBar["enabled"]?.jsonPrimitive?.booleanOrNull == true &&
+            liveBar["text"]?.jsonPrimitive?.contentOrNull == "" &&
+            liveBar["bounds"]?.jsonPrimitive?.contentOrNull == expectedBar.bounds &&
+            liveBar["class_name"]?.jsonPrimitive?.contentOrNull == expectedBar.className
+    }
 
     /** Candidate-only preparation, separated from the key coroutine state machine.
      * Every action uses GenericControl's original native freshness/privacy guards. */
-    private data class ChromeReady(
+    internal data class ChromeReady(
         val frame: ControlFrame? = null, val failure: String? = null,
         val nativeRefusal: String? = null, val diagnostics: ChromeSelectorFacts? = null,
         val tabsBefore: Int? = null, val tabsAfter: Int? = null,
@@ -378,11 +479,18 @@ internal object DebugOneStopQa {
         val firstChromeRefusal: String? = null,
         val foregroundFactsAtRefusal: ChromeWindowFacts? = null,
         val toolbarSamples: List<ChromeSelectorFacts> = emptyList(),
+        val omniboxBackAttempts: Int = 0,
     )
 
-    private suspend fun prepareChromeEditor(
-        port: AndroidControlPort, control: GenericControl, session: ControlSession,
-        allowed: () -> Boolean, diagnosticOnly: Boolean, onPhase: (String) -> Unit,
+    internal suspend fun prepareChromeEditorWithSeam(
+        capture: suspend () -> ControlFrame,
+        inspectWindow: suspend () -> ChromeWindowFacts,
+        clickNode: suspend (ControlFrame, ai.closepaw.chatgpt.control.ControlNode, String) -> ChromeActionOutcome,
+        dispatchBack: suspend (ControlFrame, String) -> ChromeActionOutcome,
+        allowed: () -> Boolean,
+        diagnosticOnly: Boolean,
+        onPhase: (String) -> Unit,
+        pause: suspend (Long) -> Unit = { delay(it) },
     ): ChromeReady {
         var nativeRefusal: String? = null
         var diagnostics: ChromeSelectorFacts? = null
@@ -398,19 +506,21 @@ internal object DebugOneStopQa {
         var firstChromeRefusal: String? = null
         var foregroundFactsAtRefusal: ChromeWindowFacts? = null
         val toolbarSamples = mutableListOf<ChromeSelectorFacts>()
+        var omniboxBackAttempts = 0
         fun result(frame: ControlFrame? = null, failure: String? = null) = ChromeReady(
             frame, failure, nativeRefusal, diagnostics, tabsBefore, tabsAfter,
             newTabVerified, newTabEvidence, navigationClicks, focusClicks, unknown,
-            chromeReadCount, chromeRecoveryReads, firstChromeRefusal, foregroundFactsAtRefusal, toolbarSamples)
+            chromeReadCount, chromeRecoveryReads, firstChromeRefusal, foregroundFactsAtRefusal,
+            toolbarSamples, omniboxBackAttempts)
 
         suspend fun settleChromeTransition(seekToolbar: Boolean = false): ControlFrame {
             val sample = captureChromeTransition(
                 capture = {
-                    port.capture().also { if (seekToolbar) toolbarSamples += chromeSelectorFacts(it) }
+                    capture().also { if (seekToolbar) toolbarSamples += chromeSelectorFacts(it) }
                 },
-                inspect = { chromeWindowFacts() },
+                inspect = inspectWindow,
                 allowed = allowed,
-                pause = { delay(350L) },
+                pause = { pause(350L) },
                 onRetry = { reason ->
                     onPhase(if (reason == "chrome_toolbar_settling") "chrome_toolbar_read_only_retry"
                         else "chrome_foreground_read_only_retry")
@@ -440,58 +550,19 @@ internal object DebugOneStopQa {
         if (first.navigationOnly) return result(failure = "preflight_navigation_only")
         if (first.packageName != CHROME) return result(failure = "preflight_chrome_not_foreground")
 
-        /** One fresh observed native click; no coordinates, URL or synthetic text. */
-        suspend fun clickChromeNode(
+        suspend fun runClick(
             frame: ControlFrame, target: ai.closepaw.chatgpt.control.ControlNode,
             phase: String, editorFocus: Boolean = false,
         ): Boolean {
             if (!safeChromeFrame(frame) || target.sourcePackage != CHROME ||
                 target.sourceWindowId != frame.windowId || !target.clickable ||
                 !target.enabled || target.password) return false
-            val filter = target.resourceId.ifBlank {
-                val labels = menuDescriptions + setOf("새 탭", "New tab")
-                listOf(target.description.trim(), target.text.trim()).firstOrNull { it in labels }.orEmpty()
-            }
-            if (filter.isBlank()) return false
-            val observed = control.observe(filter = filter)
-            if (!observed.success ||
-                observed.data["output_truncated"]?.jsonPrimitive?.booleanOrNull != false ||
-                observed.data["package_name"]?.jsonPrimitive?.content != CHROME ||
-                observed.data["window_id"]?.jsonPrimitive?.intOrNull != frame.windowId ||
-                observed.data["configuration_revision"]?.jsonPrimitive?.longOrNull != frame.configurationRevision ||
-                observed.data["node_actions_allowed"]?.jsonPrimitive?.booleanOrNull != true) return false
-            val matches = (observed.data["nodes"] as? JsonArray)
-                ?.mapNotNull { it as? JsonObject }
-                ?.filter {
-                    it["source_window_id"]?.jsonPrimitive?.intOrNull == frame.windowId &&
-                        it["resource_id"]?.jsonPrimitive?.content == target.resourceId &&
-                        (target.resourceId.isNotEmpty() ||
-                            (it["description"]?.jsonPrimitive?.content == target.description.take(100) &&
-                                it["text"]?.jsonPrimitive?.content == target.text.take(100))) &&
-                        it["class_name"]?.jsonPrimitive?.content == target.className &&
-                        it["bounds"]?.jsonPrimitive?.content == target.bounds &&
-                        it["clickable"]?.jsonPrimitive?.booleanOrNull == true &&
-                        it["enabled"]?.jsonPrimitive?.booleanOrNull == true
-                }.orEmpty()
-            if (matches.size != 1) return false
-            val observationId = observed.data["observation_id"]?.jsonPrimitive?.content
-                ?: return false
-            val nodeId = matches.single()["node_id"]?.jsonPrimitive?.intOrNull
-                ?: return false
-            onPhase(phase)
-            val effect = control.action(buildJsonObject {
-                put("action", "click")
-                put("session_id", session.id)
-                put("observation_id", observationId)
-                put("node_id", nodeId)
-            })
-            val attempted = effect.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
-            if (attempted) {
+            val outcome = clickNode(frame, target, phase)
+            if (outcome.attempted) {
                 if (editorFocus) focusClicks++ else navigationClicks++
             }
-            val actionUnknown = effect.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
-            unknown = unknown || actionUnknown || (attempted && !effect.success)
-            return effect.success && !actionUnknown
+            unknown = unknown || outcome.unknown || (outcome.attempted && !outcome.confirmed)
+            return outcome.confirmed && !outcome.unknown
         }
 
         // This branch is strictly read-only, so there is no reason to navigate
@@ -501,28 +572,61 @@ internal object DebugOneStopQa {
             return result(frame = first)
         }
 
+        // Guarded omnibox normalization (six-key mode only, max 2 distinct states):
+        // normal toolbar -> 0 Back; only proven ordinary Chrome empty focused omnibox
+        // with active IME or suggestions dropdown may dismiss focus to reveal toolbar.
+        if (!diagnosticOnly && chromeMenuButton(first) == null && mayDispatchGuardedOmniboxBack(first, null)) {
+            var priorBackFrame: ControlFrame? = null
+            for (step in 1..2) {
+                if (!allowed()) return result(failure = "control_authority_revoked")
+                if (!mayDispatchGuardedOmniboxBack(first, priorBackFrame)) break
+                val beforeBack = first
+                val outcome = dispatchBack(beforeBack, "chrome_omnibox_back_${step}_dispatch")
+                if (outcome.attempted) {
+                    omniboxBackAttempts++
+                    navigationClicks++
+                }
+                unknown = unknown || outcome.unknown || (outcome.attempted && !outcome.confirmed)
+                if (!outcome.confirmed || outcome.unknown)
+                    return result(failure = "chrome_omnibox_back_unconfirmed")
+                pause(350L)
+                if (!allowed()) return result(failure = "control_authority_revoked")
+                val afterBack = settleChromeTransition(seekToolbar = false)
+                if (!allowed()) return result(failure = "control_authority_revoked")
+                diagnostics = chromeSelectorFacts(afterBack)
+                toolbarSamples += diagnostics
+                if (!sameChromeBackContext(beforeBack, afterBack))
+                    return result(failure = "chrome_omnibox_back_context_changed")
+                first = afterBack
+                if (chromeMenuButton(first) != null) break
+                priorBackFrame = beforeBack
+            }
+        }
+
         // Input mode always preserves every existing tab and requires a new one.
         val beforeNavigation = first
         val previousCount = chromeTabCount(beforeNavigation)
         tabsBefore = previousCount
         val menu = chromeMenuButton(first)
             ?: return result(failure = "unique_chrome_menu_unavailable")
-        if (!clickChromeNode(first, menu, "chrome_menu_dispatch"))
+        if (!runClick(first, menu, "chrome_menu_dispatch"))
             return result(failure = "chrome_menu_unconfirmed")
-        val popup = port.capture()
+        if (!allowed()) return result(failure = "control_authority_revoked")
+        val popup = capture()
         nativeRefusal = popup.reason
+        if (!allowed()) return result(failure = "control_authority_revoked")
         val newTabCommand = chromeNewTabMenuItem(popup)
             ?: return result(failure = "verified_new_tab_menu_unavailable")
-        if (!clickChromeNode(popup, newTabCommand, "chrome_new_tab_dispatch"))
+        if (!runClick(popup, newTabCommand, "chrome_new_tab_dispatch"))
             return result(failure = "chrome_new_tab_unconfirmed")
 
         // At most three passive probes and zero action replay.
         onPhase("new_blank_tab_preflight")
         var newTabFrame: ControlFrame? = null
         for (read in 0..2) {
-            delay(if (read == 0) 350L else 250L)
+            pause(if (read == 0) 350L else 250L)
             if (!allowed()) return result(failure = "control_authority_revoked")
-            val probe = port.capture()
+            val probe = capture()
             nativeRefusal = probe.reason
             diagnostics = chromeSelectorFacts(probe)
             if (probe.reason != null && !readOnlyResampleReason(probe.reason))
@@ -548,9 +652,9 @@ internal object DebugOneStopQa {
         val target = blankOmnibox(first)
             ?: return result(failure = "unique_blank_chrome_omnibox_unavailable")
         if (first.inputTarget == null || first.keyboard?.packageName != SAMSUNG_IME) {
-            if (!clickChromeNode(first, target, "chrome_editor_focus_dispatch", editorFocus = true))
+            if (!runClick(first, target, "chrome_editor_focus_dispatch", editorFocus = true))
                 return result(failure = "chrome_editor_focus_unconfirmed")
-            delay(350L)
+            pause(350L)
             if (!allowed()) return result(failure = "control_authority_revoked")
             val focused = settleChromeTransition()
             if (!allowed()) return result(failure = "control_authority_revoked")
@@ -567,6 +671,92 @@ internal object DebugOneStopQa {
         onPhase("editor_preflight")
         return result(frame = first)
     }
+
+    private suspend fun prepareChromeEditor(
+        port: AndroidControlPort, control: GenericControl, session: ControlSession,
+        allowed: () -> Boolean, diagnosticOnly: Boolean, onPhase: (String) -> Unit,
+    ): ChromeReady = prepareChromeEditorWithSeam(
+        capture = { port.capture() },
+        inspectWindow = { chromeWindowFacts() },
+        clickNode = { frame, target, phase ->
+            val filter = target.resourceId.ifBlank {
+                val labels = menuDescriptions + setOf("새 탭", "New tab")
+                listOf(target.description.trim(), target.text.trim()).firstOrNull { it in labels }.orEmpty()
+            }
+            if (filter.isBlank()) {
+                ChromeActionOutcome(confirmed = false, attempted = false, unknown = false)
+            } else {
+                val observed = control.observe(filter = filter)
+                if (!observed.success ||
+                    observed.data["output_truncated"]?.jsonPrimitive?.booleanOrNull != false ||
+                    observed.data["package_name"]?.jsonPrimitive?.content != CHROME ||
+                    observed.data["window_id"]?.jsonPrimitive?.intOrNull != frame.windowId ||
+                    observed.data["configuration_revision"]?.jsonPrimitive?.longOrNull != frame.configurationRevision ||
+                    observed.data["node_actions_allowed"]?.jsonPrimitive?.booleanOrNull != true) {
+                    ChromeActionOutcome(confirmed = false, attempted = false, unknown = false)
+                } else {
+                    val matches = (observed.data["nodes"] as? JsonArray)
+                        ?.mapNotNull { it as? JsonObject }
+                        ?.filter {
+                            it["source_window_id"]?.jsonPrimitive?.intOrNull == frame.windowId &&
+                                it["resource_id"]?.jsonPrimitive?.content == target.resourceId &&
+                                (target.resourceId.isNotEmpty() ||
+                                    (it["description"]?.jsonPrimitive?.content == target.description.take(100) &&
+                                        it["text"]?.jsonPrimitive?.content == target.text.take(100))) &&
+                                it["class_name"]?.jsonPrimitive?.content == target.className &&
+                                it["bounds"]?.jsonPrimitive?.content == target.bounds &&
+                                it["clickable"]?.jsonPrimitive?.booleanOrNull == true &&
+                                it["enabled"]?.jsonPrimitive?.booleanOrNull == true
+                        }.orEmpty()
+                    val observationId = observed.data["observation_id"]?.jsonPrimitive?.content
+                    val nodeId = matches.singleOrNull()?.get("node_id")?.jsonPrimitive?.intOrNull
+                    if (matches.size != 1 || observationId == null || nodeId == null) {
+                        ChromeActionOutcome(confirmed = false, attempted = false, unknown = false)
+                    } else {
+                        onPhase(phase)
+                        val effect = control.action(buildJsonObject {
+                            put("action", "click")
+                            put("session_id", session.id)
+                            put("observation_id", observationId)
+                            put("node_id", nodeId)
+                        })
+                        val attempted = effect.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
+                        val actionUnknown = effect.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
+                        ChromeActionOutcome(
+                            confirmed = effect.success && !actionUnknown,
+                            attempted = attempted,
+                            unknown = actionUnknown || (attempted && !effect.success),
+                        )
+                    }
+                }
+            }
+        },
+        dispatchBack = { frame, phase ->
+            val observed = control.observe(filter = "$CHROME:id/url_bar")
+            val observationId = observed.data["observation_id"]?.jsonPrimitive?.contentOrNull
+            if (!observed.success || observationId == null || !guardedBackObservationMatches(frame, observed.data)) {
+                ChromeActionOutcome(confirmed = false, attempted = false, unknown = false)
+            } else {
+                onPhase(phase)
+                val effect = control.action(buildJsonObject {
+                    put("action", "back")
+                    put("session_id", session.id)
+                    put("observation_id", observationId)
+                })
+                val attempted = effect.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
+                val actionUnknown = effect.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
+                ChromeActionOutcome(
+                    confirmed = effect.success && !actionUnknown,
+                    attempted = attempted,
+                    unknown = actionUnknown || (attempted && !effect.success),
+                )
+            }
+        },
+        allowed = allowed,
+        diagnosticOnly = diagnosticOnly,
+        onPhase = onPhase,
+        pause = { delay(it) },
+    )
 
     internal fun sameEditor(first: ControlFrame, later: ControlFrame): Boolean {
         val a = first.inputTarget ?: return false
@@ -653,6 +843,33 @@ internal object DebugOneStopQa {
         put("elapsed_realtime_ms", elapsedRealtimeMs)
     }
 
+    internal data class TerminalFailureRecord(
+        val failureCount: Int,
+        val firstFailureCode: String?,
+        val shouldRecordStep: Boolean,
+    )
+
+    internal fun safeReasonCode(code: String): String =
+        code.takeIf { it.length in 1..80 && it.matches(Regex("[a-z0-9_]+")) }
+            ?: "unavailable"
+
+    /** Ensures terminal BLOCKED/UNKNOWN reports never emit failure_count=0 or empty step_events. */
+    internal fun ensureTerminalFailureRecorded(
+        currentFailureCount: Int,
+        currentFirstFailureCode: String?,
+        currentStepEventCount: Int,
+        reason: String,
+    ): TerminalFailureRecord {
+        val code = currentFirstFailureCode ?: safeReasonCode(reason)
+        val missingCount = currentFailureCount <= 0
+        val missingSteps = currentStepEventCount <= 0
+        return TerminalFailureRecord(
+            failureCount = if (missingCount) 1 else currentFailureCount,
+            firstFailureCode = code,
+            shouldRecordStep = missingCount || missingSteps,
+        )
+    }
+
     suspend fun run(context: Context, status: (String) -> Unit, request: DebugQaRunRequest,
                     batchId: String, approvedProjection: ProjectionImageLease): JsonObject {
         val diagnosticOnly = request.mode.diagnosticOnly
@@ -703,6 +920,7 @@ internal object DebugOneStopQa {
         var newChromeTabCount: Int? = null
         var newChromeTabVerified = false
         var navigationClickAttempts = 0
+        var chromeOmniboxBackAttempts = 0
         var chromeReadCount = 0
         var chromeRecoveryReads = 0
         var firstChromeRefusal: String? = null
@@ -747,6 +965,7 @@ internal object DebugOneStopQa {
             put("touch_attempts", attempts)
             put("editor_focus_click_attempts", setupClickAttempts)
             put("navigation_click_attempts", navigationClickAttempts)
+            put("chrome_omnibox_back_attempts", chromeOmniboxBackAttempts)
             put("new_chrome_tab_verified", newChromeTabVerified)
             put("new_chrome_tab_evidence", newTabEvidence)
             priorChromeTabCount?.let { put("chrome_tabs_before", it) }
@@ -805,6 +1024,12 @@ internal object DebugOneStopQa {
         }
         fun stop(why: String): JsonObject {
             if (qaState != "PERMISSION_REVOKED") qaState = "SESSION_STOPPED"
+            val terminal = ensureTerminalFailureRecorded(failureCount, firstFailureCode, stepEvents.size, why)
+            firstFailureCode = terminal.firstFailureCode
+            failureCount = terminal.failureCount
+            if (terminal.shouldRecordStep) {
+                recordStep(stage, if (uncertain) "UNKNOWN" else "FAILED", why)
+            }
             return result(if (uncertain) "UNKNOWN" else "BLOCKED", why)
                 .also { write(context, it); publishLive() }
         }
@@ -879,6 +1104,7 @@ internal object DebugOneStopQa {
             newChromeTabVerified = prepared.newTabVerified
             newTabEvidence = prepared.newTabEvidence
             navigationClickAttempts = prepared.navigationClicks
+            chromeOmniboxBackAttempts = prepared.omniboxBackAttempts
             setupClickAttempts = prepared.focusClicks
             uncertain = prepared.unknown
             // Ordinary Chrome-setup failure does not terminate a live, user-approved

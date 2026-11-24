@@ -349,6 +349,44 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     internal fun debugDisplayPlanRefusal(): String? =
         if (ai.closepaw.BuildConfig.DEBUG) displayPlanRefusalCode else null
 
+    /**
+     * Read-only on-device pixel-role certification for a uniquely selected IME key
+     * candidate from the live certified keyboard snapshot. Reuses the exact native
+     * crop, disclosure-mask proof, SpaceBarGlyphPolicy, and ML Kit Korean OCR (>=0.92).
+     * Never dispatches input and never falls back to uncertified coordinates.
+     */
+    internal suspend fun certifyKeyboardCandidatePixels(
+        visualId: String,
+        frame: ControlFrame,
+        nodeBoundsRaw: String,
+        imageOnly: Boolean,
+        expectedLabel: String,
+    ): TapBounds? {
+        if (!allowed()) return null
+        val live = session()?.takeIf { it.explicit && it.state == ControlSession.State.ACTIVE } ?: return null
+        val ime = frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed } ?: return null
+        val proof = VisualImageCache.proofFor(visualId) ?: return null
+        if (proof.scope != "keyboard" || proof.sourceDisplayId != 0 ||
+            !proof.sourceDisclosureAllowed() ||
+            System.currentTimeMillis() - proof.at !in 0L..10_000L ||
+            VisualKeyboardPolicy.proofOwnerRefusal(proof, ime) != null) return null
+        val nodeBounds = KeyboardImageFallbackPolicy.bounds(nodeBoundsRaw) ?: return null
+        val imeBounds = KeyboardImageFallbackPolicy.bounds(proof.imeBounds) ?: return null
+        val rawCrop = KeyboardImageFallbackPolicy.crop(proof, nodeBounds) ?: return null
+        val resolved = KeyboardSequencePixelProof.resolvedCrop(
+            proof, rawCrop, nodeBounds, imeBounds, requireWholeNode = imageOnly,
+        ) ?: return null
+        val owner = KeyboardTouchGeometry.Owner(
+            live.id, live.epoch,
+            ai.closepaw.security.ImageRevocationAuthority.currentEpoch,
+            frame.configurationRevision, frame.windowContext, ime,
+        )
+        return resolved.takeIf {
+            keyboardImageRecognition.confirms(owner, proof, it, expectedLabel) &&
+                allowed() && proof.sourceDisclosureAllowed()
+        }
+    }
+
     private fun displayPlan(service: AgentService, frame: ControlFrame, keyboardOnly: Boolean = false): DisplayPlan? {
         if (ai.closepaw.BuildConfig.DEBUG) {
             displayPlanRefusalCode = null

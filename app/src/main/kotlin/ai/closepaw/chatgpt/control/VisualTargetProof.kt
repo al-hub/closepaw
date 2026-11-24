@@ -77,6 +77,15 @@ internal object VisualImageCache {
         val data = java.util.Base64.getEncoder().encodeToString(image.bytes)
         return if (imageFor(result) === image) EncodedVisualImage(image.mimeType, data) else null
     }
+    @Synchronized fun proofFor(id: String): VisualTargetProof? {
+        prune()
+        val entry = images[id] ?: return null
+        if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(entry.imageEpoch)) {
+            images.remove(id)
+            return null
+        }
+        return entry.proof
+    }
     @Synchronized fun imageFor(result: JsonObject): ScreenImage? {
         prune()
         val data=((result["result"] as? JsonObject)?.get("data") ?: result["data"]) as? JsonObject
