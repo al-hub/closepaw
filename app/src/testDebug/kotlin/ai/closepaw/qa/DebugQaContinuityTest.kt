@@ -22,43 +22,75 @@ class DebugQaContinuityTest {
             sourcePackage = chrome, sourceWindowId = 42,
             enabled = true, clickable = true, description = "$count tabs")
 
-    @Test fun missingChromeTabCounterUsesConfirmedNewTabAndUniqueBlankNtpOnly() {
+    @Test fun missingChromeTabCounterRequiresAcknowledgedCommandAndNewBlankNtpSurface() {
+        val before = frame(node(resource = "url_bar"))
         val ntp = frame(node())
         assertNull(DebugOneStopQa.chromeTabCount(ntp))
-        assertTrue(DebugOneStopQa.verifiedBlankAfterNewTabCommand(null, ntp, true))
-        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(null, ntp, false))
-        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(null, frame(), true))
-        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(null,
-            frame(node(resource = "url_bar")), true))
-        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(null,
-            frame(node(text = "existing")), true))
-        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(null,
-            frame(node().copy(password = true)), true))
-        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(null,
-            frame(node(), node(id = 3)), true))
-        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(null,
-            ntp.copy(reason = "secure_window"), true))
-        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(null,
-            ntp.copy(truncated = true), true))
-        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(null,
-            ntp.copy(packageName = "another.app"), true))
+        assertTrue(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, ntp, true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, ntp, false))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, before, true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(ntp, ntp, true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, frame(), true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, frame(node(text = "existing")), true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, frame(node().copy(password = true)), true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, frame(node(), node(id = 3)), true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, ntp.copy(reason = "secure_window"), true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, ntp.copy(truncated = true), true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, ntp.copy(packageName = "another.app"), true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, ntp.copy(windowId = 43), true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, ntp.copy(configurationRevision = 2), true))
     }
 
     @Test fun whenTabCountersExistTheyStillMustIncrementExactlyOne() {
-        assertTrue(DebugOneStopQa.verifiedBlankAfterNewTabCommand(7,
-            frame(tab(8), node()), true))
-        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(7,
-            frame(tab(7), node()), true))
-        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(7,
-            frame(tab(9), node()), true))
-        // A disappeared counter is only acceptable for a confirmed action
-        // plus the uniquely empty New Tab Page, never the address/url_bar.
-        assertTrue(DebugOneStopQa.verifiedBlankAfterNewTabCommand(7,
-            frame(node()), true))
-        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(7,
-            frame(node(resource = "url_bar")), true))
+        val before = frame(tab(7), node())
+        assertTrue(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, frame(tab(8), node()), true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, frame(tab(7), node()), true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, frame(tab(9), node()), true))
+        assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(before, frame(node()), true))
+        val priorEditor = frame(tab(7), node(resource = "url_bar"))
+        assertTrue(DebugOneStopQa.verifiedBlankAfterNewTabCommand(priorEditor, frame(node()), true))
     }
 
+    private fun blankBarWithoutToolbar() = frame(
+        node(resource = "url_bar").copy(editable = true, focused = true),
+        *(10..69).map { node(id = it, resource = "fixture").copy(clickable = false) }.toTypedArray(),
+    )
+
+    @Test fun observedMenuAbsenceAfterSecureWindowRecoveryUsesOneRemainingPassiveRead() =
+        kotlinx.coroutines.runBlocking {
+            val blank = blankBarWithoutToolbar()
+            val frames = ArrayDeque(listOf(blank.copy(reason = "secure_window_changed"), blank, blank))
+            val reasons = mutableListOf<String>()
+            val result = DebugOneStopQa.captureChromeTransition(
+                capture = { frames.removeFirst() }, inspect = { facts() },
+                allowed = { true }, pause = {}, onRetry = { reasons += it },
+                needsToolbar = { DebugOneStopQa.chromeMenuButton(it) == null },
+            )
+            assertEquals(3, result.reads)
+            assertEquals(listOf("secure_window_changed", "chrome_toolbar_settling"), reasons)
+            assertEquals(61, DebugOneStopQa.chromeSelectorFacts(result.frame).chromeNodeCount)
+            assertEquals(1, DebugOneStopQa.chromeSelectorFacts(result.frame).focusedUrlBarCount)
+            assertNull(DebugOneStopQa.chromeMenuButton(result.frame))
+            assertFalse(DebugOneStopQa.verifiedBlankAfterNewTabCommand(blank, result.frame, false))
+        }
+
+    @Test fun toolbarMayRecoverInSameWindowButSecurityRefusalOrWindowChangeStopsProbing() =
+        kotlinx.coroutines.runBlocking {
+            val blank = blankBarWithoutToolbar()
+            val menu = node(resource = "menu_button").copy(id = 90)
+            val ready = blank.copy(nodes = blank.nodes + menu)
+            val framesToCheck = listOf(ready, ready.copy(reason = "secure_window"), ready.copy(windowId = 43))
+            for ((index, next) in framesToCheck.withIndex()) {
+                val frames = ArrayDeque(listOf(blank, next))
+                val result = DebugOneStopQa.captureChromeTransition(
+                    capture = { frames.removeFirst() }, inspect = { facts() }, allowed = { true }, pause = {},
+                    needsToolbar = { DebugOneStopQa.chromeMenuButton(it) == null },
+                )
+                assertEquals(2, result.reads)
+                assertEquals(if (index == 0) menu else null, DebugOneStopQa.chromeMenuButton(result.frame))
+                assertEquals(listOf(null, "secure_window", "chrome_toolbar_context_changed")[index], result.frame.reason)
+            }
+        }
 
     private fun facts(chromeRoot: Boolean = true, active: Boolean = true, focused: Boolean = true) =
         DebugOneStopQa.ChromeWindowFacts(chromeRoot, true, true,

@@ -176,22 +176,39 @@ internal object DebugOneStopQa {
         allowed: () -> Boolean,
         pause: suspend () -> Unit,
         onRetry: (String) -> Unit = {},
+        needsToolbar: (ControlFrame) -> Boolean = { false },
     ): ChromeCaptureSample {
         var frame = capture()
         var reads = 1
         var retries = 0
         val firstRefusal = frame.reason
         var facts: ChromeWindowFacts? = null
-        while (frame.reason != null && allowed()) {
-            facts = inspect()
-            val reason = frame.reason ?: break
-            if (!mayResampleChromeTransition(reason, facts.chromeRoot, reads)) break
-            onRetry(reason)
+        var toolbarBaseline: ControlFrame? = null
+        while (reads < 3 && allowed()) {
+            val refusal = frame.reason
+            val retryReason = if (refusal != null) {
+                facts = inspect()
+                if (!mayResampleChromeTransition(refusal, facts.chromeRoot, reads)) break
+                refusal
+            } else {
+                if (!safeChromeFrame(frame) || !needsToolbar(frame)) break
+                if (toolbarBaseline == null) toolbarBaseline = frame
+                "chrome_toolbar_settling"
+            }
+            onRetry(retryReason)
             pause()
             if (!allowed()) break
             frame = capture()
             reads++
             retries++
+            if (toolbarBaseline != null && (
+                    frame.packageName != toolbarBaseline.packageName ||
+                    frame.windowId != toolbarBaseline.windowId ||
+                    frame.configurationRevision != toolbarBaseline.configurationRevision
+                )) {
+                frame = frame.copy(reason = frame.reason ?: "chrome_toolbar_context_changed")
+                break
+            }
         }
         return ChromeCaptureSample(frame, reads, retries, firstRefusal, facts)
     }
@@ -210,6 +227,8 @@ internal object DebugOneStopQa {
         val enabledCount: Int, val passwordCount: Int, val blankCount: Int,
         val menuIdCount: Int, val menuClickableCount: Int, val menuEnabledCount: Int,
         val menuEligibleCount: Int, val menuForeignOwnerCount: Int,
+        val menuSemanticCount: Int, val tabSwitcherCount: Int,
+        val focusedUrlBarCount: Int, val keyboardPresent: Boolean,
     ) {
         fun redactedJson() = buildJsonObject {
             put("full_frame", fullFrame); put("chrome_owned_nodes", chromeNodeCount)
@@ -223,6 +242,10 @@ internal object DebugOneStopQa {
             put("menu_enabled_matches", menuEnabledCount)
             put("menu_eligible_matches", menuEligibleCount)
             put("menu_foreign_owner_or_window_matches", menuForeignOwnerCount)
+            put("menu_semantic_matches", menuSemanticCount)
+            put("tab_switcher_id_matches", tabSwitcherCount)
+            put("focused_url_bar_matches", focusedUrlBarCount)
+            put("keyboard_present", keyboardPresent)
         }
     }
 
@@ -243,7 +266,10 @@ internal object DebugOneStopQa {
             candidates.count { it.enabled }, candidates.count { it.password },
             candidates.count { it.empty && it.text.isEmpty() },
             menu.size, menu.count { it.clickable }, menu.count { it.enabled },
-            menu.count { it.clickable && it.enabled && !it.password }, foreignMenu)
+            menu.count { it.clickable && it.enabled && !it.password }, foreignMenu,
+            owned.count { it.description.trim() in menuDescriptions },
+            owned.count { it.resourceId == "$CHROME:id/tab_switcher_button" },
+            bars.count { it.focused }, frame.keyboard != null)
     }
 
     /** No navigation or editing in diagnostic mode when a complete, fresh
@@ -266,16 +292,16 @@ internal object DebugOneStopQa {
             .singleOrNull()?.takeIf { it in 0..9998 }
     }
 
+    private val menuDescriptions = setOf("More options", "더보기")
+
     internal fun chromeMenuButton(frame: ControlFrame): ai.closepaw.chatgpt.control.ControlNode? {
         if (!safeChromeFrame(frame)) return null
         val eligible = ownedChromeNodes(frame).filter { it.clickable && it.enabled && !it.password }
         // Native resource ID remains preferred. Chrome versions can omit the ID
         // while exposing a unique, explicitly named accessibility control.
-        val byId = eligible.filter { it.resourceId == "$CHROME:id/menu_button" }
-        if (byId.isNotEmpty()) return byId.singleOrNull()
-        return eligible.filter {
-            it.description.trim() in setOf("More options", "더보기")
-        }.singleOrNull()
+        val byId = ownedChromeNodes(frame).filter { it.resourceId == "$CHROME:id/menu_button" }
+        if (byId.isNotEmpty()) return byId.singleOrNull()?.takeIf { it in eligible }
+        return eligible.filter { it.description.trim() in menuDescriptions }.singleOrNull()
     }
 
     /** Never select incognito, tab group, history or delete command. */
@@ -320,19 +346,24 @@ internal object DebugOneStopQa {
     internal fun verifiedBlankNewTab(priorTabCount: Int, frame: ControlFrame): Boolean =
         chromeTabCount(frame) == priorTabCount + 1 && blankOmnibox(frame) != null
 
-    /** A missing localized tab counter is not evidence of an unsafe editor.
-     * The user-approved New Tab command must have succeeded, and only the uniquely
-     * empty Chrome New Tab Page search box is accepted as a count-less fallback.
-     * Every actual touch still passes native authority and editor/caret guards. */
+    /** Independent before/after evidence after the acknowledged regular New Tab action. */
     internal fun verifiedBlankAfterNewTabCommand(
-        prior: Int?, frame: ControlFrame, newTabCommandConfirmed: Boolean,
+        before: ControlFrame, frame: ControlFrame, newTabCommandConfirmed: Boolean,
     ): Boolean {
-        if (!newTabCommandConfirmed) return false
+        if (!newTabCommandConfirmed || !sameChromeWindow(before, frame)) return false
+        val prior = chromeTabCount(before)
         val after = chromeTabCount(frame)
         if (prior != null && after != null) return verifiedBlankNewTab(prior, frame)
-        val target = blankOmnibox(frame) ?: return false
-        return target.resourceId == "$CHROME:id/search_box_text"
+        val ntp = "$CHROME:id/search_box_text"
+        return blankOmnibox(frame)?.resourceId == ntp &&
+            ownedChromeNodes(before).none { it.resourceId == ntp }
     }
+
+    internal fun sameChromeWindow(before: ControlFrame, after: ControlFrame): Boolean =
+        safeChromeFrame(before) && safeChromeFrame(after) &&
+            before.windowId == after.windowId &&
+            before.configurationRevision == after.configurationRevision
+
 
     /** Candidate-only preparation, separated from the key coroutine state machine.
      * Every action uses GenericControl's original native freshness/privacy guards. */
@@ -346,6 +377,7 @@ internal object DebugOneStopQa {
         val chromeReadCount: Int = 0, val chromeRecoveryReads: Int = 0,
         val firstChromeRefusal: String? = null,
         val foregroundFactsAtRefusal: ChromeWindowFacts? = null,
+        val toolbarSamples: List<ChromeSelectorFacts> = emptyList(),
     )
 
     private suspend fun prepareChromeEditor(
@@ -365,18 +397,28 @@ internal object DebugOneStopQa {
         var chromeRecoveryReads = 0
         var firstChromeRefusal: String? = null
         var foregroundFactsAtRefusal: ChromeWindowFacts? = null
+        val toolbarSamples = mutableListOf<ChromeSelectorFacts>()
         fun result(frame: ControlFrame? = null, failure: String? = null) = ChromeReady(
             frame, failure, nativeRefusal, diagnostics, tabsBefore, tabsAfter,
             newTabVerified, newTabEvidence, navigationClicks, focusClicks, unknown,
-            chromeReadCount, chromeRecoveryReads, firstChromeRefusal, foregroundFactsAtRefusal)
+            chromeReadCount, chromeRecoveryReads, firstChromeRefusal, foregroundFactsAtRefusal, toolbarSamples)
 
-        suspend fun settleChromeTransition(): ControlFrame {
+        suspend fun settleChromeTransition(seekToolbar: Boolean = false): ControlFrame {
             val sample = captureChromeTransition(
-                capture = { port.capture() },
+                capture = {
+                    port.capture().also { if (seekToolbar) toolbarSamples += chromeSelectorFacts(it) }
+                },
                 inspect = { chromeWindowFacts() },
                 allowed = allowed,
                 pause = { delay(350L) },
-                onRetry = { onPhase("chrome_foreground_read_only_retry") },
+                onRetry = { reason ->
+                    onPhase(if (reason == "chrome_toolbar_settling") "chrome_toolbar_read_only_retry"
+                        else "chrome_foreground_read_only_retry")
+                },
+                needsToolbar = { frame ->
+                    seekToolbar && chromeMenuButton(frame) == null &&
+                        !mayUseExistingBlankEditorForReadOnly(editorPreflightFacts(frame), diagnosticOnly)
+                },
             )
             chromeReadCount += sample.reads
             chromeRecoveryReads += sample.recoveryReads
@@ -388,10 +430,12 @@ internal object DebugOneStopQa {
 
         // A Chrome root can appear before its native window is active/focused.
         // The read-only bounded settle gate does NOT authorize an action.
-        var first = settleChromeTransition()
+        var first = settleChromeTransition(seekToolbar = true)
         if (!allowed()) return result(failure = "control_authority_revoked")
         diagnostics = chromeSelectorFacts(first)
-        if (first.reason != null) return result(failure = "preflight_frame_unavailable")
+        if (first.reason != null) return result(failure =
+            if (first.reason == "chrome_toolbar_context_changed") "chrome_toolbar_context_changed"
+            else "preflight_frame_unavailable")
         if (first.truncated) return result(failure = "preflight_frame_truncated")
         if (first.navigationOnly) return result(failure = "preflight_navigation_only")
         if (first.packageName != CHROME) return result(failure = "preflight_chrome_not_foreground")
@@ -404,12 +448,26 @@ internal object DebugOneStopQa {
             if (!safeChromeFrame(frame) || target.sourcePackage != CHROME ||
                 target.sourceWindowId != frame.windowId || !target.clickable ||
                 !target.enabled || target.password) return false
-            val observed = control.observe()
-            if (!observed.success) return false
+            val filter = target.resourceId.ifBlank {
+                val labels = menuDescriptions + setOf("새 탭", "New tab")
+                listOf(target.description.trim(), target.text.trim()).firstOrNull { it in labels }.orEmpty()
+            }
+            if (filter.isBlank()) return false
+            val observed = control.observe(filter = filter)
+            if (!observed.success ||
+                observed.data["output_truncated"]?.jsonPrimitive?.booleanOrNull != false ||
+                observed.data["package_name"]?.jsonPrimitive?.content != CHROME ||
+                observed.data["window_id"]?.jsonPrimitive?.intOrNull != frame.windowId ||
+                observed.data["configuration_revision"]?.jsonPrimitive?.longOrNull != frame.configurationRevision ||
+                observed.data["node_actions_allowed"]?.jsonPrimitive?.booleanOrNull != true) return false
             val matches = (observed.data["nodes"] as? JsonArray)
                 ?.mapNotNull { it as? JsonObject }
                 ?.filter {
-                    it["resource_id"]?.jsonPrimitive?.content == target.resourceId &&
+                    it["source_window_id"]?.jsonPrimitive?.intOrNull == frame.windowId &&
+                        it["resource_id"]?.jsonPrimitive?.content == target.resourceId &&
+                        (target.resourceId.isNotEmpty() ||
+                            (it["description"]?.jsonPrimitive?.content == target.description.take(100) &&
+                                it["text"]?.jsonPrimitive?.content == target.text.take(100))) &&
                         it["class_name"]?.jsonPrimitive?.content == target.className &&
                         it["bounds"]?.jsonPrimitive?.content == target.bounds &&
                         it["clickable"]?.jsonPrimitive?.booleanOrNull == true &&
@@ -444,7 +502,8 @@ internal object DebugOneStopQa {
         }
 
         // Input mode always preserves every existing tab and requires a new one.
-        val previousCount = chromeTabCount(first)
+        val beforeNavigation = first
+        val previousCount = chromeTabCount(beforeNavigation)
         tabsBefore = previousCount
         val menu = chromeMenuButton(first)
             ?: return result(failure = "unique_chrome_menu_unavailable")
@@ -470,7 +529,9 @@ internal object DebugOneStopQa {
                 return result(failure = "new_tab_native_security_refusal")
             if (probe.truncated || probe.navigationOnly)
                 return result(failure = "new_tab_incomplete_frame")
-            if (verifiedBlankAfterNewTabCommand(previousCount, probe, newTabCommandConfirmed = true)) {
+            if (probe.reason == null && !sameChromeWindow(beforeNavigation, probe))
+                return result(failure = "new_tab_chrome_context_changed")
+            if (verifiedBlankAfterNewTabCommand(beforeNavigation, probe, newTabCommandConfirmed = true)) {
                 newTabFrame = probe
                 break
             }
@@ -480,7 +541,7 @@ internal object DebugOneStopQa {
         // Count-less NTP is safe to edit but is not independent tab-count proof.
         newTabVerified = previousCount != null && tabsAfter == previousCount + 1
         newTabEvidence = if (newTabVerified)
-            "tab_count_increment_and_blank_ntp" else "confirmed_new_tab_command_and_blank_ntp"
+            "tab_count_increment_and_blank_editor" else "confirmed_new_tab_command_and_new_ntp_surface"
 
         // Pre-focus non-editable NTP search box is allowed only in this proven
         // new tab; post-focus editor, Samsung IME and 0/0 caret remain mandatory.
@@ -491,10 +552,18 @@ internal object DebugOneStopQa {
                 return result(failure = "chrome_editor_focus_unconfirmed")
             delay(350L)
             if (!allowed()) return result(failure = "control_authority_revoked")
-            first = settleChromeTransition()
+            val focused = settleChromeTransition()
             if (!allowed()) return result(failure = "control_authority_revoked")
-            diagnostics = chromeSelectorFacts(first)
+            diagnostics = chromeSelectorFacts(focused)
+            val focusedCount = chromeTabCount(focused)
+            if (!sameChromeWindow(first, focused) ||
+                (tabsAfter != null && focusedCount != null && tabsAfter != focusedCount))
+                return result(failure = "chrome_editor_context_changed_after_focus")
+            first = focused
         }
+        if (!diagnosticOnly && first.inputTarget?.let {
+                it.resourceId == "$CHROME:id/url_bar" && it.sourceWindowId == first.windowId
+            } != true) return result(failure = "fresh_chrome_tab_address_editor_unverified")
         onPhase("editor_preflight")
         return result(frame = first)
     }
@@ -629,6 +698,7 @@ internal object DebugOneStopQa {
         var preflightFacts: EditorPreflightFacts? = null
         var nativePreflightRefusal: String? = null
         var chromeSelectorDiagnostics: ChromeSelectorFacts? = null
+        var chromeToolbarSamples = emptyList<ChromeSelectorFacts>()
         var priorChromeTabCount: Int? = null
         var newChromeTabCount: Int? = null
         var newChromeTabVerified = false
@@ -682,6 +752,8 @@ internal object DebugOneStopQa {
             priorChromeTabCount?.let { put("chrome_tabs_before", it) }
             newChromeTabCount?.let { put("chrome_tabs_after", it) }
             chromeSelectorDiagnostics?.let { put("chrome_selector_diagnostics", it.redactedJson()) }
+            if (chromeToolbarSamples.isNotEmpty())
+                put("chrome_toolbar_samples", JsonArray(chromeToolbarSamples.map { it.redactedJson() }))
             put("outcome_unknown", uncertain)
             put("projection_active", ProjectionImageTransport.active()?.screenObservationAllowed() == true)
             put("control_session_state", AgentService.instance?.remoteControlSession?.state?.name ?: "unavailable")
@@ -801,6 +873,7 @@ internal object DebugOneStopQa {
             firstChromeRefusal = prepared.firstChromeRefusal
             foregroundFactsAtRefusal = prepared.foregroundFactsAtRefusal
             chromeSelectorDiagnostics = prepared.diagnostics
+            chromeToolbarSamples = prepared.toolbarSamples
             priorChromeTabCount = prepared.tabsBefore
             newChromeTabCount = prepared.tabsAfter
             newChromeTabVerified = prepared.newTabVerified
