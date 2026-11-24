@@ -88,6 +88,39 @@ class DebugKeyboardEvidenceTest {
         assertNull(DebugKeyboardEvidence.safeDisplayRefusal("unexpected_private_field"))
     }
 
+    @Test fun windowJournalIsBoundedAndOnlyAttachedToMatchingRefusal() {
+        val event = buildJsonObject {
+            put("type", "windows_changed"); put("reported_owner", "closepaw")
+            put("event_window_match", "other"); put("window_change_mask", 8)
+            put("event_display_class", "default"); put("window_id", 12345)
+            put("package_name", "PRIVATE"); put("unknown_change_bits", false)
+        }
+        val journal = buildJsonObject {
+            put("elapsed_ms", 100); put("unrecorded_count", 0)
+            put("events", JsonArray(List(20) { event })); put("private", "SECRET")
+        }
+        val data = buildJsonObject { put("reason_code", "display_window_changed_during_capture") }
+        val evidence = DebugKeyboardEvidence.fromObservation(data, false, listOf("ㄱ"), windowChanges = journal)
+        val safe = evidence.getValue("capture_window_changes").jsonObject
+        assertEquals(16, safe.getValue("events").jsonArray.size)
+        assertFalse(safe.toString().contains("PRIVATE"))
+        assertFalse(safe.toString().contains("SECRET"))
+        assertFalse(safe.toString().contains("window_id"))
+        assertFalse(evidence.getValue("native_touch_authorized_by_diagnostic").jsonPrimitive.boolean)
+        assertFalse(DebugKeyboardEvidence.fromObservation(data, true, listOf("ㄱ"),
+            windowChanges = journal).containsKey("capture_window_changes"))
+        assertFalse(DebugKeyboardEvidence.fromObservation(buildJsonObject { put("reason_code", "screen_changed") },
+            false, listOf("ㄱ"), windowChanges = journal).containsKey("capture_window_changes"))
+    }
+    @Test fun structureRetryOnlyForExactReadOnlyGenerationFailureAndBudget() {
+        val reason = "display_window_changed_during_capture"
+        assertTrue(DebugKeyboardEvidence.mayRetryStructure(reason, 1, true, false))
+        assertTrue(DebugKeyboardEvidence.mayRetryStructure(reason, 2, true, false))
+        assertFalse(DebugKeyboardEvidence.mayRetryStructure(reason, 3, true, false))
+        assertFalse(DebugKeyboardEvidence.mayRetryStructure(reason, 1, false, false))
+        assertFalse(DebugKeyboardEvidence.mayRetryStructure(reason, 1, true, true))
+        assertFalse(DebugKeyboardEvidence.mayRetryStructure("display_surface_unverified", 1, true, false))
+    }
     @Test fun rejectedWindowCensusIsBoundedRedactedAndNeverAuthorizesTouch() {
         val row = ai.closepaw.chatgpt.control.CensusRow(
             ai.closepaw.chatgpt.control.CensusKind.ACCESSIBILITY_OVERLAY,

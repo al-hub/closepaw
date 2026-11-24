@@ -35,8 +35,40 @@ internal object DebugKeyboardEvidence {
 
     internal fun safeDisplayRefusal(code: String?): String? = code?.takeIf { it in fixedDisplayRefusals }
 
+    // One capture's bounded journal, never the process-wide diagnostic history.
+    internal fun safeWindowChanges(journal: JsonObject): JsonObject = buildJsonObject {
+        fun nonnegative(name: String, obj: JsonObject) =
+            (obj[name] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull?.takeIf { it >= 0 }
+        nonnegative("elapsed_ms", journal)?.let { put("elapsed_ms", it) }
+        nonnegative("unrecorded_count", journal)?.let { put("unrecorded_count", it) }
+        put("events", JsonArray((journal["events"] as? JsonArray).orEmpty().take(16).mapNotNull { entry ->
+            val event = entry as? JsonObject ?: return@mapNotNull null
+            buildJsonObject {
+                val allowed = mapOf(
+                    "type" to setOf("windows_changed", "window_state_changed"),
+                    "reported_owner" to setOf("chrome", "samsung_ime", "closepaw", "system", "other", "unknown"),
+                    "event_window_match" to setOf("application", "ime", "other", "unknown"),
+                    "event_display_class" to setOf("default", "other", "unknown"))
+                for ((name, choices) in allowed) {
+                    (event[name] as? JsonPrimitive)?.takeIf { it.isString && it.content in choices }
+                        ?.let { put(name, it) }
+                }
+                nonnegative("after_action_source_check_ms", event)?.let { put("after_action_source_check_ms", it) }
+                nonnegative("window_change_mask", event)?.takeIf { it <= 0x7ff }?.let { put("window_change_mask", it) }
+                (event["unknown_change_bits"] as? JsonPrimitive)?.takeUnless { it.isString }
+                    ?.booleanOrNull?.let { put("unknown_change_bits", it) }
+            }
+        }))
+    }
+
+    internal const val MAX_STRUCTURE_OBSERVATIONS = 3
+    internal fun mayRetryStructure(reason: String, observations: Int, authority: Boolean, unknown: Boolean): Boolean =
+        reason == "display_window_changed_during_capture" && observations in 1 until MAX_STRUCTURE_OBSERVATIONS &&
+            authority && !unknown
+
     fun fromObservation(data: JsonObject, succeeded: Boolean, wanted: List<String>,
-        displayPlanRefusal: String? = null, census: DisplayWindowCensus? = null): JsonObject {
+        displayPlanRefusal: String? = null, census: DisplayWindowCensus? = null,
+        windowChanges: JsonObject? = null): JsonObject {
         val labels = wanted.filter { it in allowedLabels }.distinct()
         val nodes = (data["nodes"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
         val scan = (data["keyboard"] as? JsonObject)?.get("scan") as? JsonObject
@@ -52,6 +84,8 @@ internal object DebugKeyboardEvidence {
             if (!succeeded) {
                 put("native_refusal_reason", nativeRefusalReason(data))
                 safeDisplayRefusal(displayPlanRefusal)?.let { put("display_plan_refusal", it) }
+                if (nativeRefusalReason(data) == "display_window_changed_during_capture" && windowChanges != null)
+                    put("capture_window_changes", safeWindowChanges(windowChanges))
                 if (displayPlanRefusal == "display_unowned_window" &&
                     nativeRefusalReason(data) == "display_surface_unverified" && census != null) {
                     put("display_window_census", buildJsonObject {

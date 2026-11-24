@@ -41,6 +41,9 @@ class LocalCaptureQaActivity : ComponentActivity() {
     private lateinit var fixture: Spinner
     private lateinit var scope: Spinner
     private lateinit var save: CheckBox
+    private lateinit var publishQaResult: CheckBox
+    private var pendingPublishQaResult = false
+    private lateinit var resultSummary: TextView
     private lateinit var status: TextView
     private lateinit var report: TextView
     private lateinit var preview: ImageView
@@ -63,7 +66,9 @@ class LocalCaptureQaActivity : ComponentActivity() {
                     armedAfterConsent = false
                     val diagnosticOnly = pendingDiagnosticOnly
                     pendingDiagnosticOnly = false
-                    runGuardedSixKeyNow(diagnosticOnly)
+                    val publish = pendingPublishQaResult
+                    pendingPublishQaResult = false
+                    runGuardedSixKeyNow(diagnosticOnly, publish)
                 }
             }
             is ProjectionConsentState.Denied -> {
@@ -90,6 +95,8 @@ class LocalCaptureQaActivity : ComponentActivity() {
         armedAfterConsent = savedInstanceState?.getBoolean("qa_pending_user_arm", false) == true
         pendingDiagnosticOnly = savedInstanceState?.getBoolean("qa_pending_diagnostic_only", false) == true &&
             armedAfterConsent
+        pendingPublishQaResult = savedInstanceState?.getBoolean("qa_pending_publish_result", false) == true &&
+            armedAfterConsent
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 36, 24, 24) }
         column.setOnApplyWindowInsetsListener { view, insets ->
             val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
@@ -105,6 +112,7 @@ class LocalCaptureQaActivity : ComponentActivity() {
         text("Local capture QA · ${BuildConfig.GIT_SHA}")
         text("Candidate only. No ADB, LLM key or network is needed. Use only a NEW blank Chrome tab or NEW empty Notes editor with Samsung keyboard. Notifications/other overlays may be visible. No typing, taps or submissions are dispatched to fixtures.")
         status = text("Setup not checked")
+        resultSummary = text("QA result: none")
         button("Refresh setup") { refreshSetup() }
         button("Main settings / app access / screen control") {
             startActivity(Intent(this, MainActivity::class.java)
@@ -131,6 +139,11 @@ class LocalCaptureQaActivity : ComponentActivity() {
         text("Approve setup first. Read-only capture remains one run. The separate guarded INPUT QA uses its own foreground runner. Stop/pause, lock, service loss or projection revocation stop it; no unverified key is replayed.")
         button("Arm one run · wait up to 10 minutes") { arm() }
         text("CONTINUOUS DEBUG QA: one approved no-key session; Chrome setup failures are saved and followed by bounded independent read-only window/IME/image probes while consent is valid. Red error indicator does not mean session stopped. No text or keys are entered. See notification for current phase; Stop QA is always available.")
+        publishQaResult = CheckBox(this).apply {
+            text = "Publish this run's redacted QA JSON to shared Downloads (AI/Termux can read; other permitted apps may read). No screenshots."
+            isChecked = false
+            column.addView(this)
+        }
         button("Arm ONE continuous no-key diagnosis · auto-open Chrome") { armOneStop(diagnosticOnly = true) }
         button("Arm guarded six-key first-pass · auto-open Chrome") { armOneStop(diagnosticOnly = false) }
         button("Revoke Samsung keyboard interaction · Debug only", guarded = false) {
@@ -161,12 +174,24 @@ class LocalCaptureQaActivity : ComponentActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("qa_pending_user_arm", armedAfterConsent)
         outState.putBoolean("qa_pending_diagnostic_only", pendingDiagnosticOnly)
+        outState.putBoolean("qa_pending_publish_result", pendingPublishQaResult)
         super.onSaveInstanceState(outState)
     }
     override fun onResume() {
         super.onResume()
         ai.closepaw.chatgpt.control.ControlDiagnostics.record("debug_qa_activity", "resumed")
         if (::status.isInitialized && job?.isActive != true) refreshSetup()
+        if (::resultSummary.isInitialized) {
+            val latest = DebugOneStopQa.lastResult(this)
+            val batch = DebugOneStopQa.lastBatchResult(this)
+            val batchId = batch?.get("batch_id")?.jsonPrimitive?.content
+            val state = batch?.get("state")?.jsonPrimitive?.content ?: "none"
+            val outcome = latest?.get("outcome")?.jsonPrimitive?.content ?: "none"
+            val reason = latest?.get("reason")?.jsonPrimitive?.content ?: "none"
+            resultSummary.text = if (DebugQaRunnerService.isRunning()) "QA result: RUNNING"
+                else "QA result: $state / $outcome · $reason".take(100)
+            if (batchId != null) resultSummary.contentDescription = "QA batch: $batchId"
+        }
         if (::report.isInitialized && !DebugQaRunnerService.isRunning()) {
             DebugOneStopQa.lastBatchResult(this)?.let {
                 val state = it["state"]?.jsonPrimitive?.content.orEmpty()
@@ -308,6 +333,7 @@ class LocalCaptureQaActivity : ComponentActivity() {
         if (ProjectionImageTransport.active()?.screenObservationAllowed() != true) {
             armedAfterConsent = true
             pendingDiagnosticOnly = diagnosticOnly
+            pendingPublishQaResult = publishQaResult.isChecked
             if (requestObservation()) {
                 status.text = "Approve Android screen sharing; selected Debug QA mode will continue automatically."
             } else {
@@ -316,10 +342,10 @@ class LocalCaptureQaActivity : ComponentActivity() {
             }
             return
         }
-        runGuardedSixKeyNow(diagnosticOnly)
+        runGuardedSixKeyNow(diagnosticOnly, publishQaResult.isChecked)
     }
 
-    private fun runGuardedSixKeyNow(diagnosticOnly: Boolean) {
+    private fun runGuardedSixKeyNow(diagnosticOnly: Boolean, publish: Boolean) {
         if (isDestroyed || isFinishing || DebugQaRunnerService.isRunning()) return
         // Launching an Activity from a background FGS is restricted on Android
         // 14+. The physically visible QA screen performs ONLY this launch.
@@ -330,10 +356,11 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }
         previewIfReadyClear()
         report.text = "Foreground Debug QA requested; saved results will survive this screen."
-        if (!DebugQaRunnerService.start(this, diagnosticOnly)) {
+        if (!DebugQaRunnerService.start(this, diagnosticOnly, publish)) {
             status.text = "Foreground Debug runner unavailable or already active."
             return
         }
+        publishQaResult.isChecked = false
         try {
             startActivity(chrome)
             status.text = if (diagnosticOnly)

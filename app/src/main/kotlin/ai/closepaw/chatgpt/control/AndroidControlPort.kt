@@ -334,6 +334,16 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     // The production visualFailure() remains unchanged and the release variant never records it.
     private var displayPlanRefusalCode: String? = null
     private var displayWindowCensus: DisplayWindowCensus? = null
+    private var captureWindowChangeEvidence: JsonObject? = null
+    internal fun resetDebugCaptureEvidence() {
+        if (ai.closepaw.BuildConfig.DEBUG) {
+            displayPlanRefusalCode = null
+            displayWindowCensus = null
+            captureWindowChangeEvidence = null
+        }
+    }
+    internal fun debugCaptureWindowChangeEvidence(): JsonObject? =
+        if (ai.closepaw.BuildConfig.DEBUG) captureWindowChangeEvidence else null
     internal fun debugDisplayWindowCensus(): DisplayWindowCensus? =
         if (ai.closepaw.BuildConfig.DEBUG) displayWindowCensus else null
     internal fun debugDisplayPlanRefusal(): String? =
@@ -462,10 +472,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         onCertifiedFrame: ((ControlFrame) -> Unit)? = null): VisualTargetProof? {
         fun fail(code: String): VisualTargetProof? { visualFailureReason=code; return null }
         visualFailureReason="visual_observation_unavailable"
-        if (ai.closepaw.BuildConfig.DEBUG) {
-            displayPlanRefusalCode = null
-            displayWindowCensus = null
-        }
+        resetDebugCaptureEvidence()
         val observationOnly = scope == "screen_observe"
         val nativeKeyboardDisplay = scope == "keyboard"
         val projectionDisplay = scope == "display" || observationOnly
@@ -543,8 +550,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 // Capture-time failures previously lacked the native gate's bounded event provenance.
                 // This is read-only instrumentation; the original refusal is unchanged.
                 captureWindowMark?.let { mark ->
-                    ControlDiagnostics.record("display_capture_window_change", refusal,
-                        metrics = service.remoteDisplayJournal.summarize(mark, currentGeneration))
+                    val evidence = service.remoteDisplayJournal.summarize(mark, currentGeneration)
+                    if (ai.closepaw.BuildConfig.DEBUG) captureWindowChangeEvidence = evidence
+                    ControlDiagnostics.record("display_capture_window_change", refusal, metrics = evidence)
                 }
                 return fail(refusal)
             }

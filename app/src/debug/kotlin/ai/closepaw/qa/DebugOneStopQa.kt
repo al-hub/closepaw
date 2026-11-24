@@ -858,27 +858,58 @@ internal object DebugOneStopQa {
             preflightFacts = diagnosed
             editorPreflightReason(diagnosed)?.let { return continueAfterFailure(it) }
 
-            // Explicit first-run mode: a single combined accessibility + visual
-            // observation, without dispatching any typing keys. Chrome setup
-            // navigation/focus remains guarded and may create one blank tab.
+            // At most three fresh read-only observations in the same locally
+            // approved session, only for the exact capture-generation refusal.
+            // No retry of a touch, no reuse of stale images or relaxed guard.
             if (diagnosticOnly) {
                 stage = "structure_diagnostic"
                 checkpoint("one_no_key_observation")
-                if (!allowed()) return stop("control_authority_revoked")
-                val diagnosticStart = SystemClock.elapsedRealtime()
-                val observed = control.observe(includeImage = true, imageScope = "keyboard",
-                    keyboardSequenceLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
-                diagnosticDurationMs += SystemClock.elapsedRealtime() - diagnosticStart
-                keyEvidence += DebugKeyboardEvidence.fromObservation(
-                    observed.data, observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"),
-                    if (observed.success) null else port.debugDisplayPlanRefusal(),
-                    if (observed.success) null else port.debugDisplayWindowCensus())
-                if (!observed.success) return stop("structure_observation_refused")
-                stage = "structure_diagnostic_saved"
-                qaState = "DIAGNOSTICS_COMPLETE"
-                recordStep("structure_diagnostic", "PASS", "no_key_evidence_captured")
-                return result("DIAGNOSTIC_COMPLETE", "no_key_evidence_captured")
-                    .also { write(context, it); publishLive() }
+                val originalEpoch = session.epoch
+                for (index in 0 until DebugKeyboardEvidence.MAX_STRUCTURE_OBSERVATIONS) {
+                    currentCoroutineContext().ensureActive()
+                    if (!allowed() || session.epoch != originalEpoch) return stop("control_authority_revoked")
+                    if (index > 0) {
+                        control.invalidate()
+                        delay(350L)
+                        if (!allowed() || session.epoch != originalEpoch) return stop("control_authority_revoked")
+                        val fresh = port.capture()
+                        diagnosticReadCount++
+                        if (!allowed() || session.epoch != originalEpoch) return stop("control_authority_revoked")
+                        val facts = editorPreflightFacts(fresh)
+                        if (editorPreflightReason(facts) != null || !sameEditor(first, fresh) ||
+                            fresh.keyboard != first.keyboard || fresh.configurationRevision != first.configurationRevision ||
+                            fresh.foregroundWindowId != first.foregroundWindowId ||
+                            fresh.windowContext != first.windowContext || fresh.touchContext != first.touchContext)
+                            return stop("structure_retry_target_changed")
+                    }
+                    port.resetDebugCaptureEvidence()
+                    val diagnosticStart = SystemClock.elapsedRealtime()
+                    val observed = control.observe(includeImage = true, imageScope = "keyboard",
+                        keyboardSequenceLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
+                    diagnosticDurationMs += SystemClock.elapsedRealtime() - diagnosticStart
+                    val reason = DebugKeyboardEvidence.nativeRefusalReason(observed.data)
+                    keyEvidence += DebugKeyboardEvidence.fromObservation(
+                        observed.data, observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"),
+                        if (observed.success) null else port.debugDisplayPlanRefusal(),
+                        if (observed.success) null else port.debugDisplayWindowCensus(),
+                        if (observed.success) null else port.debugCaptureWindowChangeEvidence())
+                    if (observed.success) {
+                        stage = "structure_diagnostic_saved"
+                        qaState = "DIAGNOSTICS_COMPLETE"
+                        recordStep("structure_diagnostic", "PASS", "no_key_evidence_captured")
+                        return result("DIAGNOSTIC_COMPLETE", "no_key_evidence_captured")
+                            .also { write(context, it); publishLive() }
+                    }
+                    if (firstFailureCode == null) firstFailureCode = reason
+                    failureCount++
+                    recordStep("structure_diagnostic", "FAILED", reason)
+                    checkpoint("structure_refusal_preserved")
+                    if (!DebugKeyboardEvidence.mayRetryStructure(reason, index + 1,
+                            allowed() && session.epoch == originalEpoch,
+                            uncertain || observed.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true))
+                        return stop("structure_observation_refused")
+                }
+                return stop("structure_observation_refused")
             }
 
             val execution = DebugSixKeyExecution.run(

@@ -104,13 +104,14 @@ class DebugQaRunnerService : Service() {
         }
 
         /** Call only from the physically visible local QA screen or its OS consent callback. */
-        fun start(context: Context, diagnosticOnly: Boolean = false): Boolean {
+        fun start(context: Context, diagnosticOnly: Boolean = false, publishResult: Boolean = false): Boolean {
             if (!BuildConfig.DEBUG || context.packageName != CaptureQaAcceptance.CANDIDATE ||
                 running.get()) return false
             return runCatching {
                 ContextCompat.startForegroundService(context,
                     Intent(context, DebugQaRunnerService::class.java)
-                        .setAction(if (diagnosticOnly) ACTION_DIAG else ACTION_RUN))
+                        .setAction(if (diagnosticOnly) ACTION_DIAG else ACTION_RUN)
+                        .putExtra("local_publish_redacted_result", publishResult))
                 true
             }.getOrDefault(false)
         }
@@ -178,6 +179,7 @@ class DebugQaRunnerService : Service() {
         }
 
         val diagnosticOnly = intent?.action == ACTION_DIAG
+        val publishResult = intent?.getBooleanExtra("local_publish_redacted_result", false) == true
         job = scope.launch {
             val batchId = UUID.randomUUID().toString()
             val results = mutableListOf<JsonObject>()
@@ -259,6 +261,11 @@ class DebugQaRunnerService : Service() {
                 withContext(NonCancellable) {
                     pulse.cancelAndJoin()
                     record(terminal, phase)
+                    if (publishResult) withContext(Dispatchers.IO) {
+                        // Optional local per-run consent; no exported service/provider.
+                        // Only a terminal same-source batch is copied to shared Downloads.
+                        runCatching { DebugQaDownloadExport.publish(applicationContext, batchId) }
+                    }
                 }
                 running.set(false)
                 stopForeground(STOP_FOREGROUND_REMOVE)
