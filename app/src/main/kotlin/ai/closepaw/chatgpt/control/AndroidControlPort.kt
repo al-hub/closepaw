@@ -522,6 +522,76 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         )
     }
 
+    internal suspend fun certifyKoreanLayoutSwitchDetailed(
+        visualId: String,
+        frame: ControlFrame,
+        nodeId: Int,
+        nodeBoundsRaw: String,
+    ): PixelCertificationOutcome {
+        val started = SystemClock.elapsedRealtime()
+        fun fail(
+            stage: String,
+            proofAgeMs: Long = -1L,
+            cropWidth: Int = 0,
+            cropHeight: Int = 0,
+        ) = PixelCertificationOutcome(
+            crop = null, method = "none", failureStage = stage, proofAgeMs = proofAgeMs,
+            cropWidth = cropWidth, cropHeight = cropHeight, ocrAttempted = false,
+            ocrLabelMatched = null, ocrConfidenceBucket = "not_run",
+            elapsedMs = (SystemClock.elapsedRealtime() - started).coerceAtLeast(0L),
+        )
+        if (!allowed()) return fail("authority_revoked")
+        if (!allowsAutonomousDebugKeyboardProof) return fail("autonomous_keyboard_proof_not_allowed")
+        session()?.takeIf { it.explicit && it.state == ControlSession.State.ACTIVE }
+            ?: return fail("session_inactive")
+        val ime = frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed }
+            ?: return fail("ime_not_authorized")
+        val proof = VisualImageCache.proofFor(visualId) ?: return fail("proof_cache_miss")
+        val ageMs = (System.currentTimeMillis() - proof.at).coerceAtLeast(-1L)
+        if (frame.visual?.id != visualId) return fail("frame_visual_id_mismatch", proofAgeMs = ageMs)
+        if (proof.scope != "keyboard" || proof.sourceDisplayId != 0)
+            return fail("proof_scope_or_display_invalid", proofAgeMs = ageMs)
+        if (!proof.sourceDisclosureAllowed()) return fail("proof_disclosure_revoked", proofAgeMs = ageMs)
+        if (ageMs !in 0L..10_000L) return fail("proof_age_expired", proofAgeMs = ageMs)
+        if (VisualKeyboardPolicy.proofOwnerRefusal(proof, ime) != null)
+            return fail("proof_owner_mismatch", proofAgeMs = ageMs)
+        val node = frame.nodes.singleOrNull { it.id == nodeId }
+            ?: return fail("candidate_node_missing_in_frame", proofAgeMs = ageMs)
+        if (node.bounds != nodeBoundsRaw) return fail("candidate_bounds_mismatch", proofAgeMs = ageMs)
+        val nodeBounds = KeyboardImageFallbackPolicy.bounds(nodeBoundsRaw)
+            ?: return fail("node_bounds_invalid", proofAgeMs = ageMs)
+        val structural = NativeKeyboardStructuralCertification.verifyKoreanLayoutSwitch(
+            frame = frame,
+            proof = proof,
+            node = node,
+        )
+        val resolved = structural.crop ?: return fail(
+            structural.failureStage ?: "layout_switch_unverified",
+            proofAgeMs = ageMs,
+        )
+        val cropW = resolved.right - resolved.left
+        val cropH = resolved.bottom - resolved.top
+        val surfaceFailure = keyboardImageRecognition.verifyKeyCropLiveSurface(proof, resolved, nodeBounds)
+        if (surfaceFailure != null) {
+            return fail(surfaceFailure, proofAgeMs = ageMs, cropWidth = cropW, cropHeight = cropH)
+        }
+        if (!allowed() || !proof.sourceDisclosureAllowed()) {
+            return fail("post_disclosure_revoked", proofAgeMs = ageMs, cropWidth = cropW, cropHeight = cropH)
+        }
+        return PixelCertificationOutcome(
+            crop = resolved,
+            method = "native_layout_switch_and_live_surface",
+            failureStage = null,
+            proofAgeMs = ageMs,
+            cropWidth = cropW,
+            cropHeight = cropH,
+            ocrAttempted = false,
+            ocrLabelMatched = null,
+            ocrConfidenceBucket = "not_run",
+            elapsedMs = (SystemClock.elapsedRealtime() - started).coerceAtLeast(0L),
+        )
+    }
+
     private fun displayPlan(service: AgentService, frame: ControlFrame, keyboardOnly: Boolean = false): DisplayPlan? {
         if (ai.closepaw.BuildConfig.DEBUG) {
             displayPlanRefusalCode = null
@@ -1379,13 +1449,21 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 } else if (action == "visual_key" && autonomousConfirmed) {
                     val liveCandidate = freshKey ?: return@withTree ControlEffect(false, false, "keyboard_visual_candidate_unverified")
                     val ctx = dispatchCtx ?: return@withTree ControlEffect(false, false, "visual_proof_invalid_or_expired")
-                    val liveStructural = NativeKeyboardStructuralCertification.verify(
-                        frame = fresh.copy(visual = proof),
-                        proof = proof,
-                        node = liveCandidate,
-                        expectedLabel = ctx.label,
-                        requiredNativeLabels = ctx.expectedNativeLabels.toList(),
-                    )
+                    val liveStructural = if (ctx.kind == AutonomousDispatchKind.KOREAN_LAYOUT_SWITCH) {
+                        NativeKeyboardStructuralCertification.verifyKoreanLayoutSwitch(
+                            frame = fresh.copy(visual = proof),
+                            proof = proof,
+                            node = liveCandidate,
+                        )
+                    } else {
+                        NativeKeyboardStructuralCertification.verify(
+                            frame = fresh.copy(visual = proof),
+                            proof = proof,
+                            node = liveCandidate,
+                            expectedLabel = ctx.label,
+                            requiredNativeLabels = ctx.expectedNativeLabels.toList(),
+                        )
+                    }
                     if (liveStructural.crop == null) {
                         return@withTree ControlEffect(false, false, "keyboard_autonomous_structural_unverified")
                     }

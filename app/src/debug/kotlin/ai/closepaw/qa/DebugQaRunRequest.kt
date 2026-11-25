@@ -1,5 +1,6 @@
 package ai.closepaw.qa
 
+import ai.closepaw.chatgpt.control.ControlSession
 import java.util.UUID
 
 internal enum class DebugQaMode(val code: String, val label: String, val action: String) {
@@ -27,6 +28,13 @@ internal data class DebugQaApprovedRun(
 
 /** Main-thread owner of local confirmation and one-shot service admission. Nothing is rehydrated from disk. */
 internal class DebugQaRunAdmission {
+    companion object {
+        /** Operational admission guard (separate from native guards): do not admit local QA
+         * confirmation or start while this app's control session is not IDLE/ENDED. */
+        fun blocksForActiveControlSession(state: ControlSession.State?): Boolean =
+            state != null && state !in setOf(ControlSession.State.IDLE, ControlSession.State.ENDED)
+    }
+
     private val usedIds = LinkedHashSet<String>()
     var current: DebugQaRunRequest? = null
         private set

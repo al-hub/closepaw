@@ -164,6 +164,100 @@ class DebugQaContinuityTest {
             assertEquals(0, revoked.recoveryReads)
         }
 
+    @Test fun toolbarBaselinePreservedAcrossTransientDeniedSentinelWithinThreeReadBudget() =
+        kotlinx.coroutines.runBlocking {
+            val blank = blankBarWithoutToolbar()
+            val menu = node(resource = "menu_button").copy(id = 90)
+            val recovered = blank.copy(nodes = blank.nodes + menu)
+            val transientDenied = ControlFrame("", -1, "", emptyList(), reason = "secure_window_changed")
+
+            // 1) Valid -> transient denied sentinel -> same-context valid (uses 3rd allowed read, no budget extension)
+            run {
+                val frames = ArrayDeque(listOf(blank, transientDenied, recovered))
+                val retries = mutableListOf<String>()
+                val res = DebugOneStopQa.captureChromeTransition(
+                    capture = { frames.removeFirst() }, inspect = { facts() },
+                    allowed = { true }, pause = {}, onRetry = { retries += it },
+                    needsToolbar = { DebugOneStopQa.chromeMenuButton(it) == null },
+                )
+                assertEquals(3, res.reads)
+                assertEquals(2, res.recoveryReads)
+                assertEquals(listOf("chrome_toolbar_settling", "secure_window_changed"), retries)
+                assertNull(res.frame.reason)
+                assertEquals("secure_window_changed", res.firstRefusal)
+                assertEquals(menu.id, DebugOneStopQa.chromeMenuButton(res.frame)?.id)
+            }
+
+            // 2) Valid -> transient denied sentinel -> genuinely changed valid context on 3rd read -> refused against Read-1 baseline
+            for (shifted in listOf(
+                recovered.copy(windowId = 43),
+                recovered.copy(packageName = "other.app"),
+                recovered.copy(configurationRevision = blank.configurationRevision + 1),
+            )) {
+                val frames = ArrayDeque(listOf(blank, transientDenied, shifted))
+                val res = DebugOneStopQa.captureChromeTransition(
+                    capture = { frames.removeFirst() }, inspect = { facts() },
+                    allowed = { true }, pause = {},
+                    needsToolbar = { DebugOneStopQa.chromeMenuButton(it) == null },
+                )
+                assertEquals(3, res.reads)
+                assertEquals(2, res.recoveryReads)
+                assertEquals("chrome_toolbar_context_changed", res.frame.reason)
+                assertEquals("secure_window_changed", res.firstRefusal)
+            }
+
+            // 3) Valid -> repeated transient refusal -> terminates at 3 reads with refusal (no budget extension)
+            run {
+                val frames = ArrayDeque(listOf(blank, transientDenied, transientDenied))
+                val res = DebugOneStopQa.captureChromeTransition(
+                    capture = { frames.removeFirst() }, inspect = { facts() },
+                    allowed = { true }, pause = {},
+                    needsToolbar = { DebugOneStopQa.chromeMenuButton(it) == null },
+                )
+                assertEquals(3, res.reads)
+                assertEquals(2, res.recoveryReads)
+                assertEquals("secure_window_changed", res.frame.reason)
+                assertEquals("secure_window_changed", res.firstRefusal)
+            }
+
+            // 4) Valid -> actual secure_window sentinel -> stops immediately at 2 reads (never takes 3rd read)
+            run {
+                val secureDenied = ControlFrame("", -1, "", emptyList(), reason = "secure_window")
+                val frames = ArrayDeque(listOf(blank, secureDenied, recovered))
+                val res = DebugOneStopQa.captureChromeTransition(
+                    capture = { frames.removeFirst() }, inspect = { facts() },
+                    allowed = { true }, pause = {},
+                    needsToolbar = { DebugOneStopQa.chromeMenuButton(it) == null },
+                )
+                assertEquals(2, res.reads)
+                assertEquals(1, res.recoveryReads)
+                assertEquals("secure_window", res.frame.reason)
+                assertEquals("secure_window", res.firstRefusal)
+            }
+
+            // 5) Authority revoked after Read-2 transient sentinel -> stops immediately at 2 reads
+            run {
+                var live = true
+                var reads = 0
+                val frames = ArrayDeque(listOf(blank, transientDenied, recovered))
+                val res = DebugOneStopQa.captureChromeTransition(
+                    capture = {
+                        reads++
+                        val next = frames.removeFirst()
+                        if (reads == 2) live = false
+                        next
+                    },
+                    inspect = { facts() },
+                    allowed = { live },
+                    pause = {},
+                    needsToolbar = { DebugOneStopQa.chromeMenuButton(it) == null },
+                )
+                assertEquals(2, res.reads)
+                assertEquals(1, res.recoveryReads)
+                assertEquals("secure_window_changed", res.frame.reason)
+            }
+        }
+
     @Test fun chromeForegroundDiagnosticsExcludeAllContentAndPackageNames() {
         val detail = facts(active = false, focused = false).redactedJson().toString()
         assertTrue(detail.contains("\"active\":false"))

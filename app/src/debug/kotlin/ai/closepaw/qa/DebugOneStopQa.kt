@@ -10,6 +10,7 @@ import ai.closepaw.chatgpt.control.ControlFrame
 import ai.closepaw.chatgpt.control.ControlWindowContinuity
 import ai.closepaw.chatgpt.control.GenericControl
 import ai.closepaw.chatgpt.control.HangulKeyComposer
+import ai.closepaw.chatgpt.control.NativeKeyboardStructuralCertification
 import ai.closepaw.platform.virtualdisplay.ProjectionImageLease
 import ai.closepaw.platform.virtualdisplay.ProjectionImageTransport
 import android.content.Context
@@ -188,12 +189,13 @@ internal object DebugOneStopQa {
         var frame = capture()
         var reads = 1
         var retries = 0
-        val firstRefusal = frame.reason
+        var firstRefusal = frame.reason
         var facts: ChromeWindowFacts? = null
         var toolbarBaseline: ControlFrame? = null
         while (reads < 3 && allowed()) {
             val refusal = frame.reason
             val retryReason = if (refusal != null) {
+                if (firstRefusal == null) firstRefusal = refusal
                 facts = inspect()
                 if (!mayResampleChromeTransition(refusal, facts.chromeRoot, reads)) break
                 refusal
@@ -208,12 +210,13 @@ internal object DebugOneStopQa {
             frame = capture()
             reads++
             retries++
-            if (toolbarBaseline != null && (
+            if (firstRefusal == null && frame.reason != null) firstRefusal = frame.reason
+            if (toolbarBaseline != null && frame.reason == null && (
                     frame.packageName != toolbarBaseline.packageName ||
                     frame.windowId != toolbarBaseline.windowId ||
                     frame.configurationRevision != toolbarBaseline.configurationRevision
                 )) {
-                frame = frame.copy(reason = frame.reason ?: "chrome_toolbar_context_changed")
+                frame = frame.copy(reason = "chrome_toolbar_context_changed")
                 break
             }
         }
@@ -1013,6 +1016,10 @@ internal object DebugOneStopQa {
         var afterFailureStatus = "not_required"
         var diagnosticDurationMs = 0L
         var diagnosticReadCount = 0
+        var initialPhysicalLayout: String? = null
+        var finalPhysicalLayout: String? = null
+        var layoutSwitchAttempts = 0
+        var layoutSwitchConfirmed = false
         val started = SystemClock.elapsedRealtime()
         val startedEpochMs = System.currentTimeMillis()
         var newTabEvidence = "none"
@@ -1046,6 +1053,10 @@ internal object DebugOneStopQa {
             put("reason", reason)
             put("completed_keys", verifiedKeys)
             put("touch_attempts", attempts)
+            put("layout_switch_attempts", layoutSwitchAttempts)
+            put("layout_switch_confirmed", layoutSwitchConfirmed)
+            initialPhysicalLayout?.let { put("initial_physical_layout", safeCode(it)) }
+            finalPhysicalLayout?.let { put("final_physical_layout", safeCode(it)) }
             put("editor_focus_click_attempts", setupClickAttempts)
             put("navigation_click_attempts", navigationClickAttempts)
             put("chrome_omnibox_back_attempts", chromeOmniboxBackAttempts)
@@ -1238,6 +1249,9 @@ internal object DebugOneStopQa {
             val diagnosed = editorPreflightFacts(first)
             preflightFacts = diagnosed
             editorPreflightReason(diagnosed)?.let { return continueAfterFailure(it) }
+            val observedLayout = NativeKeyboardStructuralCertification.classifyPhysicalLayout(first).code
+            initialPhysicalLayout = observedLayout
+            finalPhysicalLayout = observedLayout
 
             // At most three fresh read-only observations in the same locally
             // approved session, only for the exact capture-generation refusal.
@@ -1311,6 +1325,10 @@ internal object DebugOneStopQa {
             diagnosticReadCount += execution.followUpNativeReads
             afterFailureStatus = execution.followUpStatus
             afterFailureEvidence = execution.followUpEvidence
+            initialPhysicalLayout = execution.initialPhysicalLayout
+            finalPhysicalLayout = execution.finalPhysicalLayout
+            layoutSwitchAttempts = execution.layoutSwitchAttempts
+            layoutSwitchConfirmed = execution.layoutSwitchConfirmed
             if (execution.failure != null) stop(execution.failure)
             else result("PASS", "six_physical_keys_editor_and_caret_confirmed")
                 .also { write(context, it) }

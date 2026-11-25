@@ -504,4 +504,362 @@ class NativeKeyboardStructuralCertificationTest {
             assertTrue(port.ledger.begin("seq-after-halt", port.activeSession.id, port.activeSession.epoch, 1))
         }
     }
+
+    private fun galaxyEnglishNodes(
+        withKoreanSuggestions: Boolean = true,
+        hanEngDescription: String? = "한국어로 변경",
+        duplicateHanEng: Boolean = false,
+        withNumberRow: Boolean = true,
+    ): List<ControlNode> {
+        val out = mutableListOf<ControlNode>()
+        if (withNumberRow) {
+            val nums = listOf("1", "2", "3", "4", "5", "6")
+            val lefts = listOf(31, 171, 311, 451, 591, 731)
+            out += nums.mapIndexed { idx, label ->
+                hangulKey(80 + idx, label, lefts[idx], 1954, width = 118, height = 155, parent = 200)
+            }
+        }
+        val row1Labels = listOf("q", "w", "e", "r", "t", "y")
+        val row1Lefts = listOf(31, 171, 311, 451, 591, 731)
+        out += row1Labels.mapIndexed { idx, label ->
+            hangulKey(100 + idx, label, row1Lefts[idx], 2154, width = 118, height = 155, parent = 201)
+        }
+        val row2Labels = listOf("a", "s", "d", "f", "g", "h", "j", "k")
+        val row2Lefts = listOf(101, 241, 381, 521, 661, 801, 941, 1081)
+        out += row2Labels.mapIndexed { idx, label ->
+            hangulKey(120 + idx, label, row2Lefts[idx], 2354, width = 118, height = 155, parent = 202)
+        }
+        if (withKoreanSuggestions) {
+            out += listOf("ㄱ", "ㅏ", "ㄴ").mapIndexed { idx, label ->
+                ControlNode(
+                    id = 300 + idx, text = label, keyboardKey = label,
+                    className = "android.widget.TextView",
+                    bounds = "${20 + idx * 450} 1810 ${440 + idx * 450} 1920",
+                    parent = 290, enabled = true, clickable = true, textEntryKey = false,
+                    sourceWindowId = ime.windowId, sourcePackage = imePkg,
+                    visualKeyCandidate = true, visualKeyChildCount = 0,
+                )
+            }
+        }
+        if (hanEngDescription != null) {
+            out += ControlNode(
+                id = 160, text = "", description = hanEngDescription,
+                keyboardKey = "한/영", className = "android.view.ViewGroup",
+                bounds = "210 2754 340 2909", parent = 203,
+                enabled = true, clickable = false, textEntryKey = false,
+                sourceWindowId = ime.windowId, sourcePackage = imePkg,
+                visualKeyCandidate = true, visualKeyChildCount = 1,
+            )
+            if (duplicateHanEng) {
+                out += ControlNode(
+                    id = 161, text = "", description = hanEngDescription,
+                    keyboardKey = "한/영", className = "android.view.ViewGroup",
+                    bounds = "1200 2754 1330 2909", parent = 203,
+                    enabled = true, clickable = false, textEntryKey = false,
+                    sourceWindowId = ime.windowId, sourcePackage = imePkg,
+                    visualKeyCandidate = true, visualKeyChildCount = 1,
+                )
+            }
+        }
+        return out
+    }
+
+    @Test fun physicalLayoutClassificationDistinguishesPhysicalKeysFromSuggestionsAndSymbols() {
+        val koreanWithNumbers = koreanFrame(nodes = galaxyKoreanNodes() + listOf("1", "2", "3", "4", "5", "6").mapIndexed { idx, label ->
+            hangulKey(80 + idx, label, 31 + idx * 140, 1954, width = 118, height = 155, parent = 200)
+        })
+        assertEquals(PhysicalKeyboardLayout.HANGUL, NativeKeyboardStructuralCertification.classifyPhysicalLayout(koreanWithNumbers))
+        assertNull(NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(koreanWithNumbers))
+
+        // English QWERTY + Korean suggestions must classify as LATIN, never HANGUL!
+        val englishWithSuggestions = koreanFrame(nodes = galaxyEnglishNodes(withKoreanSuggestions = true))
+        assertEquals(PhysicalKeyboardLayout.LATIN, NativeKeyboardStructuralCertification.classifyPhysicalLayout(englishWithSuggestions))
+        val candidate = NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(englishWithSuggestions)
+        assertNotNull(candidate)
+        assertEquals(KoreanLayoutSwitchRoute.SAMSUNG_VISUAL_KEY, candidate!!.route)
+        assertEquals(160, candidate.node.id)
+
+        // Wrong direction ("영어(미국)로 변경"), missing, duplicate, or globe -> null!
+        assertNull(NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(
+            koreanFrame(nodes = galaxyEnglishNodes(hanEngDescription = "영어(미국)로 변경")),
+        ))
+        assertNull(NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(
+            koreanFrame(nodes = galaxyEnglishNodes(hanEngDescription = null)),
+        ))
+        assertNull(NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(
+            koreanFrame(nodes = galaxyEnglishNodes(duplicateHanEng = true)),
+        ))
+        val withGlobe = galaxyEnglishNodes(hanEngDescription = null) + ControlNode(
+            id = 162, text = "🌐", keyboardKey = "🌐", className = "android.widget.Button",
+            bounds = "210 2754 340 2909", parent = 203, enabled = true, clickable = true, textEntryKey = true,
+            sourceWindowId = ime.windowId, sourcePackage = imePkg, visualKeyCandidate = false,
+        )
+        assertNull(NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(koreanFrame(nodes = withGlobe)))
+
+        // Clickable semantic "한/영" fallback route supported when unique and inside physical keyboard region
+        val withSemantic = galaxyEnglishNodes(hanEngDescription = null) + ControlNode(
+            id = 163, text = "한/영", keyboardKey = "한/영", className = "android.widget.Button",
+            bounds = "210 2754 340 2909", parent = 203, enabled = true, clickable = true, textEntryKey = true,
+            sourceWindowId = ime.windowId, sourcePackage = imePkg, visualKeyCandidate = false,
+        )
+        val sem = NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(koreanFrame(nodes = withSemantic))
+        assertNotNull(sem)
+        assertEquals(KoreanLayoutSwitchRoute.SEMANTIC_KEY, sem!!.route)
+        assertEquals(163, sem.node.id)
+
+        // Regression: dictionary word "한국어" (even clickable + textEntryKey) MUST NOT be selected as SEMANTIC_KEY
+        val withKoreanWordSuggestion = galaxyEnglishNodes(hanEngDescription = null) + ControlNode(
+            id = 164, text = "한국어", keyboardKey = "한국어", className = "android.widget.Button",
+            bounds = "210 2754 340 2909", parent = 203, enabled = true, clickable = true, textEntryKey = true,
+            sourceWindowId = ime.windowId, sourcePackage = imePkg, visualKeyCandidate = false,
+        )
+        assertNull(NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(
+            koreanFrame(nodes = withKoreanWordSuggestion),
+        ))
+
+        // Regression: clickable "한/영" placed ABOVE the physical character rows (in suggestion strip) MUST NOT be selected
+        val withStripHanEng = galaxyEnglishNodes(hanEngDescription = null, withNumberRow = false) + ControlNode(
+            id = 165, text = "한/영", keyboardKey = "한/영", className = "android.widget.Button",
+            bounds = "210 1810 340 1920", parent = 290, enabled = true, clickable = true, textEntryKey = true,
+            sourceWindowId = ime.windowId, sourcePackage = imePkg, visualKeyCandidate = false,
+        )
+        assertNull(NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(
+            koreanFrame(nodes = withStripHanEng),
+        ))
+
+        // Symbols/numbers page -> SYMBOLS_OR_NUMBERS and no speculative switch candidate
+        val symbolNodes = listOf("1", "2", "3", "4", "5", "6").mapIndexed { idx, label ->
+            hangulKey(400 + idx, label, 31 + idx * 140, 2154, width = 118, height = 155, parent = 201)
+        } + listOf("@", "#", "$", "%", "&", "*").mapIndexed { idx, label ->
+            hangulKey(420 + idx, label, 31 + idx * 140, 2354, width = 118, height = 155, parent = 202)
+        }
+        val symbolsFrame = koreanFrame(nodes = symbolNodes)
+        assertEquals(PhysicalKeyboardLayout.SYMBOLS_OR_NUMBERS, NativeKeyboardStructuralCertification.classifyPhysicalLayout(symbolsFrame))
+        assertNull(NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(symbolsFrame))
+
+        // Suggestions-only frame (no multi-row physical character keys) -> UNVERIFIED
+        val suggestionsOnly = koreanFrame(nodes = listOf("ㄱ", "ㅏ", "ㄴ").mapIndexed { idx, label ->
+            ControlNode(
+                id = 300 + idx, text = label, keyboardKey = label,
+                bounds = "${20 + idx * 450} 1810 ${440 + idx * 450} 1920",
+                parent = 290, enabled = true, clickable = true, textEntryKey = false,
+                sourceWindowId = ime.windowId, sourcePackage = imePkg,
+                visualKeyCandidate = true, visualKeyChildCount = 0,
+            )
+        })
+        assertEquals(PhysicalKeyboardLayout.UNVERIFIED, NativeKeyboardStructuralCertification.classifyPhysicalLayout(suggestionsOnly))
+    }
+
+    @Test fun verifyKoreanLayoutSwitchEnforcesStrictStructuralAndContractGuards() {
+        val p = proof()
+        val enNodes = galaxyEnglishNodes(withKoreanSuggestions = true, hanEngDescription = "한국어로 변경")
+        val hanEng = enNodes.single { it.id == 160 }
+        val enFrame = koreanFrame(nodes = enNodes, p = p)
+
+        // Valid Latin -> Korean switch passes
+        val ok = NativeKeyboardStructuralCertification.verifyKoreanLayoutSwitch(enFrame, p, hanEng, nowMs)
+        assertNotNull("Expected valid layout switch crop, got ${ok.failureStage}", ok.crop)
+        assertNull(ok.failureStage)
+
+        // Character-key verify() still rejects Kind.LAYOUT (never weakened!)
+        val charVerify = NativeKeyboardStructuralCertification.verify(enFrame, p, hanEng, "한/영", listOf("한/영"), nowMs)
+        assertNull(charVerify.crop)
+        assertEquals("native_character_role_unverified", charVerify.failureStage)
+
+        // Non-empty editor -> refused
+        val nonEmpty = koreanFrame(nodes = enNodes, ed = editor("abc", 3), p = p)
+        assertEquals("layout_switch_editor_not_empty_origin",
+            NativeKeyboardStructuralCertification.verifyKoreanLayoutSwitch(nonEmpty, p, hanEng, nowMs).failureStage)
+
+        // Wrong description ("영어(미국)로 변경") -> refused
+        val toEnglish = hanEng.copy(description = "영어(미국)로 변경")
+        val wrongDir = koreanFrame(nodes = enNodes.filterNot { it.id == 160 } + toEnglish, p = p)
+        assertEquals("layout_switch_descriptor_mismatch",
+            NativeKeyboardStructuralCertification.verifyKoreanLayoutSwitch(wrongDir, p, toEnglish, nowMs).failureStage)
+
+        // Frame-proof visual ID mismatch -> refused
+        assertEquals("frame_visual_id_mismatch",
+            NativeKeyboardStructuralCertification.verifyKoreanLayoutSwitch(enFrame.copy(visual = null), p, hanEng, nowMs).failureStage)
+    }
+
+    @Test fun visualKoreanLayoutSwitchAutonomousEnforcesReleaseExternalAndPostSwitchContracts() = runBlocking {
+        class LayoutSwitchPort(
+            override val allowsAutonomousDebugKeyboardProof: Boolean,
+        ) : ControlPort {
+            val activeSession = ControlSession().apply { start() }
+            val ledger = AutonomousSequenceLedger()
+            var isKorean = false
+            var mutateEditorOnSwitch = false
+            var refuseSwitchEffect = false
+            var frameCounter = 0
+            var proofCounter = 0
+            var seenExternalFlag: Boolean? = null
+
+            override fun session(): ControlSession = activeSession
+            override fun beginAutonomousKeyboardSequence(sequenceNonce: String, sessionId: String, epoch: Long, totalSteps: Int) =
+                allowsAutonomousDebugKeyboardProof && ledger.begin(sequenceNonce, sessionId, epoch, totalSteps)
+            override fun advanceAutonomousKeyboardStep(sequenceNonce: String, completedStepIndex: Int) {
+                if (allowsAutonomousDebugKeyboardProof) ledger.advance(sequenceNonce, completedStepIndex)
+            }
+            override fun endAutonomousKeyboardSequence(sequenceNonce: String) = ledger.end(sequenceNonce)
+            override suspend fun apps(filter: String) = JsonArray(emptyList())
+
+            override suspend fun capture(): ControlFrame {
+                frameCounter++
+                val ed = if (mutateEditorOnSwitch && isKorean) editor("x", 1) else editor("", 0)
+                val nodes = if (isKorean) galaxyKoreanNodes() else galaxyEnglishNodes(withKoreanSuggestions = true)
+                return koreanFrame(nodes = nodes, ed = ed, p = proof("vis-cap")).copy(
+                    visual = null,
+                    fingerprint = "fp-layout-${if (isKorean) "ko" else "en"}-${if (mutateEditorOnSwitch && isKorean) "mut" else "clean"}",
+                )
+            }
+
+            override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof {
+                proofCounter++
+                return proof(id = "vis-ls-$proofCounter", at = nowMs)
+            }
+
+            override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
+                val action = input["action"]?.jsonPrimitive?.content.orEmpty()
+                val proof = frame.visual ?: return ControlEffect(false, false, "visual_observation_required")
+                val ctx = currentCoroutineContext()[AutonomousKeyboardDispatchContext]
+                val external = input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull == true
+                seenExternalFlag = external
+                if (ctx != null && external) return ControlEffect(false, false, "visual_proof_invalid_or_expired")
+                val liveFull = capture().copy(visual = proof)
+                val liveNode = liveFull.nodes.singleOrNull { it.id == node?.id }
+                val autonomousOk = action == "visual_key" && !external && allowsAutonomousDebugKeyboardProof &&
+                    ctx != null && ctx.kind == AutonomousDispatchKind.KOREAN_LAYOUT_SWITCH &&
+                    ctx.visualId == proof.id && ctx.sessionId == activeSession.id && ctx.epoch == activeSession.epoch &&
+                    liveNode != null && ctx.nodeId == liveNode.id && liveNode.keyboardKey == "한/영" &&
+                    ledger.verifyAndConsumeDispatch(ctx) &&
+                    NativeKeyboardStructuralCertification.verifyKoreanLayoutSwitch(liveFull, proof, liveNode, nowMs).crop != null
+                if (!external && !autonomousOk) return ControlEffect(false, false, "visual_proof_invalid_or_expired")
+                if (refuseSwitchEffect) return ControlEffect(true, true, "visual_key_acknowledged") // does not switch!
+                isKorean = true
+                return ControlEffect(true, true, "visual_key_acknowledged")
+            }
+        }
+
+        // 1) Release mode -> blocked with 0 attempts
+        run {
+            val port = LayoutSwitchPort(allowsAutonomousDebugKeyboardProof = false)
+            val control = GenericControl(port, { true }, { nowMs })
+            val obs = control.observe(includeImage = true, imageScope = "keyboard", keyboardKeyExact = "한/영")
+            val obsId = obs.data["observation_id"]!!.jsonPrimitive.content
+            val visId = obs.data["visual"]!!.jsonObject["visual_id"]!!.jsonPrimitive.content
+            val blocked = control.visualKoreanLayoutSwitchAutonomous(
+                buildJsonObject {
+                    put("session_id", port.activeSession.id); put("observation_id", obsId)
+                    put("visual_id", visId); put("visual_target_confirmed", false); put("node_id", 160)
+                },
+                AutonomousKeyboardSequenceProof("ls-rel", port.activeSession.id, port.activeSession.epoch, obsId, visId,
+                    listOf(AutonomousCertifiedKeyStep("한/영", 160, false, TapBounds(65, 847, 104, 895), "native_layout_switch_and_live_surface"))),
+            )
+            assertFalse(blocked.success)
+            assertEquals("autonomous_keyboard_proof_not_allowed", blocked.data["reason_code"]?.jsonPrimitive?.content)
+            assertEquals(false, blocked.data["action_attempted"]?.jsonPrimitive?.boolean)
+        }
+
+        // 2) External action("visual_key", visual_target_confirmed=false) on "한/영" STILL REJECTED!
+        run {
+            val port = LayoutSwitchPort(allowsAutonomousDebugKeyboardProof = true)
+            val control = GenericControl(port, { true }, { nowMs })
+            val obs = control.observe(includeImage = true, imageScope = "keyboard", keyboardKeyExact = "한/영")
+            val obsId = obs.data["observation_id"]!!.jsonPrimitive.content
+            val visId = obs.data["visual"]!!.jsonObject["visual_id"]!!.jsonPrimitive.content
+            val certified = control.certifiedKeyboardObservation(obsId, visId, port.activeSession.epoch)!!
+            val crop = NativeKeyboardStructuralCertification.verifyKoreanLayoutSwitch(
+                certified.frame, certified.proof, certified.frame.nodes.single { it.id == 160 }, nowMs,
+            ).crop!!
+            val extRefused = control.action(buildJsonObject {
+                put("action", "visual_key"); put("session_id", port.activeSession.id)
+                put("observation_id", obsId); put("node_id", 160)
+                put("visual_id", visId); put("visual_target_confirmed", false)
+                put("image_rect", JsonArray(listOf(crop.left, crop.top, crop.right, crop.bottom).map(::JsonPrimitive)))
+            })
+            assertFalse(extRefused.success)
+            assertEquals("visual_proof_invalid_or_expired", extRefused.data["reason_code"]?.jsonPrimitive?.content)
+            assertFalse(port.isKorean)
+        }
+
+        // 3) Debug autonomous Korean layout switch PASS (English QWERTY -> Korean 2-beolsik, empty 0/0 editor preserved)
+        run {
+            val port = LayoutSwitchPort(allowsAutonomousDebugKeyboardProof = true)
+            val control = GenericControl(port, { true }, { nowMs })
+            val obs = control.observe(includeImage = true, imageScope = "keyboard", keyboardKeyExact = "한/영")
+            val obsId = obs.data["observation_id"]!!.jsonPrimitive.content
+            val visId = obs.data["visual"]!!.jsonObject["visual_id"]!!.jsonPrimitive.content
+            val certified = control.certifiedKeyboardObservation(obsId, visId, port.activeSession.epoch)!!
+            val crop = NativeKeyboardStructuralCertification.verifyKoreanLayoutSwitch(
+                certified.frame, certified.proof, certified.frame.nodes.single { it.id == 160 }, nowMs,
+            ).crop!!
+            val proofBundle = AutonomousKeyboardSequenceProof(
+                "ls-debug-1", port.activeSession.id, port.activeSession.epoch, obsId, visId,
+                listOf(AutonomousCertifiedKeyStep("한/영", 160, false, crop, "native_layout_switch_and_live_surface")),
+            )
+
+            // Conflict with visual_target_confirmed=true -> rejected!
+            val conflict = control.visualKoreanLayoutSwitchAutonomous(
+                buildJsonObject {
+                    put("session_id", port.activeSession.id); put("observation_id", obsId)
+                    put("visual_id", visId); put("visual_target_confirmed", true); put("node_id", 160)
+                },
+                proofBundle,
+            )
+            assertFalse(conflict.success)
+            assertEquals("autonomous_confirmation_mode_conflict", conflict.data["reason_code"]?.jsonPrimitive?.content)
+
+            // Fresh observation -> autonomous switch PASS!
+            val obs2 = control.observe(includeImage = true, imageScope = "keyboard", keyboardKeyExact = "한/영")
+            val obsId2 = obs2.data["observation_id"]!!.jsonPrimitive.content
+            val visId2 = obs2.data["visual"]!!.jsonObject["visual_id"]!!.jsonPrimitive.content
+            val ok = control.visualKoreanLayoutSwitchAutonomous(
+                buildJsonObject {
+                    put("session_id", port.activeSession.id); put("observation_id", obsId2)
+                    put("visual_id", visId2); put("visual_target_confirmed", false); put("node_id", 160)
+                },
+                proofBundle.copy(nonce = "ls-debug-2", observationId = obsId2, visualId = visId2),
+            )
+            assertTrue("Expected layout switch PASS, got ${ok.data}", ok.success)
+            assertTrue(port.isKorean)
+            assertEquals(false, port.seenExternalFlag)
+            assertEquals("autonomous_debug_layout_switch", ok.data["confirmation_mode"]?.jsonPrimitive?.content)
+            assertEquals(false, ok.data["external_visual_review_confirmed"]?.jsonPrimitive?.boolean)
+            assertEquals(true, ok.data["layout_switch_attempted"]?.jsonPrimitive?.boolean)
+            assertEquals(true, ok.data["layout_switch_confirmed"]?.jsonPrimitive?.boolean)
+            assertEquals(false, ok.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+            // Ledger cleaned in finally
+            assertTrue(port.ledger.begin("after-ls", port.activeSession.id, port.activeSession.epoch, 1))
+        }
+
+        // 4) Switch fails to change layout or mutates editor -> fails closed with outcome_unknown=true
+        for (mutate in listOf(false, true)) {
+            val port = LayoutSwitchPort(allowsAutonomousDebugKeyboardProof = true).apply {
+                mutateEditorOnSwitch = mutate
+                refuseSwitchEffect = !mutate
+            }
+            val control = GenericControl(port, { true }, { nowMs })
+            val obs = control.observe(includeImage = true, imageScope = "keyboard", keyboardKeyExact = "한/영")
+            val obsId = obs.data["observation_id"]!!.jsonPrimitive.content
+            val visId = obs.data["visual"]!!.jsonObject["visual_id"]!!.jsonPrimitive.content
+            val certified = control.certifiedKeyboardObservation(obsId, visId, port.activeSession.epoch)!!
+            val crop = NativeKeyboardStructuralCertification.verifyKoreanLayoutSwitch(
+                certified.frame, certified.proof, certified.frame.nodes.single { it.id == 160 }, nowMs,
+            ).crop!!
+            val failRes = control.visualKoreanLayoutSwitchAutonomous(
+                buildJsonObject {
+                    put("session_id", port.activeSession.id); put("observation_id", obsId)
+                    put("visual_id", visId); put("visual_target_confirmed", false); put("node_id", 160)
+                },
+                AutonomousKeyboardSequenceProof(
+                    "ls-fail-$mutate", port.activeSession.id, port.activeSession.epoch, obsId, visId,
+                    listOf(AutonomousCertifiedKeyStep("한/영", 160, false, crop, "native_layout_switch_and_live_surface")),
+                ),
+            )
+            assertFalse(failRes.success)
+            assertEquals(true, failRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+            assertEquals(false, failRes.data["layout_switch_confirmed"]?.jsonPrimitive?.boolean)
+        }
+    }
 }

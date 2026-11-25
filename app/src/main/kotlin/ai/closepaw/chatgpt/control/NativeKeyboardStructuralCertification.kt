@@ -29,6 +29,32 @@ internal data class AutonomousKeyboardSequenceProof(
     val steps: List<AutonomousCertifiedKeyStep>,
 )
 
+internal enum class AutonomousDispatchKind {
+    SEQUENCE_KEY,
+    KOREAN_LAYOUT_SWITCH,
+}
+
+/**
+ * Physical keyboard layout classification derived strictly from corroborated
+ * multi-row physical character keys (never suggestion strip captions).
+ */
+internal enum class PhysicalKeyboardLayout(val code: String) {
+    HANGUL("hangul"),
+    LATIN("latin"),
+    SYMBOLS_OR_NUMBERS("symbols_or_numbers"),
+    UNVERIFIED("unverified"),
+}
+
+internal enum class KoreanLayoutSwitchRoute(val code: String) {
+    SAMSUNG_VISUAL_KEY("samsung_visual_key"),
+    SEMANTIC_KEY("semantic_key"),
+}
+
+internal data class KoreanLayoutSwitchCandidate(
+    val node: ControlNode,
+    val route: KoreanLayoutSwitchRoute,
+)
+
 /**
  * Per-dispatch coroutine context scoped to a single autonomous visual_key invocation.
  * Carries a fresh single-use step nonce and exact target bindings verified at both
@@ -46,6 +72,7 @@ internal data class AutonomousKeyboardDispatchContext(
     val label: String,
     val imageOnly: Boolean,
     val expectedNativeLabels: Set<String>,
+    val kind: AutonomousDispatchKind = AutonomousDispatchKind.SEQUENCE_KEY,
 ) : AbstractCoroutineContextElement(Key) {
     companion object Key : CoroutineContext.Key<AutonomousKeyboardDispatchContext>
 }
@@ -307,11 +334,249 @@ internal object NativeKeyboardStructuralCertification {
         return Result(crop = resolved, failureStage = null)
     }
 
-    private fun verifiedPhysicalRows(
+    /**
+     * Classifies the active physical keyboard layout strictly from corroborated
+     * multi-row physical character keys (>= 2 vertical rows, >= 3 disjoint keys per row,
+     * >= 6 distinct character labels with physically disjoint locations).
+     * Suggestion captions are structurally excluded and never establish a layout.
+     */
+    fun classifyPhysicalLayout(frame: ControlFrame): PhysicalKeyboardLayout {
+        if (frame.reason != null || frame.truncated || frame.navigationOnly) {
+            return PhysicalKeyboardLayout.UNVERIFIED
+        }
+        val ime = frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed }
+            ?: return PhysicalKeyboardLayout.UNVERIFIED
+        if (!ime.inputMethodId.contains('/') || ime.inputMethodId.substringBefore('/') != ime.packageName) {
+            return PhysicalKeyboardLayout.UNVERIFIED
+        }
+        val proof = frame.visual?.takeIf { it.scope == "keyboard" }
+        val rows = if (proof != null) {
+            if (VisualKeyboardPolicy.proofOwnerRefusal(proof, ime) != null || proof.sourceDisplayId != 0) {
+                return PhysicalKeyboardLayout.UNVERIFIED
+            }
+            val imeBounds = KeyboardImageFallbackPolicy.bounds(proof.imeBounds)
+                ?: return PhysicalKeyboardLayout.UNVERIFIED
+            val filtered = frame.copy(nodes = VisualSequenceCandidates.layoutNodes(frame))
+            verifiedPhysicalRows(filtered, ime, proof, imeBounds)
+        } else {
+            verifiedPhysicalRowsWithoutImage(frame, ime)
+        }
+        if (!rows.any { a -> rows.any { b -> a.bottom <= b.top } }) {
+            return PhysicalKeyboardLayout.UNVERIFIED
+        }
+        val rowCells = rows.flatMap { it.keys }
+        fun hasDisjointPair(cells: List<Cell>): Boolean =
+            cells.indices.any { i ->
+                val a = cells[i].rect
+                cells.drop(i + 1).any { b ->
+                    a.right <= b.rect.left || b.rect.right <= a.left ||
+                        a.bottom <= b.rect.top || b.rect.bottom <= a.top
+                }
+            }
+        val hangul = rowCells.filter { Character.UnicodeScript.of(it.label.codePointAt(0)) == Character.UnicodeScript.HANGUL }
+        val latin = rowCells.filter { Character.UnicodeScript.of(it.label.codePointAt(0)) == Character.UnicodeScript.LATIN }
+        val otherAlpha = rowCells.filter {
+            val s = Character.UnicodeScript.of(it.label.codePointAt(0))
+            s in alphabeticScripts && s != Character.UnicodeScript.HANGUL && s != Character.UnicodeScript.LATIN
+        }
+        val common = rowCells.filter { Character.UnicodeScript.of(it.label.codePointAt(0)) == Character.UnicodeScript.COMMON }
+        if (otherAlpha.isNotEmpty()) return PhysicalKeyboardLayout.UNVERIFIED
+        val hangulCount = hangul.map { it.label }.distinct().size
+        val latinCount = latin.map { it.label }.distinct().size
+        val commonCount = common.map { it.label }.distinct().size
+        return when {
+            hangulCount >= 6 && hasDisjointPair(hangul) && latin.isEmpty() -> PhysicalKeyboardLayout.HANGUL
+            latinCount >= 6 && hasDisjointPair(latin) && hangul.isEmpty() -> PhysicalKeyboardLayout.LATIN
+            commonCount >= 6 && hasDisjointPair(common) && hangul.isEmpty() && latin.isEmpty() ->
+                PhysicalKeyboardLayout.SYMBOLS_OR_NUMBERS
+            else -> PhysicalKeyboardLayout.UNVERIFIED
+        }
+    }
+
+    /**
+     * Resolves at most one verified Korean language-switch control on a corroborated
+     * Latin physical keyboard. Rejects non-Latin layouts (including symbols/numbers),
+     * ambiguous duplicates, globe ("🌐"), dictionary words like "한국어" that may appear
+     * in suggestion strips, controls positioned above the physical character rows, and
+     * English-bound ("영어(미국)로 변경") controls.
+     */
+    fun findUniqueKoreanLayoutSwitchCandidate(frame: ControlFrame): KoreanLayoutSwitchCandidate? {
+        if (classifyPhysicalLayout(frame) != PhysicalKeyboardLayout.LATIN) return null
+        val ime = frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed } ?: return null
+        val proof = frame.visual?.takeIf { it.scope == "keyboard" }
+        val physicalRows = if (proof != null) {
+            val imeBounds = KeyboardImageFallbackPolicy.bounds(proof.imeBounds) ?: return null
+            verifiedPhysicalRows(frame.copy(nodes = VisualSequenceCandidates.layoutNodes(frame)), ime, proof, imeBounds)
+        } else {
+            verifiedPhysicalRowsWithoutImage(frame, ime)
+        }
+        val firstPhysicalRowTop = physicalRows.minOfOrNull { it.top } ?: return null
+        val physicalCharRects = physicalRows.flatMap { it.keys }.map { it.rect }
+        val owned = frame.nodes.filter {
+            it.enabled && !it.password && it.sourceWindowId == ime.windowId && it.sourcePackage == ime.packageName
+        }
+        val samsungAllHanEng = owned.filter {
+            !it.keyboardImageCandidate && it.visualKeyCandidate &&
+                VisualKeyboardPolicy.identifyCandidate(it, ime) ==
+                KeyboardKeyPolicy.Key("한/영", KeyboardKeyPolicy.Kind.LAYOUT)
+        }
+        val samsungDistinctCenters = samsungAllHanEng.mapNotNull {
+            KeyboardImageFallbackPolicy.bounds(it.bounds)?.center
+        }.distinct()
+        val samsungTarget = if (samsungAllHanEng.isNotEmpty()) {
+            if (samsungDistinctCenters.size != 1) return null
+            samsungAllHanEng.singleOrNull()?.takeIf { node ->
+                val rect = KeyboardImageFallbackPolicy.bounds(node.bounds) ?: return@takeIf false
+                KeyboardImageFallbackPolicy.trustedIme(ime, node.sourcePackage) &&
+                    node.keyboardKey == "한/영" &&
+                    node.text.isEmpty() &&
+                    node.description == "한국어로 변경" &&
+                    node.className == "android.view.ViewGroup" &&
+                    node.visualKeyChildCount == 1 &&
+                    rect.top >= firstPhysicalRowTop
+            } ?: return null
+        } else null
+
+        val semanticCandidates = owned.filter { node ->
+            if (node.keyboardImageCandidate) return@filter false
+            // Never admit dictionary words such as "한국어" that can appear as suggestion chips.
+            if (node.keyboardKey.lowercase() !in setOf("한/영", "한영")) return@filter false
+            if (KeyboardKeyPolicy.identify(
+                    node.text, node.description, node.className, node.clickable, node.textEntryKey,
+                )?.kind != KeyboardKeyPolicy.Kind.LAYOUT) return@filter false
+            val rect = KeyboardImageFallbackPolicy.bounds(node.bounds) ?: return@filter false
+            val w = rect.right - rect.left
+            val h = rect.bottom - rect.top
+            // Must sit inside the physical keyboard region (at/below the first physical row),
+            // have non-banner key proportions, and not overlap any physical character key.
+            rect.top >= firstPhysicalRowTop &&
+                w >= 16 && h >= 20 && w <= h * 3 &&
+                physicalCharRects.none { other ->
+                    other.left < rect.right && rect.left < other.right &&
+                        other.top < rect.bottom && rect.top < other.bottom
+                }
+        }
+        if (samsungTarget != null) {
+            // If another distinct clickable layout key also claims Korean switch, refuse ambiguity.
+            if (semanticCandidates.any { it.id != samsungTarget.id }) return null
+            return KoreanLayoutSwitchCandidate(samsungTarget, KoreanLayoutSwitchRoute.SAMSUNG_VISUAL_KEY)
+        }
+        val semanticTarget = semanticCandidates.singleOrNull() ?: return null
+        return KoreanLayoutSwitchCandidate(semanticTarget, KoreanLayoutSwitchRoute.SEMANTIC_KEY)
+    }
+
+    /**
+     * Dedicated fail-closed structural + owned-pixel certification for Samsung HoneyBoard's
+     * non-clickable "한/영" ("한국어로 변경") layout switch key on a corroborated Latin
+     * keyboard with an empty 0/0 focused editor. Never weakens character-key verify().
+     */
+    fun verifyKoreanLayoutSwitch(
+        frame: ControlFrame,
+        proof: VisualTargetProof,
+        node: ControlNode,
+        nowMs: Long = System.currentTimeMillis(),
+    ): Result {
+        if (frame.reason != null || frame.truncated || frame.navigationOnly) {
+            return Result(failureStage = "frame_incomplete_or_refused")
+        }
+        val ime = frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed }
+            ?: return Result(failureStage = "ime_not_authorized")
+        if (!ime.inputMethodId.contains('/') || ime.inputMethodId.substringBefore('/') != ime.packageName) {
+            return Result(failureStage = "ime_identity_unverified")
+        }
+        if (!KeyboardImageFallbackPolicy.trustedIme(ime, node.sourcePackage)) {
+            return Result(failureStage = "layout_switch_untrusted_ime")
+        }
+        if (node.keyboardImageCandidate) {
+            return Result(failureStage = "layout_switch_image_only_disallowed")
+        }
+        if (!node.enabled || node.password || !node.visualKeyCandidate ||
+            node.sourceWindowId != ime.windowId || node.sourcePackage != ime.packageName) {
+            return Result(failureStage = "layout_switch_candidate_unverified")
+        }
+        if (node.text.isNotEmpty() || node.description != "한국어로 변경" ||
+            node.className != "android.view.ViewGroup" || node.visualKeyChildCount != 1) {
+            return Result(failureStage = "layout_switch_descriptor_mismatch")
+        }
+        val role = VisualKeyboardPolicy.identifyCandidate(node, ime)
+        if (role != KeyboardKeyPolicy.Key("한/영", KeyboardKeyPolicy.Kind.LAYOUT) || node.keyboardKey != "한/영") {
+            return Result(failureStage = "layout_switch_role_unverified")
+        }
+        if (proof.scope != "keyboard" || proof.sourceDisplayId != 0) {
+            return Result(failureStage = "proof_scope_or_display_invalid")
+        }
+        if (!proof.sourceDisclosureAllowed()) {
+            return Result(failureStage = "proof_disclosure_revoked")
+        }
+        if (nowMs - proof.at !in 0L..10_000L) {
+            return Result(failureStage = "proof_age_expired")
+        }
+        if (VisualKeyboardPolicy.proofOwnerRefusal(proof, ime) != null) {
+            return Result(failureStage = "proof_owner_mismatch")
+        }
+        if (frame.visual?.id != proof.id) {
+            return Result(failureStage = "frame_visual_id_mismatch")
+        }
+        if (VisualKeyboardPolicy.refusal(frame, node, "keyboard") != null) {
+            return Result(failureStage = "visual_keyboard_policy_refused")
+        }
+        val field = frame.inputTarget
+        if (field == null || field.text.isNotEmpty() || field.selectionStart != 0 || field.selectionEnd != 0) {
+            return Result(failureStage = "layout_switch_editor_not_empty_origin")
+        }
+        val boundFrame = if (frame.visual == proof) frame else frame.copy(visual = proof)
+        if (classifyPhysicalLayout(boundFrame) != PhysicalKeyboardLayout.LATIN) {
+            return Result(failureStage = "layout_switch_source_not_latin")
+        }
+        val unique = findUniqueKoreanLayoutSwitchCandidate(boundFrame)
+        if (unique == null || unique.route != KoreanLayoutSwitchRoute.SAMSUNG_VISUAL_KEY || unique.node.id != node.id) {
+            return Result(failureStage = "layout_switch_candidate_not_unique")
+        }
+        val imeBounds = KeyboardImageFallbackPolicy.bounds(proof.imeBounds)
+            ?: return Result(failureStage = "ime_bounds_invalid")
+        val nodeBounds = KeyboardImageFallbackPolicy.bounds(node.bounds)
+            ?: return Result(failureStage = "node_bounds_invalid")
+        if (!imeBounds.contains(nodeBounds) || !proof.window.contains(nodeBounds)) {
+            return Result(failureStage = "node_outside_ime_or_viewport")
+        }
+        val nodeW = nodeBounds.right - nodeBounds.left
+        val nodeH = nodeBounds.bottom - nodeBounds.top
+        if (nodeW < 16 || nodeH < 20) {
+            return Result(failureStage = "layout_switch_shape_unverified")
+        }
+        val rawCrop = KeyboardImageFallbackPolicy.crop(proof, nodeBounds)
+            ?: return Result(failureStage = "crop_unverified_or_masked")
+        val resolved = KeyboardSequencePixelProof.resolvedCrop(
+            proof, rawCrop, nodeBounds, imeBounds, requireWholeNode = false,
+        ) ?: return Result(failureStage = "resolved_crop_unverified")
+        val mapped = proof.map(resolved)
+            ?: return Result(failureStage = "mapped_crop_not_disclosed")
+        if (!nodeBounds.contains(mapped) || !OwnedPixelPolicy.contains(proof.disclosedRegions, mapped)) {
+            return Result(failureStage = "mapped_crop_outside_owned_node")
+        }
+        val ownedKeys = boundFrame.nodes.filter {
+            it.id != node.id && it.enabled && !it.password &&
+                it.sourceWindowId == ime.windowId && it.sourcePackage == ime.packageName &&
+                (it.keyboardKey.isNotEmpty() || it.keyboardImageCandidate)
+        }
+        val overlappingNeighbor = ownedKeys.any { other ->
+            if (KeyboardImageFallbackPolicy.isRowBackdrop(boundFrame, other)) return@any false
+            val sameRoleWrapper = VisualKeyboardPolicy.identifyCandidate(other, ime) == role &&
+                (other.bounds == node.bounds || other.parent == node.id || node.parent == other.id)
+            if (sameRoleWrapper) return@any false
+            val otherRect = KeyboardImageFallbackPolicy.bounds(other.bounds) ?: return@any false
+            otherRect.left < mapped.right && mapped.left < otherRect.right &&
+                otherRect.top < mapped.bottom && mapped.top < otherRect.bottom
+        }
+        if (overlappingNeighbor) {
+            return Result(failureStage = "neighbor_key_overlaps_interior")
+        }
+        return Result(crop = resolved, failureStage = null)
+    }
+
+    private fun verifiedPhysicalRowsWithoutImage(
         frame: ControlFrame,
         ime: ControlKeyboard,
-        proof: VisualTargetProof,
-        imeBounds: TapBounds,
     ): List<Row> {
         val cells = frame.nodes.mapNotNull { peer ->
             if (!peer.enabled || peer.password || peer.parent < 0 ||
@@ -324,11 +589,12 @@ internal object NativeKeyboardStructuralCertification {
             val w = rect.right - rect.left
             val h = rect.bottom - rect.top
             if (w < 16 || h < 20 || w > h * 2) return@mapNotNull null
-            if (!imeBounds.contains(rect) || !proof.window.contains(rect) ||
-                !OwnedPixelPolicy.contains(proof.disclosedRegions, rect)) return@mapNotNull null
             Cell(peer, rect, role.label)
         }
+        return clusterPhysicalRows(cells)
+    }
 
+    private fun clusterPhysicalRows(cells: List<Cell>): List<Row> {
         val rows = mutableListOf<Row>()
         for ((parentId, parentCells) in cells.groupBy { it.node.parent }) {
             val sorted = parentCells.sortedWith(compareBy<Cell>({ it.rect.top }, { it.rect.left }))
@@ -360,5 +626,29 @@ internal object NativeKeyboardStructuralCertification {
             }
         }
         return rows
+    }
+
+    private fun verifiedPhysicalRows(
+        frame: ControlFrame,
+        ime: ControlKeyboard,
+        proof: VisualTargetProof,
+        imeBounds: TapBounds,
+    ): List<Row> {
+        val cells = frame.nodes.mapNotNull { peer ->
+            if (!peer.enabled || peer.password || peer.parent < 0 ||
+                peer.sourceWindowId != ime.windowId || peer.sourcePackage != ime.packageName ||
+                !peer.visualKeyCandidate || peer.keyboardImageCandidate ||
+                !(peer.textEntryKey || peer.visualKeyChildCount == 1)) return@mapNotNull null
+            val role = VisualKeyboardPolicy.identifyCandidate(peer, ime)
+                ?.takeIf { it.kind == KeyboardKeyPolicy.Kind.CHARACTER } ?: return@mapNotNull null
+            val rect = KeyboardImageFallbackPolicy.bounds(peer.bounds) ?: return@mapNotNull null
+            val w = rect.right - rect.left
+            val h = rect.bottom - rect.top
+            if (w < 16 || h < 20 || w > h * 2) return@mapNotNull null
+            if (!imeBounds.contains(rect) || !proof.window.contains(rect) ||
+                !OwnedPixelPolicy.contains(proof.disclosedRegions, rect)) return@mapNotNull null
+            Cell(peer, rect, role.label)
+        }
+        return clusterPhysicalRows(cells)
     }
 }

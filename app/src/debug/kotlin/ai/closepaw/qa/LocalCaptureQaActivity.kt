@@ -1,6 +1,7 @@
 package ai.closepaw.qa
 
 import ai.closepaw.BuildConfig
+import ai.closepaw.app.AgentService
 import ai.closepaw.app.MainActivity
 import ai.closepaw.platform.virtualdisplay.MediaProjectionCaptureService
 import ai.closepaw.platform.virtualdisplay.ProjectionConsentState
@@ -240,7 +241,8 @@ class LocalCaptureQaActivity : ComponentActivity() {
     }
     private fun refreshSetup() {
         if (!::status.isInitialized) return
-        status.text = "Setup: ${CaptureQaAcceptance.setup(this)}; observation=${ProjectionImageTransport.active()?.screenObservationAllowed() == true}; qa_busy=${CaptureQaAcceptance.isRunning()}; independent_input_qa=${DebugQaRunnerService.isRunning()}; samsung_ime_selected=${DebugImeInteractConsent.selectedSamsungIme(this)}; ime_interact_explicit=${DebugImeInteractConsent.explicitlyGranted(this)}"
+        val sessionState = AgentService.instance?.remoteControlSession?.state?.name ?: "unavailable"
+        status.text = "Setup: ${CaptureQaAcceptance.setup(this)}; observation=${ProjectionImageTransport.active()?.screenObservationAllowed() == true}; control_session=$sessionState; qa_busy=${CaptureQaAcceptance.isRunning()}; independent_input_qa=${DebugQaRunnerService.isRunning()}; samsung_ime_selected=${DebugImeInteractConsent.selectedSamsungIme(this)}; ime_interact_explicit=${DebugImeInteractConsent.explicitlyGranted(this)}"
     }
     private fun requestObservation(request: DebugQaRunRequest? = null): Boolean {
         if (consentGeneration != null || (request == null && DebugQaRunnerService.isBusy())) {
@@ -368,6 +370,9 @@ class LocalCaptureQaActivity : ComponentActivity() {
                 DebugQaRunnerService.audit(request, admission.name, "local_confirmation")
                 if (admission != DebugQaAdmissionOutcome.ACCEPTED) {
                     status.text = "${admission.name} · ${mode.label} · Request ${request.id}"
+                } else if (DebugQaRunAdmission.blocksForActiveControlSession(
+                        AgentService.instance?.remoteControlSession?.state)) {
+                    reject(request, "BUSY", "external_control_session_still_active")
                 } else if (!DebugImeInteractConsent.selectedSamsungIme(this)) {
                     reject(request, "DENIED", "samsung_ime_not_selected")
                 } else if (DebugImeInteractConsent.explicitlyGranted(this)) {
@@ -414,6 +419,11 @@ class LocalCaptureQaActivity : ComponentActivity() {
         if (isDestroyed || isFinishing || DebugQaRunnerService.admission.current != request) return
         if (CaptureQaAcceptance.isRunning()) {
             reject(request, "BUSY", "capture_qa_busy")
+            return
+        }
+        if (DebugQaRunAdmission.blocksForActiveControlSession(
+                AgentService.instance?.remoteControlSession?.state)) {
+            reject(request, "BUSY", "external_control_session_still_active")
             return
         }
         // Android restricts background launches; the visible QA Activity opens Chrome.

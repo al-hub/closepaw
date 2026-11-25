@@ -12,6 +12,7 @@ import ai.closepaw.chatgpt.control.ControlWindowRecord
 import ai.closepaw.chatgpt.control.ControlWindowRect
 import ai.closepaw.chatgpt.control.ControlWindowSnapshot
 import ai.closepaw.chatgpt.control.DisplayWindowCensus
+import ai.closepaw.chatgpt.control.KoreanLayoutSwitchRoute
 import ai.closepaw.chatgpt.control.PixelCertificationOutcome
 import ai.closepaw.chatgpt.control.TapBounds
 import kotlinx.coroutines.runBlocking
@@ -384,13 +385,112 @@ class DebugOmniboxAndSequenceTest {
             put("nodes", JsonArray(nodes.map { it.json() }))
         }
 
+    private fun koreanPhysicalKeyboardNodes(): List<ControlNode> {
+        val row1 = listOf("ㅂ", "ㅈ", "ㄷ", "ㄱ", "ㅅ", "ㅛ").mapIndexed { i, ch ->
+            ControlNode(
+                id = 500 + i, text = ch, sourceWindowId = 13301, sourcePackage = ime,
+                bounds = "${20 + i * 100} 1600 ${110 + i * 100} 1700", parent = 50,
+                enabled = true, keyboardKey = ch, textEntryKey = true,
+                visualKeyCandidate = true, visualKeyChildCount = 1,
+            )
+        }
+        val row2 = listOf("ㅁ", "ㄴ", "ㅇ", "ㄹ", "ㅎ", "ㅏ").mapIndexed { i, ch ->
+            ControlNode(
+                id = 520 + i, text = ch, sourceWindowId = 13301, sourcePackage = ime,
+                bounds = "${20 + i * 100} 1720 ${110 + i * 100} 1820", parent = 51,
+                enabled = true, keyboardKey = ch, textEntryKey = true,
+                visualKeyCandidate = true, visualKeyChildCount = 1,
+            )
+        }
+        return row1 + row2
+    }
+
+    private fun englishPhysicalKeyboardNodes(
+        withKoreanSuggestions: Boolean = false,
+        hanEngDescription: String? = "한국어로 변경",
+        duplicateHanEng: Boolean = false,
+    ): List<ControlNode> {
+        val row1 = listOf("q", "w", "e", "r", "t", "y").mapIndexed { i, ch ->
+            ControlNode(
+                id = 600 + i, text = ch, sourceWindowId = 13301, sourcePackage = ime,
+                bounds = "${20 + i * 100} 1600 ${110 + i * 100} 1700", parent = 50,
+                enabled = true, keyboardKey = ch, textEntryKey = true,
+                visualKeyCandidate = true, visualKeyChildCount = 1,
+            )
+        }
+        val row2 = listOf("a", "s", "d", "f", "g", "h").mapIndexed { i, ch ->
+            ControlNode(
+                id = 620 + i, text = ch, sourceWindowId = 13301, sourcePackage = ime,
+                bounds = "${20 + i * 100} 1720 ${110 + i * 100} 1820", parent = 51,
+                enabled = true, keyboardKey = ch, textEntryKey = true,
+                visualKeyCandidate = true, visualKeyChildCount = 1,
+            )
+        }
+        val out = mutableListOf<ControlNode>()
+        out += row1
+        out += row2
+        if (withKoreanSuggestions) {
+            out += listOf("ㄱ", "ㅏ", "ㄴ").mapIndexed { i, ch ->
+                ControlNode(
+                    id = 650 + i, text = ch, sourceWindowId = 13301, sourcePackage = ime,
+                    bounds = "${20 + i * 320} 1470 ${320 + i * 320} 1560", parent = 60,
+                    clickable = true, enabled = true, keyboardKey = ch,
+                    textEntryKey = false, visualKeyCandidate = true, visualKeyChildCount = 0,
+                )
+            }
+        }
+        if (hanEngDescription != null) {
+            out += ControlNode(
+                id = 690, text = "", description = hanEngDescription,
+                className = "android.view.ViewGroup",
+                sourceWindowId = 13301, sourcePackage = ime,
+                bounds = "120 2060 220 2180", parent = 53,
+                clickable = false, enabled = true, keyboardKey = "한/영",
+                textEntryKey = false, visualKeyCandidate = true, visualKeyChildCount = 1,
+            )
+            if (duplicateHanEng) {
+                out += ControlNode(
+                    id = 691, text = "", description = hanEngDescription,
+                    className = "android.view.ViewGroup",
+                    sourceWindowId = 13301, sourcePackage = ime,
+                    bounds = "240 2060 340 2180", parent = 53,
+                    clickable = false, enabled = true, keyboardKey = "한/영",
+                    textEntryKey = false, visualKeyCandidate = true, visualKeyChildCount = 1,
+                )
+            }
+        }
+        return out
+    }
+
+    private fun symbolPhysicalKeyboardNodes(): List<ControlNode> {
+        val row1 = listOf("1", "2", "3", "4", "5", "6").mapIndexed { i, ch ->
+            ControlNode(
+                id = 700 + i, text = ch, sourceWindowId = 13301, sourcePackage = ime,
+                bounds = "${20 + i * 100} 1600 ${110 + i * 100} 1700", parent = 50,
+                enabled = true, keyboardKey = ch, textEntryKey = true,
+                visualKeyCandidate = true, visualKeyChildCount = 1,
+            )
+        }
+        val row2 = listOf("@", "#", "$", "%", "&", "*").mapIndexed { i, ch ->
+            ControlNode(
+                id = 720 + i, text = ch, sourceWindowId = 13301, sourcePackage = ime,
+                bounds = "${20 + i * 100} 1720 ${110 + i * 100} 1820", parent = 51,
+                enabled = true, keyboardKey = ch, textEntryKey = true,
+                visualKeyCandidate = true, visualKeyChildCount = 1,
+            )
+        }
+        return row1 + row2
+    }
+
     @Test fun p0b_sixKeyExecutionUsesExplicitAutonomousHybridContractWithoutForgingExternalConfirm() = runBlocking {
-        val g = node(101, window = 13301, pkg = ime, keyboardKey = "ㄱ", visualKeyCandidate = true)
-        val a = node(103, window = 13301, pkg = ime, keyboardKey = "ㅏ", visualKeyCandidate = true)
-        val n = node(105, window = 13301, pkg = ime, keyboardKey = "ㄴ", visualKeyCandidate = true)
+        val koreanKeys = koreanPhysicalKeyboardNodes()
+        val g = koreanKeys.single { it.keyboardKey == "ㄱ" }
+        val a = koreanKeys.single { it.keyboardKey == "ㅏ" }
+        val n = koreanKeys.single { it.keyboardKey == "ㄴ" }
         val space = node(107, window = 13301, pkg = ime, keyboardImageCandidate = true)
-        val staleBefore = frame(blankFocusedUrl, editor = blankFocusedUrl, withIme = true).copy(fingerprint = "stale-before")
-        val certifiedObsFrame = frame(blankFocusedUrl, g, a, n, space, editor = blankFocusedUrl, withIme = true)
+        val staleBefore = frame(*(listOf(blankFocusedUrl) + koreanKeys + space).toTypedArray(), editor = blankFocusedUrl, withIme = true)
+            .copy(fingerprint = "stale-before")
+        val certifiedObsFrame = frame(*(listOf(blankFocusedUrl) + koreanKeys + space).toTypedArray(), editor = blankFocusedUrl, withIme = true)
             .copy(fingerprint = "certified-obs-frame")
         val finalEditor = blankFocusedUrl.copy(text = "가 나 ", empty = false, selectionStart = 4, selectionEnd = 4)
         val afterSeq = frame(finalEditor, editor = finalEditor, withIme = true)
@@ -474,13 +574,14 @@ class DebugOmniboxAndSequenceTest {
     }
 
     @Test fun p0b_duplicateNonEntryLabelsMissingCertifiedFrameOrUncertifiedKeysFailClosedWithZeroTouches() = runBlocking {
-        val g = node(101, window = 13301, pkg = ime, keyboardKey = "ㄱ", visualKeyCandidate = true)
+        val koreanKeys = koreanPhysicalKeyboardNodes()
+        val g = koreanKeys.single { it.keyboardKey == "ㄱ" }
         val gDup = node(102, window = 13301, pkg = ime, keyboardKey = "ㄱ", visualKeyCandidate = true)
         val gNonVisual = node(109, window = 13301, pkg = ime, keyboardKey = "ㄱ", visualKeyCandidate = false)
-        val a = node(103, window = 13301, pkg = ime, keyboardKey = "ㅏ", visualKeyCandidate = true)
-        val n = node(105, window = 13301, pkg = ime, keyboardKey = "ㄴ", visualKeyCandidate = true)
+        val a = koreanKeys.single { it.keyboardKey == "ㅏ" }
+        val n = koreanKeys.single { it.keyboardKey == "ㄴ" }
         val space = node(107, window = 13301, pkg = ime, keyboardImageCandidate = true)
-        val initial = frame(blankFocusedUrl, g, a, n, space, editor = blankFocusedUrl, withIme = true)
+        val initial = frame(*(listOf(blankFocusedUrl) + koreanKeys + space).toTypedArray(), editor = blankFocusedUrl, withIme = true)
 
         // 1) Duplicate visual candidates or non-entry nodes without visualKeyCandidate -> rejected
         assertNull(DebugSixKeyExecution.resolveUniqueSequenceCandidates(validSequenceObservation(g, gDup, a, n, space)))
@@ -619,7 +720,9 @@ class DebugOmniboxAndSequenceTest {
             clockMs = { 100L },
         )
         assertEquals("keyboard_observation_refused", refused.failure)
-        val obsEv = refused.evidence.single()
+        val obsEv = refused.evidence.first {
+            it["source"]?.jsonPrimitive?.contentOrNull == "single_observation_redacted"
+        }
         assertEquals("display_unowned_window", obsEv["display_plan_refusal"]?.jsonPrimitive?.content)
         assertTrue(obsEv.containsKey("display_window_census"))
         assertEquals(2, obsEv["display_window_census"]?.jsonObject?.get("unowned_content_windows")?.jsonPrimitive?.int)
@@ -944,5 +1047,171 @@ class DebugOmniboxAndSequenceTest {
         assertEquals("chrome_omnibox_back_context_changed", blocked.failure)
         assertEquals("unexpected_window_added", blocked.backContextRefusalDetail)
         assertEquals(1, backs)
+    }
+
+    @Test fun defectA_postFocusEnglishQwertyWithKoreanSuggestionsPerformsSingleGuardedSwitchThenSixKeyPass() = runBlocking {
+        val englishNodes = englishPhysicalKeyboardNodes(withKoreanSuggestions = true, hanEngDescription = "한국어로 변경")
+        val koreanNodes = koreanPhysicalKeyboardNodes()
+        val g = koreanNodes.single { it.keyboardKey == "ㄱ" }
+        val a = koreanNodes.single { it.keyboardKey == "ㅏ" }
+        val n = koreanNodes.single { it.keyboardKey == "ㄴ" }
+        val space = node(107, window = 13301, pkg = ime, keyboardImageCandidate = true)
+
+        val englishFocused = frame(*(listOf(blankFocusedUrl) + englishNodes + space).toTypedArray(),
+            editor = blankFocusedUrl, withIme = true).copy(fingerprint = "fp-en-1")
+        val koreanAfterSwitch = frame(*(listOf(blankFocusedUrl) + koreanNodes + space).toTypedArray(),
+            editor = blankFocusedUrl, withIme = true).copy(fingerprint = "fp-ko-2")
+        val finalEditor = blankFocusedUrl.copy(text = "가 나 ", empty = false, selectionStart = 4, selectionEnd = 4)
+        val finalFrame = frame(*(listOf(finalEditor) + koreanNodes + space).toTypedArray(),
+            editor = finalEditor, withIme = true).copy(fingerprint = "fp-ko-final")
+
+        val frames = ArrayDeque(listOf(englishFocused, koreanAfterSwitch, finalFrame))
+        var switches = 0
+        var sequences = 0
+        val seenStages = mutableListOf<String>()
+        val outcome = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { frames.removeFirst() },
+            observeSequence = {
+                DebugSixKeyExecution.ObservePacket(true, validSequenceObservation(g, a, n, space), certifiedFrame = koreanAfterSwitch)
+            },
+            certifyCandidate = { _, _, c, _ ->
+                PixelCertificationOutcome(
+                    crop = TapBounds(12, 12, 80, 80),
+                    method = if (c.imageOnly) "space_glyph" else "native_structural_and_live_surface",
+                )
+            },
+            dispatchSequence = { _, _ ->
+                sequences++
+                DebugSixKeyExecution.SequencePacket(true, buildJsonObject {
+                    put("action_attempted", true)
+                    put("outcome_unknown", false)
+                    put("app_result_verified", true)
+                    put("completed_keys", 6)
+                    put("confirmed_image_fallback_spaces", 2)
+                })
+            },
+            sessionId = "s-layout",
+            sessionEpoch = 2L,
+            first = englishFocused,
+            allowed = { true },
+            checkpoint = { progress, _ -> seenStages += progress.stage },
+            clockMs = { 100L },
+            nonceGenerator = { "nonce-layout-1" },
+            switchToKoreanLayout = { _, candidate, _ ->
+                switches++
+                assertTrue("Dispatch stage must end with _dispatch for cancellation uncertainty",
+                    seenStages.last().endsWith("_dispatch"))
+                assertEquals(KoreanLayoutSwitchRoute.SAMSUNG_VISUAL_KEY, candidate.route)
+                assertEquals("한국어로 변경", candidate.node.description)
+                DebugSixKeyExecution.LayoutSwitchPacket(success = true, attempted = true, unknown = false)
+            },
+        )
+
+        assertNull(outcome.failure)
+        assertEquals(1, switches)
+        assertEquals(1, sequences)
+        assertEquals("latin", outcome.initialPhysicalLayout)
+        assertEquals("hangul", outcome.finalPhysicalLayout)
+        assertEquals(1, outcome.layoutSwitchAttempts)
+        assertTrue(outcome.layoutSwitchConfirmed)
+        assertEquals(6, outcome.progress.verified)
+        assertEquals(6, outcome.progress.attempts)
+        assertFalse(outcome.progress.uncertain)
+        val layoutEv = outcome.evidence.first {
+            it["source"]?.jsonPrimitive?.contentOrNull == "korean_layout_readiness"
+        }
+        assertEquals("latin", layoutEv["initial_physical_layout"]?.jsonPrimitive?.content)
+        assertEquals("hangul", layoutEv["final_physical_layout"]?.jsonPrimitive?.content)
+        assertEquals("samsung_visual_key", layoutEv["layout_switch_route"]?.jsonPrimitive?.content)
+        assertFalse(layoutEv.toString().contains("한국어로"))
+        assertFalse(layoutEv.toString().contains("13301"))
+    }
+
+    @Test fun defectA_refusesUnsupportedSymbolsAmbiguousSwitchUnknownOrPostSwitchMutationWithZeroReplay() = runBlocking {
+        val space = node(107, window = 13301, pkg = ime, keyboardImageCandidate = true)
+
+        // 1) Symbols/numbers page -> explicit refusal, 0 switches, 0 touches
+        run {
+            val symbols = frame(*(listOf(blankFocusedUrl) + symbolPhysicalKeyboardNodes() + space).toTypedArray(),
+                editor = blankFocusedUrl, withIme = true)
+            var switches = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { symbols },
+                observeSequence = { fail("Should not observe sequence on symbols page"); DebugSixKeyExecution.ObservePacket(false, buildJsonObject {}) },
+                certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+                sessionId = "s-sym", first = symbols, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                switchToKoreanLayout = { _, _, _ -> switches++; DebugSixKeyExecution.LayoutSwitchPacket(false, false, false) },
+            )
+            assertEquals("korean_layout_switch_unsupported_page", res.failure)
+            assertEquals("symbols_or_numbers", res.initialPhysicalLayout)
+            assertEquals(0, switches)
+            assertEquals(0, res.layoutSwitchAttempts)
+            assertFalse(res.progress.uncertain)
+        }
+
+        // 2) English QWERTY with missing/ambiguous/wrong-direction switch key -> explicit refusal, 0 touches
+        for (badNodes in listOf(
+            englishPhysicalKeyboardNodes(withKoreanSuggestions = true, hanEngDescription = null),
+            englishPhysicalKeyboardNodes(withKoreanSuggestions = true, hanEngDescription = "영어(미국)로 변경"),
+            englishPhysicalKeyboardNodes(withKoreanSuggestions = true, hanEngDescription = "한국어로 변경", duplicateHanEng = true),
+        )) {
+            val en = frame(*(listOf(blankFocusedUrl) + badNodes + space).toTypedArray(),
+                editor = blankFocusedUrl, withIme = true)
+            var switches = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { en },
+                observeSequence = { fail("Should not observe sequence"); DebugSixKeyExecution.ObservePacket(false, buildJsonObject {}) },
+                certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+                sessionId = "s-amb", first = en, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                switchToKoreanLayout = { _, _, _ -> switches++; DebugSixKeyExecution.LayoutSwitchPacket(false, false, false) },
+            )
+            assertEquals("korean_layout_switch_unavailable", res.failure)
+            assertEquals(0, switches)
+            assertFalse(res.progress.uncertain)
+        }
+
+        // 3) Switch returns UNKNOWN -> stops immediately with uncertain=true, no replay
+        run {
+            val en = frame(*(listOf(blankFocusedUrl) + englishPhysicalKeyboardNodes(true, "한국어로 변경") + space).toTypedArray(),
+                editor = blankFocusedUrl, withIme = true)
+            var switches = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { en },
+                observeSequence = { fail("Should not observe after UNKNOWN switch"); DebugSixKeyExecution.ObservePacket(false, buildJsonObject {}) },
+                certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+                sessionId = "s-unk", first = en, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                switchToKoreanLayout = { _, _, _ ->
+                    switches++
+                    DebugSixKeyExecution.LayoutSwitchPacket(false, attempted = true, unknown = true, reason = "keyboard_layout_unconfirmed")
+                },
+            )
+            assertEquals("keyboard_layout_unconfirmed", res.failure)
+            assertEquals(1, switches)
+            assertEquals(1, res.layoutSwitchAttempts)
+            assertTrue(res.progress.uncertain)
+        }
+
+        // 4) Switch mutates editor value/caret or fails to produce NEW Korean frame -> fails closed with uncertain=true
+        run {
+            val en = frame(*(listOf(blankFocusedUrl) + englishPhysicalKeyboardNodes(true, "한국어로 변경") + space).toTypedArray(),
+                editor = blankFocusedUrl, withIme = true).copy(fingerprint = "fp-en")
+            val mutatedEditor = blankFocusedUrl.copy(text = "x", empty = false, selectionStart = 1, selectionEnd = 1)
+            val badPost = frame(*(listOf(mutatedEditor) + koreanPhysicalKeyboardNodes() + space).toTypedArray(),
+                editor = mutatedEditor, withIme = true).copy(fingerprint = "fp-ko-mutated")
+            val frames = ArrayDeque(listOf(en, badPost))
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { frames.removeFirst() },
+                observeSequence = { fail("Should not observe after mutated editor"); DebugSixKeyExecution.ObservePacket(false, buildJsonObject {}) },
+                certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+                sessionId = "s-mut", first = en, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                switchToKoreanLayout = { _, _, _ -> DebugSixKeyExecution.LayoutSwitchPacket(true, attempted = true, unknown = false) },
+            )
+            assertEquals("korean_layout_post_switch_unverified", res.failure)
+            assertTrue(res.progress.uncertain)
+        }
     }
 }

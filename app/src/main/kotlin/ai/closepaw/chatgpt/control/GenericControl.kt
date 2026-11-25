@@ -398,6 +398,150 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         expectedEpoch: Long? = null,
     ): OperationResult = visualKeySequenceInternal(input, expectedEpoch, autonomousProof = autonomousProof)
 
+    /**
+     * Debug-only internal entry point for a single guarded Korean layout switch
+     * (Samsung HoneyBoard "한/영" with description "한국어로 변경" on a verified
+     * Latin keyboard and empty 0/0 editor). Never exposed in MCP schemas and
+     * mutually exclusive with external visual_target_confirmed=true.
+     */
+    internal suspend fun visualKoreanLayoutSwitchAutonomous(
+        input: JsonObject,
+        autonomousProof: AutonomousKeyboardSequenceProof,
+        expectedEpoch: Long? = null,
+    ): OperationResult {
+        var attempted = false
+        fun stop(reason: String, unknown: Boolean = false): OperationResult {
+            VisualImageCache.remove(current?.frame?.visual?.id)
+            current = null
+            if (unknown) keyboardCheckpoint = null
+            return OperationResult(success = false, summary = reason, data = buildJsonObject {
+                put("reason_code", reason)
+                put("confirmation_mode", "autonomous_debug_layout_switch")
+                put("external_visual_review_confirmed", false)
+                put("action_attempted", attempted)
+                put("layout_switch_attempted", attempted)
+                put("layout_switch_confirmed", false)
+                put("outcome_unknown", unknown)
+                put("input_method", "visual_keyboard_layout_switch")
+            })
+        }
+        if (!allowed()) return stop("generic_control_disabled")
+        if (!port.allowsAutonomousDebugKeyboardProof) return stop("autonomous_keyboard_proof_not_allowed")
+        if (input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull == true) {
+            return stop("autonomous_confirmation_mode_conflict")
+        }
+        val original = current ?: return stop("observation_required")
+        if (input["observation_id"]?.jsonPrimitive?.contentOrNull != original.id) {
+            return stop("stale_observation")
+        }
+        val session = port.session()?.takeIf {
+            it.explicit && it.state == ControlSession.State.ACTIVE &&
+                it.id == input["session_id"]?.jsonPrimitive?.contentOrNull &&
+                it.epoch == original.epoch &&
+                (expectedEpoch == null || it.epoch == expectedEpoch)
+        } ?: return stop("explicit_active_session_required")
+        val proof = original.verificationFrame.visual ?: return stop("keyboard_visual_required")
+        if (input["visual_id"]?.jsonPrimitive?.contentOrNull != proof.id ||
+            autonomousProof.sessionId != session.id ||
+            autonomousProof.sessionEpoch != session.epoch ||
+            autonomousProof.observationId != original.id ||
+            autonomousProof.visualId != proof.id ||
+            autonomousProof.nonce.isBlank()) {
+            return stop("visual_proof_invalid_or_expired")
+        }
+        val step = autonomousProof.steps.singleOrNull() ?: return stop("layout_switch_proof_invalid")
+        val requestedNodeId = input["node_id"]?.jsonPrimitive?.intOrNull
+        if (step.label != "한/영" || step.imageOnly ||
+            step.method != "native_layout_switch_and_live_surface" ||
+            requestedNodeId == null || requestedNodeId != step.nodeId || !step.crop.valid) {
+            return stop("layout_switch_proof_invalid")
+        }
+        val node = original.frame.nodes.singleOrNull { it.id == step.nodeId }
+            ?: return stop("target_not_in_observation")
+        val structural = NativeKeyboardStructuralCertification.verifyKoreanLayoutSwitch(
+            frame = original.verificationFrame,
+            proof = proof,
+            node = node,
+            nowMs = now(),
+        )
+        val verifiedCrop = structural.crop ?: return stop(structural.failureStage ?: "layout_switch_unverified")
+        if (verifiedCrop != step.crop) return stop("layout_switch_crop_mismatch")
+
+        if (!port.beginAutonomousKeyboardSequence(autonomousProof.nonce, session.id, session.epoch, 1)) {
+            return stop("autonomous_sequence_busy")
+        }
+        val actionResult = try {
+            val actionInput = buildJsonObject {
+                put("session_id", session.id)
+                put("observation_id", original.id)
+                put("action", "visual_key")
+                put("node_id", node.id)
+                put("visual_id", proof.id)
+                put("visual_target_confirmed", false)
+                put("image_rect", JsonArray(listOf(
+                    verifiedCrop.left, verifiedCrop.top, verifiedCrop.right, verifiedCrop.bottom,
+                ).map(::JsonPrimitive)))
+            }
+            val dispatchContext = AutonomousKeyboardDispatchContext(
+                nonce = UUID.randomUUID().toString(),
+                sequenceNonce = autonomousProof.nonce,
+                sessionId = session.id,
+                epoch = session.epoch,
+                observationId = original.id,
+                visualId = proof.id,
+                stepIndex = 0,
+                nodeId = node.id,
+                label = "한/영",
+                imageOnly = false,
+                expectedNativeLabels = emptySet(),
+                kind = AutonomousDispatchKind.KOREAN_LAYOUT_SWITCH,
+            )
+            kotlinx.coroutines.withContext(dispatchContext) {
+                actionNative(actionInput, original)
+            }
+        } finally {
+            port.endAutonomousKeyboardSequence(autonomousProof.nonce)
+        }
+        attempted = actionResult.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
+        val unknown = actionResult.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
+        val reason = actionResult.data["reason_code"]?.jsonPrimitive?.contentOrNull ?: "korean_layout_switch_unconfirmed"
+        if (!actionResult.success || !attempted || unknown) {
+            return stop(reason, unknown = unknown || attempted)
+        }
+        val post = current?.verificationFrame
+        val postField = post?.inputTarget
+        val confirmedHangul = post != null &&
+            post !== original.verificationFrame &&
+            post.fingerprint != original.verificationFrame.fingerprint &&
+            post.reason == null && !post.truncated && !post.navigationOnly &&
+            post.keyboard == original.verificationFrame.keyboard &&
+            KeyboardEditorContinuity.sameFocusedEditor(original.verificationFrame, post, allowAnonymousResize = false) &&
+            postField != null && postField.text.isEmpty() &&
+            postField.selectionStart == 0 && postField.selectionEnd == 0 &&
+            NativeKeyboardStructuralCertification.classifyPhysicalLayout(post) == PhysicalKeyboardLayout.HANGUL &&
+            VisualKeyboardPolicy.literalLayoutChanged(
+                original.verificationFrame, post, languageSwitch = true,
+                destination = Character.UnicodeScript.HANGUL,
+            )
+        if (!confirmedHangul) {
+            return stop("korean_layout_post_switch_unverified", unknown = true)
+        }
+        return OperationResult(
+            success = true,
+            summary = "Guarded autonomous Korean layout switch confirmed.",
+            data = buildJsonObject {
+                put("confirmation_mode", "autonomous_debug_layout_switch")
+                put("external_visual_review_confirmed", false)
+                put("action_attempted", true)
+                put("layout_switch_attempted", true)
+                put("layout_switch_confirmed", true)
+                put("outcome_unknown", false)
+                put("input_method", "visual_keyboard_layout_switch")
+                current?.let { put("observation_id", it.id) }
+            },
+        )
+    }
+
     private suspend fun visualKeySequenceInternal(
         input: JsonObject,
         expectedEpoch: Long? = null,

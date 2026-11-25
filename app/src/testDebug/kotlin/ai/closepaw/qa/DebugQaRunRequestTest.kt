@@ -1,5 +1,6 @@
 package ai.closepaw.qa
 
+import ai.closepaw.chatgpt.control.ControlSession
 import ai.closepaw.platform.virtualdisplay.MediaProjectionConsentGate
 import ai.closepaw.platform.virtualdisplay.ProjectionConsentState
 import kotlinx.serialization.json.buildJsonObject
@@ -100,5 +101,15 @@ class DebugQaRunRequestTest {
         assertFalse(DebugQaBatchPolicy.mayProceedAfter(unknown))
         assertEquals("DIAGNOSTIC_COMPLETE", DebugQaBatchPolicy.terminalState(DebugQaMode.STRUCTURE, structural))
         assertEquals("BLOCKED", DebugQaBatchPolicy.terminalState(DebugQaMode.SIX_KEY, structural))
+    }
+
+    @Test fun activeControlSessionBlocksLocalQaConfirmationAndLaunch() {
+        assertFalse(DebugQaRunAdmission.blocksForActiveControlSession(null))
+        assertFalse(DebugQaRunAdmission.blocksForActiveControlSession(ControlSession.State.IDLE))
+        assertFalse(DebugQaRunAdmission.blocksForActiveControlSession(ControlSession.State.ENDED))
+        assertTrue(DebugQaRunAdmission.blocksForActiveControlSession(ControlSession.State.ACTIVE))
+        assertTrue(DebugQaRunAdmission.blocksForActiveControlSession(ControlSession.State.WAITING))
+        assertTrue(DebugQaRunAdmission.blocksForActiveControlSession(ControlSession.State.PAUSED))
+        assertTrue(DebugQaRunAdmission.blocksForActiveControlSession(ControlSession.State.REOBSERVING))
     }
 }

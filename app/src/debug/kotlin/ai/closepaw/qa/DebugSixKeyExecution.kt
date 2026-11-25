@@ -7,8 +7,13 @@ import ai.closepaw.chatgpt.control.ControlFrame
 import ai.closepaw.chatgpt.control.ControlSession
 import ai.closepaw.chatgpt.control.DisplayWindowCensus
 import ai.closepaw.chatgpt.control.GenericControl
+import ai.closepaw.chatgpt.control.KoreanLayoutSwitchCandidate
+import ai.closepaw.chatgpt.control.KoreanLayoutSwitchRoute
+import ai.closepaw.chatgpt.control.NativeKeyboardStructuralCertification
+import ai.closepaw.chatgpt.control.PhysicalKeyboardLayout
 import ai.closepaw.chatgpt.control.PixelCertificationOutcome
 import ai.closepaw.chatgpt.control.TapBounds
+import ai.closepaw.chatgpt.control.VisualKeyboardPolicy
 import android.os.SystemClock
 import java.util.UUID
 import kotlinx.coroutines.currentCoroutineContext
@@ -37,6 +42,17 @@ internal object DebugSixKeyExecution {
         val evidence: List<JsonObject>, val observationElapsedMs: Long,
         val followUpNativeReads: Int, val followUpStatus: String,
         val followUpEvidence: JsonObject?,
+        val initialPhysicalLayout: String = PhysicalKeyboardLayout.UNVERIFIED.code,
+        val finalPhysicalLayout: String = PhysicalKeyboardLayout.UNVERIFIED.code,
+        val layoutSwitchAttempts: Int = 0,
+        val layoutSwitchConfirmed: Boolean = false,
+    )
+
+    internal data class LayoutSwitchPacket(
+        val success: Boolean,
+        val attempted: Boolean,
+        val unknown: Boolean,
+        val reason: String? = null,
     )
 
     internal data class PhysicalCandidate(
@@ -127,6 +143,9 @@ internal object DebugSixKeyExecution {
         checkpoint: (Progress, String) -> Unit,
         clockMs: () -> Long = { SystemClock.elapsedRealtime() },
         nonceGenerator: () -> String = { UUID.randomUUID().toString() },
+        switchToKoreanLayout: suspend (ControlFrame, KoreanLayoutSwitchCandidate, String) -> LayoutSwitchPacket = { _, _, _ ->
+            LayoutSwitchPacket(false, false, false, "korean_layout_switch_unavailable")
+        },
     ): Outcome {
         var verified = 0
         var attempts = 0
@@ -136,11 +155,16 @@ internal object DebugSixKeyExecution {
         var extraReads = 0
         var afterFailure = "not_required"
         var followUpEvidence: JsonObject? = null
+        var initialLayoutCode = PhysicalKeyboardLayout.UNVERIFIED.code
+        var finalLayoutCode = PhysicalKeyboardLayout.UNVERIFIED.code
+        var layoutSwitchAttempts = 0
+        var layoutSwitchConfirmed = false
         val evidence = mutableListOf<JsonObject>()
         fun progress() = Progress(verified, attempts, uncertain, stage)
         fun fail(reason: String) = Outcome(
             progress(), reason, evidence.toList(), observationMs,
             extraReads, afterFailure, followUpEvidence,
+            initialLayoutCode, finalLayoutCode, layoutSwitchAttempts, layoutSwitchConfirmed,
         )
         fun checkpointAt(next: String, reason: String) {
             stage = next
@@ -151,13 +175,95 @@ internal object DebugSixKeyExecution {
         if (!allowed()) return fail("control_authority_revoked")
         checkpointAt("key_1_preflight", "fresh_keyboard_sequence_observation")
 
-        val before = captureFrame()
+        var before = captureFrame()
         if (!DebugOneStopQa.sameEditor(first, before)) return fail("editor_identity_changed")
         val field = before.inputTarget
         if (before.reason != null || before.packageName != "com.android.chrome" ||
             before.keyboard?.packageName != "com.samsung.android.honeyboard" || field == null ||
             !DebugOneStopQa.SixKey.matches(field.text, field.selectionStart, field.selectionEnd, 0))
             return fail("editor_checkpoint_changed")
+
+        // Post-focus target-layout readiness check: distinguish physical keys from suggestion
+        // captions and allow at most one guarded LATIN -> HANGUL switch before sequence acquisition.
+        val initialLayout = NativeKeyboardStructuralCertification.classifyPhysicalLayout(before)
+        initialLayoutCode = initialLayout.code
+        finalLayoutCode = initialLayout.code
+        fun recordLayoutEvidence(route: String, refusal: String? = null) {
+            evidence += buildJsonObject {
+                put("source", "korean_layout_readiness")
+                put("initial_physical_layout", initialLayoutCode)
+                put("final_physical_layout", finalLayoutCode)
+                put("layout_switch_attempted", layoutSwitchAttempts > 0)
+                put("layout_switch_attempts", layoutSwitchAttempts)
+                put("layout_switch_confirmed", layoutSwitchConfirmed)
+                put("layout_switch_route", safeCode(route))
+                refusal?.let { put("refusal_reason", safeCode(it)) }
+            }
+        }
+        when (initialLayout) {
+            PhysicalKeyboardLayout.HANGUL -> {
+                recordLayoutEvidence("none")
+            }
+            PhysicalKeyboardLayout.SYMBOLS_OR_NUMBERS -> {
+                recordLayoutEvidence("none", "korean_layout_switch_unsupported_page")
+                return fail("korean_layout_switch_unsupported_page")
+            }
+            PhysicalKeyboardLayout.UNVERIFIED -> {
+                recordLayoutEvidence("none", "korean_layout_unverified")
+                return fail("korean_layout_unverified")
+            }
+            PhysicalKeyboardLayout.LATIN -> {
+                val switchCandidate = NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(before)
+                if (switchCandidate == null) {
+                    recordLayoutEvidence("none", "korean_layout_switch_unavailable")
+                    return fail("korean_layout_switch_unavailable")
+                }
+                if (!allowed()) {
+                    recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
+                    return fail("control_authority_revoked")
+                }
+                checkpointAt("layout_readiness_switch_dispatch", "guarded_korean_layout_switch")
+                val switched = switchToKoreanLayout(before, switchCandidate, nonceGenerator())
+                if (switched.attempted) layoutSwitchAttempts = 1
+                if (!switched.success || switched.unknown || !switched.attempted) {
+                    uncertain = uncertain || switched.unknown || switched.attempted
+                    val refusal = safeCode(switched.reason ?: "korean_layout_switch_unconfirmed")
+                    recordLayoutEvidence(switchCandidate.route.code, refusal)
+                    return fail(refusal)
+                }
+                if (!allowed()) {
+                    uncertain = true
+                    recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
+                    return fail("control_authority_revoked")
+                }
+                val afterSwitch = captureFrame()
+                val afterField = afterSwitch.inputTarget
+                val afterLayout = NativeKeyboardStructuralCertification.classifyPhysicalLayout(afterSwitch)
+                finalLayoutCode = afterLayout.code
+                val switchedCleanly = afterSwitch.reason == null &&
+                    !afterSwitch.truncated && !afterSwitch.navigationOnly &&
+                    afterSwitch.packageName == "com.android.chrome" &&
+                    afterSwitch.fingerprint != before.fingerprint &&
+                    DebugOneStopQa.sameEditor(first, afterSwitch) &&
+                    afterSwitch.keyboard == before.keyboard &&
+                    afterField != null &&
+                    DebugOneStopQa.SixKey.matches(afterField.text, afterField.selectionStart, afterField.selectionEnd, 0) &&
+                    afterLayout == PhysicalKeyboardLayout.HANGUL &&
+                    VisualKeyboardPolicy.literalLayoutChanged(
+                        before, afterSwitch, languageSwitch = true,
+                        destination = Character.UnicodeScript.HANGUL,
+                    )
+                if (!switchedCleanly) {
+                    uncertain = true
+                    recordLayoutEvidence(switchCandidate.route.code, "korean_layout_post_switch_unverified")
+                    return fail("korean_layout_post_switch_unverified")
+                }
+                layoutSwitchConfirmed = true
+                recordLayoutEvidence(switchCandidate.route.code)
+                before = afterSwitch
+                checkpointAt("key_1_preflight", "korean_layout_ready")
+            }
+        }
 
         val started = clockMs()
         val observed = observeSequence(sequenceLabels)
@@ -355,7 +461,10 @@ internal object DebugSixKeyExecution {
             uncertain = attempts > 0
             return fail("six_key_final_read_unconfirmed")
         }
-        return Outcome(progress(), null, evidence.toList(), observationMs, extraReads, afterFailure, followUpEvidence)
+        return Outcome(
+            progress(), null, evidence.toList(), observationMs, extraReads, afterFailure, followUpEvidence,
+            initialLayoutCode, finalLayoutCode, layoutSwitchAttempts, layoutSwitchConfirmed,
+        )
     }
 
     suspend fun run(
@@ -405,5 +514,132 @@ internal object DebugSixKeyExecution {
         first = first,
         allowed = allowed,
         checkpoint = checkpoint,
+        switchToKoreanLayout = { beforeFrame, candidate, nonce ->
+            val ime = beforeFrame.keyboard
+            when (candidate.route) {
+                KoreanLayoutSwitchRoute.SAMSUNG_VISUAL_KEY -> {
+                    port.resetDebugCaptureEvidence()
+                    val observed = control.observe(
+                        includeImage = true,
+                        imageScope = "keyboard",
+                        keyboardKeyExact = "한/영",
+                    )
+                    val obsId = observed.data["observation_id"]?.jsonPrimitive?.contentOrNull
+                    val vis = observed.data["visual"] as? JsonObject
+                    val visId = vis?.get("visual_id")?.jsonPrimitive?.contentOrNull
+                    val visScope = vis?.get("scope")?.jsonPrimitive?.contentOrNull
+                    val nodes = (observed.data["nodes"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+                    val matchedNode = nodes.filter { node ->
+                        node["enabled"]?.jsonPrimitive?.booleanOrNull == true &&
+                            node["source_window_id"]?.jsonPrimitive?.intOrNull == ime?.windowId &&
+                            node["keyboard_key"]?.jsonPrimitive?.contentOrNull == "한/영" &&
+                            node["visual_key_candidate"]?.jsonPrimitive?.booleanOrNull == true &&
+                            node["keyboard_image_candidate"]?.jsonPrimitive?.booleanOrNull != true &&
+                            node["bounds"]?.jsonPrimitive?.contentOrNull == candidate.node.bounds
+                    }.singleOrNull()
+                    val nodeId = matchedNode?.get("node_id")?.jsonPrimitive?.intOrNull
+                    val certifiedFrame = if (observed.success && !obsId.isNullOrBlank() && !visId.isNullOrBlank()) {
+                        control.certifiedKeyboardObservation(obsId, visId, session.epoch)?.frame
+                    } else null
+                    if (!observed.success ||
+                        observed.data["security_scan_complete"]?.jsonPrimitive?.booleanOrNull != true ||
+                        observed.data["output_truncated"]?.jsonPrimitive?.booleanOrNull != false ||
+                        visScope != "keyboard" || obsId.isNullOrBlank() || visId.isNullOrBlank() ||
+                        nodeId == null || certifiedFrame == null ||
+                        !DebugOneStopQa.sameEditor(first, certifiedFrame) ||
+                        certifiedFrame.keyboard != ime) {
+                        LayoutSwitchPacket(
+                            success = false, attempted = false, unknown = false,
+                            reason = observed.data["reason_code"]?.jsonPrimitive?.contentOrNull
+                                ?: "korean_layout_switch_observation_unverified",
+                        )
+                    } else {
+                        val cert = port.certifyKoreanLayoutSwitchDetailed(
+                            visualId = visId,
+                            frame = certifiedFrame,
+                            nodeId = nodeId,
+                            nodeBoundsRaw = candidate.node.bounds,
+                        )
+                        val crop = cert.crop?.takeIf { it.valid }
+                        if (crop == null || cert.method != "native_layout_switch_and_live_surface") {
+                            LayoutSwitchPacket(
+                                success = false, attempted = false, unknown = false,
+                                reason = cert.failureStage ?: "korean_layout_switch_certification_unverified",
+                            )
+                        } else {
+                            val proof = AutonomousKeyboardSequenceProof(
+                                nonce = nonce,
+                                sessionId = session.id,
+                                sessionEpoch = session.epoch,
+                                observationId = obsId,
+                                visualId = visId,
+                                steps = listOf(
+                                    AutonomousCertifiedKeyStep(
+                                        label = "한/영",
+                                        nodeId = nodeId,
+                                        imageOnly = false,
+                                        crop = crop,
+                                        method = cert.method,
+                                    ),
+                                ),
+                            )
+                            val res = control.visualKoreanLayoutSwitchAutonomous(
+                                buildJsonObject {
+                                    put("session_id", session.id)
+                                    put("observation_id", obsId)
+                                    put("visual_id", visId)
+                                    put("visual_target_confirmed", false)
+                                    put("node_id", nodeId)
+                                },
+                                proof,
+                            )
+                            LayoutSwitchPacket(
+                                success = res.success &&
+                                    res.data["layout_switch_confirmed"]?.jsonPrimitive?.booleanOrNull == true,
+                                attempted = res.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true,
+                                unknown = res.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true,
+                                reason = res.data["reason_code"]?.jsonPrimitive?.contentOrNull,
+                            )
+                        }
+                    }
+                }
+                KoreanLayoutSwitchRoute.SEMANTIC_KEY -> {
+                    val observed = control.observe(keyboardKeyExact = candidate.node.keyboardKey)
+                    val obsId = observed.data["observation_id"]?.jsonPrimitive?.contentOrNull
+                    val nodes = (observed.data["nodes"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+                    val matchedNode = nodes.filter { node ->
+                        node["enabled"]?.jsonPrimitive?.booleanOrNull == true &&
+                            node["clickable"]?.jsonPrimitive?.booleanOrNull == true &&
+                            node["source_window_id"]?.jsonPrimitive?.intOrNull == ime?.windowId &&
+                            node["keyboard_key"]?.jsonPrimitive?.contentOrNull == candidate.node.keyboardKey &&
+                            node["bounds"]?.jsonPrimitive?.contentOrNull == candidate.node.bounds
+                    }.singleOrNull()
+                    val nodeId = matchedNode?.get("node_id")?.jsonPrimitive?.intOrNull
+                    if (!observed.success ||
+                        observed.data["security_scan_complete"]?.jsonPrimitive?.booleanOrNull != true ||
+                        observed.data["output_truncated"]?.jsonPrimitive?.booleanOrNull != false ||
+                        obsId.isNullOrBlank() || nodeId == null) {
+                        LayoutSwitchPacket(
+                            success = false, attempted = false, unknown = false,
+                            reason = observed.data["reason_code"]?.jsonPrimitive?.contentOrNull
+                                ?: "korean_layout_switch_observation_unverified",
+                        )
+                    } else {
+                        val res = control.action(buildJsonObject {
+                            put("action", "key")
+                            put("session_id", session.id)
+                            put("observation_id", obsId)
+                            put("node_id", nodeId)
+                        })
+                        LayoutSwitchPacket(
+                            success = res.success,
+                            attempted = res.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true,
+                            unknown = res.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true,
+                            reason = res.data["reason_code"]?.jsonPrimitive?.contentOrNull,
+                        )
+                    }
+                }
+            }
+        },
     )
 }
