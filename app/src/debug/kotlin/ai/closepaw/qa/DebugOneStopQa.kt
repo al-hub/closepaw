@@ -958,39 +958,249 @@ internal object DebugOneStopQa {
                     batchId: String, approvedProjection: ProjectionImageLease): JsonObject {
         val diagnosticOnly = request.mode.diagnosticOnly
         require(BuildConfig.DEBUG && context.packageName == CaptureQaAcceptance.CANDIDATE)
-        val runId = UUID.randomUUID().toString()
         val settings = McpExecutionSettings(context)
+        val ctx = RunContext(context, status, request, batchId, diagnosticOnly)
+
+        if (CaptureQaAcceptance.setup(context) != "ready") return ctx.stop("debug_qa_setup_required")
+        if (!settings.enabled) return ctx.stop("debug_connection_not_enabled")
+        val service = AgentService.instance ?: return ctx.stop("accessibility_permission_missing")
+        val session = service.remoteControlSession
+        ctx.sessionReference = session.id
+        if (session.state !in setOf(ControlSession.State.IDLE, ControlSession.State.ENDED))
+            return ctx.stop("another_control_session_active")
+        if (ProjectionImageTransport.active() !== approvedProjection || !approvedProjection.screenObservationAllowed())
+            return ctx.stop("android_observation_approval_required")
+
+        // Chrome was opened by the physically visible QA Activity immediately
+        // after starting the foreground runner. A background FGS must NOT try to
+        // bypass Android background-activity-launch restrictions.
+        ctx.stage = "await_chrome"
+        ctx.checkpoint("waiting_for_visible_activity_chrome_launch")
+        val deadline = SystemClock.elapsedRealtime() + 60_000L
+        var foreground = false
+        while (SystemClock.elapsedRealtime() < deadline) {
+            currentCoroutineContext().ensureActive()
+            if (AgentService.instance !== service || !settings.genericControlEnabled ||
+                ProjectionImageTransport.active() !== approvedProjection ||
+                !approvedProjection.screenObservationAllowed())
+                return ctx.stop("authority_changed_during_preflight")
+            if (session.state !in setOf(ControlSession.State.IDLE, ControlSession.State.ENDED))
+                return ctx.stop("session_changed_during_preflight")
+            foreground = withContext(Dispatchers.Main) {
+                val root = service.rootInActiveWindow ?: return@withContext false
+                try { root.packageName?.toString() == CHROME } finally { root.recycle() }
+            }
+            if (foreground) break
+            delay(250)
+        }
+        if (!foreground) return ctx.stop("blank_chrome_deadline")
+        if (!ControlScreenLease.mutex.tryLock()) return ctx.stop("ui_busy")
+        var active = false
+        val allowed: () -> Boolean = {
+            AgentService.instance === service && settings.enabled && settings.genericControlEnabled &&
+                ProjectionImageTransport.active() === approvedProjection &&
+                approvedProjection.screenObservationAllowed() &&
+                session.explicit && session.state == ControlSession.State.ACTIVE
+        }
+        val port = AndroidControlPort(context, runtime = settings.runtimeControl, allowed = allowed)
+        val control = GenericControl(port, allowed)
+        return try {
+            if (!withContext(Dispatchers.Main) { session.start() })
+                return ctx.stop("explicit_session_start_refused")
+            active = true
+            port.activity(true)
+            // Chrome's accessibility window can be replaced during the first resume
+            // animation. Let the foreground settle before a fresh full security scan.
+            delay(350L)
+            if (!allowed()) return ctx.stop("control_authority_revoked")
+            ctx.stage = "editor_preflight"
+            ctx.checkpoint("native_preflight")
+            val prepared = prepareChromeEditor(port, control, session, allowed, diagnosticOnly) { phase ->
+                ctx.stage = phase
+                ctx.checkpoint("guarded_chrome_preparation")
+            }
+            ctx.recordPrepared(prepared)
+            val first = prepared.frame
+                ?: return continueAfterFailure(ctx, port, control, session, service, approvedProjection, allowed,
+                    prepared.failure ?: "chrome_preparation_refused")
+            // Independent reason codes and booleans are written before any key dispatch.
+            val diagnosed = editorPreflightFacts(first)
+            ctx.preflightFacts = diagnosed
+            editorPreflightReason(diagnosed)?.let {
+                return continueAfterFailure(ctx, port, control, session, service, approvedProjection, allowed, it)
+            }
+            val observedLayout = NativeKeyboardStructuralCertification.classifyPhysicalLayout(first).code
+            ctx.initialPhysicalLayout = observedLayout
+            ctx.finalPhysicalLayout = observedLayout
+
+            // At most three fresh read-only observations in the same locally
+            // approved session, only for the exact capture-generation refusal.
+            // No retry of a touch, no reuse of stale images or relaxed guard.
+            if (diagnosticOnly) {
+                return runStructureDiagnostic(ctx, port, control, session, first, allowed)
+            }
+
+            val execution = DebugSixKeyExecution.run(
+                port, control, session, first, allowed,
+            ) { progress, reason ->
+                ctx.verifiedKeys = progress.verified
+                ctx.attempts = progress.attempts
+                ctx.uncertain = progress.uncertain
+                ctx.stage = progress.stage
+                ctx.checkpoint(reason)
+            }
+            ctx.verifiedKeys = execution.progress.verified
+            ctx.attempts = execution.progress.attempts
+            ctx.uncertain = execution.progress.uncertain
+            ctx.stage = execution.progress.stage
+            ctx.keyEvidence.addAll(execution.evidence)
+            ctx.diagnosticDurationMs += execution.observationElapsedMs
+            ctx.diagnosticReadCount += execution.followUpNativeReads
+            ctx.afterFailureStatus = execution.followUpStatus
+            ctx.afterFailureEvidence = execution.followUpEvidence
+            ctx.initialPhysicalLayout = execution.initialPhysicalLayout
+            ctx.finalPhysicalLayout = execution.finalPhysicalLayout
+            ctx.layoutSwitchAttempts = execution.layoutSwitchAttempts
+            ctx.layoutSwitchConfirmed = execution.layoutSwitchConfirmed
+            if (execution.failure != null) ctx.stop(execution.failure)
+            else ctx.result("PASS", "six_physical_keys_editor_and_caret_confirmed")
+                .also { write(context, it) }
+        } catch (cancel: CancellationException) {
+            ctx.uncertain = ctx.uncertain || ctx.stage.endsWith("_dispatch")
+            ctx.stop("run_cancelled")
+        } catch (_: Exception) {
+            ctx.uncertain = ctx.uncertain || ctx.stage.endsWith("_dispatch")
+            ctx.stop("guarded_qa_failed")
+        } finally {
+            control.invalidate()
+            try { port.activity(false) } finally {
+                if (active) withContext(NonCancellable + Dispatchers.Main) { session.end() }
+                ControlScreenLease.mutex.unlock()
+            }
+        }
+    }
+
+    // Ordinary Chrome-setup failure does not terminate a live, user-approved
+    // diagnostic session before independent, bounded READ-ONLY probes.
+    private suspend fun continueAfterFailure(
+        ctx: RunContext,
+        port: AndroidControlPort,
+        control: GenericControl,
+        session: ControlSession,
+        service: AgentService,
+        approvedProjection: ProjectionImageLease,
+        allowed: () -> Boolean,
+        reason: String,
+    ): JsonObject {
+        ctx.firstFailureCode = safeReasonCode(reason)
+        ctx.failureCount++
+        ctx.recordStep("chrome_preparation", "FAILED", reason,
+            ctx.chromeSelectorDiagnostics?.redactedJson() ?: buildJsonObject {})
+        val liveChrome = allowed() && chromeWindowFacts().chromeRoot
+        if (!DebugContinuousReadOnly.mayInspect(
+                reason, ctx.diagnosticOnly, ctx.uncertain, allowed(), liveChrome)) {
+            ctx.recordStep("independent_diagnostics", "DEPENDENCY_BLOCKED",
+                "unsafe_or_ineligible")
+            return ctx.stop(reason)
+        }
+        ctx.qaState = "STEP_FAILED_CONTINUING"
+        ctx.stage = "post_failure_read_only"
+        ctx.checkpoint("first_failure_preserved")
+        DebugPostFailureProbes.collect(
+            port = port, control = control, session = session,
+            projectionLive = { approvedProjection.screenObservationAllowed() },
+            accessibilityLive = { AgentService.instance === service },
+            allowed = allowed, inspectWindow = { chromeWindowFacts() },
+        ) { finding ->
+            ctx.postFailureStepCount++
+            ctx.recordStep(finding.stepId, finding.status, finding.reason, finding.details)
+            ctx.stage = finding.stepId
+            ctx.qaState = if (finding.status == "PERMISSION_REVOKED")
+                "PERMISSION_REVOKED" else "STEP_FAILED_CONTINUING"
+            ctx.checkpoint("independent_read_only_step")
+        }
+        if (ctx.qaState != "PERMISSION_REVOKED") {
+            ctx.qaState = "DIAGNOSTICS_COMPLETE"
+            ctx.stage = "post_failure_complete"
+            ctx.checkpoint("independent_read_only_complete")
+        }
+        return ctx.stop(reason)
+    }
+
+    private suspend fun runStructureDiagnostic(
+        ctx: RunContext,
+        port: AndroidControlPort,
+        control: GenericControl,
+        session: ControlSession,
+        first: ControlFrame,
+        allowed: () -> Boolean,
+    ): JsonObject {
+        ctx.stage = "structure_diagnostic"
+        ctx.checkpoint("one_no_key_observation")
+        val originalEpoch = session.epoch
+        for (index in 0 until DebugKeyboardEvidence.MAX_STRUCTURE_OBSERVATIONS) {
+            currentCoroutineContext().ensureActive()
+            if (!allowed() || session.epoch != originalEpoch) return ctx.stop("control_authority_revoked")
+            if (index > 0) {
+                control.invalidate()
+                delay(350L)
+                if (!allowed() || session.epoch != originalEpoch) return ctx.stop("control_authority_revoked")
+                val fresh = port.capture()
+                ctx.diagnosticReadCount++
+                if (!allowed() || session.epoch != originalEpoch) return ctx.stop("control_authority_revoked")
+                val facts = editorPreflightFacts(fresh)
+                if (editorPreflightReason(facts) != null || !sameEditor(first, fresh) ||
+                    fresh.keyboard != first.keyboard || fresh.configurationRevision != first.configurationRevision ||
+                    fresh.foregroundWindowId != first.foregroundWindowId ||
+                    fresh.windowContext != first.windowContext || fresh.touchContext != first.touchContext)
+                    return ctx.stop("structure_retry_target_changed")
+            }
+            port.resetDebugCaptureEvidence()
+            val diagnosticStart = SystemClock.elapsedRealtime()
+            val observed = control.observe(includeImage = true, imageScope = "keyboard",
+                keyboardSequenceLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
+            ctx.diagnosticDurationMs += SystemClock.elapsedRealtime() - diagnosticStart
+            val reason = DebugKeyboardEvidence.nativeRefusalReason(observed.data)
+            ctx.keyEvidence += DebugKeyboardEvidence.fromObservation(
+                observed.data, observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"),
+                if (observed.success) null else port.debugDisplayPlanRefusal(),
+                if (observed.success) null else port.debugDisplayWindowCensus(),
+                if (observed.success) null else port.debugCaptureWindowChangeEvidence())
+            if (observed.success) {
+                ctx.stage = "structure_diagnostic_saved"
+                ctx.qaState = "DIAGNOSTICS_COMPLETE"
+                ctx.recordStep("structure_diagnostic", "PASS", "structural_key_evidence_captured_without_input")
+                return ctx.result("DIAGNOSTIC_COMPLETE", "structural_key_evidence_captured_without_input")
+                    .also { write(ctx.context, it); ctx.publishLive() }
+            }
+            if (ctx.firstFailureCode == null) ctx.firstFailureCode = reason
+            ctx.failureCount++
+            ctx.recordStep("structure_diagnostic", "FAILED", reason)
+            ctx.checkpoint("structure_refusal_preserved")
+            if (!DebugKeyboardEvidence.mayRetryStructure(reason, index + 1,
+                    allowed() && session.epoch == originalEpoch,
+                    ctx.uncertain || observed.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true))
+                return ctx.stop("structure_observation_refused")
+        }
+        return ctx.stop("structure_observation_refused")
+    }
+
+    /** Holds per-run mutable evidence outside suspend run() to keep JVM method bytecode well below 64 KiB. */
+    private class RunContext(
+        val context: Context,
+        val status: (String) -> Unit,
+        val request: DebugQaRunRequest,
+        val batchId: String,
+        val diagnosticOnly: Boolean,
+    ) {
+        val runId: String = UUID.randomUUID().toString()
         val stepEvents = mutableListOf<JsonObject>()
         var qaState = "SESSION_ACTIVE"
         var sessionReference = "not_started"
-        var eventStartElapsedMs = SystemClock.elapsedRealtime()
+        val eventStartElapsedMs = SystemClock.elapsedRealtime()
         var firstFailureCode: String? = null
         var failureCount = 0
         var postFailureStepCount = 0
-        fun safeCode(code: String): String =
-            code.takeIf { it.length in 1..80 && it.matches(Regex("[a-z0-9_]+")) }
-                ?: "unavailable"
-        fun recordStep(stepId: String, statusCode: String, reasonCode: String,
-                       details: JsonObject = buildJsonObject {}) {
-            if (stepEvents.size >= 20) return
-            val sequence = stepEvents.size + 1
-            val eventEpochMs = System.currentTimeMillis()
-            val eventElapsedMs = SystemClock.elapsedRealtime()
-            stepEvents += buildJsonObject {
-                put("sequence", sequence)
-                put("run_id", runId)
-                put("device_clock", deviceClockEvidence(eventEpochMs, eventElapsedMs))
-                put("step_id", safeCode(stepId))
-                put("status", safeCode(statusCode.lowercase()).uppercase())
-                put("reason_code", safeCode(reasonCode))
-                put("elapsed_ms", SystemClock.elapsedRealtime() - eventStartElapsedMs)
-                put("facts", details)
-            }
-            // ADB logcat correlation marker. Never log frame content, URLs,
-            // keyboard labels, pixels, coordinates or any arbitrary error string.
-            android.util.Log.i("ClosePawQaClock",
-                "run_id=$runId seq=$sequence epoch_ms=$eventEpochMs elapsed_realtime_ms=$eventElapsedMs")
-        }
         var verifiedKeys = 0
         var attempts = 0
         var setupClickAttempts = 0
@@ -1023,6 +1233,49 @@ internal object DebugOneStopQa {
         val started = SystemClock.elapsedRealtime()
         val startedEpochMs = System.currentTimeMillis()
         var newTabEvidence = "none"
+
+        fun recordPrepared(prepared: ChromeReady) {
+            nativePreflightRefusal = prepared.nativeRefusal
+            chromeReadCount = prepared.chromeReadCount
+            chromeRecoveryReads = prepared.chromeRecoveryReads
+            firstChromeRefusal = prepared.firstChromeRefusal
+            foregroundFactsAtRefusal = prepared.foregroundFactsAtRefusal
+            chromeSelectorDiagnostics = prepared.diagnostics
+            chromeToolbarSamples = prepared.toolbarSamples
+            priorChromeTabCount = prepared.tabsBefore
+            newChromeTabCount = prepared.tabsAfter
+            newChromeTabVerified = prepared.newTabVerified
+            newTabEvidence = prepared.newTabEvidence
+            navigationClickAttempts = prepared.navigationClicks
+            chromeOmniboxBackAttempts = prepared.omniboxBackAttempts
+            chromeBackContextRefusalDetail = prepared.backContextRefusalDetail
+            chromeBackStepFacts = prepared.backStepFacts
+            setupClickAttempts = prepared.focusClicks
+            uncertain = prepared.unknown
+        }
+
+        fun recordStep(stepId: String, statusCode: String, reasonCode: String,
+                       details: JsonObject = buildJsonObject {}) {
+            if (stepEvents.size >= 20) return
+            val sequence = stepEvents.size + 1
+            val eventEpochMs = System.currentTimeMillis()
+            val eventElapsedMs = SystemClock.elapsedRealtime()
+            stepEvents += buildJsonObject {
+                put("sequence", sequence)
+                put("run_id", runId)
+                put("device_clock", deviceClockEvidence(eventEpochMs, eventElapsedMs))
+                put("step_id", safeReasonCode(stepId))
+                put("status", safeReasonCode(statusCode.lowercase()).uppercase())
+                put("reason_code", safeReasonCode(reasonCode))
+                put("elapsed_ms", SystemClock.elapsedRealtime() - eventStartElapsedMs)
+                put("facts", details)
+            }
+            // ADB logcat correlation marker. Never log frame content, URLs,
+            // keyboard labels, pixels, coordinates or any arbitrary error string.
+            android.util.Log.i("ClosePawQaClock",
+                "run_id=$runId seq=$sequence epoch_ms=$eventEpochMs elapsed_realtime_ms=$eventElapsedMs")
+        }
+
         fun result(outcome: String, reason: String) = buildJsonObject {
             put("schema_version", 3)
             put("run_id", runId)
@@ -1055,8 +1308,8 @@ internal object DebugOneStopQa {
             put("touch_attempts", attempts)
             put("layout_switch_attempts", layoutSwitchAttempts)
             put("layout_switch_confirmed", layoutSwitchConfirmed)
-            initialPhysicalLayout?.let { put("initial_physical_layout", safeCode(it)) }
-            finalPhysicalLayout?.let { put("final_physical_layout", safeCode(it)) }
+            initialPhysicalLayout?.let { put("initial_physical_layout", safeReasonCode(it)) }
+            finalPhysicalLayout?.let { put("final_physical_layout", safeReasonCode(it)) }
             put("editor_focus_click_attempts", setupClickAttempts)
             put("navigation_click_attempts", navigationClickAttempts)
             put("chrome_omnibox_back_attempts", chromeOmniboxBackAttempts)
@@ -1103,22 +1356,25 @@ internal object DebugOneStopQa {
                 it.length in 1..80 && it.matches(Regex("[a-z0-9_]+"))
             }?.let { put("native_preflight_refusal", it) }
         }
+
         fun publishLive() {
             atomicWrite(File(context.filesDir, "debug-qa/live-state.json"), buildJsonObject {
                 put("schema_version", 1)
                 put("run_id", runId)
                 put("state", qaState)
-                put("stage", safeCode(stage))
+                put("stage", safeReasonCode(stage))
                 put("error_count", failureCount)
                 put("error_code", firstFailureCode ?: "none")
                 put("updated_at_epoch_ms", System.currentTimeMillis())
             })
-            status(qaState + ": " + safeCode(stage) + " errors=" + failureCount)
+            status(qaState + ": " + safeReasonCode(stage) + " errors=" + failureCount)
         }
+
         fun checkpoint(why: String) {
             write(context, result("IN_PROGRESS", why))
             publishLive()
         }
+
         fun stop(why: String): JsonObject {
             if (qaState != "PERMISSION_REVOKED") qaState = "SESSION_STOPPED"
             val terminal = ensureTerminalFailureRecorded(failureCount, firstFailureCode, stepEvents.size, why)
@@ -1129,221 +1385,6 @@ internal object DebugOneStopQa {
             }
             return result(if (uncertain) "UNKNOWN" else "BLOCKED", why)
                 .also { write(context, it); publishLive() }
-        }
-
-        if (CaptureQaAcceptance.setup(context) != "ready") return stop("debug_qa_setup_required")
-        if (!settings.enabled) return stop("debug_connection_not_enabled")
-        val service = AgentService.instance ?: return stop("accessibility_permission_missing")
-        val session = service.remoteControlSession
-        sessionReference = session.id
-        if (session.state !in setOf(ControlSession.State.IDLE, ControlSession.State.ENDED))
-            return stop("another_control_session_active")
-        if (ProjectionImageTransport.active() !== approvedProjection || !approvedProjection.screenObservationAllowed())
-            return stop("android_observation_approval_required")
-
-        // Chrome was opened by the physically visible QA Activity immediately
-        // after starting the foreground runner. A background FGS must NOT try to
-        // bypass Android background-activity-launch restrictions.
-        stage = "await_chrome"
-        checkpoint("waiting_for_visible_activity_chrome_launch")
-        val deadline = SystemClock.elapsedRealtime() + 60_000L
-        var foreground = false
-        while (SystemClock.elapsedRealtime() < deadline) {
-            currentCoroutineContext().ensureActive()
-            if (AgentService.instance !== service || !settings.genericControlEnabled ||
-                ProjectionImageTransport.active() !== approvedProjection ||
-                !approvedProjection.screenObservationAllowed())
-                return stop("authority_changed_during_preflight")
-            if (session.state !in setOf(ControlSession.State.IDLE, ControlSession.State.ENDED))
-                return stop("session_changed_during_preflight")
-            foreground = withContext(Dispatchers.Main) {
-                val root = service.rootInActiveWindow ?: return@withContext false
-                try { root.packageName?.toString() == CHROME } finally { root.recycle() }
-            }
-            if (foreground) break
-            delay(250)
-        }
-        if (!foreground) return stop("blank_chrome_deadline")
-        if (!ControlScreenLease.mutex.tryLock()) return stop("ui_busy")
-        var active = false
-        val allowed: () -> Boolean = {
-            AgentService.instance === service && settings.enabled && settings.genericControlEnabled &&
-                ProjectionImageTransport.active() === approvedProjection &&
-                approvedProjection.screenObservationAllowed() &&
-                session.explicit && session.state == ControlSession.State.ACTIVE
-        }
-        val port = AndroidControlPort(context, runtime = settings.runtimeControl, allowed = allowed)
-        val control = GenericControl(port, allowed)
-        return try {
-            if (!withContext(Dispatchers.Main) { session.start() })
-                return stop("explicit_session_start_refused")
-            active = true
-            port.activity(true)
-            // Chrome's accessibility window can be replaced during the first resume
-            // animation. Let the foreground settle before a fresh full security scan.
-            delay(350L)
-            if (!allowed()) return stop("control_authority_revoked")
-            stage = "editor_preflight"
-            checkpoint("native_preflight")
-            val prepared = prepareChromeEditor(port, control, session, allowed, diagnosticOnly) { phase ->
-                stage = phase
-                checkpoint("guarded_chrome_preparation")
-            }
-            nativePreflightRefusal = prepared.nativeRefusal
-            chromeReadCount = prepared.chromeReadCount
-            chromeRecoveryReads = prepared.chromeRecoveryReads
-            firstChromeRefusal = prepared.firstChromeRefusal
-            foregroundFactsAtRefusal = prepared.foregroundFactsAtRefusal
-            chromeSelectorDiagnostics = prepared.diagnostics
-            chromeToolbarSamples = prepared.toolbarSamples
-            priorChromeTabCount = prepared.tabsBefore
-            newChromeTabCount = prepared.tabsAfter
-            newChromeTabVerified = prepared.newTabVerified
-            newTabEvidence = prepared.newTabEvidence
-            navigationClickAttempts = prepared.navigationClicks
-            chromeOmniboxBackAttempts = prepared.omniboxBackAttempts
-            chromeBackContextRefusalDetail = prepared.backContextRefusalDetail
-            chromeBackStepFacts = prepared.backStepFacts
-            setupClickAttempts = prepared.focusClicks
-            uncertain = prepared.unknown
-            // Ordinary Chrome-setup failure does not terminate a live, user-approved
-            // diagnostic session before independent, bounded READ-ONLY probes.
-            suspend fun continueAfterFailure(reason: String): JsonObject {
-                firstFailureCode = safeCode(reason)
-                failureCount++
-                recordStep("chrome_preparation", "FAILED", reason,
-                    chromeSelectorDiagnostics?.redactedJson() ?: buildJsonObject {})
-                val liveChrome = allowed() && chromeWindowFacts().chromeRoot
-                if (!DebugContinuousReadOnly.mayInspect(
-                        reason, diagnosticOnly, uncertain, allowed(), liveChrome)) {
-                    recordStep("independent_diagnostics", "DEPENDENCY_BLOCKED",
-                        "unsafe_or_ineligible")
-                    return stop(reason)
-                }
-                qaState = "STEP_FAILED_CONTINUING"
-                stage = "post_failure_read_only"
-                checkpoint("first_failure_preserved")
-                DebugPostFailureProbes.collect(
-                    port = port, control = control, session = session,
-                    projectionLive = { approvedProjection.screenObservationAllowed() },
-                    accessibilityLive = { AgentService.instance === service },
-                    allowed = allowed, inspectWindow = { chromeWindowFacts() },
-                ) { finding ->
-                    postFailureStepCount++
-                    recordStep(finding.stepId, finding.status, finding.reason, finding.details)
-                    stage = finding.stepId
-                    qaState = if (finding.status == "PERMISSION_REVOKED")
-                        "PERMISSION_REVOKED" else "STEP_FAILED_CONTINUING"
-                    checkpoint("independent_read_only_step")
-                }
-                if (qaState != "PERMISSION_REVOKED") {
-                    qaState = "DIAGNOSTICS_COMPLETE"
-                    stage = "post_failure_complete"
-                    checkpoint("independent_read_only_complete")
-                }
-                return stop(reason)
-            }
-            val first = prepared.frame
-                ?: return continueAfterFailure(prepared.failure ?: "chrome_preparation_refused")
-            // Independent reason codes and booleans are written before any key dispatch.
-            val diagnosed = editorPreflightFacts(first)
-            preflightFacts = diagnosed
-            editorPreflightReason(diagnosed)?.let { return continueAfterFailure(it) }
-            val observedLayout = NativeKeyboardStructuralCertification.classifyPhysicalLayout(first).code
-            initialPhysicalLayout = observedLayout
-            finalPhysicalLayout = observedLayout
-
-            // At most three fresh read-only observations in the same locally
-            // approved session, only for the exact capture-generation refusal.
-            // No retry of a touch, no reuse of stale images or relaxed guard.
-            if (diagnosticOnly) {
-                stage = "structure_diagnostic"
-                checkpoint("one_no_key_observation")
-                val originalEpoch = session.epoch
-                for (index in 0 until DebugKeyboardEvidence.MAX_STRUCTURE_OBSERVATIONS) {
-                    currentCoroutineContext().ensureActive()
-                    if (!allowed() || session.epoch != originalEpoch) return stop("control_authority_revoked")
-                    if (index > 0) {
-                        control.invalidate()
-                        delay(350L)
-                        if (!allowed() || session.epoch != originalEpoch) return stop("control_authority_revoked")
-                        val fresh = port.capture()
-                        diagnosticReadCount++
-                        if (!allowed() || session.epoch != originalEpoch) return stop("control_authority_revoked")
-                        val facts = editorPreflightFacts(fresh)
-                        if (editorPreflightReason(facts) != null || !sameEditor(first, fresh) ||
-                            fresh.keyboard != first.keyboard || fresh.configurationRevision != first.configurationRevision ||
-                            fresh.foregroundWindowId != first.foregroundWindowId ||
-                            fresh.windowContext != first.windowContext || fresh.touchContext != first.touchContext)
-                            return stop("structure_retry_target_changed")
-                    }
-                    port.resetDebugCaptureEvidence()
-                    val diagnosticStart = SystemClock.elapsedRealtime()
-                    val observed = control.observe(includeImage = true, imageScope = "keyboard",
-                        keyboardSequenceLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space"))
-                    diagnosticDurationMs += SystemClock.elapsedRealtime() - diagnosticStart
-                    val reason = DebugKeyboardEvidence.nativeRefusalReason(observed.data)
-                    keyEvidence += DebugKeyboardEvidence.fromObservation(
-                        observed.data, observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"),
-                        if (observed.success) null else port.debugDisplayPlanRefusal(),
-                        if (observed.success) null else port.debugDisplayWindowCensus(),
-                        if (observed.success) null else port.debugCaptureWindowChangeEvidence())
-                    if (observed.success) {
-                        stage = "structure_diagnostic_saved"
-                        qaState = "DIAGNOSTICS_COMPLETE"
-                        recordStep("structure_diagnostic", "PASS", "structural_key_evidence_captured_without_input")
-                        return result("DIAGNOSTIC_COMPLETE", "structural_key_evidence_captured_without_input")
-                            .also { write(context, it); publishLive() }
-                    }
-                    if (firstFailureCode == null) firstFailureCode = reason
-                    failureCount++
-                    recordStep("structure_diagnostic", "FAILED", reason)
-                    checkpoint("structure_refusal_preserved")
-                    if (!DebugKeyboardEvidence.mayRetryStructure(reason, index + 1,
-                            allowed() && session.epoch == originalEpoch,
-                            uncertain || observed.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true))
-                        return stop("structure_observation_refused")
-                }
-                return stop("structure_observation_refused")
-            }
-
-            val execution = DebugSixKeyExecution.run(
-                port, control, session, first, allowed,
-            ) { progress, reason ->
-                verifiedKeys = progress.verified
-                attempts = progress.attempts
-                uncertain = progress.uncertain
-                stage = progress.stage
-                checkpoint(reason)
-            }
-            verifiedKeys = execution.progress.verified
-            attempts = execution.progress.attempts
-            uncertain = execution.progress.uncertain
-            stage = execution.progress.stage
-            keyEvidence.addAll(execution.evidence)
-            diagnosticDurationMs += execution.observationElapsedMs
-            diagnosticReadCount += execution.followUpNativeReads
-            afterFailureStatus = execution.followUpStatus
-            afterFailureEvidence = execution.followUpEvidence
-            initialPhysicalLayout = execution.initialPhysicalLayout
-            finalPhysicalLayout = execution.finalPhysicalLayout
-            layoutSwitchAttempts = execution.layoutSwitchAttempts
-            layoutSwitchConfirmed = execution.layoutSwitchConfirmed
-            if (execution.failure != null) stop(execution.failure)
-            else result("PASS", "six_physical_keys_editor_and_caret_confirmed")
-                .also { write(context, it) }
-        } catch (cancel: CancellationException) {
-            uncertain = uncertain || stage.endsWith("_dispatch")
-            stop("run_cancelled")
-        } catch (_: Exception) {
-            uncertain = uncertain || stage.endsWith("_dispatch")
-            stop("guarded_qa_failed")
-        } finally {
-            control.invalidate()
-            try { port.activity(false) } finally {
-                if (active) withContext(NonCancellable + Dispatchers.Main) { session.end() }
-                ControlScreenLease.mutex.unlock()
-            }
         }
     }
 }
