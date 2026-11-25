@@ -196,10 +196,28 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         } == true)
     private val keyboardTouchGeometry = KeyboardTouchGeometry()
     private val keyboardImageRecognition = KeyboardImageFallbackOcr()
+    private val autonomousSequenceLedger = AutonomousSequenceLedger()
+    override val allowsAutonomousDebugKeyboardProof: Boolean get() = ai.closepaw.BuildConfig.DEBUG
+    override fun beginAutonomousKeyboardSequence(
+        sequenceNonce: String,
+        sessionId: String,
+        epoch: Long,
+        totalSteps: Int,
+    ): Boolean = allowsAutonomousDebugKeyboardProof &&
+        autonomousSequenceLedger.begin(sequenceNonce, sessionId, epoch, totalSteps)
+    override fun advanceAutonomousKeyboardStep(sequenceNonce: String, completedStepIndex: Int) {
+        if (allowsAutonomousDebugKeyboardProof) {
+            autonomousSequenceLedger.advance(sequenceNonce, completedStepIndex)
+        }
+    }
+    override fun endAutonomousKeyboardSequence(sequenceNonce: String) {
+        autonomousSequenceLedger.end(sequenceNonce)
+    }
     override fun invalidate() {
         probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null
         keyboardTouchGeometry.clear()
         keyboardImageRecognition.clear()
+        autonomousSequenceLedger.clearActive()
     }
     private fun reason(service: AgentService?): String? = when {
         localAuthority?.refusal() != null -> localAuthority?.refusal()
@@ -354,41 +372,154 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         if (ai.closepaw.BuildConfig.DEBUG) displayPlanRefusalCode else null
 
     /**
-     * Read-only on-device pixel-role certification for a uniquely selected IME key
-     * candidate from the live certified keyboard snapshot. Reuses the exact native
-     * crop, disclosure-mask proof, SpaceBarGlyphPolicy, and ML Kit Korean OCR (>=0.92).
+     * Read-only on-device hybrid certification for a uniquely selected IME key
+     * candidate from the exact certified keyboard observation frame.
+     * - Image-only keys (e.g. Space): SpaceBarGlyphPolicy + ML Kit Korean OCR (>=0.92),
+     *   requiring whole-node disclosure.
+     * - Native-labeled physical character keys (Debug autonomous QA only): 8-layer
+     *   NativeKeyboardStructuralCertification + crop-scoped non-blank live surface check.
      * Never dispatches input and never falls back to uncertified coordinates.
      */
     internal suspend fun certifyKeyboardCandidatePixels(
         visualId: String,
         frame: ControlFrame,
+        nodeId: Int,
         nodeBoundsRaw: String,
         imageOnly: Boolean,
         expectedLabel: String,
-    ): TapBounds? {
-        if (!allowed()) return null
-        val live = session()?.takeIf { it.explicit && it.state == ControlSession.State.ACTIVE } ?: return null
-        val ime = frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed } ?: return null
-        val proof = VisualImageCache.proofFor(visualId) ?: return null
-        if (proof.scope != "keyboard" || proof.sourceDisplayId != 0 ||
-            !proof.sourceDisclosureAllowed() ||
-            System.currentTimeMillis() - proof.at !in 0L..10_000L ||
-            VisualKeyboardPolicy.proofOwnerRefusal(proof, ime) != null) return null
-        val nodeBounds = KeyboardImageFallbackPolicy.bounds(nodeBoundsRaw) ?: return null
-        val imeBounds = KeyboardImageFallbackPolicy.bounds(proof.imeBounds) ?: return null
-        val rawCrop = KeyboardImageFallbackPolicy.crop(proof, nodeBounds) ?: return null
+        requiredNativeLabels: List<String> = listOf(expectedLabel),
+    ): TapBounds? = certifyKeyboardCandidatePixelsDetailed(
+        visualId, frame, nodeId, nodeBoundsRaw, imageOnly, expectedLabel, requiredNativeLabels,
+    ).crop
+
+    internal suspend fun certifyKeyboardCandidatePixelsDetailed(
+        visualId: String,
+        frame: ControlFrame,
+        nodeId: Int,
+        nodeBoundsRaw: String,
+        imageOnly: Boolean,
+        expectedLabel: String,
+        requiredNativeLabels: List<String> = listOf(expectedLabel),
+    ): PixelCertificationOutcome {
+        val started = SystemClock.elapsedRealtime()
+        fun fail(
+            stage: String,
+            proofAgeMs: Long = -1L,
+            cropWidth: Int = 0,
+            cropHeight: Int = 0,
+            ocrAttempted: Boolean = false,
+            ocrLabelMatched: Boolean? = null,
+            ocrConfidenceBucket: String = "not_run",
+        ) = PixelCertificationOutcome(
+            crop = null, method = "none", failureStage = stage, proofAgeMs = proofAgeMs,
+            cropWidth = cropWidth, cropHeight = cropHeight, ocrAttempted = ocrAttempted,
+            ocrLabelMatched = ocrLabelMatched, ocrConfidenceBucket = ocrConfidenceBucket,
+            elapsedMs = (SystemClock.elapsedRealtime() - started).coerceAtLeast(0L),
+        )
+        if (!allowed()) return fail("authority_revoked")
+        val live = session()?.takeIf { it.explicit && it.state == ControlSession.State.ACTIVE }
+            ?: return fail("session_inactive")
+        val ime = frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed }
+            ?: return fail("ime_not_authorized")
+        val proof = VisualImageCache.proofFor(visualId) ?: return fail("proof_cache_miss")
+        val ageMs = (System.currentTimeMillis() - proof.at).coerceAtLeast(-1L)
+        if (frame.visual?.id != visualId) {
+            return fail("frame_visual_id_mismatch", proofAgeMs = ageMs)
+        }
+        if (proof.scope != "keyboard" || proof.sourceDisplayId != 0)
+            return fail("proof_scope_or_display_invalid", proofAgeMs = ageMs)
+        if (!proof.sourceDisclosureAllowed())
+            return fail("proof_disclosure_revoked", proofAgeMs = ageMs)
+        if (ageMs !in 0L..10_000L)
+            return fail("proof_age_expired", proofAgeMs = ageMs)
+        if (VisualKeyboardPolicy.proofOwnerRefusal(proof, ime) != null)
+            return fail("proof_owner_mismatch", proofAgeMs = ageMs)
+        val node = frame.nodes.singleOrNull { it.id == nodeId }
+            ?: return fail("candidate_node_missing_in_frame", proofAgeMs = ageMs)
+        if (node.bounds != nodeBoundsRaw)
+            return fail("candidate_bounds_mismatch", proofAgeMs = ageMs)
+        if (node.keyboardImageCandidate != imageOnly)
+            return fail("candidate_kind_mismatch", proofAgeMs = ageMs)
+        val nodeBounds = KeyboardImageFallbackPolicy.bounds(nodeBoundsRaw)
+            ?: return fail("node_bounds_invalid", proofAgeMs = ageMs)
+        val imeBounds = KeyboardImageFallbackPolicy.bounds(proof.imeBounds)
+            ?: return fail("ime_bounds_invalid", proofAgeMs = ageMs)
+
+        if (!imageOnly) {
+            if (!allowsAutonomousDebugKeyboardProof) {
+                return fail("autonomous_keyboard_proof_not_allowed", proofAgeMs = ageMs)
+            }
+            val structural = NativeKeyboardStructuralCertification.verify(
+                frame = frame,
+                proof = proof,
+                node = node,
+                expectedLabel = expectedLabel,
+                requiredNativeLabels = requiredNativeLabels,
+            )
+            val resolved = structural.crop ?: return fail(
+                structural.failureStage ?: "native_structural_unverified",
+                proofAgeMs = ageMs,
+            )
+            val cropW = resolved.right - resolved.left
+            val cropH = resolved.bottom - resolved.top
+            val surfaceFailure = keyboardImageRecognition.verifyKeyCropLiveSurface(proof, resolved, nodeBounds)
+            if (surfaceFailure != null) {
+                return fail(surfaceFailure, proofAgeMs = ageMs, cropWidth = cropW, cropHeight = cropH)
+            }
+            if (!allowed() || !proof.sourceDisclosureAllowed()) {
+                return fail("post_disclosure_revoked", proofAgeMs = ageMs, cropWidth = cropW, cropHeight = cropH)
+            }
+            return PixelCertificationOutcome(
+                crop = resolved,
+                method = "native_structural_and_live_surface",
+                failureStage = null,
+                proofAgeMs = ageMs,
+                cropWidth = cropW,
+                cropHeight = cropH,
+                ocrAttempted = false,
+                ocrLabelMatched = null,
+                ocrConfidenceBucket = "not_run",
+                elapsedMs = (SystemClock.elapsedRealtime() - started).coerceAtLeast(0L),
+            )
+        }
+
+        val rawCrop = KeyboardImageFallbackPolicy.crop(proof, nodeBounds)
+            ?: return fail("crop_unverified_or_masked", proofAgeMs = ageMs)
         val resolved = KeyboardSequencePixelProof.resolvedCrop(
-            proof, rawCrop, nodeBounds, imeBounds, requireWholeNode = imageOnly,
-        ) ?: return null
+            proof, rawCrop, nodeBounds, imeBounds, requireWholeNode = true,
+        ) ?: return fail(
+            "resolved_crop_unverified", proofAgeMs = ageMs,
+            cropWidth = rawCrop.right - rawCrop.left, cropHeight = rawCrop.bottom - rawCrop.top,
+        )
         val owner = KeyboardTouchGeometry.Owner(
             live.id, live.epoch,
             ai.closepaw.security.ImageRevocationAuthority.currentEpoch,
             frame.configurationRevision, frame.windowContext, ime,
         )
-        return resolved.takeIf {
-            keyboardImageRecognition.confirms(owner, proof, it, expectedLabel) &&
-                allowed() && proof.sourceDisclosureAllowed()
+        val rec = keyboardImageRecognition.confirmDetailed(owner, proof, resolved, expectedLabel)
+        val elapsed = (SystemClock.elapsedRealtime() - started).coerceAtLeast(0L)
+        if (!rec.confirmed) {
+            return PixelCertificationOutcome(
+                crop = null, method = "none", failureStage = rec.failureStage ?: "recognition_unverified",
+                proofAgeMs = ageMs, cropWidth = rec.cropWidth, cropHeight = rec.cropHeight,
+                ocrAttempted = rec.ocrAttempted, ocrLabelMatched = rec.ocrLabelMatched,
+                ocrConfidenceBucket = rec.ocrConfidenceBucket, elapsedMs = elapsed,
+            )
         }
+        if (!allowed() || !proof.sourceDisclosureAllowed()) {
+            return PixelCertificationOutcome(
+                crop = null, method = "none", failureStage = "post_disclosure_revoked",
+                proofAgeMs = ageMs, cropWidth = rec.cropWidth, cropHeight = rec.cropHeight,
+                ocrAttempted = rec.ocrAttempted, ocrLabelMatched = rec.ocrLabelMatched,
+                ocrConfidenceBucket = rec.ocrConfidenceBucket, elapsedMs = elapsed,
+            )
+        }
+        return PixelCertificationOutcome(
+            crop = resolved, method = rec.method, failureStage = null,
+            proofAgeMs = ageMs, cropWidth = rec.cropWidth, cropHeight = rec.cropHeight,
+            ocrAttempted = rec.ocrAttempted, ocrLabelMatched = rec.ocrLabelMatched,
+            ocrConfidenceBucket = rec.ocrConfidenceBucket, elapsedMs = elapsed,
+        )
     }
 
     private fun displayPlan(service: AgentService, frame: ControlFrame, keyboardOnly: Boolean = false): DisplayPlan? {
@@ -1180,10 +1311,33 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 } else if (!proof.sourceDisclosureAllowed()) return@withTree ControlEffect(false, false, VISUAL_SOURCE_REFUSED)
                 if(!editorGenerationMatches(proof,service) || editorImageRefusal(service,frame.packageName)!=null)
                     return@withTree ControlEffect(false,false,"visual_editor_privacy_changed")
-                if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
-                    System.currentTimeMillis()-proof.at !in 0L..60_000L) return@withTree ControlEffect(false,false,"visual_proof_invalid_or_expired")
-                if (!VisualActionPolicy.scopeAllowed(action,proof.scope)) return@withTree ControlEffect(false,false,"visual_scope_mismatch")
                 val freshKey = fresh.nodes.singleOrNull { it.id == node?.id }
+                val dispatchCtx = currentCoroutineContext()[AutonomousKeyboardDispatchContext]
+                val externalConfirmed = input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull == true
+                if (dispatchCtx != null && externalConfirmed) {
+                    return@withTree ControlEffect(false, false, "visual_proof_invalid_or_expired")
+                }
+                val expectedLabelMatches = if (imageOnlyKey) {
+                    imageLabel == dispatchCtx?.label
+                } else {
+                    imageLabel == null && freshKey?.keyboardKey == dispatchCtx?.label
+                }
+                val visualIdAndAgeValid = input["visual_id"]?.jsonPrimitive?.content == proof.id &&
+                    System.currentTimeMillis() - proof.at in 0L..60_000L
+                val autonomousFieldsMatch = visualIdAndAgeValid && action == "visual_key" && !externalConfirmed &&
+                    allowsAutonomousDebugKeyboardProof && dispatchCtx != null &&
+                    dispatchCtx.nonce.isNotBlank() && dispatchCtx.sequenceNonce.isNotBlank() &&
+                    input["observation_id"]?.jsonPrimitive?.contentOrNull == dispatchCtx.observationId &&
+                    dispatchCtx.visualId == proof.id &&
+                    dispatchCtx.sessionId == sessionFor(service).id &&
+                    dispatchCtx.epoch == admittedEpoch &&
+                    freshKey != null && freshKey.id == node?.id && freshKey.id == dispatchCtx.nodeId &&
+                    dispatchCtx.imageOnly == imageOnlyKey && expectedLabelMatches
+                val autonomousConfirmed = dispatchCtx != null && autonomousFieldsMatch &&
+                    autonomousSequenceLedger.verifyAndConsumeDispatch(dispatchCtx)
+                if (!visualIdAndAgeValid || !(externalConfirmed || autonomousConfirmed))
+                    return@withTree ControlEffect(false,false,"visual_proof_invalid_or_expired")
+                if (!VisualActionPolicy.scopeAllowed(action,proof.scope)) return@withTree ControlEffect(false,false,"visual_scope_mismatch")
                 if (action == "visual_key") VisualKeyboardPolicy.refusal(fresh, freshKey, proof.scope, imageLabel, input)?.let {
                     return@withTree ControlEffect(false,false,it)
                 }
@@ -1222,6 +1376,19 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         ?: return@withTree ControlEffect(false, false, "keyboard_image_crop_unverified")
                     if (!controlSpan("keyboard_role_image") { keyboardImageRecognition.confirms(owner, proof, crop, imageLabel.orEmpty()) })
                         return@withTree ControlEffect(false, false, "keyboard_image_label_unverified")
+                } else if (action == "visual_key" && autonomousConfirmed) {
+                    val liveCandidate = freshKey ?: return@withTree ControlEffect(false, false, "keyboard_visual_candidate_unverified")
+                    val ctx = dispatchCtx ?: return@withTree ControlEffect(false, false, "visual_proof_invalid_or_expired")
+                    val liveStructural = NativeKeyboardStructuralCertification.verify(
+                        frame = fresh.copy(visual = proof),
+                        proof = proof,
+                        node = liveCandidate,
+                        expectedLabel = ctx.label,
+                        requiredNativeLabels = ctx.expectedNativeLabels.toList(),
+                    )
+                    if (liveStructural.crop == null) {
+                        return@withTree ControlEffect(false, false, "keyboard_autonomous_structural_unverified")
+                    }
                 }
                 val latest = (if (proof.scope == "display") visualDisplay(fresh) else if (action == "visual_key") visualKeyboard(fresh) else visual(fresh)) ?: return@withTree ControlEffect(false,false,"visual_revalidation_failed")
                 if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context || latest.sourceWindowId != proof.sourceWindowId || latest.scope != proof.scope || latest.sourceDisplayId != proof.sourceDisplayId || latest.rotation != proof.rotation || latest.disclosedRegions != proof.disclosedRegions || latest.editorPrivacyGeneration != proof.editorPrivacyGeneration) {

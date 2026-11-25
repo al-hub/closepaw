@@ -1,5 +1,9 @@
 package ai.closepaw.qa
 
+import ai.closepaw.chatgpt.control.CensusKind
+import ai.closepaw.chatgpt.control.CensusLayer
+import ai.closepaw.chatgpt.control.CensusOwner
+import ai.closepaw.chatgpt.control.CensusRow
 import ai.closepaw.chatgpt.control.ControlFrame
 import ai.closepaw.chatgpt.control.ControlKeyboard
 import ai.closepaw.chatgpt.control.ControlNode
@@ -7,6 +11,8 @@ import ai.closepaw.chatgpt.control.ControlWindow
 import ai.closepaw.chatgpt.control.ControlWindowRecord
 import ai.closepaw.chatgpt.control.ControlWindowRect
 import ai.closepaw.chatgpt.control.ControlWindowSnapshot
+import ai.closepaw.chatgpt.control.DisplayWindowCensus
+import ai.closepaw.chatgpt.control.PixelCertificationOutcome
 import ai.closepaw.chatgpt.control.TapBounds
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
@@ -378,26 +384,55 @@ class DebugOmniboxAndSequenceTest {
             put("nodes", JsonArray(nodes.map { it.json() }))
         }
 
-    @Test fun p0b_sixKeyExecutionReusesVisualKeySequenceOnlyWhenAllFourKeysPixelCertified() = runBlocking {
+    @Test fun p0b_sixKeyExecutionUsesExplicitAutonomousHybridContractWithoutForgingExternalConfirm() = runBlocking {
         val g = node(101, window = 13301, pkg = ime, keyboardKey = "ㄱ", visualKeyCandidate = true)
         val a = node(103, window = 13301, pkg = ime, keyboardKey = "ㅏ", visualKeyCandidate = true)
         val n = node(105, window = 13301, pkg = ime, keyboardKey = "ㄴ", visualKeyCandidate = true)
         val space = node(107, window = 13301, pkg = ime, keyboardImageCandidate = true)
-        val initial = frame(blankFocusedUrl, g, a, n, space, editor = blankFocusedUrl, withIme = true)
+        val staleBefore = frame(blankFocusedUrl, editor = blankFocusedUrl, withIme = true).copy(fingerprint = "stale-before")
+        val certifiedObsFrame = frame(blankFocusedUrl, g, a, n, space, editor = blankFocusedUrl, withIme = true)
+            .copy(fingerprint = "certified-obs-frame")
         val finalEditor = blankFocusedUrl.copy(text = "가 나 ", empty = false, selectionStart = 4, selectionEnd = 4)
         val afterSeq = frame(finalEditor, editor = finalEditor, withIme = true)
 
-        val frames = ArrayDeque(listOf(initial, afterSeq))
+        val frames = ArrayDeque(listOf(staleBefore, afterSeq))
         var sequenceCalls = 0
+        val certifiedFrameFingerprints = mutableListOf<String>()
         val outcome = DebugSixKeyExecution.runWithSeam(
             captureFrame = { frames.removeFirst() },
-            observeSequence = { DebugSixKeyExecution.ObservePacket(true, validSequenceObservation(g, a, n, space)) },
-            certifyCandidate = { _, _, _ -> TapBounds(12, 12, 80, 80) },
-            dispatchSequence = { payload ->
+            observeSequence = {
+                DebugSixKeyExecution.ObservePacket(
+                    success = true,
+                    data = validSequenceObservation(g, a, n, space),
+                    certifiedFrame = certifiedObsFrame,
+                )
+            },
+            certifyCandidate = { _, cf, c, nativeLabels ->
+                certifiedFrameFingerprints += cf.fingerprint
+                assertEquals(listOf("ㄱ", "ㅏ", "ㄴ"), nativeLabels)
+                PixelCertificationOutcome(
+                    crop = TapBounds(12, 12, 80, 80),
+                    method = if (c.label == "Space") "space_glyph" else "native_structural_and_live_surface",
+                    proofAgeMs = 120L,
+                    cropWidth = if (c.label == "Space") 129 else 29,
+                    cropHeight = 36,
+                    elapsedMs = 4L,
+                )
+            },
+            dispatchSequence = { payload, autonomousProof ->
                 sequenceCalls++
                 assertEquals("가 나 ", payload["text"]?.jsonPrimitive?.content)
-                assertEquals(true, payload["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull)
+                assertEquals(false, payload["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull)
+                assertEquals(false, payload["reuse_key_map"]?.jsonPrimitive?.booleanOrNull)
                 assertEquals(6, payload["steps"]?.jsonArray?.size)
+                assertEquals("s1", autonomousProof.sessionId)
+                assertEquals(7L, autonomousProof.sessionEpoch)
+                assertEquals("seq-obs-1", autonomousProof.observationId)
+                assertEquals("vis-seq-1", autonomousProof.visualId)
+                assertEquals("nonce-test-1", autonomousProof.nonce)
+                assertEquals(6, autonomousProof.steps.size)
+                assertEquals("native_structural_and_live_surface", autonomousProof.steps[0].method)
+                assertEquals("space_glyph", autonomousProof.steps[2].method)
                 DebugSixKeyExecution.SequencePacket(true, buildJsonObject {
                     put("action_attempted", true)
                     put("outcome_unknown", false)
@@ -407,27 +442,45 @@ class DebugOmniboxAndSequenceTest {
                 })
             },
             sessionId = "s1",
-            first = initial,
+            sessionEpoch = 7L,
+            first = staleBefore,
             allowed = { true },
             checkpoint = { _, _ -> },
             clockMs = { 100L },
+            nonceGenerator = { "nonce-test-1" },
         )
 
         assertNull(outcome.failure)
         assertEquals(1, sequenceCalls)
+        assertEquals(listOf("certified-obs-frame", "certified-obs-frame", "certified-obs-frame", "certified-obs-frame"),
+            certifiedFrameFingerprints)
         assertEquals(6, outcome.progress.verified)
         assertEquals(6, outcome.progress.attempts)
         assertFalse(outcome.progress.uncertain)
+        val passCheck = outcome.evidence.first {
+            it["source"]?.jsonPrimitive?.contentOrNull == "autonomous_keyboard_certification_check"
+        }
+        assertEquals("autonomous_debug_hybrid_structural_and_image", passCheck["confirmation_mode"]?.jsonPrimitive?.content)
+        assertEquals(false, passCheck["external_visual_review_confirmed"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(false, passCheck["native_keys_semantically_ocr_verified"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(true, passCheck["image_only_keys_pixel_role_verified"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(true, passCheck["all_candidates_certified"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(listOf("ㄱ", "ㅏ", "ㄴ"), passCheck["native_structural_verified_labels"]?.jsonArray?.map { it.jsonPrimitive.content })
+        assertEquals(listOf("Space"), passCheck["image_role_verified_labels"]?.jsonArray?.map { it.jsonPrimitive.content })
+        val passDetails = passCheck["certification_checks"]?.jsonArray!!
+        assertEquals(4, passDetails.size)
+        assertEquals("native_structural_and_live_surface", passDetails[0].jsonObject["method"]?.jsonPrimitive?.content)
+        assertEquals("space_glyph", passDetails[3].jsonObject["method"]?.jsonPrimitive?.content)
     }
 
-    @Test fun p0b_duplicateNonEntryLabelsMissingSpaceOrUncertifiedPixelsFailClosedWithZeroTouches() = runBlocking {
+    @Test fun p0b_duplicateNonEntryLabelsMissingCertifiedFrameOrUncertifiedKeysFailClosedWithZeroTouches() = runBlocking {
         val g = node(101, window = 13301, pkg = ime, keyboardKey = "ㄱ", visualKeyCandidate = true)
         val gDup = node(102, window = 13301, pkg = ime, keyboardKey = "ㄱ", visualKeyCandidate = true)
         val gNonVisual = node(109, window = 13301, pkg = ime, keyboardKey = "ㄱ", visualKeyCandidate = false)
         val a = node(103, window = 13301, pkg = ime, keyboardKey = "ㅏ", visualKeyCandidate = true)
         val n = node(105, window = 13301, pkg = ime, keyboardKey = "ㄴ", visualKeyCandidate = true)
         val space = node(107, window = 13301, pkg = ime, keyboardImageCandidate = true)
-        val initial = frame(blankFocusedUrl, editor = blankFocusedUrl, withIme = true)
+        val initial = frame(blankFocusedUrl, g, a, n, space, editor = blankFocusedUrl, withIme = true)
 
         // 1) Duplicate visual candidates or non-entry nodes without visualKeyCandidate -> rejected
         assertNull(DebugSixKeyExecution.resolveUniqueSequenceCandidates(validSequenceObservation(g, gDup, a, n, space)))
@@ -439,14 +492,56 @@ class DebugOmniboxAndSequenceTest {
             validSequenceObservation(g, a, n, space, preflightStatus = "BLOCKED")
         ))
 
-        // 4) Uncertified pixel roles (Space passes, ㄱ/ㅏ/ㄴ fail OCR) -> fail closed with 0 touches!
+        // 3b) Missing atomic certifiedFrame (stale `before` must never substitute) -> fail closed with 0 touches
+        var dispatchedMissingFrame = 0
+        val missingCertified = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { initial },
+            observeSequence = {
+                DebugSixKeyExecution.ObservePacket(
+                    success = true,
+                    data = validSequenceObservation(g, a, n, space),
+                    certifiedFrame = null,
+                )
+            },
+            certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome(crop = TapBounds(12, 12, 80, 80), method = "native_structural_and_live_surface") },
+            dispatchSequence = { _, _ -> dispatchedMissingFrame++; DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+            sessionId = "s1",
+            first = initial,
+            allowed = { true },
+            checkpoint = { _, _ -> },
+            clockMs = { 100L },
+        )
+        assertEquals("certified_observation_unavailable", missingCertified.failure)
+        assertEquals(0, dispatchedMissingFrame)
+
+        // 4) Uncertified keys (Space passes, ㄱ/ㅏ/ㄴ fail structural/surface check) -> fail closed with 0 touches + redacted per-key diagnostics!
         var dispatched = 0
         val frames = ArrayDeque(listOf(initial, initial))
         val uncertified = DebugSixKeyExecution.runWithSeam(
             captureFrame = { frames.removeFirst() },
-            observeSequence = { DebugSixKeyExecution.ObservePacket(true, validSequenceObservation(g, a, n, space)) },
-            certifyCandidate = { _, _, c -> if (c.label == "Space") TapBounds(12, 12, 80, 80) else null },
-            dispatchSequence = {
+            observeSequence = {
+                DebugSixKeyExecution.ObservePacket(
+                    success = true,
+                    data = validSequenceObservation(g, a, n, space),
+                    certifiedFrame = initial,
+                )
+            },
+            certifyCandidate = { _, _, c, _ ->
+                if (c.label == "Space") {
+                    PixelCertificationOutcome(
+                        crop = TapBounds(12, 12, 80, 80), method = "space_glyph",
+                        proofAgeMs = 450L, cropWidth = 129, cropHeight = 36, elapsedMs = 3L,
+                    )
+                } else {
+                    PixelCertificationOutcome(
+                        crop = null, method = "none",
+                        failureStage = "native_physical_row_unverified",
+                        proofAgeMs = 440L, cropWidth = 29, cropHeight = 36,
+                        ocrAttempted = false, ocrConfidenceBucket = "not_run", elapsedMs = 2L,
+                    )
+                }
+            },
+            dispatchSequence = { _, _ ->
                 dispatched++
                 DebugSixKeyExecution.SequencePacket(false, buildJsonObject {})
             },
@@ -457,24 +552,90 @@ class DebugOmniboxAndSequenceTest {
             clockMs = { 100L },
         )
 
-        assertEquals("autonomous_pixel_role_unverified", uncertified.failure)
+        assertEquals("autonomous_keyboard_certification_unverified", uncertified.failure)
         assertEquals(0, dispatched)
         assertEquals(0, uncertified.progress.attempts)
         assertFalse(uncertified.progress.uncertain)
         val pixelCheck = uncertified.evidence.first {
-            it["source"]?.jsonPrimitive?.contentOrNull == "autonomous_pixel_role_check"
+            it["source"]?.jsonPrimitive?.contentOrNull == "autonomous_keyboard_certification_check"
         }
-        assertFalse(pixelCheck["pixel_role_certified"]?.jsonPrimitive?.boolean!!)
-        assertEquals(listOf("Space"), pixelCheck["verified_labels"]?.jsonArray?.map { it.jsonPrimitive.content })
+        assertFalse(pixelCheck["all_candidates_certified"]?.jsonPrimitive?.boolean!!)
+        assertEquals(false, pixelCheck["external_visual_review_confirmed"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(listOf("Space"), pixelCheck["image_role_verified_labels"]?.jsonArray?.map { it.jsonPrimitive.content })
         assertEquals(listOf("ㄱ", "ㅏ", "ㄴ"), pixelCheck["unverified_labels"]?.jsonArray?.map { it.jsonPrimitive.content })
+        val checks = pixelCheck["certification_checks"]?.jsonArray!!
+        assertEquals(4, checks.size)
+        assertEquals("native_physical_row_unverified", checks[0].jsonObject["failure_stage"]?.jsonPrimitive?.content)
+        assertEquals(29, checks[0].jsonObject["crop_width"]?.jsonPrimitive?.int)
+        assertEquals(36, checks[0].jsonObject["crop_height"]?.jsonPrimitive?.int)
+        assertEquals("space_glyph", checks[3].jsonObject["method"]?.jsonPrimitive?.content)
+        assertFalse(checks[3].jsonObject.containsKey("failure_stage"))
+        // Redaction check: never leak coordinates, node IDs, raw OCR text, or pixel bytes.
+        val serialized = pixelCheck.toString()
+        for (forbidden in listOf("node_id", "bounds", "13300", "13301", "pixels", "raw_text")) {
+            assertFalse("Must not leak $forbidden", serialized.contains(forbidden))
+        }
 
-        // 5) UNKNOWN from visualKeySequence -> stops immediately, uncertain=true, no replay
+        // 4a) Space image-only key cannot use native_structural_and_live_surface method -> fails closed
+        val spaceMethodSpoof = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { initial },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, validSequenceObservation(g, a, n, space), certifiedFrame = initial) },
+            certifyCandidate = { _, _, _, _ ->
+                PixelCertificationOutcome(crop = TapBounds(12, 12, 80, 80), method = "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ -> dispatched++; DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+            sessionId = "s1",
+            first = initial,
+            allowed = { true },
+            checkpoint = { _, _ -> },
+            clockMs = { 100L },
+        )
+        assertEquals("autonomous_keyboard_certification_unverified", spaceMethodSpoof.failure)
+        assertEquals(0, dispatched)
+
+        // 4b) Refused keyboard observation forwards display_window_census and capture_window_changes identically to read-only mode
+        val census = DisplayWindowCensus(
+            total = 8, content = 4, duplicates = 0, unowned = 2,
+            rows = listOf(
+                CensusRow(CensusKind.ACCESSIBILITY_OVERLAY, CensusOwner.UNOWNED, true, CensusLayer.ABOVE, false, false, false),
+            ),
+        )
+        val refused = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { initial },
+            observeSequence = {
+                DebugSixKeyExecution.ObservePacket(
+                    success = false,
+                    data = buildJsonObject { put("reason_code", "display_surface_unverified") },
+                    displayPlanRefusal = "display_unowned_window",
+                    displayWindowCensus = census,
+                )
+            },
+            certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+            dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+            sessionId = "s1",
+            first = initial,
+            allowed = { true },
+            checkpoint = { _, _ -> },
+            clockMs = { 100L },
+        )
+        assertEquals("keyboard_observation_refused", refused.failure)
+        val obsEv = refused.evidence.single()
+        assertEquals("display_unowned_window", obsEv["display_plan_refusal"]?.jsonPrimitive?.content)
+        assertTrue(obsEv.containsKey("display_window_census"))
+        assertEquals(2, obsEv["display_window_census"]?.jsonObject?.get("unowned_content_windows")?.jsonPrimitive?.int)
+
+        // 5) UNKNOWN from visualKeySequenceAutonomous -> stops immediately, uncertain=true, no replay
         var unknownCalls = 0
         val unknownRes = DebugSixKeyExecution.runWithSeam(
             captureFrame = { initial },
-            observeSequence = { DebugSixKeyExecution.ObservePacket(true, validSequenceObservation(g, a, n, space)) },
-            certifyCandidate = { _, _, _ -> TapBounds(12, 12, 80, 80) },
-            dispatchSequence = {
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, validSequenceObservation(g, a, n, space), certifiedFrame = initial) },
+            certifyCandidate = { _, _, c, _ ->
+                PixelCertificationOutcome(
+                    crop = TapBounds(12, 12, 80, 80),
+                    method = if (c.imageOnly) "space_glyph" else "native_structural_and_live_surface",
+                )
+            },
+            dispatchSequence = { _, _ ->
                 unknownCalls++
                 DebugSixKeyExecution.SequencePacket(false, buildJsonObject {
                     put("action_attempted", true)

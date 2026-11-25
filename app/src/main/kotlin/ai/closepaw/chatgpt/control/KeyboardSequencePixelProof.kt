@@ -93,3 +93,30 @@ internal object KeyboardSequencePixelProof {
     }
 
 }
+
+/**
+ * Redacted per-key pixel certification outcome. Never stores raw OCR text,
+ * absolute screen coordinates, window IDs, or pixel bytes.
+ */
+internal data class PixelCertificationOutcome(
+    val crop: TapBounds? = null,
+    val method: String = "none",
+    val failureStage: String? = null,
+    val proofAgeMs: Long = -1L,
+    val cropWidth: Int = 0,
+    val cropHeight: Int = 0,
+    val ocrAttempted: Boolean = false,
+    val ocrLabelMatched: Boolean? = null,
+    val ocrConfidenceBucket: String = "not_run",
+    val elapsedMs: Long = 0L,
+) {
+    companion object {
+        fun confidenceBucket(confidence: Float?): String = when {
+            confidence == null || !confidence.isFinite() -> "missing"
+            confidence >= 0.92f -> "ge_0_92"
+            confidence >= 0.80f -> "0_80_to_0_91"
+            confidence >= 0.50f -> "0_50_to_0_79"
+            else -> "lt_0_50"
+        }
+    }
+}

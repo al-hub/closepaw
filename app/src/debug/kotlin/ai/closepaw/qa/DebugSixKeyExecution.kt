@@ -1,21 +1,28 @@
 package ai.closepaw.qa
 
 import ai.closepaw.chatgpt.control.AndroidControlPort
+import ai.closepaw.chatgpt.control.AutonomousCertifiedKeyStep
+import ai.closepaw.chatgpt.control.AutonomousKeyboardSequenceProof
 import ai.closepaw.chatgpt.control.ControlFrame
 import ai.closepaw.chatgpt.control.ControlSession
+import ai.closepaw.chatgpt.control.DisplayWindowCensus
 import ai.closepaw.chatgpt.control.GenericControl
+import ai.closepaw.chatgpt.control.PixelCertificationOutcome
 import ai.closepaw.chatgpt.control.TapBounds
 import android.os.SystemClock
+import java.util.UUID
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.*
 
 /**
  * #147 one-shot physical key state machine. Reuses the production
- * VisualSequenceCandidates observation, on-device pixel-role certification
- * (SpaceBarGlyphPolicy + ML Kit Korean OCR >= 0.92), and GenericControl.visualKeySequence.
- * Never guesses coordinates, picks arbitrarily among duplicates, weakens native
- * guards, or replays UNKNOWN outcomes.
+ * VisualSequenceCandidates observation, explicit debug-only hybrid certification
+ * (NativeKeyboardStructuralCertification + crop-scoped live surface liveness for
+ * unique native IME keys; SpaceBarGlyphPolicy + ML Kit Korean OCR >= 0.92 for
+ * image-only Space), and GenericControl.visualKeySequenceAutonomous.
+ * Never forges visual_target_confirmed=true, guesses coordinates, picks arbitrarily
+ * among duplicates, weakens native guards, or replays UNKNOWN outcomes.
  */
 internal object DebugSixKeyExecution {
     private val sequenceLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space")
@@ -42,7 +49,10 @@ internal object DebugSixKeyExecution {
     internal data class ObservePacket(
         val success: Boolean,
         val data: JsonObject,
+        val certifiedFrame: ControlFrame? = null,
         val displayPlanRefusal: String? = null,
+        val displayWindowCensus: DisplayWindowCensus? = null,
+        val captureWindowChanges: JsonObject? = null,
     )
 
     internal data class SequencePacket(
@@ -108,13 +118,15 @@ internal object DebugSixKeyExecution {
     internal suspend fun runWithSeam(
         captureFrame: suspend () -> ControlFrame,
         observeSequence: suspend (List<String>) -> ObservePacket,
-        certifyCandidate: suspend (String, ControlFrame, PhysicalCandidate) -> TapBounds?,
-        dispatchSequence: suspend (JsonObject) -> SequencePacket,
+        certifyCandidate: suspend (String, ControlFrame, PhysicalCandidate, List<String>) -> PixelCertificationOutcome,
+        dispatchSequence: suspend (JsonObject, AutonomousKeyboardSequenceProof) -> SequencePacket,
         sessionId: String,
+        sessionEpoch: Long = 0L,
         first: ControlFrame,
         allowed: () -> Boolean,
         checkpoint: (Progress, String) -> Unit,
         clockMs: () -> Long = { SystemClock.elapsedRealtime() },
+        nonceGenerator: () -> String = { UUID.randomUUID().toString() },
     ): Outcome {
         var verified = 0
         var attempts = 0
@@ -153,6 +165,8 @@ internal object DebugSixKeyExecution {
         evidence += DebugKeyboardEvidence.fromObservation(
             observed.data, observed.success, sequenceLabels,
             if (observed.success) null else observed.displayPlanRefusal,
+            if (observed.success) null else observed.displayWindowCensus,
+            if (observed.success) null else observed.captureWindowChanges,
         )
         if (!observed.success) {
             // A refusal could mean protected content or revoked consent.
@@ -175,59 +189,125 @@ internal object DebugSixKeyExecution {
             return fail("unique_physical_key_not_proven")
         }
 
-        // Strict fail-closed on-device pixel-role certification for every key.
-        // Never set visual_target_confirmed=true unless all 4 crops are verified.
-        val certifiedCrops = linkedMapOf<String, Pair<PhysicalCandidate, TapBounds>>()
-        val verifiedLabels = mutableListOf<String>()
+        val certifiedFrame = observed.certifiedFrame
+            ?: return fail("certified_observation_unavailable")
+        if (!DebugOneStopQa.sameEditor(first, certifiedFrame) || certifiedFrame.keyboard != before.keyboard) {
+            return fail("editor_identity_changed")
+        }
+
+        // Strict fail-closed hybrid certification against the EXACT observed certified frame
+        // (never stale `before`). Never forges visual_target_confirmed=true.
+        val requiredNativeLabels = candidates.filterNot { it.imageOnly }.map { it.label }.distinct()
+        val certifiedStepsByLabel = linkedMapOf<String, Pair<PhysicalCandidate, PixelCertificationOutcome>>()
+        val nativeStructuralVerified = mutableListOf<String>()
+        val imageRoleVerified = mutableListOf<String>()
         val unverifiedLabels = mutableListOf<String>()
+        val checkDetails = mutableListOf<JsonObject>()
         for (candidate in candidates) {
             currentCoroutineContext().ensureActive()
             if (!allowed()) return fail("control_authority_revoked")
-            val crop = certifyCandidate(visualId, before, candidate)
-            if (crop != null && crop.valid) {
-                certifiedCrops[candidate.label] = candidate to crop
-                if (candidate.label in allowedLabels) verifiedLabels += candidate.label
+            val check = certifyCandidate(visualId, certifiedFrame, candidate, requiredNativeLabels)
+            val crop = check.crop?.takeIf { it.valid }
+            val validMethod = if (candidate.imageOnly) {
+                check.method in setOf("space_glyph", "mlkit_ocr", "cache_reused")
+            } else {
+                check.method == "native_structural_and_live_surface"
+            }
+            val certified = crop != null && validMethod
+            if (certified) {
+                certifiedStepsByLabel[candidate.label] = candidate to check
+                if (candidate.label in allowedLabels) {
+                    if (candidate.imageOnly) imageRoleVerified += candidate.label
+                    else nativeStructuralVerified += candidate.label
+                }
             } else {
                 if (candidate.label in allowedLabels) unverifiedLabels += candidate.label
             }
+            if (candidate.label in allowedLabels) {
+                checkDetails += buildJsonObject {
+                    put("label", candidate.label)
+                    put("image_only", candidate.imageOnly)
+                    put("certified", certified)
+                    put("method", safeCode(check.method))
+                    if (!certified) {
+                        put("failure_stage", safeCode(check.failureStage ?: if (!validMethod) "invalid_certification_method" else null))
+                    }
+                    put("proof_age_ms", check.proofAgeMs.coerceAtLeast(-1L))
+                    put("crop_width", check.cropWidth.coerceAtLeast(0))
+                    put("crop_height", check.cropHeight.coerceAtLeast(0))
+                    put("ocr_attempted", check.ocrAttempted)
+                    check.ocrLabelMatched?.let { put("ocr_label_matched", it) }
+                    put("ocr_confidence_bucket", safeCode(check.ocrConfidenceBucket))
+                    put("elapsed_ms", check.elapsedMs.coerceAtLeast(0L))
+                }
+            }
         }
+        val imageOnlyCandidates = candidates.filter { it.imageOnly }
+        val allCandidatesCertified = unverifiedLabels.isEmpty() && certifiedStepsByLabel.size == sequenceLabels.size
         evidence += buildJsonObject {
-            put("source", "autonomous_pixel_role_check")
-            put("pixel_role_certified", unverifiedLabels.isEmpty() && certifiedCrops.size == sequenceLabels.size)
-            put("verified_labels", JsonArray(verifiedLabels.map(::JsonPrimitive)))
+            put("source", "autonomous_keyboard_certification_check")
+            put("confirmation_mode", "autonomous_debug_hybrid_structural_and_image")
+            put("external_visual_review_confirmed", false)
+            put("native_keys_semantically_ocr_verified", false)
+            put("image_only_keys_pixel_role_verified",
+                imageOnlyCandidates.isNotEmpty() && imageRoleVerified.size == imageOnlyCandidates.size)
+            put("all_candidates_certified", allCandidatesCertified)
+            put("native_structural_verified_labels", JsonArray(nativeStructuralVerified.map(::JsonPrimitive)))
+            put("image_role_verified_labels", JsonArray(imageRoleVerified.map(::JsonPrimitive)))
             put("unverified_labels", JsonArray(unverifiedLabels.map(::JsonPrimitive)))
-            put("touch_authorized_without_pixel_proof", false)
+            put("certification_checks", JsonArray(checkDetails))
+            put("touch_authorized_without_certification", false)
         }
-        if (unverifiedLabels.isNotEmpty() || certifiedCrops.size != sequenceLabels.size) {
+        if (!allCandidatesCertified) {
             val followUp = DebugKeyboardEvidence.inspectAmbiguousCandidates(
                 capture = captureFrame, baseline = first, keyIndex = 0, allowed = allowed,
             )
             afterFailure = followUp.status
             followUpEvidence = followUp.evidence
             extraReads += followUp.reads
-            return fail("autonomous_pixel_role_unverified")
+            return fail("autonomous_keyboard_certification_unverified")
         }
 
         if (!allowed()) return fail("control_authority_revoked")
+        val proofSteps = mutableListOf<AutonomousCertifiedKeyStep>()
         val steps = JsonArray(DebugOneStopQa.SixKey.labels.map { label ->
-            val (candidate, crop) = certifiedCrops[label]
-                ?: return fail("autonomous_pixel_role_unverified")
+            val (candidate, check) = certifiedStepsByLabel[label]
+                ?: return fail("autonomous_keyboard_certification_unverified")
+            val crop = check.crop ?: return fail("autonomous_keyboard_certification_unverified")
+            proofSteps += AutonomousCertifiedKeyStep(
+                label = label,
+                nodeId = candidate.nodeId,
+                imageOnly = candidate.imageOnly,
+                crop = crop,
+                method = check.method,
+            )
             buildJsonObject {
                 put("label", label)
                 put("node_id", candidate.nodeId)
                 put("image_rect", JsonArray(listOf(crop.left, crop.top, crop.right, crop.bottom).map(::JsonPrimitive)))
             }
         })
+        val autonomousProof = AutonomousKeyboardSequenceProof(
+            nonce = nonceGenerator(),
+            sessionId = sessionId,
+            sessionEpoch = sessionEpoch,
+            observationId = observationId,
+            visualId = visualId,
+            steps = proofSteps.toList(),
+        )
         checkpointAt("key_1_dispatch", "guarded_visual_key_sequence")
-        val sequenceResult = dispatchSequence(buildJsonObject {
-            put("session_id", sessionId)
-            put("observation_id", observationId)
-            put("visual_id", visualId)
-            put("visual_target_confirmed", true)
-            put("text", DebugOneStopQa.SixKey.expected(6))
-            put("reuse_key_map", false)
-            put("steps", steps)
-        })
+        val sequenceResult = dispatchSequence(
+            buildJsonObject {
+                put("session_id", sessionId)
+                put("observation_id", observationId)
+                put("visual_id", visualId)
+                put("visual_target_confirmed", false)
+                put("text", DebugOneStopQa.SixKey.expected(6))
+                put("reuse_key_map", false)
+                put("steps", steps)
+            },
+            autonomousProof,
+        )
 
         val attempted = sequenceResult.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
         val unknown = sequenceResult.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
@@ -238,6 +318,8 @@ internal object DebugSixKeyExecution {
         val seqReason = sequenceResult.data["reason_code"]?.jsonPrimitive?.contentOrNull
         evidence += buildJsonObject {
             put("source", "visual_key_sequence_result")
+            put("confirmation_mode", "autonomous_debug_hybrid_structural_and_image")
+            put("external_visual_review_confirmed", false)
             put("sequence_succeeded", sequenceResult.success)
             put("completed_keys", completed)
             put("action_attempted", attempted)
@@ -283,27 +365,43 @@ internal object DebugSixKeyExecution {
     ): Outcome = runWithSeam(
         captureFrame = { port.capture() },
         observeSequence = { labels ->
+            port.resetDebugCaptureEvidence()
             val res = control.observe(
                 includeImage = true,
                 imageScope = "keyboard",
                 keyboardSequenceLabels = labels,
             )
-            ObservePacket(res.success, res.data, if (res.success) null else port.debugDisplayPlanRefusal())
+            val obsId = res.data["observation_id"]?.jsonPrimitive?.contentOrNull
+            val visId = (res.data["visual"] as? JsonObject)?.get("visual_id")?.jsonPrimitive?.contentOrNull
+            val certified = if (res.success && !obsId.isNullOrBlank() && !visId.isNullOrBlank()) {
+                control.certifiedKeyboardObservation(obsId, visId, session.epoch)?.frame
+            } else null
+            ObservePacket(
+                success = res.success,
+                data = res.data,
+                certifiedFrame = certified,
+                displayPlanRefusal = if (res.success) null else port.debugDisplayPlanRefusal(),
+                displayWindowCensus = if (res.success) null else port.debugDisplayWindowCensus(),
+                captureWindowChanges = if (res.success) null else port.debugCaptureWindowChangeEvidence(),
+            )
         },
-        certifyCandidate = { visualId, frame, candidate ->
-            port.certifyKeyboardCandidatePixels(
+        certifyCandidate = { visualId, certifiedFrame, candidate, requiredNativeLabels ->
+            port.certifyKeyboardCandidatePixelsDetailed(
                 visualId = visualId,
-                frame = frame,
+                frame = certifiedFrame,
+                nodeId = candidate.nodeId,
                 nodeBoundsRaw = candidate.bounds,
                 imageOnly = candidate.imageOnly,
                 expectedLabel = candidate.label,
+                requiredNativeLabels = requiredNativeLabels,
             )
         },
-        dispatchSequence = { payload ->
-            val res = control.visualKeySequence(payload)
+        dispatchSequence = { payload, autonomousProof ->
+            val res = control.visualKeySequenceAutonomous(payload, autonomousProof)
             SequencePacket(res.success, res.data)
         },
         sessionId = session.id,
+        sessionEpoch = session.epoch,
         first = first,
         allowed = allowed,
         checkpoint = checkpoint,

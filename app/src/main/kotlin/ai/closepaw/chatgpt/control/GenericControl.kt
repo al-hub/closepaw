@@ -103,6 +103,11 @@ internal interface ControlPort : IslandControlPort {
     override suspend fun dragIsland(before: IslandBounds, dx: Int, dy: Int, holdMs: Long, moveMs: Long, sessionId: String): Boolean = false
     /** Only adapters that enforce the complete freshness policy inside perform may opt in. */
     val validatesAtNativeBoundary: Boolean get() = false
+    /** Debug-only internal opt-in for autonomous QA hybrid proof. Always false in Release. */
+    val allowsAutonomousDebugKeyboardProof: Boolean get() = false
+    fun beginAutonomousKeyboardSequence(sequenceNonce: String, sessionId: String, epoch: Long, totalSteps: Int): Boolean = false
+    fun advanceAutonomousKeyboardStep(sequenceNonce: String, completedStepIndex: Int) {}
+    fun endAutonomousKeyboardSequence(sequenceNonce: String) {}
     fun session(): ControlSession? = null
     fun bindResume(check: suspend () -> Boolean) {}
     suspend fun feedback(label: String) {}
@@ -359,9 +364,57 @@ internal class GenericControl(private val port: ControlPort, private val allowed
      * the exact postcondition on every touch. Layout changes are separate
      * verified actions. No backspace, submit, coordinate guessing or replay.
      */
-    suspend fun visualKeySequence(input: JsonObject, expectedEpoch: Long? = null): OperationResult {
+    /**
+     * Debug-only atomic lookup of the current certified keyboard observation bound
+     * to (observationId, visualId, sessionEpoch). Never available in Release builds.
+     */
+    internal fun certifiedKeyboardObservation(
+        observationId: String,
+        visualId: String,
+        sessionEpoch: Long,
+    ): CertifiedKeyboardFrame? {
+        if (!port.allowsAutonomousDebugKeyboardProof) return null
+        val obs = current ?: return null
+        val session = port.session() ?: return null
+        if (!allowed() || !session.explicit || session.state != ControlSession.State.ACTIVE) return null
+        if (session.epoch != sessionEpoch || obs.epoch != sessionEpoch || obs.id != observationId) return null
+        val proof = obs.verificationFrame.visual ?: return null
+        if (proof.id != visualId || proof.scope != "keyboard" || proof.sourceDisplayId != 0) return null
+        if (!proof.sourceDisclosureAllowed() || now() - proof.at !in 0L..10_000L) return null
+        return CertifiedKeyboardFrame(obs.verificationFrame, proof)
+    }
+
+    suspend fun visualKeySequence(input: JsonObject, expectedEpoch: Long? = null): OperationResult =
+        visualKeySequenceInternal(input, expectedEpoch, autonomousProof = null)
+
+    /**
+     * Debug-only internal entry point for autonomous hybrid structural + image-only
+     * keyboard sequences. Never exposed in MCP schemas and mutually exclusive with
+     * external visual_target_confirmed=true.
+     */
+    internal suspend fun visualKeySequenceAutonomous(
+        input: JsonObject,
+        autonomousProof: AutonomousKeyboardSequenceProof,
+        expectedEpoch: Long? = null,
+    ): OperationResult = visualKeySequenceInternal(input, expectedEpoch, autonomousProof = autonomousProof)
+
+    private suspend fun visualKeySequenceInternal(
+        input: JsonObject,
+        expectedEpoch: Long? = null,
+        autonomousProof: AutonomousKeyboardSequenceProof? = null,
+    ): OperationResult {
+        val autonomous = autonomousProof != null
+        val externalVisualReviewConfirmed = !autonomous &&
+            input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull == true
+        val confirmationMode = if (autonomous) {
+            "autonomous_debug_hybrid_structural_and_image"
+        } else {
+            "external_visual_review"
+        }
         var confirmed = 0
         var imageFallbackSpaces = 0
+        var imageOnlyConfirmed = 0
+        var expectedImageOnlyCount = 0
         var touched = false
         val reuseMaps = input["reuse_key_map"]?.jsonPrimitive?.booleanOrNull == true
         var reusedKeySteps = 0
@@ -425,6 +478,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 observationRetryReason?.let { put("observation_retry_reason_code", it) }
                 visualSourceFailure?.let { put("visual_source_failure", it) }
                 put("confirmed_image_fallback_spaces", imageFallbackSpaces)
+                put("confirmation_mode", confirmationMode)
+                put("external_visual_review_confirmed", externalVisualReviewConfirmed)
+                if (autonomous) {
+                    put("native_keys_semantically_ocr_verified", false)
+                    put("image_only_keys_pixel_role_verified",
+                        expectedImageOnlyCount > 0 && imageOnlyConfirmed == expectedImageOnlyCount)
+                }
                 put("action_attempted", touched); put("outcome_unknown", unknown)
                 put("input_method", "visual_keyboard_sequence")
             })
@@ -439,6 +499,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 it.id == input["session_id"]?.jsonPrimitive?.content && it.epoch == anchorEpoch &&
                 (expectedEpoch == null || it.epoch == expectedEpoch)
         } ?: return stop("explicit_active_session_required")
+        if (autonomousProof != null) {
+            if (!port.allowsAutonomousDebugKeyboardProof) return stop("autonomous_keyboard_proof_not_allowed")
+            if (input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull == true) {
+                return stop("autonomous_confirmation_mode_conflict")
+            }
+            if (reuseMaps) return stop("autonomous_reuse_key_map_not_allowed")
+        }
         fun sessionCurrent() = allowed() && port.session() === session &&
             session.explicit && session.state == ControlSession.State.ACTIVE &&
             session.id == input["session_id"]?.jsonPrimitive?.content && session.epoch == anchorEpoch
@@ -476,7 +543,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val sourceFailure = firstProof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)
         initialProofReason = when {
             input["visual_id"]?.jsonPrimitive?.content != firstProof.id -> "image_id_mismatch"
-            input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true -> "image_not_confirmed"
+            autonomousProof == null && input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true -> "image_not_confirmed"
             firstProof.scope != "keyboard" || firstProof.sourceDisplayId != 0 -> "image_owner_invalid"
             sourceFailure?.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED -> "display_window_changed"
             sourceFailure != null || !firstProof.sourceDisclosureAllowed() -> "image_source_or_consent_revoked"
@@ -568,6 +635,15 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 original = newer
                 firstProof = newProof
                 break
+            }
+        }
+        if (autonomousProof != null) {
+            if (autonomousProof.nonce.isBlank() ||
+                autonomousProof.sessionId != session.id ||
+                autonomousProof.sessionEpoch != session.epoch ||
+                autonomousProof.observationId != original.id ||
+                autonomousProof.visualId != firstProof.id) {
+                return stop("autonomous_proof_binding_mismatch")
             }
         }
         val ime = original.frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed }
@@ -703,6 +779,40 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             initialCrops[recoveryKey] = resolved
             planned.add(Step(label, node, resolved, nodeBounds))
         }
+        expectedImageOnlyCount = planned.count { it.originalNode.keyboardImageCandidate }
+        val nativeSequenceLabels = planned
+            .filterNot { it.originalNode.keyboardImageCandidate }
+            .map { it.label }
+            .distinct()
+        if (autonomousProof != null) {
+            if (submitted == null || autonomousProof.steps.size != planned.size) {
+                return stop("autonomous_proof_steps_mismatch")
+            }
+            for ((i, step) in planned.withIndex()) {
+                val pStep = autonomousProof.steps[i]
+                if (pStep.label != step.label ||
+                    pStep.nodeId != step.originalNode.id ||
+                    pStep.imageOnly != step.originalNode.keyboardImageCandidate ||
+                    pStep.crop != step.crop) {
+                    return stop("autonomous_proof_step_mismatch")
+                }
+                val validMethod = if (step.originalNode.keyboardImageCandidate) {
+                    pStep.method in setOf("space_glyph", "mlkit_ocr", "cache_reused")
+                } else {
+                    pStep.method == "native_structural_and_live_surface"
+                }
+                if (!validMethod) return stop("autonomous_proof_method_invalid")
+                if (!step.originalNode.keyboardImageCandidate) {
+                    val structural = NativeKeyboardStructuralCertification.verify(
+                        original.verificationFrame, firstProof, step.originalNode,
+                        step.label, nativeSequenceLabels, now(),
+                    )
+                    if (structural.crop == null) {
+                        return stop(structural.failureStage ?: "keyboard_autonomous_structural_unverified")
+                    }
+                }
+            }
+        }
         if (submitted == null) {
             // Admit only the already verified candidates for this private request.
             // No new nodes/authority are exposed as reusable MCP observations.
@@ -726,6 +836,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         data class InvalidatedDisplayProof(val id: String, val generation: Long)
         var refresh = false
+        if (autonomousProof != null && !port.beginAutonomousKeyboardSequence(
+                autonomousProof.nonce, session.id, session.epoch, planned.size,
+            )) {
+            return stop("autonomous_sequence_ledger_unavailable")
+        }
+        try {
         for ((index, step) in planned.withIndex()) {
             var touchCrop = step.crop
             var followUpAttempt = 0
@@ -826,16 +942,41 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 }
                 VisualKeyboardPolicy.refusal(active.verificationFrame, node, "keyboard",
                     step.label.takeIf { node.keyboardImageCandidate })?.let { return stop(it) }
+                if (autonomousProof != null && !node.keyboardImageCandidate) {
+                    val liveStructural = NativeKeyboardStructuralCertification.verify(
+                        active.verificationFrame, proof, node, step.label, nativeSequenceLabels, now(),
+                    )
+                    if (liveStructural.crop == null) {
+                        return stop("keyboard_autonomous_structural_recheck_failed", unknown = touched)
+                    }
+                }
                 keyboardCheckpoint = null // Uncertain dispatch or cancellation must leave no resume authority.
                 val actionInput = buildJsonObject {
                     put("session_id", session.id); put("observation_id", active.id)
                     put("action", "visual_key"); put("node_id", node.id)
-                    put("visual_id", proof.id); put("visual_target_confirmed", true)
+                    put("visual_id", proof.id); put("visual_target_confirmed", autonomousProof == null)
                     put("image_rect", JsonArray(listOf(touchCrop.left, touchCrop.top,
                         touchCrop.right, touchCrop.bottom).map { JsonPrimitive(it) }))
                     if (node.keyboardImageCandidate) put("image_key_label", step.label)
                 }
-                val result = kotlinx.coroutines.withContext(KeyboardWindowTrace(index + 1, followUpAttempt, reuseMaps)) {
+                val dispatchContext: kotlin.coroutines.CoroutineContext = if (autonomousProof != null) {
+                    KeyboardWindowTrace(index + 1, followUpAttempt, reuseMaps) + AutonomousKeyboardDispatchContext(
+                        nonce = UUID.randomUUID().toString(),
+                        sequenceNonce = autonomousProof.nonce,
+                        sessionId = session.id,
+                        epoch = session.epoch,
+                        observationId = active.id,
+                        visualId = proof.id,
+                        stepIndex = index,
+                        nodeId = node.id,
+                        label = step.label,
+                        imageOnly = node.keyboardImageCandidate,
+                        expectedNativeLabels = nativeSequenceLabels.toSet(),
+                    )
+                } else {
+                    KeyboardWindowTrace(index + 1, followUpAttempt, reuseMaps)
+                }
+                val result = kotlinx.coroutines.withContext(dispatchContext) {
                     actionNative(actionInput, active)
                 }
                 val attempted = result.data["action_attempted"]?.jsonPrimitive?.booleanOrNull
@@ -908,15 +1049,24 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 lastVerified = confirmedFrame
                 checkpoint(confirmedFrame)
                 confirmed++
+                if (autonomousProof != null) {
+                    port.advanceAutonomousKeyboardStep(autonomousProof.nonce, index)
+                }
                 if (cached != null) reusedKeySteps++
                 if (owner != null && submitted != null) {
                     if (visualKeyMaps.remember(owner, layoutId, step.label, VisualKeyMapCache.Entry(
                             step.bounds, touchCrop, node.keyboardImageCandidate))) mapsLearned++
                     mapEntriesConfirmed++
                 }
+                if (node.keyboardImageCandidate) imageOnlyConfirmed++
                 if (step.label == "Space" && node.keyboardImageCandidate) imageFallbackSpaces++
                 refresh = true
                 break
+            }
+        }
+        } finally {
+            if (autonomousProof != null) {
+                port.endAutonomousKeyboardSequence(autonomousProof.nonce)
             }
         }
         // Read only: a transient echo can be replaced by an autocomplete value
@@ -935,6 +1085,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             data = buildJsonObject {
                 metrics()
                 put("input_method", "visual_keyboard_sequence")
+                put("confirmation_mode", confirmationMode)
+                put("external_visual_review_confirmed", externalVisualReviewConfirmed)
+                if (autonomous) {
+                    put("native_keys_semantically_ocr_verified", false)
+                    put("image_only_keys_pixel_role_verified",
+                        expectedImageOnlyCount > 0 && imageOnlyConfirmed == expectedImageOnlyCount)
+                }
                 put("action_attempted", touched); put("outcome_unknown", false)
                 put("app_result_verified", true); put("completed_keys", confirmed)
                 observationRetryReason?.let { put("observation_retry_reason_code", it) }
@@ -987,7 +1144,30 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 trace?.mark = mark
             } else if (!proof.sourceDisclosureAllowed()) return failure(VISUAL_SOURCE_REFUSED)
             if (!VisualActionPolicy.scopeAllowed(action,proof.scope)) return failure("visual_scope_mismatch")
-            if (input["visual_id"]?.jsonPrimitive?.content != proof.id || input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull != true ||
+            val dispatchCtx = kotlinx.coroutines.currentCoroutineContext()[AutonomousKeyboardDispatchContext]
+            val externalConfirmed = input["visual_target_confirmed"]?.jsonPrimitive?.booleanOrNull == true
+            if (dispatchCtx != null && externalConfirmed) return failure("visual_proof_invalid_or_expired")
+            val activeSession = port.session()
+            val targetId = input["node_id"]?.jsonPrimitive?.intOrNull
+            val targetNode = frame.nodes.singleOrNull { it.id == targetId }
+            val expectedLabelMatches = if (targetNode?.keyboardImageCandidate == true) {
+                imageLabel == dispatchCtx?.label
+            } else {
+                imageLabel == null && targetNode?.keyboardKey == dispatchCtx?.label
+            }
+            val autonomousConfirmed = action == "visual_key" && !externalConfirmed &&
+                port.allowsAutonomousDebugKeyboardProof && dispatchCtx != null &&
+                dispatchCtx.nonce.isNotBlank() && dispatchCtx.sequenceNonce.isNotBlank() &&
+                input["observation_id"]?.jsonPrimitive?.contentOrNull == dispatchCtx.observationId &&
+                dispatchCtx.observationId == observation.id &&
+                dispatchCtx.visualId == proof.id &&
+                dispatchCtx.sessionId == activeSession?.id &&
+                dispatchCtx.epoch == activeSession.epoch &&
+                dispatchCtx.epoch == observation.epoch &&
+                targetId != null && dispatchCtx.nodeId == targetId &&
+                targetNode != null && dispatchCtx.imageOnly == targetNode.keyboardImageCandidate &&
+                expectedLabelMatches
+            if (input["visual_id"]?.jsonPrimitive?.content != proof.id || !(externalConfirmed || autonomousConfirmed) ||
                 now() - proof.at !in 0L..60_000L) return failure("visual_proof_invalid_or_expired")
         }
         val id = input["node_id"]?.jsonPrimitive?.intOrNull
