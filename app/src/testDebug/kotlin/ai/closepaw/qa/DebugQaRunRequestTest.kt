@@ -3,7 +3,11 @@ package ai.closepaw.qa
 import ai.closepaw.chatgpt.control.ControlSession
 import ai.closepaw.platform.virtualdisplay.MediaProjectionConsentGate
 import ai.closepaw.platform.virtualdisplay.ProjectionConsentState
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.*
 import org.junit.Test
@@ -111,5 +115,90 @@ class DebugQaRunRequestTest {
         assertTrue(DebugQaRunAdmission.blocksForActiveControlSession(ControlSession.State.WAITING))
         assertTrue(DebugQaRunAdmission.blocksForActiveControlSession(ControlSession.State.PAUSED))
         assertTrue(DebugQaRunAdmission.blocksForActiveControlSession(ControlSession.State.REOBSERVING))
+    }
+
+    @Test fun preRunDenialFailureAndProcessRestartBuildRedactedExportableBatchSnapshot() {
+        for (state in listOf("PASS", "BLOCKED", "DIAGNOSTIC_COMPLETE", "FAILED", "CANCELLED",
+            "UNKNOWN", "DENIED", "BUSY", "DUPLICATE", "INTERRUPTED")) {
+            assertTrue("Expected $state to be exportable", DebugQaLifecyclePolicy.isExportableTerminalState(state))
+        }
+        for (nonTerminal in listOf(null, "", "IN_PROGRESS", "WAITING", "RUNNING", "ARBITRARY")) {
+            assertFalse("Expected $nonTerminal to be non-exportable", DebugQaLifecyclePolicy.isExportableTerminalState(nonTerminal))
+        }
+        assertTrue(DebugQaLifecyclePolicy.MAX_BATCH_FILE_BYTES >= 256_000L)
+        assertTrue(DebugQaLifecyclePolicy.MAX_EXPORT_BYTES >= 256_000)
+
+        val batchId = "11111111-2222-3333-4444-555555555555"
+        val reqId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        val snapshot = DebugQaLifecyclePolicy.buildPreRunBatchSnapshot(
+            batchId = batchId,
+            requestId = reqId,
+            sourceCommit = "0a3e213251bae1af67a0f2f7bbbe31ee2663804d",
+            versionName = "0.1.165-capturecandidate",
+            versionCode = 166,
+            mode = DebugQaMode.SIX_KEY,
+            state = "INTERRUPTED",
+            stage = "android_observation_approval",
+            reason = "stale_android_consent_process_restarted",
+            admissionOutcome = DebugQaAdmissionOutcome.DENIED,
+            consent = null,
+            candidateControlSessionState = ControlSession.State.ENDED,
+            nowEpochMs = 1_795_671_263_396L,
+        )
+        assertEquals(3, snapshot["schema_version"]?.jsonPrimitive?.intOrNull)
+        assertEquals(batchId, snapshot["batch_id"]?.jsonPrimitive?.content)
+        assertEquals(reqId, snapshot["request_id"]?.jsonPrimitive?.content)
+        assertEquals("0a3e213251bae1af67a0f2f7bbbe31ee2663804d", snapshot["source_commit"]?.jsonPrimitive?.content)
+        assertEquals("INTERRUPTED", snapshot["state"]?.jsonPrimitive?.content)
+        assertEquals("android_observation_approval", snapshot["stage"]?.jsonPrimitive?.content)
+        assertEquals("stale_android_consent_process_restarted", snapshot["reason"]?.jsonPrimitive?.content)
+        assertEquals("six_key_first_pass", snapshot["mode"]?.jsonPrimitive?.content)
+        assertEquals("NONE", snapshot["projection_consent"]?.jsonPrimitive?.content)
+        assertEquals("DENIED", snapshot["service_admission"]?.jsonPrimitive?.content)
+        assertEquals("ENDED", snapshot["candidate_control_session_state"]?.jsonPrimitive?.content)
+        assertEquals(false, snapshot["release_session_ended_externally_verified"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(true, snapshot["pre_run_terminal"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(false, snapshot["outcome_unknown"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(3, snapshot["repetitions_requested"]?.jsonPrimitive?.intOrNull)
+        assertEquals(0, snapshot["repetitions_completed"]?.jsonPrimitive?.intOrNull)
+        assertEquals(0, snapshot["runs"]?.jsonArray?.size)
+
+        // Unsafe strings / malformed IDs / unknown state must sanitize fail-closed without leaking raw text
+        val sanitized = DebugQaLifecyclePolicy.buildPreRunBatchSnapshot(
+            batchId = "not-a-uuid",
+            requestId = "https://secret.invalid/token",
+            sourceCommit = "0a3e213251bae1af67a0f2f7bbbe31ee2663804d",
+            versionName = "0.1.165-capturecandidate",
+            versionCode = 166,
+            mode = null,
+            state = "ARBITRARY_SECRET",
+            stage = "https://private.invalid/stage",
+            reason = "SECRET TOKEN!",
+        )
+        assertEquals("FAILED", sanitized["state"]?.jsonPrimitive?.content)
+        assertEquals("unavailable", sanitized["stage"]?.jsonPrimitive?.content)
+        assertEquals("unavailable", sanitized["reason"]?.jsonPrimitive?.content)
+        assertEquals("unknown", sanitized["mode"]?.jsonPrimitive?.content)
+        assertTrue(sanitized["batch_id"]!!.jsonPrimitive.content.matches(Regex("[a-f0-9-]{36}")))
+        assertTrue(sanitized["request_id"]!!.jsonPrimitive.content.matches(Regex("[a-f0-9-]{36}")))
+        val serialized = sanitized.toString()
+        assertFalse(serialized.contains("secret.invalid"))
+        assertFalse(serialized.contains("private.invalid"))
+        assertFalse(serialized.contains("SECRET TOKEN"))
+
+        // Verify admission.current stays non-null (isBusy == true) across reserve -> waitForConsent -> queue -> admit -> finish
+        val admission = DebugQaRunAdmission()
+        val req = DebugQaRunRequest(DebugQaMode.SIX_KEY)
+        assertNull(admission.current)
+        assertEquals(DebugQaAdmissionOutcome.ACCEPTED, admission.reserve(req, captureBusy = false))
+        assertNotNull(admission.current)
+        admission.waitForConsent(req, 42L)
+        assertNotNull(admission.current)
+        assertTrue(admission.queue(DebugQaApprovedRun(req, DebugQaConsent.NEW_OS_APPROVAL, 42L)))
+        assertNotNull(admission.current)
+        assertEquals(DebugQaAdmissionOutcome.ACCEPTED, admission.admit(req.id, req.mode.action).first)
+        assertNotNull(admission.current)
+        assertTrue(admission.finish(req))
+        assertNull(admission.current)
     }
 }

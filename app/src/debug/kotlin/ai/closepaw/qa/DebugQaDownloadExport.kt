@@ -46,20 +46,24 @@ internal object DebugQaDownloadExport {
             publish(context, batchId, checkNotNull(run.request.exportGrant))
         }
 
+    fun completePreRun(context: Context, exportGrant: String?, batchId: String): DebugQaExportOutcome =
+        exportDebugQaResult(exportGrant, { grant(context) }) {
+            publish(context, batchId, checkNotNull(exportGrant))
+        }
+
     private fun publish(context: Context, batchId: String, grant: String): Boolean {
         check(BuildConfig.DEBUG && context.packageName == CaptureQaAcceptance.CANDIDATE)
         check(batchId.matches(Regex("[a-f0-9-]{36}")))
-        val batch = checkNotNull(DebugOneStopQa.lastBatchResult(context))
+        val batch = checkNotNull(DebugOneStopQa.batchResultById(context, batchId))
         check(batch["batch_id"]?.jsonPrimitive?.content == batchId)
-        check(batch["state"]?.jsonPrimitive?.content in setOf(
-            "BLOCKED", "DIAGNOSTIC_COMPLETE", "PASS", "FAILED", "CANCELLED", "UNKNOWN"))
+        check(DebugQaLifecyclePolicy.isExportableTerminalState(batch["state"]?.jsonPrimitive?.content))
         val last = DebugOneStopQa.lastResult(context)?.takeIf { it["batch_id"]?.jsonPrimitive?.content == batchId }
         val bytes = buildJsonObject {
             put("format", "debug_qa_redacted_v1")
             last?.let { put("last_run", it) }
             put("last_batch", batch)
         }.toString().toByteArray(Charsets.UTF_8)
-        check(bytes.size in 1..128_000)
+        check(bytes.size in 1..DebugQaLifecyclePolicy.MAX_EXPORT_BYTES)
         val resolver = context.contentResolver
         val uri = checkNotNull(resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "closepaw-debug-qa-$batchId.json")

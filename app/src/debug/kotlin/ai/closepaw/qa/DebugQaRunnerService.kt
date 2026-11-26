@@ -1,6 +1,7 @@
 package ai.closepaw.qa
 
 import ai.closepaw.BuildConfig
+import ai.closepaw.app.AgentService
 import ai.closepaw.platform.virtualdisplay.MediaProjectionCaptureService
 import ai.closepaw.platform.virtualdisplay.ProjectionImageTransport
 import android.app.Notification
@@ -120,6 +121,13 @@ internal object DebugQaRunnerStatusStore {
         }.onFailure { Log.w("ClosePawDebugQA", "status_store_failed request_id=${value.request.id}") }
     }
 
+    fun savedStatusJson(context: Context): JsonObject? = runCatching {
+        val file = File(context.filesDir, "debug-qa/runner-status.json")
+        if (!file.isFile || file.length() !in 1L..2048L) return@runCatching null
+        val fields = Json.parseToJsonElement(file.readText()).jsonObject
+        fields.takeIf { it["source_commit"]?.jsonPrimitive?.content == BuildConfig.CAPTURE_QA_SOURCE_SHA }
+    }.getOrNull()
+
     fun savedDescription(context: Context): String = runCatching {
         val file = File(context.filesDir, "debug-qa/runner-status.json")
         if (!file.isFile || file.length() !in 1L..2048L) return@runCatching "QA result: none"
@@ -156,6 +164,9 @@ class DebugQaRunnerService : Service() {
         private const val REQUEST_ID = "local_run_request_id"
         internal val admission = DebugQaRunAdmission()
         internal val processId = UUID.randomUUID().toString()
+        // Serialized off-main-thread IO lane for pre-run persistence & atomic MediaStore export.
+        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+        private val preRunIoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
 
         fun isRunning(): Boolean = admission.active != null
         fun isBusy(): Boolean = admission.current != null
@@ -164,11 +175,126 @@ class DebugQaRunnerService : Service() {
             Log.i("ClosePawDebugQA", "request_id=${request.id} mode=${request.mode.code} outcome=$outcome reason=$reason")
         }
 
-        internal fun reject(context: Context, request: DebugQaRunRequest, state: String, reason: String) {
+        private fun persistPreRunAsync(
+            appContext: Context,
+            request: DebugQaRunRequest?,
+            mode: DebugQaMode?,
+            requestId: String,
+            exportGrant: String?,
+            state: String,
+            reason: String,
+            stage: String,
+            admissionOutcome: DebugQaAdmissionOutcome?,
+            consent: DebugQaConsent?,
+        ) {
+            val batchId = UUID.randomUUID().toString()
+            val candidateSessionState = AgentService.instance?.remoteControlSession?.state
+            val snapshot = DebugQaLifecyclePolicy.buildPreRunBatchSnapshot(
+                batchId = batchId,
+                requestId = requestId,
+                sourceCommit = BuildConfig.CAPTURE_QA_SOURCE_SHA,
+                versionName = BuildConfig.VERSION_NAME,
+                versionCode = BuildConfig.VERSION_CODE,
+                mode = mode,
+                state = state,
+                stage = stage,
+                reason = reason,
+                admissionOutcome = admissionOutcome,
+                consent = consent,
+                candidateControlSessionState = candidateSessionState,
+            )
+            preRunIoScope.launch {
+                val (allowLatest, saved) = synchronized(DebugOneStopQa.batchFileLock) {
+                    val idle = !isBusy()
+                    val ok = runCatching {
+                        DebugOneStopQa.savePreRunBatch(appContext, snapshot, overwriteLatest = idle)
+                    }.isSuccess
+                    idle to ok
+                }
+                // Always export this specific pre-run batch_id from history/batch-<id>.json when
+                // grant is enabled, even if a live batch is running (never overwriting live latest).
+                val export = if (saved) {
+                    DebugQaDownloadExport.completePreRun(appContext, exportGrant, batchId)
+                } else if (exportGrant == null) {
+                    DebugQaExportOutcome.NOT_ENABLED
+                } else {
+                    DebugQaExportOutcome.FAILED
+                }
+                if (allowLatest) {
+                    val statusRequest = request ?: mode?.let { DebugQaRunRequest(it, exportGrant, requestId) }
+                    if (statusRequest != null) {
+                        synchronized(DebugOneStopQa.batchFileLock) {
+                            if (!isBusy()) {
+                                DebugQaRunnerStatusStore.publish(
+                                    appContext,
+                                    DebugQaStatus(statusRequest, state, reason, export, batchId),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        internal fun reject(
+            context: Context,
+            request: DebugQaRunRequest,
+            state: String,
+            reason: String,
+            stage: String = reason,
+            admissionOutcome: DebugQaAdmissionOutcome = DebugQaAdmissionOutcome.DENIED,
+            consent: DebugQaConsent? = null,
+        ) {
             audit(request, state, reason)
             if (admission.finish(request)) {
-                DebugQaRunnerStatusStore.publish(context, DebugQaStatus(request, state, reason))
+                persistPreRunAsync(
+                    appContext = context.applicationContext,
+                    request = request,
+                    mode = request.mode,
+                    requestId = request.id,
+                    exportGrant = request.exportGrant,
+                    state = state,
+                    reason = reason,
+                    stage = stage,
+                    admissionOutcome = admissionOutcome,
+                    consent = consent,
+                )
             }
+        }
+
+        /**
+         * Persists an unreserved pre-run rejection/drop (e.g. BUSY/DUPLICATE admission or
+         * OS consent returning after process death) off the main thread with correlation IDs
+         * while holding [DebugOneStopQa.batchFileLock] so no reserved/queued/active live batch
+         * is ever overwritten.
+         */
+        internal fun recordUnreservedPreRunOutcome(
+            context: Context,
+            mode: DebugQaMode?,
+            requestId: String?,
+            exportGrant: String?,
+            state: String,
+            reason: String,
+            stage: String,
+            admissionOutcome: DebugQaAdmissionOutcome? = null,
+            consent: DebugQaConsent? = null,
+        ) {
+            if (!BuildConfig.DEBUG || context.packageName != CaptureQaAcceptance.CANDIDATE) return
+            val safeRequestId = DebugQaLifecyclePolicy.safeUuidOrFresh(requestId)
+            Log.i("ClosePawDebugQA",
+                "request_id=$safeRequestId mode=${mode?.code ?: "unknown"} outcome=$state reason=$reason pre_run=true")
+            persistPreRunAsync(
+                appContext = context.applicationContext,
+                request = null,
+                mode = mode,
+                requestId = safeRequestId,
+                exportGrant = exportGrant,
+                state = state,
+                reason = reason,
+                stage = stage,
+                admissionOutcome = admissionOutcome,
+                consent = consent,
+            )
         }
 
         internal fun start(context: Context, run: DebugQaApprovedRun): Boolean {

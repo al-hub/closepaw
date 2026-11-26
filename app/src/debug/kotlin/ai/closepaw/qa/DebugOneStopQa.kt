@@ -855,14 +855,45 @@ internal object DebugOneStopQa {
             a.sourceWindowId == b.sourceWindowId && first.packageName == later.packageName
     }
 
+    internal val batchFileLock = Any()
+
     private fun reportFile(context: Context) = File(context.filesDir, "debug-qa/one-stop-result.json")
     private fun batchFile(context: Context) = File(context.filesDir, "debug-qa/one-stop-batch.json")
     internal fun lastBatchResult(context: Context): JsonObject? {
         if (!BuildConfig.DEBUG || context.packageName != CaptureQaAcceptance.CANDIDATE) return null
-        val file = batchFile(context)
-        if (!file.isFile || file.length() !in 1L..64_000L) return null
-        return runCatching { Json.parseToJsonElement(file.readText()).jsonObject }.getOrNull()
-            ?.takeIf { it["source_commit"]?.jsonPrimitive?.content == BuildConfig.CAPTURE_QA_SOURCE_SHA }
+        return synchronized(batchFileLock) {
+            val file = batchFile(context)
+            if (!file.isFile || file.length() !in 1L..DebugQaLifecyclePolicy.MAX_BATCH_FILE_BYTES) return@synchronized null
+            runCatching { Json.parseToJsonElement(file.readText()).jsonObject }.getOrNull()
+                ?.takeIf { it["source_commit"]?.jsonPrimitive?.content == BuildConfig.CAPTURE_QA_SOURCE_SHA }
+        }
+    }
+    internal fun batchResultById(context: Context, batchId: String): JsonObject? {
+        if (!BuildConfig.DEBUG || context.packageName != CaptureQaAcceptance.CANDIDATE) return null
+        if (!batchId.matches(Regex("[a-f0-9-]{36}"))) return null
+        return synchronized(batchFileLock) {
+            val historyFile = File(context.filesDir, "debug-qa/history/batch-$batchId.json")
+            val fromHistory = if (historyFile.isFile && historyFile.length() in 1L..DebugQaLifecyclePolicy.MAX_BATCH_FILE_BYTES) {
+                runCatching { Json.parseToJsonElement(historyFile.readText()).jsonObject }.getOrNull()
+                    ?.takeIf {
+                        it["source_commit"]?.jsonPrimitive?.content == BuildConfig.CAPTURE_QA_SOURCE_SHA &&
+                            it["batch_id"]?.jsonPrimitive?.content == batchId
+                    }
+            } else null
+            fromHistory ?: lastBatchResult(context)?.takeIf {
+                it["batch_id"]?.jsonPrimitive?.content == batchId
+            }
+        }
+    }
+    internal fun savePreRunBatch(context: Context, snapshot: JsonObject, overwriteLatest: Boolean = true) {
+        require(BuildConfig.DEBUG && context.packageName == CaptureQaAcceptance.CANDIDATE)
+        synchronized(batchFileLock) {
+            if (overwriteLatest) atomicWrite(batchFile(context), snapshot)
+            val batchId = snapshot["batch_id"]?.jsonPrimitive?.content.orEmpty()
+            if (batchId.matches(Regex("[a-f0-9-]{36}"))) {
+                atomicWrite(File(context.filesDir, "debug-qa/history/batch-$batchId.json"), snapshot)
+            }
+        }
     }
     internal fun saveBatch(context: Context, id: String, state: String, reason: String,
                            results: List<JsonObject>, run: DebugQaApprovedRun) {
@@ -876,18 +907,28 @@ internal object DebugOneStopQa {
             put("projection_consent", run.consent.name)
             put("service_action", run.request.mode.action)
             put("service_admission", DebugQaAdmissionOutcome.ACCEPTED.name)
+            put("candidate_control_session_state",
+                AgentService.instance?.remoteControlSession?.state?.name ?: "unavailable")
+            // Candidate in-process state cannot prove a separate Release package session ended.
+            put("release_session_ended_externally_verified", false)
+            put("pre_run_terminal", false)
             put("repetitions_requested", run.request.mode.repetitions)
             put("repetitions_completed", results.count { it["outcome"]?.jsonPrimitive?.content == "PASS" })
             put("runs", JsonArray(results))
             put("last_updated_epoch_ms", System.currentTimeMillis())
         }
-        atomicWrite(batchFile(context), snapshot)
+        synchronized(batchFileLock) {
+            atomicWrite(batchFile(context), snapshot)
+            if (state != "IN_PROGRESS" && id.matches(Regex("[a-f0-9-]{36}"))) {
+                atomicWrite(File(context.filesDir, "debug-qa/history/batch-$id.json"), snapshot)
+            }
+        }
     }
     /** Read-only persisted checkpoint, never an authorization or replay token. */
     fun lastResult(context: Context): JsonObject? {
         if (!BuildConfig.DEBUG || context.packageName != CaptureQaAcceptance.CANDIDATE) return null
         val file = reportFile(context)
-        if (!file.isFile || file.length() !in 1L..64_000L) return null
+        if (!file.isFile || file.length() !in 1L..DebugQaLifecyclePolicy.MAX_BATCH_FILE_BYTES) return null
         return runCatching { Json.parseToJsonElement(file.readText()).jsonObject }.getOrNull()
             ?.takeIf { item ->
                 item["source_commit"]?.jsonPrimitive?.content == BuildConfig.CAPTURE_QA_SOURCE_SHA &&

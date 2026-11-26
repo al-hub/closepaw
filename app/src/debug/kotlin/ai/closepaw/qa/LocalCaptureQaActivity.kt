@@ -50,6 +50,8 @@ class LocalCaptureQaActivity : ComponentActivity() {
     private var selectedMode: DebugQaMode? = null
     private var pendingRequest: DebugQaRunRequest? = null
     private var consentGeneration: Long? = null
+    private var savedConsentRequestId: String? = null
+    private var savedConsentModeCode: String? = null
     private lateinit var resultSummary: TextView
     private lateinit var status: TextView
     private lateinit var report: TextView
@@ -62,10 +64,29 @@ class LocalCaptureQaActivity : ComponentActivity() {
         val gate = MediaProjectionCaptureService.consentGate
         val generation = consentGeneration
         val request = pendingRequest
+        val staleRequestId = savedConsentRequestId
+        val staleModeCode = savedConsentModeCode
         consentGeneration = null
         pendingRequest = null
+        savedConsentRequestId = null
+        savedConsentModeCode = null
         if (generation == null || gate.generation != generation) {
-            request?.let { reject(it, "DENIED", "stale_android_consent") }
+            if (request != null) {
+                reject(request, "DENIED", "stale_android_consent", stage = "android_observation_approval")
+            } else if (staleRequestId != null) {
+                val staleMode = DebugQaMode.entries.firstOrNull { it.code == staleModeCode } ?: selectedMode
+                DebugQaRunnerService.recordUnreservedPreRunOutcome(
+                    context = this,
+                    mode = staleMode,
+                    requestId = staleRequestId,
+                    exportGrant = DebugQaDownloadExport.grant(this),
+                    state = "INTERRUPTED",
+                    reason = "stale_android_consent_process_restarted",
+                    stage = "android_observation_approval",
+                    admissionOutcome = DebugQaAdmissionOutcome.DENIED,
+                )
+                status.text = "INTERRUPTED · stale android consent after process restart (no automatic replay)"
+            }
             return@registerForActivityResult
         }
 
@@ -102,6 +123,9 @@ class LocalCaptureQaActivity : ComponentActivity() {
             pendingRequest = DebugQaRunnerService.admission.pendingConsent(
                 savedInstanceState.getString("qa_request_id"), savedInstanceState.getString("qa_request_mode"),
                 checkNotNull(consentGeneration))
+        } else if (!sameProcess && savedInstanceState?.containsKey("qa_request_id") == true) {
+            savedConsentRequestId = savedInstanceState.getString("qa_request_id")
+            savedConsentModeCode = savedInstanceState.getString("qa_request_mode")
         }
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 36, 24, 24) }
         column.setOnApplyWindowInsetsListener { view, insets ->
@@ -191,8 +215,23 @@ class LocalCaptureQaActivity : ComponentActivity() {
             column.addView(this, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         refreshSetup()
-        if (!sameProcess && savedInstanceState?.containsKey("qa_request_id") == true)
-            status.text = "Pending QA interrupted. No run was resumed."
+        if (!sameProcess && savedInstanceState?.containsKey("qa_request_id") == true) {
+            val staleId = savedConsentRequestId
+            val staleMode = DebugQaMode.entries.firstOrNull { it.code == savedConsentModeCode } ?: selectedMode
+            savedConsentRequestId = null
+            savedConsentModeCode = null
+            DebugQaRunnerService.recordUnreservedPreRunOutcome(
+                context = this,
+                mode = staleMode,
+                requestId = staleId,
+                exportGrant = DebugQaDownloadExport.grant(this),
+                state = "INTERRUPTED",
+                reason = "stale_android_consent_process_restarted",
+                stage = "android_observation_approval",
+                admissionOutcome = DebugQaAdmissionOutcome.DENIED,
+            )
+            status.text = "Pending QA interrupted after process restart. No run was resumed."
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 DebugQaRunnerStatusStore.updates.collect { current ->
@@ -310,10 +349,13 @@ class LocalCaptureQaActivity : ComponentActivity() {
     private fun showOneStopResult() {
         val checkpoint = DebugOneStopQa.lastResult(this)
         val batch = DebugOneStopQa.lastBatchResult(this)
-        report.text = if (checkpoint == null && batch == null) "No matching-source saved Debug QA checkpoint."
+        val runnerStatus = DebugQaRunnerStatusStore.savedStatusJson(this)
+        report.text = if (checkpoint == null && batch == null && runnerStatus == null)
+            "No matching-source saved Debug QA checkpoint."
             else "PRIVATE DEBUG QA HISTORY; stage events and causal status are evidence, not input success.\n" +
                 "Batch: " + (batch?.toString() ?: "none") + "\nLast run: " +
-                (checkpoint?.toString() ?: "none")
+                (checkpoint?.toString() ?: "none") +
+                (runnerStatus?.let { "\nRunner status: $it" } ?: "")
     }
 
     /** Explicit local export only: no pixels, user text, URLs or native node data.
@@ -325,7 +367,8 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }
         val run = DebugOneStopQa.lastResult(this)
         val batch = DebugOneStopQa.lastBatchResult(this)
-        if (run == null && batch == null) {
+        val runnerStatus = DebugQaRunnerStatusStore.savedStatusJson(this)
+        if (run == null && batch == null && runnerStatus == null) {
             report.text = "No saved same-source Debug QA evidence to share."
             return
         }
@@ -336,6 +379,7 @@ class LocalCaptureQaActivity : ComponentActivity() {
                 put("format", "debug_qa_redacted_v1")
                 run?.let { put("last_run", it) }
                 batch?.let { put("last_batch", it) }
+                runnerStatus?.let { put("runner_status", it) }
             }.toString(), Charsets.UTF_8)
             val uri = FileProvider.getUriForFile(this, "$packageName.captureqa", file)
             startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
@@ -369,12 +413,23 @@ class LocalCaptureQaActivity : ComponentActivity() {
                     CaptureQaAcceptance.isRunning() || consentGeneration != null)
                 DebugQaRunnerService.audit(request, admission.name, "local_confirmation")
                 if (admission != DebugQaAdmissionOutcome.ACCEPTED) {
+                    DebugQaRunnerService.recordUnreservedPreRunOutcome(
+                        context = this,
+                        mode = mode,
+                        requestId = request.id,
+                        exportGrant = request.exportGrant,
+                        state = admission.name,
+                        reason = "admission_${admission.name.lowercase()}",
+                        stage = "local_confirmation",
+                        admissionOutcome = admission,
+                    )
                     status.text = "${admission.name} · ${mode.label} · Request ${request.id}"
                 } else if (DebugQaRunAdmission.blocksForActiveControlSession(
                         AgentService.instance?.remoteControlSession?.state)) {
-                    reject(request, "BUSY", "external_control_session_still_active")
+                    reject(request, "BUSY", "external_control_session_still_active", stage = "local_confirmation",
+                        admissionOutcome = DebugQaAdmissionOutcome.BUSY)
                 } else if (!DebugImeInteractConsent.selectedSamsungIme(this)) {
-                    reject(request, "DENIED", "samsung_ime_not_selected")
+                    reject(request, "DENIED", "samsung_ime_not_selected", stage = "local_confirmation")
                 } else if (DebugImeInteractConsent.explicitlyGranted(this)) {
                     continueConfirmed(request)
                 } else {
@@ -416,37 +471,51 @@ class LocalCaptureQaActivity : ComponentActivity() {
 
     private fun launchQa(run: DebugQaApprovedRun) {
         val request = run.request
-        if (isDestroyed || isFinishing || DebugQaRunnerService.admission.current != request) return
+        if (DebugQaRunnerService.admission.current != request) return
+        if (isDestroyed || isFinishing) {
+            reject(request, "CANCELLED", "activity_destroyed_before_launch", stage = "chrome_launch", consent = run.consent)
+            return
+        }
         if (CaptureQaAcceptance.isRunning()) {
-            reject(request, "BUSY", "capture_qa_busy")
+            reject(request, "BUSY", "capture_qa_busy", stage = "chrome_launch",
+                admissionOutcome = DebugQaAdmissionOutcome.BUSY, consent = run.consent)
             return
         }
         if (DebugQaRunAdmission.blocksForActiveControlSession(
                 AgentService.instance?.remoteControlSession?.state)) {
-            reject(request, "BUSY", "external_control_session_still_active")
+            reject(request, "BUSY", "external_control_session_still_active", stage = "chrome_launch",
+                admissionOutcome = DebugQaAdmissionOutcome.BUSY, consent = run.consent)
             return
         }
         // Android restricts background launches; the visible QA Activity opens Chrome.
         val chrome = packageManager.getLaunchIntentForPackage("com.android.chrome")
         if (chrome == null) {
-            reject(request, "DENIED", "chrome_launch_unavailable")
+            reject(request, "DENIED", "chrome_launch_unavailable", stage = "chrome_launch", consent = run.consent)
             return
         }
         previewIfReadyClear()
         if (!DebugQaRunnerService.start(this, run)) {
-            reject(request, "FAILED", "foreground_service_request_failed")
+            reject(request, "FAILED", "foreground_service_request_failed", stage = "foreground_service_start",
+                consent = run.consent)
             return
         }
         try {
             startActivity(chrome)
             DebugQaRunnerStatusStore.publish(this, DebugQaStatus(request, "WAITING", "service_admission"))
         } catch (_: Exception) {
-            reject(request, "FAILED", "chrome_launch_failed")
+            reject(request, "FAILED", "chrome_launch_failed", stage = "chrome_launch", consent = run.consent)
         }
     }
 
-    private fun reject(request: DebugQaRunRequest, state: String, reason: String) {
-        DebugQaRunnerService.reject(this, request, state, reason)
+    private fun reject(
+        request: DebugQaRunRequest,
+        state: String,
+        reason: String,
+        stage: String = reason,
+        admissionOutcome: DebugQaAdmissionOutcome = DebugQaAdmissionOutcome.DENIED,
+        consent: DebugQaConsent? = null,
+    ) {
+        DebugQaRunnerService.reject(this, request, state, reason, stage, admissionOutcome, consent)
         status.text = "$state · ${reason.replace('_', ' ')}"
     }
 
