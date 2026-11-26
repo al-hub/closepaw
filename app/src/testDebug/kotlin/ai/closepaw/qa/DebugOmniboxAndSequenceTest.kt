@@ -1214,4 +1214,348 @@ class DebugOmniboxAndSequenceTest {
             assertTrue(res.progress.uncertain)
         }
     }
+
+    @Test fun commonRecovery_code167TransientLayoutSwitchRecoversRecordsJournalAndCompletesSixKey() = runBlocking {
+        val englishNodes = englishPhysicalKeyboardNodes(withKoreanSuggestions = true, hanEngDescription = "한국어로 변경")
+        val koreanNodes = koreanPhysicalKeyboardNodes()
+        val g = koreanNodes.single { it.keyboardKey == "ㄱ" }
+        val a = koreanNodes.single { it.keyboardKey == "ㅏ" }
+        val n = koreanNodes.single { it.keyboardKey == "ㄴ" }
+        val space = node(107, window = 13301, pkg = ime, keyboardImageCandidate = true)
+
+        val focusedEd = blankFocusedUrl.copy(focusable = true)
+        val en1 = frame(*(listOf(focusedEd) + englishNodes + space).toTypedArray(),
+            editor = focusedEd, withIme = true).copy(fingerprint = "fp-en-1", touchContext = "rot0-clean", inputTargetId = focusedEd.id)
+        val en2 = en1.copy(fingerprint = "fp-en-2")
+        val ko = frame(*(listOf(focusedEd) + koreanNodes + space).toTypedArray(),
+            editor = focusedEd, withIme = true).copy(fingerprint = "fp-ko-1", touchContext = "rot0-clean", inputTargetId = focusedEd.id)
+        val finalEditor = focusedEd.copy(text = "가 나 ", empty = false, selectionStart = 4, selectionEnd = 4)
+        val fin = frame(*(listOf(finalEditor) + koreanNodes + space).toTypedArray(),
+            editor = finalEditor, withIme = true).copy(fingerprint = "fp-ko-final", touchContext = "rot0-clean", inputTargetId = finalEditor.id)
+
+        val rawJournal = buildJsonObject {
+            put("elapsed_ms", 85); put("unrecorded_count", 0)
+            put("events", buildJsonArray {
+                add(buildJsonObject {
+                    put("type", "windows_changed"); put("reported_owner", "samsung_ime")
+                    put("event_window_match", "ime"); put("window_change_mask", 8)
+                    put("unknown_change_bits", false); put("event_display_class", "default")
+                    put("after_action_source_check_ms", 42); put("window_id", 13301)
+                })
+            })
+        }
+
+        val captures = ArrayDeque(listOf(en1, en2, ko, fin))
+        var invalidations = 0
+        var switchCalls = 0
+        val seenFrameFingerprints = mutableListOf<String>()
+        val outcome = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { captures.removeFirst() },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, validSequenceObservation(g, a, n, space), certifiedFrame = ko) },
+            certifyCandidate = { _, _, c, _ ->
+                PixelCertificationOutcome(TapBounds(12, 12, 80, 80), if (c.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ ->
+                DebugSixKeyExecution.SequencePacket(true, buildJsonObject {
+                    put("action_attempted", true); put("outcome_unknown", false)
+                    put("app_result_verified", true); put("completed_keys", 6)
+                })
+            },
+            sessionId = "s-code167",
+            first = en1,
+            allowed = { true },
+            checkpoint = { _, _ -> },
+            clockMs = { 100L },
+            switchToKoreanLayout = { liveFrame, _, _ ->
+                switchCalls++
+                seenFrameFingerprints += liveFrame.fingerprint
+                if (switchCalls == 1) {
+                    DebugSixKeyExecution.LayoutSwitchPacket(
+                        success = false, attempted = false, unknown = false,
+                        reason = "display_window_changed_during_capture",
+                        captureWindowChanges = rawJournal,
+                    )
+                } else {
+                    DebugSixKeyExecution.LayoutSwitchPacket(success = true, attempted = true, unknown = false)
+                }
+            },
+            invalidateObservation = { invalidations++ },
+        )
+
+        assertNull("Expected recovery after transient pre-dispatch refusal, got ${outcome.failure}", outcome.failure)
+        assertEquals(2, switchCalls)
+        assertEquals(listOf("fp-en-1", "fp-en-2"), seenFrameFingerprints)
+        assertEquals(1, invalidations)
+        assertEquals(1, outcome.recoveryAttempts)
+        assertEquals(1, outcome.layoutSwitchAttempts)
+        assertTrue(outcome.layoutSwitchConfirmed)
+        assertEquals(6, outcome.progress.verified)
+        assertEquals(6, outcome.progress.attempts)
+        assertFalse(outcome.progress.uncertain)
+        val firstLayoutEv = outcome.evidence.first { it["source"]?.jsonPrimitive?.contentOrNull == "korean_layout_readiness" }
+        assertEquals("display_window_changed_during_capture", firstLayoutEv["refusal_reason"]?.jsonPrimitive?.content)
+        val changes = firstLayoutEv["capture_window_changes"]?.jsonObject
+        assertNotNull(changes)
+        assertEquals("samsung_ime", changes!!.getValue("events").jsonArray.single().jsonObject.getValue("reported_owner").jsonPrimitive.content)
+        assertFalse(changes.toString().contains("window_id"))
+        assertFalse(changes.toString().contains("13301"))
+    }
+
+    @Test fun commonRecovery_enforcesCapThreeAndRecoversInitialObserveAndHappyPathHasZeroRecoveries() = runBlocking {
+        val englishNodes = englishPhysicalKeyboardNodes(withKoreanSuggestions = true, hanEngDescription = "한국어로 변경")
+        val koreanNodes = koreanPhysicalKeyboardNodes()
+        val g = koreanNodes.single { it.keyboardKey == "ㄱ" }
+        val a = koreanNodes.single { it.keyboardKey == "ㅏ" }
+        val n = koreanNodes.single { it.keyboardKey == "ㄴ" }
+        val space = node(107, window = 13301, pkg = ime, keyboardImageCandidate = true)
+
+        val focusedEd = blankFocusedUrl.copy(focusable = true)
+        val en = frame(*(listOf(focusedEd) + englishNodes + space).toTypedArray(),
+            editor = focusedEd, withIme = true).copy(fingerprint = "fp-en", touchContext = "rot0-clean", inputTargetId = focusedEd.id)
+        val ko = frame(*(listOf(focusedEd) + koreanNodes + space).toTypedArray(),
+            editor = focusedEd, withIme = true).copy(fingerprint = "fp-ko", touchContext = "rot0-clean", inputTargetId = focusedEd.id)
+        val finalEditor = focusedEd.copy(text = "가 나 ", empty = false, selectionStart = 4, selectionEnd = 4)
+        val fin = frame(*(listOf(finalEditor) + koreanNodes + space).toTypedArray(),
+            editor = finalEditor, withIme = true).copy(fingerprint = "fp-fin", touchContext = "rot0-clean", inputTargetId = finalEditor.id)
+
+        // 1) Normal happy path (Hangul ready): 0 recoveries, 0 invalidations, 6/6 PASS
+        run {
+            val captures = ArrayDeque(listOf(ko, fin))
+            var invalidations = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { captures.removeFirst() },
+                observeSequence = { DebugSixKeyExecution.ObservePacket(true, validSequenceObservation(g, a, n, space), certifiedFrame = ko) },
+                certifyCandidate = { _, _, c, _ -> PixelCertificationOutcome(TapBounds(12, 12, 80, 80), if (c.imageOnly) "space_glyph" else "native_structural_and_live_surface") },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(true, buildJsonObject {
+                    put("action_attempted", true); put("outcome_unknown", false); put("app_result_verified", true); put("completed_keys", 6)
+                }) },
+                sessionId = "s-happy", first = ko, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                invalidateObservation = { invalidations++ },
+            )
+            assertNull(res.failure)
+            assertEquals(0, res.recoveryAttempts)
+            assertEquals(0, invalidations)
+            assertEquals(6, res.progress.verified)
+            assertFalse(res.progress.uncertain)
+        }
+
+        // 2) Initial 6-key observation hits display_window_changed_during_capture twice, succeeds on 3rd
+        run {
+            val captures = ArrayDeque(listOf(ko, ko, ko, fin))
+            var obsCalls = 0
+            var invalidations = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { captures.removeFirst() },
+                observeSequence = {
+                    obsCalls++
+                    if (obsCalls <= 2) DebugSixKeyExecution.ObservePacket(false, buildJsonObject {
+                        put("reason_code", "display_window_changed_during_capture")
+                        put("action_attempted", false); put("outcome_unknown", false)
+                    }) else DebugSixKeyExecution.ObservePacket(true, validSequenceObservation(g, a, n, space), certifiedFrame = ko)
+                },
+                certifyCandidate = { _, _, c, _ -> PixelCertificationOutcome(TapBounds(12, 12, 80, 80), if (c.imageOnly) "space_glyph" else "native_structural_and_live_surface") },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(true, buildJsonObject {
+                    put("action_attempted", true); put("outcome_unknown", false); put("app_result_verified", true); put("completed_keys", 6)
+                }) },
+                sessionId = "s-obs-rec", first = ko, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                invalidateObservation = { invalidations++ },
+            )
+            assertNull(res.failure)
+            assertEquals(3, obsCalls)
+            assertEquals(2, res.recoveryAttempts)
+            assertEquals(2, invalidations)
+            assertEquals(6, res.progress.verified)
+        }
+
+        // 3) Recovery cap: 4th refusal fails closed after exactly 3 read-only recoveries (4 total attempts, 0 touches)
+        run {
+            val captures = ArrayDeque(listOf(en, en, en, en))
+            var switchCalls = 0
+            var invalidations = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { captures.removeFirst() },
+                observeSequence = { fail("Must not observe after cap exhausted"); DebugSixKeyExecution.ObservePacket(false, buildJsonObject {}) },
+                certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+                sessionId = "s-cap", first = en, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                switchToKoreanLayout = { _, _, _ ->
+                    switchCalls++
+                    DebugSixKeyExecution.LayoutSwitchPacket(false, attempted = false, unknown = false, reason = "display_window_changed_during_capture")
+                },
+                invalidateObservation = { invalidations++ },
+            )
+            assertEquals("display_window_changed_during_capture", res.failure)
+            assertEquals(4, switchCalls)
+            assertEquals(3, invalidations)
+            assertEquals(3, res.recoveryAttempts)
+            assertEquals(0, res.layoutSwitchAttempts)
+            assertEquals(0, res.progress.attempts)
+            assertFalse(res.progress.uncertain)
+        }
+    }
+
+    @Test fun commonRecovery_blocksTargetChangeOverlayRotationPermissionLossLayoutDriftAndUnknown() = runBlocking {
+        val englishNodes = englishPhysicalKeyboardNodes(withKoreanSuggestions = true, hanEngDescription = "한국어로 변경")
+        val koreanNodes = koreanPhysicalKeyboardNodes()
+        val space = node(107, window = 13301, pkg = ime, keyboardImageCandidate = true)
+        val focusedEd = blankFocusedUrl.copy(focusable = true)
+        val en = frame(*(listOf(focusedEd) + englishNodes + space).toTypedArray(),
+            editor = focusedEd, withIme = true).copy(fingerprint = "fp-en", touchContext = "rot0-clean", inputTargetId = focusedEd.id)
+
+        // A) Overlay refusal (display_surface_unverified + display_unowned_window) -> 0 retries, redacted census attached
+        run {
+            val census = DisplayWindowCensus(2, 2, 0, 1, listOf(
+                CensusRow(CensusKind.ACCESSIBILITY_OVERLAY, CensusOwner.UNOWNED, true, CensusLayer.ABOVE, true, false, false),
+            ))
+            var calls = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { en },
+                observeSequence = { fail("No observe"); DebugSixKeyExecution.ObservePacket(false, buildJsonObject {}) },
+                certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+                sessionId = "s-ovl", first = en, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                switchToKoreanLayout = { _, _, _ ->
+                    calls++
+                    DebugSixKeyExecution.LayoutSwitchPacket(
+                        false, false, false, reason = "display_surface_unverified",
+                        displayPlanRefusal = "display_unowned_window", displayWindowCensus = census,
+                    )
+                },
+            )
+            assertEquals("display_surface_unverified", res.failure)
+            assertEquals(1, calls)
+            assertEquals(0, res.recoveryAttempts)
+            val ev = res.evidence.single { it["source"]?.jsonPrimitive?.contentOrNull == "korean_layout_readiness" }
+            assertEquals("display_unowned_window", ev["display_plan_refusal"]?.jsonPrimitive?.content)
+            assertEquals(1, ev["display_window_census"]?.jsonObject?.get("unowned_content_windows")?.jsonPrimitive?.int)
+        }
+
+        // B) Screen rotation during recovery (touchContext changes rot0 -> rot1) -> fails closed, 0 dispatches
+        run {
+            val rotated = en.copy(touchContext = "rot1-landscape")
+            val captures = ArrayDeque(listOf(en, rotated))
+            var calls = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { captures.removeFirst() },
+                observeSequence = { fail("No observe"); DebugSixKeyExecution.ObservePacket(false, buildJsonObject {}) },
+                certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+                sessionId = "s-rot", first = en, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                switchToKoreanLayout = { _, _, _ ->
+                    calls++
+                    DebugSixKeyExecution.LayoutSwitchPacket(false, false, false, reason = "display_window_changed_during_capture")
+                },
+            )
+            assertEquals("touch_context_or_rotation_changed", res.failure)
+            assertEquals(1, calls)
+            assertEquals(0, res.layoutSwitchAttempts)
+        }
+
+        // C) Real target change during recovery (foreground app/window changes) -> fails closed
+        run {
+            val otherApp = en.copy(packageName = "com.other.bank", windowId = 99999)
+            val captures = ArrayDeque(listOf(en, otherApp))
+            var calls = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { captures.removeFirst() },
+                observeSequence = { fail("No observe"); DebugSixKeyExecution.ObservePacket(false, buildJsonObject {}) },
+                certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+                sessionId = "s-tgt", first = en, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                switchToKoreanLayout = { _, _, _ ->
+                    calls++
+                    DebugSixKeyExecution.LayoutSwitchPacket(false, false, false, reason = "display_window_changed_during_capture")
+                },
+            )
+            assertEquals("target_package_changed", res.failure)
+            assertEquals(1, calls)
+            assertEquals(0, res.layoutSwitchAttempts)
+        }
+
+        // D) Permission loss during recovery (allowed flips false) -> fails closed immediately
+        run {
+            var live = true
+            val captures = ArrayDeque(listOf(en, en))
+            var calls = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { captures.removeFirst() },
+                observeSequence = { fail("No observe"); DebugSixKeyExecution.ObservePacket(false, buildJsonObject {}) },
+                certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+                sessionId = "s-perm", first = en, allowed = { live }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                switchToKoreanLayout = { _, _, _ ->
+                    calls++
+                    DebugSixKeyExecution.LayoutSwitchPacket(false, false, false, reason = "display_window_changed_during_capture")
+                },
+                invalidateObservation = { live = false },
+            )
+            assertEquals("control_authority_revoked", res.failure)
+            assertEquals(1, calls)
+            assertEquals(0, res.layoutSwitchAttempts)
+        }
+
+        // E) IME permission lost / changed during recovery -> fails closed
+        run {
+            val imeRevoked = en.copy(keyboard = keyboard.copy(interactAllowed = false))
+            val captures = ArrayDeque(listOf(en, imeRevoked))
+            var calls = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { captures.removeFirst() },
+                observeSequence = { fail("No observe"); DebugSixKeyExecution.ObservePacket(false, buildJsonObject {}) },
+                certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+                sessionId = "s-ime", first = en, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                switchToKoreanLayout = { _, _, _ ->
+                    calls++
+                    DebugSixKeyExecution.LayoutSwitchPacket(false, false, false, reason = "display_window_changed_during_capture")
+                },
+            )
+            assertEquals("keyboard_changed_or_unauthorized", res.failure)
+            assertEquals(1, calls)
+        }
+
+        // F) Unexpected layout flip to Hangul without our dispatch -> fails closed, never assumes safe
+        run {
+            val ko = frame(*(listOf(focusedEd) + koreanNodes + space).toTypedArray(),
+                editor = focusedEd, withIme = true).copy(fingerprint = "fp-ko-surprise", touchContext = "rot0-clean", inputTargetId = focusedEd.id)
+            val captures = ArrayDeque(listOf(en, ko))
+            var calls = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { captures.removeFirst() },
+                observeSequence = { fail("No observe"); DebugSixKeyExecution.ObservePacket(false, buildJsonObject {}) },
+                certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+                sessionId = "s-flip", first = en, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                switchToKoreanLayout = { _, _, _ ->
+                    calls++
+                    DebugSixKeyExecution.LayoutSwitchPacket(false, false, false, reason = "display_window_changed_during_capture")
+                },
+            )
+            assertEquals("layout_changed_unexpectedly_before_switch", res.failure)
+            assertEquals(1, calls)
+        }
+
+        // G) Post-dispatch attempted=true / UNKNOWN even with display_window_changed reason -> ZERO retry, uncertain=true
+        run {
+            var calls = 0
+            val res = DebugSixKeyExecution.runWithSeam(
+                captureFrame = { en },
+                observeSequence = { fail("No observe"); DebugSixKeyExecution.ObservePacket(false, buildJsonObject {}) },
+                certifyCandidate = { _, _, _, _ -> PixelCertificationOutcome() },
+                dispatchSequence = { _, _ -> DebugSixKeyExecution.SequencePacket(false, buildJsonObject {}) },
+                sessionId = "s-unk-disp", first = en, allowed = { true }, checkpoint = { _, _ -> }, clockMs = { 100L },
+                switchToKoreanLayout = { _, _, _ ->
+                    calls++
+                    DebugSixKeyExecution.LayoutSwitchPacket(
+                        false, attempted = true, unknown = true, reason = "display_window_changed_during_capture",
+                    )
+                },
+            )
+            assertEquals("display_window_changed_during_capture", res.failure)
+            assertEquals(1, calls)
+            assertEquals(0, res.recoveryAttempts)
+            assertEquals(1, res.layoutSwitchAttempts)
+            assertTrue(res.progress.uncertain)
+        }
+    }
 }

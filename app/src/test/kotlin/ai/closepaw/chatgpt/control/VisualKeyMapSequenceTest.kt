@@ -49,7 +49,7 @@ class VisualKeyMapSequenceTest {
         var initialProofAgeMs = 0L
         var wrongInitialProofId = false
         var onNextSequenceCapture: (() -> Unit)? = null
-        private var windowVersion = 1L
+        var windowVersion = 1L
         private var rejectedProofId: String? = null
         var keyOffset = 0
         var keyNodeIdRevision = 0
@@ -854,5 +854,54 @@ class VisualKeyMapSequenceTest {
         assertEquals(deliveredBefore + "ㄱ", f.touched)
         // A Korean final consonant composes into the preceding syllable ("바" + ㄱ = "박").
         assertEquals(HangulKeyComposer.append(prefix, "ㄱ"), f.currentEditor().text)
+    }
+
+    @Test fun preDispatchNativeRevalidationDisplayRefusalRecoversWithFreshGenerationAndNoReplay() = runBlocking {
+        for (reason in listOf("display_window_changed_during_capture", "display_window_changed_since_observation")) {
+            val base = Fixture()
+            var injected = 0
+            val port = object : ControlPort by base {
+                override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
+                    if (injected == 0 && base.currentEditor().text == "가 ㄴ") {
+                        injected++
+                        base.windowVersion++
+                        return ControlEffect(false, false, reason)
+                    }
+                    return base.perform(frame, input, node)
+                }
+            }
+            val control = GenericControl(port, { true })
+            val obs = control.observe(includeImage = true, imageScope = "keyboard",
+                keyboardSequenceLabels = listOf("ㄱ", "ㅏ", "Space", "ㄴ"))
+            assertTrue(obs.summary, obs.success)
+            val obsData = obs.data
+            val nodes = obsData.getValue("nodes").jsonArray.map { it.jsonObject }
+            fun stepOf(label: String): JsonObject {
+                val n = nodes.single { it["keyboard_key"]?.jsonPrimitive?.contentOrNull == label }
+                val b = n.getValue("bounds").jsonPrimitive.content.split(' ').map { it.toInt() }
+                return buildJsonObject {
+                    put("label", label); put("node_id", n.getValue("node_id").jsonPrimitive.int)
+                    put("image_rect", JsonArray(b.map(::JsonPrimitive)))
+                }
+            }
+            val result = control.visualKeySequence(buildJsonObject {
+                put("session_id", base.session().id)
+                put("observation_id", obsData.getValue("observation_id").jsonPrimitive.content)
+                put("visual_id", obsData.getValue("visual").jsonObject.getValue("visual_id").jsonPrimitive.content)
+                put("visual_target_confirmed", true)
+                put("text", "가 나 ")
+                put("reuse_key_map", false)
+                put("steps", JsonArray(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space").map(::stepOf)))
+            })
+            assertTrue("$reason: ${result.summary}", result.success)
+            assertEquals(1, injected)
+            assertEquals(JsonPrimitive(1), result.data["display_window_rechecks"])
+            assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
+            assertEquals(JsonPrimitive(6), result.data["completed_keys"])
+            assertEquals(JsonPrimitive(false), result.data["outcome_unknown"])
+            assertEquals("가 나 ", base.currentEditor().text)
+            assertEquals(4, base.currentEditor().selectionEnd)
+            assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), base.touched)
+        }
     }
 }

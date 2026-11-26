@@ -410,7 +410,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         expectedEpoch: Long? = null,
     ): OperationResult {
         var attempted = false
-        fun stop(reason: String, unknown: Boolean = false): OperationResult {
+        fun stop(reason: String, unknown: Boolean = false, visualSourceFailure: JsonObject? = null): OperationResult {
             VisualImageCache.remove(current?.frame?.visual?.id)
             current = null
             if (unknown) keyboardCheckpoint = null
@@ -423,6 +423,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 put("layout_switch_confirmed", false)
                 put("outcome_unknown", unknown)
                 put("input_method", "visual_keyboard_layout_switch")
+                visualSourceFailure?.let { put("visual_source_failure", it) }
             })
         }
         if (!allowed()) return stop("generic_control_disabled")
@@ -496,7 +497,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 expectedNativeLabels = emptySet(),
                 kind = AutonomousDispatchKind.KOREAN_LAYOUT_SWITCH,
             )
-            kotlinx.coroutines.withContext(dispatchContext) {
+            kotlinx.coroutines.withContext(KeyboardWindowTrace(0, 1, false) + dispatchContext) {
                 actionNative(actionInput, original)
             }
         } finally {
@@ -505,8 +506,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         attempted = actionResult.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
         val unknown = actionResult.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
         val reason = actionResult.data["reason_code"]?.jsonPrimitive?.contentOrNull ?: "korean_layout_switch_unconfirmed"
+        val sourceFailure = actionResult.data["visual_source_failure"] as? JsonObject
         if (!actionResult.success || !attempted || unknown) {
-            return stop(reason, unknown = unknown || attempted)
+            return stop(reason, unknown = unknown || attempted, visualSourceFailure = sourceFailure)
         }
         val post = current?.verificationFrame
         val postField = post?.inputTarget
@@ -580,7 +582,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         // One shared budget for every pre-dispatch recovery within the request.
         fun claimPreTouchRetry(): Boolean {
             val budget = sharedRecoveryBudget ?: return false
-            if (budget.used >= 3) return false
+            if (budget.used >= DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES) return false
             budget.used++
             preTouchRetries++
             return true
@@ -733,7 +735,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     onKeyboardPostCheckRefusal = { /* no raw pixels or editor content retained */ })
                 if (!read.success) {
                     val reason = read.data["reason_code"]?.jsonPrimitive?.contentOrNull
-                    if (reason in setOf("visual_post_screen_changed", "display_window_changed_during_capture") &&
+                    if (DisplayObservationRecoveryPolicy.isRecoverableReadOnlyObservationRefusal(reason) &&
                         sessionCurrent() && sameImageConsent()) {
                         observationRetryReason = reason
                         continue
@@ -1023,7 +1025,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         // and share the request budget with pre-touch dispatch refusals.
                         // The next iteration still verifies the editor, value/caret, key
                         // geometry and live pixels before it can dispatch the pending step.
-                        if (reason in setOf("visual_post_screen_changed", "display_window_changed_during_capture") &&
+                        if (DisplayObservationRecoveryPolicy.isRecoverableReadOnlyObservationRefusal(reason) &&
                             sessionCurrent() && sameImageConsent() && claimPreTouchRetry()) {
                             // The capture was read-only. Discard the failed image, and
                             // on a window event demand a new, later display generation.
@@ -1042,7 +1044,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     return stop("control_session_changed_observe_again")
                 recheckOf?.let {
                     if (!sameImageConsent()) return stop("keyboard_sequence_window_recheck_consent_changed")
-                    if (proof.id == it.id || proof.displayGeneration <= it.generation)
+                    if (!DisplayObservationRecoveryPolicy.isFreshDisplayProof(it.id, it.generation, proof))
                         return stop("keyboard_sequence_window_recheck_stale")
                 }
                 if (active.frame.touchContext != original.frame.touchContext ||
@@ -1128,9 +1130,14 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 val reason = result.data["reason_code"]?.jsonPrimitive?.content ?: "keyboard_input_unconfirmed"
                 val sourceFailure = if (reason == VISUAL_SOURCE_REFUSED)
                     result.data["visual_source_failure"] as? JsonObject else null
+                val sourceStage = sourceFailure?.get("stage")?.jsonPrimitive?.contentOrNull
+                val sourceCondition = sourceFailure?.get("condition")?.jsonPrimitive?.contentOrNull
                 val nativeDisplayInvalidation =
-                    sourceFailure?.get("stage")?.jsonPrimitive?.content == VisualSourceStage.NATIVE_ACTION_VALIDATION.code &&
-                    sourceFailure["condition"]?.jsonPrimitive?.content == VisualSourceCondition.DISPLAY_WINDOW_CHANGED.code
+                    reason == "display_window_changed_during_capture" ||
+                        reason == "display_window_changed_since_observation" ||
+                        (reason == VISUAL_SOURCE_REFUSED &&
+                            sourceStage == VisualSourceStage.NATIVE_ACTION_VALIDATION.code &&
+                            sourceCondition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED.code)
                 touched = touched || attempted == true
                 var verified = current?.verificationFrame
                 if (!result.success || result.data["app_result_verified"]?.jsonPrimitive?.booleanOrNull != true) {
@@ -1147,6 +1154,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                             displayWindowRechecks++
                             displayWindowRecheckKey = index + 1
                             recheckOf = InvalidatedDisplayProof(proof.id, proof.displayGeneration)
+                            usedFallback = true
+                            refresh = true
+                            continue
+                        }
+                        if (reason == "visual_post_screen_changed" && port.validatesAtNativeBoundary &&
+                            sessionCurrent() && sameImageConsent() && claimPreTouchRetry()) {
                             usedFallback = true
                             refresh = true
                             continue

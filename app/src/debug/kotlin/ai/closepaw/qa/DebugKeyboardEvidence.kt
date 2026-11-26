@@ -1,6 +1,7 @@
 package ai.closepaw.qa
 
 import ai.closepaw.chatgpt.control.ControlFrame
+import ai.closepaw.chatgpt.control.DisplayObservationRecoveryPolicy
 import ai.closepaw.chatgpt.control.DisplayWindowCensus
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.*
@@ -61,10 +62,38 @@ internal object DebugKeyboardEvidence {
         }))
     }
 
-    internal const val MAX_STRUCTURE_OBSERVATIONS = 3
+    internal const val MAX_STRUCTURE_OBSERVATIONS = DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES
     internal fun mayRetryStructure(reason: String, observations: Int, authority: Boolean, unknown: Boolean): Boolean =
-        reason == "display_window_changed_during_capture" && observations in 1 until MAX_STRUCTURE_OBSERVATIONS &&
-            authority && !unknown
+        reason == "display_window_changed_during_capture" &&
+            DisplayObservationRecoveryPolicy.mayRecoverPreExecution(
+                reason = reason,
+                recoveriesUsed = observations - 1,
+                actionAttempted = false,
+                outcomeUnknown = unknown,
+                authorityActive = authority,
+                maxRecoveries = MAX_STRUCTURE_OBSERVATIONS - 1,
+                observationOnly = true,
+            )
+
+    internal fun safeDisplayWindowCensus(census: DisplayWindowCensus): JsonObject = buildJsonObject {
+        put("total_windows", census.total)
+        put("content_windows", census.content)
+        put("empty_content", census.content == 0)
+        put("duplicate_content_ids", census.duplicates)
+        put("unowned_content_windows", census.unowned)
+        put("rows_truncated", census.total > census.rows.take(DisplayWindowCensus.MAX_ROWS).size)
+        put("windows", JsonArray(census.rows.take(DisplayWindowCensus.MAX_ROWS).map { row ->
+            buildJsonObject {
+                put("type", row.kind.name.lowercase())
+                put("ownership", row.owner.name.lowercase())
+                put("included_in_policy", row.included)
+                put("layer_relative_to_ime", row.imeLayer.name.lowercase())
+                row.overlapsImeBounds?.let { put("overlaps_ime_bounds", it) }
+                put("active", row.active)
+                put("focused", row.focused)
+            }
+        }))
+    }
 
     fun fromObservation(data: JsonObject, succeeded: Boolean, wanted: List<String>,
         displayPlanRefusal: String? = null, census: DisplayWindowCensus? = null,
@@ -88,25 +117,7 @@ internal object DebugKeyboardEvidence {
                     put("capture_window_changes", safeWindowChanges(windowChanges))
                 if (displayPlanRefusal == "display_unowned_window" &&
                     nativeRefusalReason(data) == "display_surface_unverified" && census != null) {
-                    put("display_window_census", buildJsonObject {
-                        put("total_windows", census.total)
-                        put("content_windows", census.content)
-                        put("empty_content", census.content == 0)
-                        put("duplicate_content_ids", census.duplicates)
-                        put("unowned_content_windows", census.unowned)
-                        put("rows_truncated", census.total > census.rows.take(DisplayWindowCensus.MAX_ROWS).size)
-                        put("windows", JsonArray(census.rows.take(DisplayWindowCensus.MAX_ROWS).map { row ->
-                            buildJsonObject {
-                                put("type", row.kind.name.lowercase())
-                                put("ownership", row.owner.name.lowercase())
-                                put("included_in_policy", row.included)
-                                put("layer_relative_to_ime", row.imeLayer.name.lowercase())
-                                row.overlapsImeBounds?.let { put("overlaps_ime_bounds", it) }
-                                put("active", row.active)
-                                put("focused", row.focused)
-                            }
-                        }))
-                    })
+                    put("display_window_census", safeDisplayWindowCensus(census))
                 }
             }
             put("full_scan_available", scan != null)

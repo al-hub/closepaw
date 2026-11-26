@@ -8,6 +8,7 @@ import ai.closepaw.chatgpt.control.ControlScreenLease
 import ai.closepaw.chatgpt.control.ControlSession
 import ai.closepaw.chatgpt.control.ControlFrame
 import ai.closepaw.chatgpt.control.ControlWindowContinuity
+import ai.closepaw.chatgpt.control.DisplayObservationRecoveryPolicy
 import ai.closepaw.chatgpt.control.GenericControl
 import ai.closepaw.chatgpt.control.HangulKeyComposer
 import ai.closepaw.chatgpt.control.NativeKeyboardStructuralCertification
@@ -1103,6 +1104,7 @@ internal object DebugOneStopQa {
             ctx.finalPhysicalLayout = execution.finalPhysicalLayout
             ctx.layoutSwitchAttempts = execution.layoutSwitchAttempts
             ctx.layoutSwitchConfirmed = execution.layoutSwitchConfirmed
+            ctx.recoveryAttempts += execution.recoveryAttempts
             if (execution.failure != null) ctx.stop(execution.failure)
             else ctx.result("PASS", "six_physical_keys_editor_and_caret_confirmed")
                 .also { write(context, it) }
@@ -1183,6 +1185,7 @@ internal object DebugOneStopQa {
             currentCoroutineContext().ensureActive()
             if (!allowed() || session.epoch != originalEpoch) return ctx.stop("control_authority_revoked")
             if (index > 0) {
+                ctx.recoveryAttempts++
                 control.invalidate()
                 delay(350L)
                 if (!allowed() || session.epoch != originalEpoch) return ctx.stop("control_authority_revoked")
@@ -1191,9 +1194,7 @@ internal object DebugOneStopQa {
                 if (!allowed() || session.epoch != originalEpoch) return ctx.stop("control_authority_revoked")
                 val facts = editorPreflightFacts(fresh)
                 if (editorPreflightReason(facts) != null || !sameEditor(first, fresh) ||
-                    fresh.keyboard != first.keyboard || fresh.configurationRevision != first.configurationRevision ||
-                    fresh.foregroundWindowId != first.foregroundWindowId ||
-                    fresh.windowContext != first.windowContext || fresh.touchContext != first.touchContext)
+                    DisplayObservationRecoveryPolicy.recertificationRefusal(first, fresh) != null)
                     return ctx.stop("structure_retry_target_changed")
             }
             port.resetDebugCaptureEvidence()
@@ -1271,6 +1272,7 @@ internal object DebugOneStopQa {
         var finalPhysicalLayout: String? = null
         var layoutSwitchAttempts = 0
         var layoutSwitchConfirmed = false
+        var recoveryAttempts = 0
         val started = SystemClock.elapsedRealtime()
         val startedEpochMs = System.currentTimeMillis()
         var newTabEvidence = "none"
@@ -1367,7 +1369,7 @@ internal object DebugOneStopQa {
             put("outcome_unknown", uncertain)
             put("projection_active", ProjectionImageTransport.active()?.screenObservationAllowed() == true)
             put("control_session_state", AgentService.instance?.remoteControlSession?.state?.name ?: "unavailable")
-            put("recovery_attempts", 0)
+            put("recovery_attempts", recoveryAttempts)
             put("diagnostic_observations", keyEvidence.size)
             put("diagnostic_extra_native_reads", diagnosticReadCount)
             put("diagnostic_elapsed_ms", diagnosticDurationMs)

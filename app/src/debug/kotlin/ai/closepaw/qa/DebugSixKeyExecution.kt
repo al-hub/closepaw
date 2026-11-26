@@ -5,6 +5,7 @@ import ai.closepaw.chatgpt.control.AutonomousCertifiedKeyStep
 import ai.closepaw.chatgpt.control.AutonomousKeyboardSequenceProof
 import ai.closepaw.chatgpt.control.ControlFrame
 import ai.closepaw.chatgpt.control.ControlSession
+import ai.closepaw.chatgpt.control.DisplayObservationRecoveryPolicy
 import ai.closepaw.chatgpt.control.DisplayWindowCensus
 import ai.closepaw.chatgpt.control.GenericControl
 import ai.closepaw.chatgpt.control.KoreanLayoutSwitchCandidate
@@ -46,6 +47,7 @@ internal object DebugSixKeyExecution {
         val finalPhysicalLayout: String = PhysicalKeyboardLayout.UNVERIFIED.code,
         val layoutSwitchAttempts: Int = 0,
         val layoutSwitchConfirmed: Boolean = false,
+        val recoveryAttempts: Int = 0,
     )
 
     internal data class LayoutSwitchPacket(
@@ -53,6 +55,11 @@ internal object DebugSixKeyExecution {
         val attempted: Boolean,
         val unknown: Boolean,
         val reason: String? = null,
+        val visualSourceStage: String? = null,
+        val visualSourceCondition: String? = null,
+        val displayPlanRefusal: String? = null,
+        val displayWindowCensus: DisplayWindowCensus? = null,
+        val captureWindowChanges: JsonObject? = null,
     )
 
     internal data class PhysicalCandidate(
@@ -146,6 +153,7 @@ internal object DebugSixKeyExecution {
         switchToKoreanLayout: suspend (ControlFrame, KoreanLayoutSwitchCandidate, String) -> LayoutSwitchPacket = { _, _, _ ->
             LayoutSwitchPacket(false, false, false, "korean_layout_switch_unavailable")
         },
+        invalidateObservation: () -> Unit = {},
     ): Outcome {
         var verified = 0
         var attempts = 0
@@ -159,17 +167,31 @@ internal object DebugSixKeyExecution {
         var finalLayoutCode = PhysicalKeyboardLayout.UNVERIFIED.code
         var layoutSwitchAttempts = 0
         var layoutSwitchConfirmed = false
+        var preExecutionRecoveries = 0
         val evidence = mutableListOf<JsonObject>()
         fun progress() = Progress(verified, attempts, uncertain, stage)
         fun fail(reason: String) = Outcome(
             progress(), reason, evidence.toList(), observationMs,
             extraReads, afterFailure, followUpEvidence,
             initialLayoutCode, finalLayoutCode, layoutSwitchAttempts, layoutSwitchConfirmed,
+            preExecutionRecoveries,
         )
         fun checkpointAt(next: String, reason: String) {
             stage = next
             checkpoint(progress(), reason)
         }
+        fun recertifyEmptyEditor(baseline: ControlFrame, fresh: ControlFrame): String? =
+            DisplayObservationRecoveryPolicy.recertificationRefusal(baseline, fresh)
+                ?: when {
+                    !DebugOneStopQa.sameEditor(first, fresh) -> "editor_identity_changed"
+                    fresh.packageName != "com.android.chrome" -> "target_package_changed"
+                    fresh.keyboard?.packageName != "com.samsung.android.honeyboard" ->
+                        "keyboard_changed_or_unauthorized"
+                    fresh.inputTarget == null || !DebugOneStopQa.SixKey.matches(
+                        fresh.inputTarget.text, fresh.inputTarget.selectionStart, fresh.inputTarget.selectionEnd, 0,
+                    ) -> "editor_value_or_caret_changed"
+                    else -> null
+                }
 
         currentCoroutineContext().ensureActive()
         if (!allowed()) return fail("control_authority_revoked")
@@ -188,7 +210,11 @@ internal object DebugSixKeyExecution {
         val initialLayout = NativeKeyboardStructuralCertification.classifyPhysicalLayout(before)
         initialLayoutCode = initialLayout.code
         finalLayoutCode = initialLayout.code
-        fun recordLayoutEvidence(route: String, refusal: String? = null) {
+        fun recordLayoutEvidence(
+            route: String,
+            refusal: String? = null,
+            packet: LayoutSwitchPacket? = null,
+        ) {
             evidence += buildJsonObject {
                 put("source", "korean_layout_readiness")
                 put("initial_physical_layout", initialLayoutCode)
@@ -197,7 +223,20 @@ internal object DebugSixKeyExecution {
                 put("layout_switch_attempts", layoutSwitchAttempts)
                 put("layout_switch_confirmed", layoutSwitchConfirmed)
                 put("layout_switch_route", safeCode(route))
+                put("read_only_recovery_attempts", preExecutionRecoveries)
                 refusal?.let { put("refusal_reason", safeCode(it)) }
+                packet?.let { p ->
+                    DebugKeyboardEvidence.safeDisplayRefusal(p.displayPlanRefusal)?.let {
+                        put("display_plan_refusal", it)
+                    }
+                    if (refusal == "display_window_changed_during_capture" && p.captureWindowChanges != null) {
+                        put("capture_window_changes", DebugKeyboardEvidence.safeWindowChanges(p.captureWindowChanges))
+                    }
+                    if (p.displayPlanRefusal == "display_unowned_window" &&
+                        refusal == "display_surface_unverified" && p.displayWindowCensus != null) {
+                        put("display_window_census", DebugKeyboardEvidence.safeDisplayWindowCensus(p.displayWindowCensus))
+                    }
+                }
             }
         }
         when (initialLayout) {
@@ -213,23 +252,72 @@ internal object DebugSixKeyExecution {
                 return fail("korean_layout_unverified")
             }
             PhysicalKeyboardLayout.LATIN -> {
-                val switchCandidate = NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(before)
-                if (switchCandidate == null) {
-                    recordLayoutEvidence("none", "korean_layout_switch_unavailable")
-                    return fail("korean_layout_switch_unavailable")
-                }
-                if (!allowed()) {
-                    recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
-                    return fail("control_authority_revoked")
-                }
-                checkpointAt("layout_readiness_switch_dispatch", "guarded_korean_layout_switch")
-                val switched = switchToKoreanLayout(before, switchCandidate, nonceGenerator())
-                if (switched.attempted) layoutSwitchAttempts = 1
-                if (!switched.success || switched.unknown || !switched.attempted) {
-                    uncertain = uncertain || switched.unknown || switched.attempted
+                var switchCandidate = NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(before)
+                    ?: run {
+                        recordLayoutEvidence("none", "korean_layout_switch_unavailable")
+                        return fail("korean_layout_switch_unavailable")
+                    }
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    if (!allowed()) {
+                        recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
+                        return fail("control_authority_revoked")
+                    }
+                    checkpointAt("layout_readiness_switch_dispatch", "guarded_korean_layout_switch")
+                    val switched = switchToKoreanLayout(before, switchCandidate, nonceGenerator())
+                    if (switched.attempted) layoutSwitchAttempts = 1
+                    if (switched.success && switched.attempted && !switched.unknown) break
                     val refusal = safeCode(switched.reason ?: "korean_layout_switch_unconfirmed")
-                    recordLayoutEvidence(switchCandidate.route.code, refusal)
-                    return fail(refusal)
+                    recordLayoutEvidence(switchCandidate.route.code, refusal, switched)
+                    if (switched.attempted || switched.unknown) {
+                        uncertain = true
+                        return fail(refusal)
+                    }
+                    if (!DisplayObservationRecoveryPolicy.mayRecoverPreExecution(
+                            reason = switched.reason,
+                            recoveriesUsed = preExecutionRecoveries,
+                            actionAttempted = switched.attempted,
+                            outcomeUnknown = switched.unknown,
+                            authorityActive = allowed(),
+                            visualSourceStage = switched.visualSourceStage,
+                            visualSourceCondition = switched.visualSourceCondition,
+                        )) {
+                        return fail(refusal)
+                    }
+                    // Confirmed pre-dispatch non-execution: discard stale observation, acquire fresh
+                    // observation, re-authenticate target/editor/IME/layout, and re-resolve switch key.
+                    preExecutionRecoveries++
+                    checkpointAt("layout_readiness_recovery", "read_only_capture_recovery")
+                    invalidateObservation()
+                    val fresh = captureFrame()
+                    if (!allowed()) {
+                        recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
+                        return fail("control_authority_revoked")
+                    }
+                    val recertRefusal = recertifyEmptyEditor(before, fresh)
+                    if (recertRefusal != null) {
+                        val safe = safeCode(recertRefusal)
+                        recordLayoutEvidence(switchCandidate.route.code, safe)
+                        return fail(safe)
+                    }
+                    val freshLayout = NativeKeyboardStructuralCertification.classifyPhysicalLayout(fresh)
+                    finalLayoutCode = freshLayout.code
+                    if (freshLayout != PhysicalKeyboardLayout.LATIN) {
+                        val layoutRefusal = if (freshLayout == PhysicalKeyboardLayout.HANGUL) {
+                            "layout_changed_unexpectedly_before_switch"
+                        } else {
+                            "korean_layout_changed_before_switch"
+                        }
+                        recordLayoutEvidence(switchCandidate.route.code, layoutRefusal)
+                        return fail(layoutRefusal)
+                    }
+                    val freshCandidate = NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(fresh)
+                    if (freshCandidate == null) {
+                        recordLayoutEvidence("none", "korean_layout_switch_unavailable")
+                        return fail("korean_layout_switch_unavailable")
+                    }
+                    before = fresh
+                    switchCandidate = freshCandidate
                 }
                 if (!allowed()) {
                     uncertain = true
@@ -265,20 +353,50 @@ internal object DebugSixKeyExecution {
             }
         }
 
-        val started = clockMs()
-        val observed = observeSequence(sequenceLabels)
-        observationMs += (clockMs() - started).coerceAtLeast(0L)
-        evidence += DebugKeyboardEvidence.fromObservation(
-            observed.data, observed.success, sequenceLabels,
-            if (observed.success) null else observed.displayPlanRefusal,
-            if (observed.success) null else observed.displayWindowCensus,
-            if (observed.success) null else observed.captureWindowChanges,
-        )
-        if (!observed.success) {
-            // A refusal could mean protected content or revoked consent.
-            // Do not collect another frame after that refusal.
-            afterFailure = "skipped_refused_observation"
-            return fail("keyboard_observation_refused")
+        var observed: ObservePacket
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            if (!allowed()) return fail("control_authority_revoked")
+            val started = clockMs()
+            observed = observeSequence(sequenceLabels)
+            observationMs += (clockMs() - started).coerceAtLeast(0L)
+            evidence += DebugKeyboardEvidence.fromObservation(
+                observed.data, observed.success, sequenceLabels,
+                if (observed.success) null else observed.displayPlanRefusal,
+                if (observed.success) null else observed.displayWindowCensus,
+                if (observed.success) null else observed.captureWindowChanges,
+            )
+            if (observed.success) break
+            val obsReason = observed.data["reason_code"]?.jsonPrimitive?.contentOrNull
+            val obsAttempted = observed.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
+            val obsUnknown = observed.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
+            if (!DisplayObservationRecoveryPolicy.mayRecoverPreExecution(
+                    reason = obsReason,
+                    recoveriesUsed = preExecutionRecoveries,
+                    actionAttempted = obsAttempted,
+                    outcomeUnknown = obsUnknown,
+                    authorityActive = allowed(),
+                    observationOnly = true,
+                )) {
+                // A refusal could mean protected content, overlay, or revoked consent.
+                // Do not collect another frame after that refusal.
+                afterFailure = "skipped_refused_observation"
+                return fail("keyboard_observation_refused")
+            }
+            preExecutionRecoveries++
+            checkpointAt("key_1_preflight", "read_only_observation_recovery")
+            invalidateObservation()
+            val fresh = captureFrame()
+            if (!allowed()) return fail("control_authority_revoked")
+            val recertRefusal = recertifyEmptyEditor(before, fresh)
+                ?: if (NativeKeyboardStructuralCertification.classifyPhysicalLayout(fresh) != PhysicalKeyboardLayout.HANGUL) {
+                    "korean_layout_changed_before_sequence"
+                } else null
+            if (recertRefusal != null) {
+                afterFailure = "skipped_refused_observation"
+                return fail(safeCode(recertRefusal))
+            }
+            before = fresh
         }
 
         val observationId = observed.data["observation_id"]?.jsonPrimitive?.contentOrNull
@@ -464,6 +582,7 @@ internal object DebugSixKeyExecution {
         return Outcome(
             progress(), null, evidence.toList(), observationMs, extraReads, afterFailure, followUpEvidence,
             initialLayoutCode, finalLayoutCode, layoutSwitchAttempts, layoutSwitchConfirmed,
+            preExecutionRecoveries,
         )
     }
 
@@ -541,17 +660,28 @@ internal object DebugSixKeyExecution {
                     val certifiedFrame = if (observed.success && !obsId.isNullOrBlank() && !visId.isNullOrBlank()) {
                         control.certifiedKeyboardObservation(obsId, visId, session.epoch)?.frame
                     } else null
+                    val recertRefusal = certifiedFrame?.let {
+                        DisplayObservationRecoveryPolicy.recertificationRefusal(beforeFrame, it)
+                    }
                     if (!observed.success ||
                         observed.data["security_scan_complete"]?.jsonPrimitive?.booleanOrNull != true ||
                         observed.data["output_truncated"]?.jsonPrimitive?.booleanOrNull != false ||
                         visScope != "keyboard" || obsId.isNullOrBlank() || visId.isNullOrBlank() ||
                         nodeId == null || certifiedFrame == null ||
+                        recertRefusal != null ||
                         !DebugOneStopQa.sameEditor(first, certifiedFrame) ||
                         certifiedFrame.keyboard != ime) {
                         LayoutSwitchPacket(
                             success = false, attempted = false, unknown = false,
-                            reason = observed.data["reason_code"]?.jsonPrimitive?.contentOrNull
-                                ?: "korean_layout_switch_observation_unverified",
+                            reason = if (!observed.success) {
+                                observed.data["reason_code"]?.jsonPrimitive?.contentOrNull
+                                    ?: "korean_layout_switch_observation_unverified"
+                            } else {
+                                recertRefusal ?: "korean_layout_switch_observation_unverified"
+                            },
+                            displayPlanRefusal = if (observed.success) null else port.debugDisplayPlanRefusal(),
+                            displayWindowCensus = if (observed.success) null else port.debugDisplayWindowCensus(),
+                            captureWindowChanges = if (observed.success) null else port.debugCaptureWindowChangeEvidence(),
                         )
                     } else {
                         val cert = port.certifyKoreanLayoutSwitchDetailed(
@@ -593,12 +723,19 @@ internal object DebugSixKeyExecution {
                                 },
                                 proof,
                             )
+                            val sourceFailure = res.data["visual_source_failure"] as? JsonObject
+                            val reason = res.data["reason_code"]?.jsonPrimitive?.contentOrNull
                             LayoutSwitchPacket(
                                 success = res.success &&
                                     res.data["layout_switch_confirmed"]?.jsonPrimitive?.booleanOrNull == true,
                                 attempted = res.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true,
                                 unknown = res.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true,
-                                reason = res.data["reason_code"]?.jsonPrimitive?.contentOrNull,
+                                reason = reason,
+                                visualSourceStage = sourceFailure?.get("stage")?.jsonPrimitive?.contentOrNull,
+                                visualSourceCondition = sourceFailure?.get("condition")?.jsonPrimitive?.contentOrNull,
+                                displayPlanRefusal = if (res.success) null else port.debugDisplayPlanRefusal(),
+                                displayWindowCensus = if (res.success) null else port.debugDisplayWindowCensus(),
+                                captureWindowChanges = if (res.success) null else port.debugCaptureWindowChangeEvidence(),
                             )
                         }
                     }
@@ -641,5 +778,6 @@ internal object DebugSixKeyExecution {
                 }
             }
         },
+        invalidateObservation = { control.invalidate() },
     )
 }
