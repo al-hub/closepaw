@@ -182,8 +182,8 @@ if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
     androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) { variant ->
         // Keep the side-by-side candidate updateable without changing the release version.
         variant.outputs.forEach { output ->
-            output.versionCode.set(166)
-            output.versionName.set("0.1.165-capturecandidate")
+            output.versionCode.set(167)
+            output.versionName.set("0.1.166-capturecandidate")
         }
         val testVariant = requireNotNull(variant.androidTest)
         tasks.register<org.gradle.api.tasks.Sync>("stageCaptureCandidate") {
