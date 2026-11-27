@@ -19,6 +19,8 @@ internal data class DebugQaRunRequest(
     val mode: DebugQaMode,
     val exportGrant: String? = null,
     val id: String = UUID.randomUUID().toString(),
+    val confirmedAtEpochMs: Long = System.currentTimeMillis(),
+    val confirmedAtElapsedMs: Long? = null,
 )
 
 internal enum class DebugQaConsent { EXISTING_OS_APPROVAL, NEW_OS_APPROVAL }
@@ -28,6 +30,8 @@ internal data class DebugQaApprovedRun(
     val request: DebugQaRunRequest,
     val consent: DebugQaConsent,
     val projectionGeneration: Long,
+    val approvedAtEpochMs: Long = System.currentTimeMillis(),
+    val approvedAtElapsedMs: Long? = null,
 )
 
 /**

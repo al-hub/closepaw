@@ -274,10 +274,14 @@ class DebugQaContinuityTest {
     }
 
     private fun result(outcome: String = "PASS", keys: Int = 6, touches: Int = 6,
-        unknown: Boolean = false, goal: Boolean = true) = buildJsonObject {
+        unknown: Boolean = false, goal: Boolean = true,
+        finalText: String = "가 나 ", caretStart: Int = 4, caretEnd: Int = 4) = buildJsonObject {
         put("outcome", outcome); put("completed_keys", keys)
         put("touch_attempts", touches); put("outcome_unknown", unknown)
         put("goal_verified", goal)
+        put("final_text", finalText)
+        put("final_caret_start", caretStart)
+        put("final_caret_end", caretEnd)
     }
 
     @Test fun noFailedUnknownOrPartialRunMayStartNextRepetition() {

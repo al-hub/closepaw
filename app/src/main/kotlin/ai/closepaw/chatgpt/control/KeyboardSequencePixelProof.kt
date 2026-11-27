@@ -1,5 +1,7 @@
 package ai.closepaw.chatgpt.control
 
+import kotlinx.serialization.json.JsonObject
+
 /**
  * Read-only explanation of the exact existing sequence pixel gates.
  * This never grants a touch, changes regions, or retains image contents.
@@ -109,6 +111,8 @@ internal data class PixelCertificationOutcome(
     val ocrLabelMatched: Boolean? = null,
     val ocrConfidenceBucket: String = "not_run",
     val elapsedMs: Long = 0L,
+    val visualSourceFailure: VisualSourceFailure? = null,
+    val captureWindowChanges: JsonObject? = null,
 ) {
     companion object {
         fun confidenceBucket(confidence: Float?): String = when {

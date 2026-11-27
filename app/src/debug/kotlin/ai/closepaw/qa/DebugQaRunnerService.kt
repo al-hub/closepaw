@@ -38,6 +38,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -60,7 +61,10 @@ internal object DebugQaBatchPolicy {
             result["goal_verified"]?.jsonPrimitive?.content == "true" &&
             result["completed_keys"]?.jsonPrimitive?.intOrNull == 6 &&
             result["touch_attempts"]?.jsonPrimitive?.intOrNull == 6 &&
-            result["outcome_unknown"]?.jsonPrimitive?.content == "false"
+            result["outcome_unknown"]?.jsonPrimitive?.content == "false" &&
+            result["final_text"]?.jsonPrimitive?.contentOrNull == "가 나 " &&
+            result["final_caret_start"]?.jsonPrimitive?.intOrNull == 4 &&
+            result["final_caret_end"]?.jsonPrimitive?.intOrNull == 4
 }
 
 internal data class DebugQaStatus(
@@ -440,7 +444,7 @@ class DebugQaRunnerService : Service() {
                                 notification(request, "${progress.value.state} · $stage",
                                     error = update.contains("errors=") && !update.endsWith("errors=0")))
                         }
-                    }, request, batchId, projection)
+                    }, request, batchId, projection, run)
                     results += result
                     terminal = DebugQaBatchPolicy.terminalState(request.mode, result)
                     reason = result.getValue("reason").jsonPrimitive.content

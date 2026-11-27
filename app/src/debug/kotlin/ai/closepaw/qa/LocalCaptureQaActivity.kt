@@ -17,6 +17,7 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.ViewGroup
 import android.widget.*
@@ -97,7 +98,15 @@ class LocalCaptureQaActivity : ComponentActivity() {
             is ProjectionConsentState.Granted -> {
                 try {
                     MediaProjectionCaptureService.startFromConsent(this, result.resultCode, checkNotNull(data), id)
-                    request?.let { launchQa(DebugQaApprovedRun(it, DebugQaConsent.NEW_OS_APPROVAL, generation)) }
+                    request?.let {
+                        launchQa(DebugQaApprovedRun(
+                            request = it,
+                            consent = DebugQaConsent.NEW_OS_APPROVAL,
+                            projectionGeneration = generation,
+                            approvedAtEpochMs = System.currentTimeMillis(),
+                            approvedAtElapsedMs = SystemClock.elapsedRealtime(),
+                        ))
+                    }
                     if (request == null) status.text = "Android observation approved."
                 } catch (_: Exception) {
                     gate.onRevoked()
@@ -408,7 +417,12 @@ class LocalCaptureQaActivity : ComponentActivity() {
         AlertDialog.Builder(this).setTitle(mode.label).setMessage(details)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Confirm this mode") { _, _ ->
-                val request = DebugQaRunRequest(mode, DebugQaDownloadExport.grant(this))
+                val request = DebugQaRunRequest(
+                    mode = mode,
+                    exportGrant = DebugQaDownloadExport.grant(this),
+                    confirmedAtEpochMs = System.currentTimeMillis(),
+                    confirmedAtElapsedMs = SystemClock.elapsedRealtime(),
+                )
                 val admission = DebugQaRunnerService.admission.reserve(request,
                     CaptureQaAcceptance.isRunning() || consentGeneration != null)
                 DebugQaRunnerService.audit(request, admission.name, "local_confirmation")
@@ -462,8 +476,13 @@ class LocalCaptureQaActivity : ComponentActivity() {
     private fun continueConfirmed(request: DebugQaRunRequest) {
         if (DebugQaRunnerService.admission.current != request) return
         if (ProjectionImageTransport.active()?.screenObservationAllowed() == true) {
-            launchQa(DebugQaApprovedRun(request, DebugQaConsent.EXISTING_OS_APPROVAL,
-                MediaProjectionCaptureService.consentGate.generation))
+            launchQa(DebugQaApprovedRun(
+                request = request,
+                consent = DebugQaConsent.EXISTING_OS_APPROVAL,
+                projectionGeneration = MediaProjectionCaptureService.consentGate.generation,
+                approvedAtEpochMs = System.currentTimeMillis(),
+                approvedAtElapsedMs = SystemClock.elapsedRealtime(),
+            ))
         } else if (!requestObservation(request)) {
             reject(request, "DENIED", "android_consent_request_unavailable")
         }

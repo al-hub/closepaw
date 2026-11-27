@@ -3,6 +3,9 @@ package ai.closepaw.qa
 import ai.closepaw.chatgpt.control.ControlFrame
 import ai.closepaw.chatgpt.control.DisplayObservationRecoveryPolicy
 import ai.closepaw.chatgpt.control.DisplayWindowCensus
+import ai.closepaw.chatgpt.control.KeyboardContextMismatch
+import ai.closepaw.chatgpt.control.VISUAL_SOURCE_REFUSED
+import ai.closepaw.chatgpt.control.VisualSourceCondition
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.*
 
@@ -95,9 +98,29 @@ internal object DebugKeyboardEvidence {
         }))
     }
 
+    internal fun safeCursorProofMismatch(mismatch: KeyboardContextMismatch): JsonObject = buildJsonObject {
+        put("kind", safeReason(mismatch.kind.code))
+        put("location", safeReason(mismatch.location.code))
+        mismatch.beforeFailure?.let { put("before_cause", safeReason(it.code)) }
+        mismatch.afterFailure?.let { put("after_cause", safeReason(it.code)) }
+        put("recoverable", mismatch.recoverableReadOnlyCursorRace)
+    }
+
+    internal fun shouldAttachWindowChanges(
+        reason: String?,
+        visualSourceCondition: String? = null,
+    ): Boolean = reason == "display_window_changed_during_capture" ||
+        reason == "display_window_changed_since_observation" ||
+        reason == "proof_display_window_changed" ||
+        visualSourceCondition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED.code ||
+        (reason == VISUAL_SOURCE_REFUSED && visualSourceCondition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED.code)
+
     fun fromObservation(data: JsonObject, succeeded: Boolean, wanted: List<String>,
         displayPlanRefusal: String? = null, census: DisplayWindowCensus? = null,
-        windowChanges: JsonObject? = null): JsonObject {
+        windowChanges: JsonObject? = null,
+        visualSourceStage: String? = null,
+        visualSourceCondition: String? = null,
+        cursorProofMismatch: KeyboardContextMismatch? = null): JsonObject {
         val labels = wanted.filter { it in allowedLabels }.distinct()
         val nodes = (data["nodes"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
         val scan = (data["keyboard"] as? JsonObject)?.get("scan") as? JsonObject
@@ -106,17 +129,22 @@ internal object DebugKeyboardEvidence {
             node["keyboard_key"]?.jsonPrimitive?.content?.let { it in labels } == true
         }
         val preflight = data["keyboard_preflight"] as? JsonObject
+        val nativeRefusal = nativeRefusalReason(data)
         return buildJsonObject {
             put("source", "single_observation_redacted")
             put("requested_keys", JsonArray(labels.map(::JsonPrimitive)))
             put("observation_succeeded", succeeded)
             if (!succeeded) {
-                put("native_refusal_reason", nativeRefusalReason(data))
+                put("native_refusal_reason", nativeRefusal)
                 safeDisplayRefusal(displayPlanRefusal)?.let { put("display_plan_refusal", it) }
-                if (nativeRefusalReason(data) == "display_window_changed_during_capture" && windowChanges != null)
+                visualSourceStage?.let { put("visual_source_stage", safeReason(it)) }
+                visualSourceCondition?.let { put("visual_source_condition", safeReason(it)) }
+                if (shouldAttachWindowChanges(nativeRefusal, visualSourceCondition) && windowChanges != null)
                     put("capture_window_changes", safeWindowChanges(windowChanges))
+                if (nativeRefusal == "visual_post_keyboard_context_changed" && cursorProofMismatch != null)
+                    put("cursor_proof_mismatch", safeCursorProofMismatch(cursorProofMismatch))
                 if (displayPlanRefusal == "display_unowned_window" &&
-                    nativeRefusalReason(data) == "display_surface_unverified" && census != null) {
+                    nativeRefusal == "display_surface_unverified" && census != null) {
                     put("display_window_census", safeDisplayWindowCensus(census))
                 }
             }

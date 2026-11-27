@@ -916,7 +916,12 @@ internal object DebugOneStopQa {
             put("repetitions_requested", run.request.mode.repetitions)
             put("repetitions_completed", results.count { it["outcome"]?.jsonPrimitive?.content == "PASS" })
             put("runs", JsonArray(results))
+            put("request_confirmed_at_epoch_ms", run.request.confirmedAtEpochMs)
+            run.request.confirmedAtElapsedMs?.let { put("request_confirmed_at_elapsed_realtime_ms", it) }
+            put("approval_completed_at_epoch_ms", run.approvedAtEpochMs)
+            run.approvedAtElapsedMs?.let { put("approval_completed_at_elapsed_realtime_ms", it) }
             put("last_updated_epoch_ms", System.currentTimeMillis())
+            put("last_updated_elapsed_realtime_ms", SystemClock.elapsedRealtime())
         }
         synchronized(batchFileLock) {
             atomicWrite(batchFile(context), snapshot)
@@ -969,6 +974,44 @@ internal object DebugOneStopQa {
         put("elapsed_realtime_ms", elapsedRealtimeMs)
     }
 
+    /** Single-device-clock lifecycle timeline; never fabricates external Release timestamps. */
+    internal fun lifecycleTimelineEvidence(
+        confirmedEpochMs: Long,
+        confirmedElapsedMs: Long?,
+        approvedEpochMs: Long?,
+        approvedElapsedMs: Long?,
+        runEntryEpochMs: Long,
+        runEntryElapsedMs: Long,
+        awaitChromeEpochMs: Long? = null,
+        awaitChromeElapsedMs: Long? = null,
+        sessionStartedEpochMs: Long? = null,
+        sessionStartedElapsedMs: Long? = null,
+        endedEpochMs: Long? = null,
+        endedElapsedMs: Long? = null,
+    ) = buildJsonObject {
+        put("clock_domain", "android_epoch_ms_plus_elapsed_realtime_ms")
+        put("request_confirmed", buildJsonObject {
+            put("epoch_ms", confirmedEpochMs)
+            confirmedElapsedMs?.let { put("elapsed_realtime_ms", it) }
+        })
+        if (approvedEpochMs != null) {
+            put("approval_completed", buildJsonObject {
+                put("epoch_ms", approvedEpochMs)
+                approvedElapsedMs?.let { put("elapsed_realtime_ms", it) }
+            })
+        }
+        put("run_entry", deviceClockEvidence(runEntryEpochMs, runEntryElapsedMs))
+        if (awaitChromeEpochMs != null && awaitChromeElapsedMs != null) {
+            put("await_chrome_completed", deviceClockEvidence(awaitChromeEpochMs, awaitChromeElapsedMs))
+        }
+        if (sessionStartedEpochMs != null && sessionStartedElapsedMs != null) {
+            put("session_started", deviceClockEvidence(sessionStartedEpochMs, sessionStartedElapsedMs))
+        }
+        if (endedEpochMs != null && endedElapsedMs != null) {
+            put("ended", deviceClockEvidence(endedEpochMs, endedElapsedMs))
+        }
+    }
+
     internal data class TerminalFailureRecord(
         val failureCount: Int,
         val firstFailureCode: String?,
@@ -997,11 +1040,12 @@ internal object DebugOneStopQa {
     }
 
     suspend fun run(context: Context, status: (String) -> Unit, request: DebugQaRunRequest,
-                    batchId: String, approvedProjection: ProjectionImageLease): JsonObject {
+                    batchId: String, approvedProjection: ProjectionImageLease,
+                    approvedRun: DebugQaApprovedRun? = null): JsonObject {
         val diagnosticOnly = request.mode.diagnosticOnly
         require(BuildConfig.DEBUG && context.packageName == CaptureQaAcceptance.CANDIDATE)
         val settings = McpExecutionSettings(context)
-        val ctx = RunContext(context, status, request, batchId, diagnosticOnly)
+        val ctx = RunContext(context, status, request, batchId, diagnosticOnly, approvedRun)
 
         if (CaptureQaAcceptance.setup(context) != "ready") return ctx.stop("debug_qa_setup_required")
         if (!settings.enabled) return ctx.stop("debug_connection_not_enabled")
@@ -1036,6 +1080,8 @@ internal object DebugOneStopQa {
             delay(250)
         }
         if (!foreground) return ctx.stop("blank_chrome_deadline")
+        ctx.awaitChromeCompletedEpochMs = System.currentTimeMillis()
+        ctx.awaitChromeCompletedElapsedMs = SystemClock.elapsedRealtime()
         if (!ControlScreenLease.mutex.tryLock()) return ctx.stop("ui_busy")
         var active = false
         val allowed: () -> Boolean = {
@@ -1049,6 +1095,8 @@ internal object DebugOneStopQa {
         return try {
             if (!withContext(Dispatchers.Main) { session.start() })
                 return ctx.stop("explicit_session_start_refused")
+            ctx.sessionStartedEpochMs = System.currentTimeMillis()
+            ctx.sessionStartedElapsedMs = SystemClock.elapsedRealtime()
             active = true
             port.activity(true)
             // Chrome's accessibility window can be replaced during the first resume
@@ -1207,7 +1255,8 @@ internal object DebugOneStopQa {
                 observed.data, observed.success, listOf("ㄱ", "ㅏ", "ㄴ", "Space"),
                 if (observed.success) null else port.debugDisplayPlanRefusal(),
                 if (observed.success) null else port.debugDisplayWindowCensus(),
-                if (observed.success) null else port.debugCaptureWindowChangeEvidence())
+                if (observed.success) null else port.debugCaptureWindowChangeEvidence(),
+                cursorProofMismatch = if (observed.success) null else port.visualKeyboardContextMismatch())
             if (observed.success) {
                 ctx.stage = "structure_diagnostic_saved"
                 ctx.qaState = "DIAGNOSTICS_COMPLETE"
@@ -1234,6 +1283,7 @@ internal object DebugOneStopQa {
         val request: DebugQaRunRequest,
         val batchId: String,
         val diagnosticOnly: Boolean,
+        val approvedRun: DebugQaApprovedRun? = null,
     ) {
         val runId: String = UUID.randomUUID().toString()
         val stepEvents = mutableListOf<JsonObject>()
@@ -1275,6 +1325,10 @@ internal object DebugOneStopQa {
         var recoveryAttempts = 0
         val started = SystemClock.elapsedRealtime()
         val startedEpochMs = System.currentTimeMillis()
+        var awaitChromeCompletedEpochMs: Long? = null
+        var awaitChromeCompletedElapsedMs: Long? = null
+        var sessionStartedEpochMs: Long? = null
+        var sessionStartedElapsedMs: Long? = null
         var newTabEvidence = "none"
 
         fun recordPrepared(prepared: ChromeReady) {
@@ -1337,7 +1391,26 @@ internal object DebugOneStopQa {
             put("started_at_epoch_ms", startedEpochMs)
             put("started_at_elapsed_realtime_ms", started)
             put("device_clock_contract", "android_epoch_ms_plus_elapsed_realtime_ms")
-            if (outcome != "IN_PROGRESS") put("ended_at_epoch_ms", System.currentTimeMillis())
+            val endEpoch = if (outcome != "IN_PROGRESS") System.currentTimeMillis() else null
+            val endElapsed = if (outcome != "IN_PROGRESS") SystemClock.elapsedRealtime() else null
+            if (endEpoch != null && endElapsed != null) {
+                put("ended_at_epoch_ms", endEpoch)
+                put("ended_at_elapsed_realtime_ms", endElapsed)
+            }
+            put("device_clock_timeline", lifecycleTimelineEvidence(
+                confirmedEpochMs = request.confirmedAtEpochMs,
+                confirmedElapsedMs = request.confirmedAtElapsedMs,
+                approvedEpochMs = approvedRun?.approvedAtEpochMs,
+                approvedElapsedMs = approvedRun?.approvedAtElapsedMs,
+                runEntryEpochMs = startedEpochMs,
+                runEntryElapsedMs = started,
+                awaitChromeEpochMs = awaitChromeCompletedEpochMs,
+                awaitChromeElapsedMs = awaitChromeCompletedElapsedMs,
+                sessionStartedEpochMs = sessionStartedEpochMs,
+                sessionStartedElapsedMs = sessionStartedElapsedMs,
+                endedEpochMs = endEpoch,
+                endedElapsedMs = endElapsed,
+            ))
             put("fixture_package", CHROME)
             put("input_method_package", SAMSUNG_IME)
             put("suite", if (diagnosticOnly) "structure_diagnostic" else "six_key_first_pass")

@@ -215,6 +215,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     }
     override fun invalidate() {
         probeThrottle.reset(); certifiedWindows = null; windowDiagnostics = null
+        lastVisualKeyboardContextMismatch = null
+        lastKeyboardCaptureMark = null
         keyboardTouchGeometry.clear()
         keyboardImageRecognition.clear()
         autonomousSequenceLedger.clearActive()
@@ -357,12 +359,30 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private var displayPlanRefusalCode: String? = null
     private var displayWindowCensus: DisplayWindowCensus? = null
     private var captureWindowChangeEvidence: JsonObject? = null
+    private var lastVisualKeyboardContextMismatch: KeyboardContextMismatch? = null
+    private var lastKeyboardCaptureMark: DisplayWindowChangeJournal.Mark? = null
     internal fun resetDebugCaptureEvidence() {
+        lastVisualKeyboardContextMismatch = null
+        lastKeyboardCaptureMark = null
         if (ai.closepaw.BuildConfig.DEBUG) {
             displayPlanRefusalCode = null
             displayWindowCensus = null
             captureWindowChangeEvidence = null
         }
+    }
+    override fun visualKeyboardContextMismatch(): KeyboardContextMismatch? = lastVisualKeyboardContextMismatch
+    override fun summarizeDisplayWindowChangesFor(proof: VisualTargetProof?): JsonObject? =
+        summarizeDisplayWindowChanges(AgentService.instance, proof)
+    private fun summarizeDisplayWindowChanges(service: AgentService?, proof: VisualTargetProof?): JsonObject? {
+        val activeService = service ?: return null
+        val mark = lastKeyboardCaptureMark?.takeIf { proof == null || it.generation == proof.displayGeneration }
+            ?: proof?.takeIf { it.displayGeneration >= 0L }?.let {
+                DisplayWindowChangeJournal.Mark(it.displayGeneration, System.nanoTime(), 0, 0)
+            }
+            ?: return null
+        val evidence = activeService.remoteDisplayJournal.summarize(mark, activeService.remoteDisplayChanges.version())
+        if (ai.closepaw.BuildConfig.DEBUG) captureWindowChangeEvidence = evidence
+        return evidence
     }
     internal fun debugCaptureWindowChangeEvidence(): JsonObject? =
         if (ai.closepaw.BuildConfig.DEBUG) captureWindowChangeEvidence else null
@@ -410,26 +430,57 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             ocrAttempted: Boolean = false,
             ocrLabelMatched: Boolean? = null,
             ocrConfidenceBucket: String = "not_run",
+            visualSourceFailure: VisualSourceFailure? = null,
+            captureWindowChanges: JsonObject? = null,
         ) = PixelCertificationOutcome(
             crop = null, method = "none", failureStage = stage, proofAgeMs = proofAgeMs,
             cropWidth = cropWidth, cropHeight = cropHeight, ocrAttempted = ocrAttempted,
             ocrLabelMatched = ocrLabelMatched, ocrConfidenceBucket = ocrConfidenceBucket,
             elapsedMs = (SystemClock.elapsedRealtime() - started).coerceAtLeast(0L),
+            visualSourceFailure = visualSourceFailure,
+            captureWindowChanges = captureWindowChanges,
         )
         if (!allowed()) return fail("authority_revoked")
         val live = session()?.takeIf { it.explicit && it.state == ControlSession.State.ACTIVE }
             ?: return fail("session_inactive")
         val ime = frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed }
             ?: return fail("ime_not_authorized")
-        val proof = VisualImageCache.proofFor(visualId) ?: return fail("proof_cache_miss")
+        val lookup = VisualImageCache.proofForOrFailure(
+            visualId, fallbackProof = frame.visual, stage = VisualSourceStage.ACTION_VALIDATION,
+        )
+        val proof = lookup.proof ?: run {
+            val failure = lookup.failure
+            val changes = if (failure?.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                summarizeDisplayWindowChanges(AgentService.instance, frame.visual)
+            } else null
+            val stage = if (failure?.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                "proof_display_window_changed"
+            } else "proof_cache_miss"
+            return fail(
+                stage = stage,
+                visualSourceFailure = failure?.copy(windowEvents = changes),
+                captureWindowChanges = changes,
+            )
+        }
         val ageMs = (System.currentTimeMillis() - proof.at).coerceAtLeast(-1L)
         if (frame.visual?.id != visualId) {
             return fail("frame_visual_id_mismatch", proofAgeMs = ageMs)
         }
         if (proof.scope != "keyboard" || proof.sourceDisplayId != 0)
             return fail("proof_scope_or_display_invalid", proofAgeMs = ageMs)
-        if (!proof.sourceDisclosureAllowed())
-            return fail("proof_disclosure_revoked", proofAgeMs = ageMs)
+        proof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)?.let { failure ->
+            val changes = if (failure.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                summarizeDisplayWindowChanges(AgentService.instance, proof)
+            } else null
+            return fail(
+                stage = if (failure.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                    "proof_display_window_changed"
+                } else "proof_disclosure_revoked",
+                proofAgeMs = ageMs,
+                visualSourceFailure = failure.copy(windowEvents = changes),
+                captureWindowChanges = changes,
+            )
+        }
         if (ageMs !in 0L..10_000L)
             return fail("proof_age_expired", proofAgeMs = ageMs)
         if (VisualKeyboardPolicy.proofOwnerRefusal(proof, ime) != null)
@@ -467,7 +518,18 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 return fail(surfaceFailure, proofAgeMs = ageMs, cropWidth = cropW, cropHeight = cropH)
             }
             if (!allowed() || !proof.sourceDisclosureAllowed()) {
-                return fail("post_disclosure_revoked", proofAgeMs = ageMs, cropWidth = cropW, cropHeight = cropH)
+                val failure = proof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)
+                val changes = if (failure?.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                    summarizeDisplayWindowChanges(AgentService.instance, proof)
+                } else null
+                return fail(
+                    stage = if (failure?.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                        "proof_display_window_changed"
+                    } else "post_disclosure_revoked",
+                    proofAgeMs = ageMs, cropWidth = cropW, cropHeight = cropH,
+                    visualSourceFailure = failure?.copy(windowEvents = changes),
+                    captureWindowChanges = changes,
+                )
             }
             return PixelCertificationOutcome(
                 crop = resolved,
@@ -507,11 +569,20 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             )
         }
         if (!allowed() || !proof.sourceDisclosureAllowed()) {
+            val failure = proof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)
+            val changes = if (failure?.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                summarizeDisplayWindowChanges(AgentService.instance, proof)
+            } else null
             return PixelCertificationOutcome(
-                crop = null, method = "none", failureStage = "post_disclosure_revoked",
+                crop = null, method = "none",
+                failureStage = if (failure?.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                    "proof_display_window_changed"
+                } else "post_disclosure_revoked",
                 proofAgeMs = ageMs, cropWidth = rec.cropWidth, cropHeight = rec.cropHeight,
                 ocrAttempted = rec.ocrAttempted, ocrLabelMatched = rec.ocrLabelMatched,
                 ocrConfidenceBucket = rec.ocrConfidenceBucket, elapsedMs = elapsed,
+                visualSourceFailure = failure?.copy(windowEvents = changes),
+                captureWindowChanges = changes,
             )
         }
         return PixelCertificationOutcome(
@@ -534,11 +605,15 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             proofAgeMs: Long = -1L,
             cropWidth: Int = 0,
             cropHeight: Int = 0,
+            visualSourceFailure: VisualSourceFailure? = null,
+            captureWindowChanges: JsonObject? = null,
         ) = PixelCertificationOutcome(
             crop = null, method = "none", failureStage = stage, proofAgeMs = proofAgeMs,
             cropWidth = cropWidth, cropHeight = cropHeight, ocrAttempted = false,
             ocrLabelMatched = null, ocrConfidenceBucket = "not_run",
             elapsedMs = (SystemClock.elapsedRealtime() - started).coerceAtLeast(0L),
+            visualSourceFailure = visualSourceFailure,
+            captureWindowChanges = captureWindowChanges,
         )
         if (!allowed()) return fail("authority_revoked")
         if (!allowsAutonomousDebugKeyboardProof) return fail("autonomous_keyboard_proof_not_allowed")
@@ -546,12 +621,39 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             ?: return fail("session_inactive")
         val ime = frame.keyboard?.takeIf { it.readAllowed && it.interactAllowed }
             ?: return fail("ime_not_authorized")
-        val proof = VisualImageCache.proofFor(visualId) ?: return fail("proof_cache_miss")
+        val lookup = VisualImageCache.proofForOrFailure(
+            visualId, fallbackProof = frame.visual, stage = VisualSourceStage.ACTION_VALIDATION,
+        )
+        val proof = lookup.proof ?: run {
+            val failure = lookup.failure
+            val changes = if (failure?.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                summarizeDisplayWindowChanges(AgentService.instance, frame.visual)
+            } else null
+            return fail(
+                stage = if (failure?.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                    "proof_display_window_changed"
+                } else "proof_cache_miss",
+                visualSourceFailure = failure?.copy(windowEvents = changes),
+                captureWindowChanges = changes,
+            )
+        }
         val ageMs = (System.currentTimeMillis() - proof.at).coerceAtLeast(-1L)
         if (frame.visual?.id != visualId) return fail("frame_visual_id_mismatch", proofAgeMs = ageMs)
         if (proof.scope != "keyboard" || proof.sourceDisplayId != 0)
             return fail("proof_scope_or_display_invalid", proofAgeMs = ageMs)
-        if (!proof.sourceDisclosureAllowed()) return fail("proof_disclosure_revoked", proofAgeMs = ageMs)
+        proof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)?.let { failure ->
+            val changes = if (failure.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                summarizeDisplayWindowChanges(AgentService.instance, proof)
+            } else null
+            return fail(
+                stage = if (failure.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                    "proof_display_window_changed"
+                } else "proof_disclosure_revoked",
+                proofAgeMs = ageMs,
+                visualSourceFailure = failure.copy(windowEvents = changes),
+                captureWindowChanges = changes,
+            )
+        }
         if (ageMs !in 0L..10_000L) return fail("proof_age_expired", proofAgeMs = ageMs)
         if (VisualKeyboardPolicy.proofOwnerRefusal(proof, ime) != null)
             return fail("proof_owner_mismatch", proofAgeMs = ageMs)
@@ -576,7 +678,18 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             return fail(surfaceFailure, proofAgeMs = ageMs, cropWidth = cropW, cropHeight = cropH)
         }
         if (!allowed() || !proof.sourceDisclosureAllowed()) {
-            return fail("post_disclosure_revoked", proofAgeMs = ageMs, cropWidth = cropW, cropHeight = cropH)
+            val failure = proof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)
+            val changes = if (failure?.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                summarizeDisplayWindowChanges(AgentService.instance, proof)
+            } else null
+            return fail(
+                stage = if (failure?.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                    "proof_display_window_changed"
+                } else "post_disclosure_revoked",
+                proofAgeMs = ageMs, cropWidth = cropW, cropHeight = cropH,
+                visualSourceFailure = failure?.copy(windowEvents = changes),
+                captureWindowChanges = changes,
+            )
         }
         return PixelCertificationOutcome(
             crop = resolved,
@@ -745,10 +858,12 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             kotlinx.coroutines.delay(50)
             islandRefusal(sessionFor(service).id)?.let {return fail(it)}
         }
+        lastVisualKeyboardContextMismatch = null
         val displayGeneration = service.remoteDisplayChanges.version()
         val trace = currentCoroutineContext()[KeyboardWindowTrace]
         val captureWindowMark = if (displayCapture) DisplayWindowChangeJournal.Mark(
             displayGeneration, System.nanoTime(), trace?.keyIndex ?: 0, trace?.readAttempt ?: 0) else null
+        if (nativeKeyboardDisplay) lastKeyboardCaptureMark = captureWindowMark
         val plan = if (displayCapture) withContext(Dispatchers.Main) { displayPlan(service,frame,nativeKeyboardDisplay) } else null
         if (displayCapture && plan==null) return fail("display_surface_unverified")
         val bounds = plan?.bounds ?: withContext(Dispatchers.Main) {
@@ -804,6 +919,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         val certified = KeyboardVisualPostCheck.certifiedFrame(frame, after, refusal, allowCaptionOnly = reuseKeyMap)
         if (certified == null) {
             if (refusal == "screen_changed") onKeyboardPostCheckRefusal?.invoke(KeyboardVisualPostCheck.describe(frame, after))
+            if (refusal == "keyboard_context_changed" && keyboardImage) {
+                lastVisualKeyboardContextMismatch = KeyboardCursorProof.classifyContextMismatch(frame, after)
+            }
             return fail("visual_post_" + checkNotNull(refusal))
         }
         if (certified !== frame) ControlDiagnostics.record("keyboard_visual_post_check", "chrome_suggestion_caption_changed")
@@ -1025,7 +1143,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     nativeEditorId?.let { put("editor_identity_hash", operationHash(it)) }
                     put("text_entry_key", node.isTextEntryKey); put("visible", node.isVisibleToUser); put("enabled", node.isEnabled); put("clickable", node.isClickable)
                     put("long_clickable", node.isLongClickable); put("editable", node.isEditable); put("scrollable", node.isScrollable); put("password", node.isPassword)
-                    put("focused", node.isFocused); put("selection_start", node.textSelectionStart); put("selection_end", node.textSelectionEnd)
+                    put("focused", node.isFocused); put("focusable", node.isFocusable); put("selection_start", node.textSelectionStart); put("selection_end", node.textSelectionEnd)
                     put("selected", node.isSelected); put("checkable", node.isCheckable); put("checked", node.isChecked)
                     put("child_count", node.childCount); put("actions", node.actionList.joinToString { it.id.toString() })
                 }
@@ -1144,18 +1262,21 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             val keyboard = selected.keyboard
             val caretSession = session()
             val epoch = caretSession?.epoch
-            val cursorGeneration = if (code == null && !truncated && rawInputTarget != null &&
+            val cursorOutcome = if (code == null && !truncated && rawInputTarget != null &&
                 keyboard?.readAllowed == true && keyboard.interactAllowed && packageAllowed(pkg, operation = "read") &&
                 packageAllowed(pkg, operation = "interact") && caretSession?.state == ControlSession.State.ACTIVE &&
                 caretSession.explicit && KeyboardCursorProof.needsProof(rawInputTarget)) {
-                val proof = native.getOrNull(nodes.indexOf(rawInputTarget))?.let { KeyboardCursorBinding.prove(service, rawInputTarget, it) }
+                val proof = native.getOrNull(nodes.indexOf(rawInputTarget))
+                    ?.let { KeyboardCursorBinding.proveDetailed(service, rawInputTarget, it) }
+                    ?: CursorProofOutcome(failure = CursorProofFailure.UNAVAILABLE)
                 reason(service)?.let { return@withContext block(denied(it), emptyList()) }
                 if (session() !== caretSession || caretSession.epoch != epoch)
                     return@withContext block(denied("control_session_changed_observe_again"), emptyList())
                 if ((runtime?.snapshot()?.revision ?: 0L) != revision)
                     return@withContext block(denied("configuration_revision_changed"), emptyList())
                 proof
-            } else null
+            } else CursorProofOutcome()
+            val cursorGeneration = cursorOutcome.generation
             val inputTarget = if (cursorGeneration == null) rawInputTarget else
                 rawInputTarget?.copy(selectionStart = 0, selectionEnd = 0, keyboardCursorGeneration = cursorGeneration)
             val frame = ControlFrame(pkg, window.id, fingerprint, nodes, code, truncated,
@@ -1168,7 +1289,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 keyboardCaptionSlots = keyboardCaptionSlots,
                 keyboardSuggestionGeometry = if (code == null && !truncated) suggestionGeometry.orEmpty() else emptyList(),
                 keyboardVisualFingerprintParts = keyboardVisualParts,
-                windowSnapshot = selected.snapshot)
+                windowSnapshot = selected.snapshot,
+                cursorProofFailure = cursorOutcome.failure)
             block(EmptyOwnedSurfacePolicy.restrict(frame,
                 selected.selection.members.size > 1 && root.windowId in selected.selection.members &&
                     window.id in selected.selection.members), native)
@@ -1372,10 +1494,16 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 val proof = frame.visual ?: return@withTree ControlEffect(false, false, "visual_observation_required")
                 if (action == "visual_key") {
                     proof.sourceFailure(VisualSourceStage.NATIVE_ACTION_VALIDATION)?.let { failure ->
-                        val mark = currentCoroutineContext()[KeyboardWindowTrace]?.mark
-                        val enriched = if (failure.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED && mark != null)
-                            failure.copy(windowEvents = service.remoteDisplayJournal.summarize(mark, service.remoteDisplayChanges.version()))
-                        else failure
+                        val enriched = if (failure.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                            val mark = currentCoroutineContext()[KeyboardWindowTrace]?.mark
+                            val evidence = if (mark != null) {
+                                service.remoteDisplayJournal.summarize(mark, service.remoteDisplayChanges.version())
+                                    .also { if (ai.closepaw.BuildConfig.DEBUG) captureWindowChangeEvidence = it }
+                            } else {
+                                summarizeDisplayWindowChanges(service, proof)
+                            }
+                            failure.copy(windowEvents = evidence)
+                        } else failure
                         return@withTree ControlEffect(false, false, VISUAL_SOURCE_REFUSED, enriched)
                     }
                 } else if (!proof.sourceDisclosureAllowed()) return@withTree ControlEffect(false, false, VISUAL_SOURCE_REFUSED)
@@ -1473,15 +1601,20 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                         false,
                         false,
                         if (action == "visual_key" &&
-                            DisplayObservationRecoveryPolicy.isRecoverableReadOnlyObservationRefusal(visualFailureReason))
+                            DisplayObservationRecoveryPolicy.isRecoverableReadOnlyObservationRefusal(
+                                visualFailureReason,
+                                recoverableCursorProofRace = lastVisualKeyboardContextMismatch?.recoverableReadOnlyCursorRace == true,
+                            ))
                             visualFailureReason else "visual_revalidation_failed",
                     )
                 if (latest.pixelHash != proof.pixelHash || latest.window != proof.window || latest.context != proof.context || latest.sourceWindowId != proof.sourceWindowId || latest.scope != proof.scope || latest.sourceDisplayId != proof.sourceDisplayId || latest.rotation != proof.rotation || latest.disclosedRegions != proof.disclosedRegions || latest.editorPrivacyGeneration != proof.editorPrivacyGeneration) {
                     ControlDiagnostics.record("visual_revalidation", "visual_pixels_or_geometry_changed", metrics = VisualRevalidationDiagnostics.metrics(proof, latest))
                     return@withTree ControlEffect(false,false,"visual_pixels_or_geometry_changed")
                 }
-                if (proof.sourceDisplayId == 0 && proof.displayGeneration != service.remoteDisplayChanges.version())
+                if (proof.sourceDisplayId == 0 && proof.displayGeneration != service.remoteDisplayChanges.version()) {
+                    summarizeDisplayWindowChanges(service, proof)
                     return@withTree ControlEffect(false,false,"display_window_changed_since_observation")
+                }
                 if (action == "visual_key") {
                     val ime = fresh.keyboard ?: return@withTree ControlEffect(false, false, "keyboard_target_unverified")
                     val candidate = freshKey ?: return@withTree ControlEffect(false, false, "keyboard_visual_candidate_unverified")

@@ -15,21 +15,43 @@ import kotlinx.coroutines.withContext
 /** For an already authorized keyboard operation, use only a bounded native
  * read. Never set selection or commit text to establish a caret. */
 internal object KeyboardCursorBinding {
-    suspend fun prove(service: AgentService, field: ControlNode, node: AccessibilityNodeInfo): Long? {
-        if (Build.VERSION.SDK_INT < 33 || !KeyboardCursorProof.needsProof(field)) return null
-        val input = service.inputMethod as? GuardedAccessibilityInputMethod ?: return null
+    suspend fun prove(service: AgentService, field: ControlNode, node: AccessibilityNodeInfo): Long? =
+        proveDetailed(service, field, node).generation
+
+    /**
+     * Bounded single-pass native read classifying exact cursor-proof failure cause
+     * without hidden retries. Any recovery must go through the outer bounded orchestrator.
+     */
+    suspend fun proveDetailed(service: AgentService, field: ControlNode, node: AccessibilityNodeInfo): CursorProofOutcome {
+        if (Build.VERSION.SDK_INT < 33 || !KeyboardCursorProof.needsProof(field)) return CursorProofOutcome()
+        val input = service.inputMethod as? GuardedAccessibilityInputMethod
+            ?: return CursorProofOutcome(failure = CursorProofFailure.UNAVAILABLE)
         val generation = input.generation
-        val editor = input.currentInputEditorInfo ?: return null
-        if (!matchesEditor(service, input, editor, generation, field) || !sameFocusedNode(service, field, node)) return null
-        val screen = service.remoteControlChanges.version()
-        val connection = input.currentInputConnection ?: return null
-        val proven = withContext(Dispatchers.IO) {
-            val sample = try { connection.getSurroundingText(1, 1, 0) } catch (_: RuntimeException) { null }
-            sample != null && KeyboardCursorProof.provesEmpty(
-                sample.text.length, sample.selectionStart, sample.selectionEnd, sample.offset)
+        val editor = input.currentInputEditorInfo
+            ?: return CursorProofOutcome(failure = CursorProofFailure.UNAVAILABLE)
+        if (!matchesEditor(service, input, editor, generation, field) || !sameFocusedNode(service, field, node)) {
+            return CursorProofOutcome(failure = CursorProofFailure.EDITOR_MISMATCH)
         }
-        return generation.takeIf { proven && service.remoteControlChanges.version() == screen &&
-            matchesEditor(service, input, editor, generation, field) && sameFocusedNode(service, field, node) }
+        val screen = service.remoteControlChanges.version()
+        val connection = input.currentInputConnection
+            ?: return CursorProofOutcome(failure = CursorProofFailure.UNAVAILABLE)
+        val sample = withContext(Dispatchers.IO) {
+            try { connection.getSurroundingText(1, 1, 0) } catch (_: RuntimeException) { null }
+        } ?: return CursorProofOutcome(failure = CursorProofFailure.IPC_NULL)
+        if (!KeyboardCursorProof.provesEmpty(
+                sample.text.length, sample.selectionStart, sample.selectionEnd, sample.offset,
+            )) {
+            return CursorProofOutcome(failure = CursorProofFailure.NONEMPTY_OR_SELECTION)
+        }
+        // Check editor/node identity before remoteControlChanges so a real editor switch is never
+        // misclassified as a benign SCREEN_CHANGE_RACE.
+        if (!matchesEditor(service, input, editor, generation, field) || !sameFocusedNode(service, field, node)) {
+            return CursorProofOutcome(failure = CursorProofFailure.EDITOR_MISMATCH)
+        }
+        if (service.remoteControlChanges.version() != screen) {
+            return CursorProofOutcome(failure = CursorProofFailure.SCREEN_CHANGE_RACE)
+        }
+        return CursorProofOutcome(generation = generation, failure = null)
     }
 
     /** Called without suspension at the gesture boundary. A proven empty

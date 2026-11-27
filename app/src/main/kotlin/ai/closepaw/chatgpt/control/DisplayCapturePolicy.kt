@@ -12,6 +12,44 @@ internal object DisplayCapturePolicy {
 }
 
 /**
+ * Single bounded read-only pre-execution recovery budget shared across
+ * DebugSixKeyExecution and GenericControl.visualKeySequenceAutonomous.
+ * Enforces both the hard attempt cap (3) and a bounded wall-clock window.
+ */
+internal class SharedQaRecoveryBudget(
+    val maxAttempts: Int = DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES,
+    val maxElapsedMs: Long = DEFAULT_RECOVERY_WINDOW_MS,
+    private val clockMs: () -> Long = { System.nanoTime() / 1_000_000L },
+) {
+    companion object {
+        const val DEFAULT_RECOVERY_WINDOW_MS = 15_000L
+    }
+
+    init {
+        require(maxAttempts in 0..DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES)
+        require(maxElapsedMs >= 0L)
+    }
+
+    private val startedAtMs: Long = clockMs()
+    var used: Int = 0
+        private set
+
+    fun remaining(): Int = (maxAttempts - used).coerceAtLeast(0)
+
+    fun elapsedMs(): Long = (clockMs() - startedAtMs).coerceAtLeast(0L)
+
+    fun withinWindow(): Boolean = elapsedMs() <= maxElapsedMs
+
+    fun canClaim(): Boolean = used < maxAttempts && withinWindow()
+
+    fun tryClaim(): Boolean {
+        if (!canClaim()) return false
+        used++
+        return true
+    }
+}
+
+/**
  * Shared fail-closed pre-execution observation recovery and target recertification policy
  * used by both production GenericControl flows and Debug QA flows.
  *
@@ -34,18 +72,40 @@ internal object DisplayObservationRecoveryPolicy {
         "screen_changed",
     )
 
-    fun isRecoverableReadOnlyObservationRefusal(reason: String?): Boolean =
-        reason != null && reason in readOnlyObservationRefusals
+    private val recoverableRecaptureReasons = setOf(
+        "screen_changed",
+        "secure_window_changed",
+        "active_root_missing",
+    )
+
+    private val recoverableDisplayWindowStages = setOf(
+        VisualSourceStage.ACTION_VALIDATION.code,
+        VisualSourceStage.NATIVE_ACTION_VALIDATION.code,
+    )
+
+    fun isRecoverableRecaptureReason(reason: String?): Boolean =
+        reason != null && reason in recoverableRecaptureReasons
+
+    fun isRecoverableReadOnlyObservationRefusal(
+        reason: String?,
+        recoverableCursorProofRace: Boolean = false,
+    ): Boolean =
+        reason != null && (
+            reason in readOnlyObservationRefusals ||
+                (reason == "visual_post_keyboard_context_changed" && recoverableCursorProofRace)
+            )
 
     fun isRecoverablePreDispatchRefusal(
         reason: String?,
         visualSourceStage: String? = null,
         visualSourceCondition: String? = null,
+        recoverableCursorProofRace: Boolean = false,
     ): Boolean {
         if (reason == null) return false
         if (reason in preDispatchNoEffectRefusals) return true
+        if (reason == "visual_post_keyboard_context_changed" && recoverableCursorProofRace) return true
         return reason == VISUAL_SOURCE_REFUSED &&
-            visualSourceStage == VisualSourceStage.NATIVE_ACTION_VALIDATION.code &&
+            visualSourceStage in recoverableDisplayWindowStages &&
             visualSourceCondition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED.code
     }
 
@@ -59,13 +119,16 @@ internal object DisplayObservationRecoveryPolicy {
         visualSourceStage: String? = null,
         visualSourceCondition: String? = null,
         observationOnly: Boolean = false,
+        recoverableCursorProofRace: Boolean = false,
     ): Boolean {
         if (actionAttempted || outcomeUnknown || !authorityActive) return false
         if (maxRecoveries !in 0..MAX_READ_ONLY_RECOVERIES || recoveriesUsed !in 0 until maxRecoveries) return false
         return if (observationOnly) {
-            isRecoverableReadOnlyObservationRefusal(reason)
+            isRecoverableReadOnlyObservationRefusal(reason, recoverableCursorProofRace)
         } else {
-            isRecoverablePreDispatchRefusal(reason, visualSourceStage, visualSourceCondition)
+            isRecoverablePreDispatchRefusal(
+                reason, visualSourceStage, visualSourceCondition, recoverableCursorProofRace,
+            )
         }
     }
 

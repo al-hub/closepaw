@@ -87,7 +87,8 @@ internal data class ControlFrame(val packageName: String, val windowId: Int, val
     val keyboardCaptionSlots: List<KeyboardCaptionSlot> = emptyList(),
     val keyboardSuggestionGeometry: List<ImeGeometryNode> = emptyList(),
     val keyboardVisualFingerprintParts: KeyboardVisualFingerprintParts? = null,
-    val windowSnapshot: ControlWindowSnapshot? = null)
+    val windowSnapshot: ControlWindowSnapshot? = null,
+    val cursorProofFailure: CursorProofFailure? = null)
 /** Logical identity is supplied only by a complete, guarded native application identity scan. */
 internal fun ControlFrame.matchesApplication(expected: String?): Boolean = expected != null && reason == null &&
     (packageName == expected || (!truncated && verifiedApplicationPackage == expected))
@@ -96,6 +97,12 @@ internal data class ControlEffect(val attempted: Boolean, val acknowledged: Bool
     val visualSourceFailure: VisualSourceFailure? = null)
 /** The frame is the snapshot certified with these pixels, not an earlier proposal. */
 internal data class CertifiedKeyboardFrame(val frame: ControlFrame, val proof: VisualTargetProof)
+internal data class CertifiedKeyboardLookup(
+    val certified: CertifiedKeyboardFrame? = null,
+    val failureStage: String? = null,
+    val visualSourceFailure: VisualSourceFailure? = null,
+    val captureWindowChanges: JsonObject? = null,
+)
 
 internal interface ControlPort : IslandControlPort {
     override fun islandRefusal(sessionId: String): String? = "island_control_unavailable"
@@ -105,6 +112,8 @@ internal interface ControlPort : IslandControlPort {
     val validatesAtNativeBoundary: Boolean get() = false
     /** Debug-only internal opt-in for autonomous QA hybrid proof. Always false in Release. */
     val allowsAutonomousDebugKeyboardProof: Boolean get() = false
+    fun visualKeyboardContextMismatch(): KeyboardContextMismatch? = null
+    fun summarizeDisplayWindowChangesFor(proof: VisualTargetProof?): JsonObject? = null
     fun beginAutonomousKeyboardSequence(sequenceNonce: String, sessionId: String, epoch: Long, totalSteps: Int): Boolean = false
     fun advanceAutonomousKeyboardStep(sequenceNonce: String, completedStepIndex: Int) {}
     fun endAutonomousKeyboardSequence(sequenceNonce: String) {}
@@ -372,16 +381,51 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         observationId: String,
         visualId: String,
         sessionEpoch: Long,
-    ): CertifiedKeyboardFrame? {
-        if (!port.allowsAutonomousDebugKeyboardProof) return null
-        val obs = current ?: return null
-        val session = port.session() ?: return null
-        if (!allowed() || !session.explicit || session.state != ControlSession.State.ACTIVE) return null
-        if (session.epoch != sessionEpoch || obs.epoch != sessionEpoch || obs.id != observationId) return null
-        val proof = obs.verificationFrame.visual ?: return null
-        if (proof.id != visualId || proof.scope != "keyboard" || proof.sourceDisplayId != 0) return null
-        if (!proof.sourceDisclosureAllowed() || now() - proof.at !in 0L..10_000L) return null
-        return CertifiedKeyboardFrame(obs.verificationFrame, proof)
+    ): CertifiedKeyboardFrame? =
+        certifiedKeyboardObservationDetailed(observationId, visualId, sessionEpoch).certified
+
+    /**
+     * Preserves structured [VisualSourceFailure] when a keyboard observation proof is
+     * invalidated (e.g. [VisualSourceCondition.DISPLAY_WINDOW_CHANGED]) without ever
+     * returning the revoked frame or pixels.
+     */
+    internal fun certifiedKeyboardObservationDetailed(
+        observationId: String,
+        visualId: String,
+        sessionEpoch: Long,
+    ): CertifiedKeyboardLookup {
+        if (!port.allowsAutonomousDebugKeyboardProof) {
+            return CertifiedKeyboardLookup(failureStage = "autonomous_keyboard_proof_not_allowed")
+        }
+        val obs = current ?: return CertifiedKeyboardLookup(failureStage = "observation_missing")
+        val session = port.session() ?: return CertifiedKeyboardLookup(failureStage = "session_missing")
+        if (!allowed() || !session.explicit || session.state != ControlSession.State.ACTIVE) {
+            return CertifiedKeyboardLookup(failureStage = "session_inactive")
+        }
+        if (session.epoch != sessionEpoch || obs.epoch != sessionEpoch || obs.id != observationId) {
+            return CertifiedKeyboardLookup(failureStage = "observation_or_epoch_mismatch")
+        }
+        val proof = obs.verificationFrame.visual
+            ?: return CertifiedKeyboardLookup(failureStage = "visual_proof_missing")
+        if (proof.id != visualId || proof.scope != "keyboard" || proof.sourceDisplayId != 0) {
+            return CertifiedKeyboardLookup(failureStage = "visual_proof_identity_mismatch")
+        }
+        proof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)?.let { failure ->
+            val changes = if (failure.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                port.summarizeDisplayWindowChangesFor(proof)
+            } else null
+            return CertifiedKeyboardLookup(
+                failureStage = if (failure.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                    "certified_observation_display_window_changed"
+                } else "certified_observation_source_refused",
+                visualSourceFailure = failure.copy(windowEvents = changes),
+                captureWindowChanges = changes,
+            )
+        }
+        if (now() - proof.at !in 0L..10_000L) {
+            return CertifiedKeyboardLookup(failureStage = "certified_observation_expired")
+        }
+        return CertifiedKeyboardLookup(certified = CertifiedKeyboardFrame(obs.verificationFrame, proof))
     }
 
     suspend fun visualKeySequence(input: JsonObject, expectedEpoch: Long? = null): OperationResult =
@@ -396,7 +440,10 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         input: JsonObject,
         autonomousProof: AutonomousKeyboardSequenceProof,
         expectedEpoch: Long? = null,
-    ): OperationResult = visualKeySequenceInternal(input, expectedEpoch, autonomousProof = autonomousProof)
+        recoveryBudget: SharedQaRecoveryBudget? = null,
+    ): OperationResult = visualKeySequenceInternal(
+        input, expectedEpoch, autonomousProof = autonomousProof, externalRecoveryBudget = recoveryBudget,
+    )
 
     /**
      * Debug-only internal entry point for a single guarded Korean layout switch
@@ -459,6 +506,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         val node = original.frame.nodes.singleOrNull { it.id == step.nodeId }
             ?: return stop("target_not_in_observation")
+        proof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)?.let { failure ->
+            val enriched = if (failure.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                failure.copy(windowEvents = port.summarizeDisplayWindowChangesFor(proof))
+            } else failure
+            return stop(VISUAL_SOURCE_REFUSED, visualSourceFailure = enriched.json())
+        }
         val structural = NativeKeyboardStructuralCertification.verifyKoreanLayoutSwitch(
             frame = original.verificationFrame,
             proof = proof,
@@ -548,6 +601,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         input: JsonObject,
         expectedEpoch: Long? = null,
         autonomousProof: AutonomousKeyboardSequenceProof? = null,
+        externalRecoveryBudget: SharedQaRecoveryBudget? = null,
     ): OperationResult {
         val autonomous = autonomousProof != null
         val externalVisualReviewConfirmed = !autonomous &&
@@ -582,6 +636,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         // One shared budget for every pre-dispatch recovery within the request.
         fun claimPreTouchRetry(): Boolean {
             val budget = sharedRecoveryBudget ?: return false
+            if (externalRecoveryBudget != null) {
+                if (budget.used >= DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES) return false
+                if (!externalRecoveryBudget.tryClaim()) return false
+                budget.used++
+                preTouchRetries++
+                return true
+            }
             if (budget.used >= DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES) return false
             budget.used++
             preTouchRetries++
@@ -698,6 +759,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             else -> null
         }
         if (initialProofReason != null) {
+            // Autonomous sequence proofs are bound to a specific visualId and 4-key certification:
+            // preserve structured DISPLAY_WINDOW_CHANGED so the QA orchestrator discards all 4
+            // certifications and re-observes + re-certifies fresh from scratch.
+            if (autonomousProof != null && initialProofReason == "display_window_changed" && sourceFailure != null) {
+                val enriched = sourceFailure.copy(windowEvents = port.summarizeDisplayWindowChangesFor(firstProof))
+                return stop(VISUAL_SOURCE_REFUSED, visualSourceFailure = enriched.json())
+            }
             // The caller's original image ID and consent cannot be repaired or replaced.
             // Only an expired or independently identified display-generation race
             // can be recertified, without a physical gesture, under the SAME session.
@@ -1025,8 +1093,12 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         // and share the request budget with pre-touch dispatch refusals.
                         // The next iteration still verifies the editor, value/caret, key
                         // geometry and live pixels before it can dispatch the pending step.
-                        if (DisplayObservationRecoveryPolicy.isRecoverableReadOnlyObservationRefusal(reason) &&
-                            sessionCurrent() && sameImageConsent() && claimPreTouchRetry()) {
+                        val recoverableCursorRace =
+                            reason == "visual_post_keyboard_context_changed" &&
+                                port.visualKeyboardContextMismatch()?.recoverableReadOnlyCursorRace == true
+                        if (DisplayObservationRecoveryPolicy.isRecoverableReadOnlyObservationRefusal(
+                                reason, recoverableCursorProofRace = recoverableCursorRace,
+                            ) && sessionCurrent() && sameImageConsent() && claimPreTouchRetry()) {
                             // The capture was read-only. Discard the failed image, and
                             // on a window event demand a new, later display generation.
                             // Never replay the already verified preceding key.
@@ -1136,8 +1208,14 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     reason == "display_window_changed_during_capture" ||
                         reason == "display_window_changed_since_observation" ||
                         (reason == VISUAL_SOURCE_REFUSED &&
-                            sourceStage == VisualSourceStage.NATIVE_ACTION_VALIDATION.code &&
+                            sourceStage in setOf(
+                                VisualSourceStage.ACTION_VALIDATION.code,
+                                VisualSourceStage.NATIVE_ACTION_VALIDATION.code,
+                            ) &&
                             sourceCondition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED.code)
+                val recoverableCursorRace =
+                    reason == "visual_post_keyboard_context_changed" &&
+                        port.visualKeyboardContextMismatch()?.recoverableReadOnlyCursorRace == true
                 touched = touched || attempted == true
                 var verified = current?.verificationFrame
                 if (!result.success || result.data["app_result_verified"]?.jsonPrimitive?.booleanOrNull != true) {
@@ -1158,7 +1236,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                             refresh = true
                             continue
                         }
-                        if (reason == "visual_post_screen_changed" && port.validatesAtNativeBoundary &&
+                        if ((reason == "visual_post_screen_changed" || recoverableCursorRace) &&
+                            port.validatesAtNativeBoundary &&
                             sessionCurrent() && sameImageConsent() && claimPreTouchRetry()) {
                             usedFallback = true
                             refresh = true
@@ -1295,8 +1374,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 val mark = if (trace != null && proof.displayGeneration >= 0)
                     DisplayWindowChangeJournal.Mark(proof.displayGeneration, System.nanoTime(), trace.keyIndex, trace.readAttempt)
                 else null
-                proof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)?.let {
-                    return failure(VISUAL_SOURCE_REFUSED, visualSourceFailure = it)
+                proof.sourceFailure(VisualSourceStage.ACTION_VALIDATION)?.let { failure ->
+                    val enriched = if (failure.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                        failure.copy(windowEvents = port.summarizeDisplayWindowChangesFor(proof))
+                    } else failure
+                    return failure(VISUAL_SOURCE_REFUSED, visualSourceFailure = enriched)
                 }
                 trace?.mark = mark
             } else if (!proof.sourceDisclosureAllowed()) return failure(VISUAL_SOURCE_REFUSED)
