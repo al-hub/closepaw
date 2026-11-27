@@ -942,9 +942,12 @@ internal object DebugOneStopQa {
             if (first.nodes.count(::sameResourceNode) != 1 || later.nodes.count(::sameResourceNode) != 1) {
                 return false
             }
-            return a.webEditorContainer == b.webEditorContainer &&
-                a.parent == b.parent &&
-                a.bounds.isNotBlank() && a.bounds == b.bounds
+            if (a.webEditorContainer != b.webEditorContainer || a.parent != b.parent) return false
+            if (a.bounds.isNotBlank() && a.bounds == b.bounds) return true
+            val ab = ai.closepaw.chatgpt.control.KeyboardImageFallbackPolicy.bounds(a.bounds) ?: return false
+            val bb = ai.closepaw.chatgpt.control.KeyboardImageFallbackPolicy.bounds(b.bounds) ?: return false
+            return ab.top == bb.top && ab.bottom == bb.bottom && (ab.left == bb.left || ab.right == bb.right) &&
+                2L * (minOf(ab.right, bb.right) - maxOf(ab.left, bb.left)) >= maxOf(ab.right - ab.left, bb.right - bb.left)
         }
         if (a.webEditorContainer != b.webEditorContainer) return false
         if (a.webEditorContainer >= 0 && a.parent < 0) return false
