@@ -51,7 +51,7 @@ internal object DebugKeyboardEvidence {
                 val allowed = mapOf(
                     "type" to setOf("windows_changed", "window_state_changed"),
                     "reported_owner" to setOf("chrome", "samsung_ime", "closepaw", "system", "other", "unknown"),
-                    "event_window_match" to setOf("application", "ime", "other", "unknown"),
+                    "event_window_match" to setOf("application", "ime", "control_overlay", "other", "unknown"),
                     "event_display_class" to setOf("default", "other", "unknown"))
                 for ((name, choices) in allowed) {
                     (event[name] as? JsonPrimitive)?.takeIf { it.isString && it.content in choices }

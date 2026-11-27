@@ -432,6 +432,8 @@ class DebugQaRunnerService : Service() {
                 reason = "android_observation_approval_unavailable"
             } else {
                 progress.value = progress.value.copy(state = "RUNNING", stage = "starting")
+                var priorVerifiedBenchmarkText: String? = null
+                var lastNotificationKey: String? = null
                 for (index in 0 until request.mode.repetitions) {
                     val result = DebugOneStopQa.run(applicationContext, { update ->
                         val stage = update.substringAfter(": ", "").substringBefore(" errors=", "")
@@ -439,16 +441,26 @@ class DebugQaRunnerService : Service() {
                             progress.value = progress.value.copy(
                                 state = if (stage == "await_chrome") "WAITING" else "RUNNING", stage = stage)
                         }
-                        runCatching {
-                            getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID,
-                                notification(request, "${progress.value.state} · $stage",
-                                    error = update.contains("errors=") && !update.endsWith("errors=0")))
+                        val hasError = update.contains("errors=") && !update.endsWith("errors=0")
+                        val notificationKey = "${progress.value.state}|$stage|$hasError"
+                        if (notificationKey != lastNotificationKey) {
+                            lastNotificationKey = notificationKey
+                            runCatching {
+                                getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID,
+                                    notification(request, "${progress.value.state} · $stage",
+                                        error = hasError))
+                            }
                         }
-                    }, request, batchId, projection, run)
+                    }, request, batchId, projection, run, priorVerifiedBenchmarkText = priorVerifiedBenchmarkText)
                     results += result
                     terminal = DebugQaBatchPolicy.terminalState(request.mode, result)
                     reason = result.getValue("reason").jsonPrimitive.content
-                    if (terminal != "PASS" || index == request.mode.repetitions - 1) break
+                    if (terminal != "PASS" || index == request.mode.repetitions - 1) {
+                        priorVerifiedBenchmarkText = null
+                        break
+                    }
+                    // Strictly bound to immediately preceding verified 6-key PASS in the same batch.
+                    priorVerifiedBenchmarkText = DebugOneStopQa.SixKey.expected(6)
                     save("IN_PROGRESS", "between_repetitions")
                     delay(500L)
                 }

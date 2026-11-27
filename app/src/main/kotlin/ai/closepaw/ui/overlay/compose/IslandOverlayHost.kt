@@ -10,9 +10,13 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.HapticFeedbackConstants
+import ai.closepaw.BuildConfig
 import ai.closepaw.chatgpt.control.ControlSession.ShareRequest
 import ai.closepaw.ui.overlay.IslandDragGesture
 import ai.closepaw.ui.overlay.IslandStatusText
+import ai.closepaw.ui.overlay.IslandWindowSize
+import ai.closepaw.ui.overlay.IslandWindowSizePolicy
+import androidx.compose.ui.unit.dp
 import android.view.WindowManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
@@ -80,7 +84,12 @@ class IslandOverlayHost internal constructor(
         remoteStatusText = text; remoteDetail = detail
         remoteUserAction = userAction
         remoteShareRequest = shareRequest
-        if (text == null || detail == null || userAction != null) detailVisible = false
+        if (text == null || detail == null || userAction != null) {
+            if (detailVisible) {
+                detailVisible = false
+                syncWindowSizeIfNeeded()
+            }
+        }
     }
     private val positions = service.getSharedPreferences("closepaw_island_position", android.content.Context.MODE_PRIVATE)
     private var islandX = positions.getInt("x", -1)
@@ -127,7 +136,36 @@ class IslandOverlayHost internal constructor(
         readOnlyMode = enabled
     }
 
+    private fun resolveWindowSize(): IslandWindowSize {
+        val metrics = service.resources.displayMetrics
+        val fontScale = service.resources.configuration.fontScale
+        val stop = stopBounds()
+        return IslandWindowSizePolicy.resolve(
+            screenWidthPx = metrics.widthPixels,
+            screenHeightPx = metrics.heightPixels,
+            density = metrics.density,
+            fontScale = fontScale,
+            stopWidthPx = stop.width(),
+            isDebug = BuildConfig.DEBUG,
+            expanded = detailVisible,
+        )
+    }
+
+    private fun syncWindowSizeIfNeeded() {
+        if (!composeHost.isShowing()) return
+        val desired = resolveWindowSize()
+        val desiredW = if (desired.wrapContent) WindowManager.LayoutParams.WRAP_CONTENT else desired.widthPx
+        val desiredH = if (desired.wrapContent) WindowManager.LayoutParams.WRAP_CONTENT else desired.heightPx
+        val currentSize = composeHost.currentLayoutSize()
+        if (currentSize != null && currentSize.first == desiredW && currentSize.second == desiredH) return
+        composeHost.updateLayoutParams {
+            it.width = desiredW
+            it.height = desiredH
+        }
+    }
+
     private fun correctMeasuredPosition() {
+        syncWindowSizeIfNeeded()
         val size = composeHost.measuredSize() ?: return
         val metrics = service.resources.displayMetrics
         val stop = stopBounds()
@@ -153,6 +191,10 @@ class IslandOverlayHost internal constructor(
             val holder = stateHolder
             val remote = remoteStatusText
             val userAction = remoteUserAction
+            val windowSize = resolveWindowSize()
+            val density = service.resources.displayMetrics.density.coerceAtLeast(1f)
+            val fixedWidthDp = if (!windowSize.wrapContent) (windowSize.widthPx / density).dp else null
+            val fixedHeightDp = if (!windowSize.wrapContent) (windowSize.heightPx / density).dp else null
             if (remote != null || holder == null) {
                 StatusIslandCompose(
                     text = if (detailVisible) remoteDetail ?: remote ?: "AI 제어 중 - 실행" else remote ?: "AI 제어 중 - 실행",
@@ -160,7 +202,14 @@ class IslandOverlayHost internal constructor(
                     pulsing = true,
                     expanded = detailVisible,
                     userAction = userAction,
-                    onClick = if (readOnlyMode) ({ if (remoteDetail != null) detailVisible = !detailVisible }) else onExpandCapsule,
+                    fixedWidthDp = fixedWidthDp,
+                    fixedHeightDp = fixedHeightDp,
+                    onClick = if (readOnlyMode) ({
+                        if (remoteDetail != null) {
+                            detailVisible = !detailVisible
+                            syncWindowSizeIfNeeded()
+                        }
+                    }) else onExpandCapsule,
                     onDrag = if (readOnlyMode) null else ::dragBy,
                     onDragEnd = ::persistPosition,
                 )
@@ -175,6 +224,8 @@ class IslandOverlayHost internal constructor(
                     dotColor = glowState.toStatusColor(),
                     pulsing = mode is CapsuleMode.Running,
                     userAction = userAction,
+                    fixedWidthDp = fixedWidthDp,
+                    fixedHeightDp = fixedHeightDp,
                     onClick = if (readOnlyMode) null else onExpandCapsule,
                     onDrag = if (readOnlyMode) null else ::dragBy,
                     onDragEnd = ::persistPosition,
@@ -220,7 +271,10 @@ class IslandOverlayHost internal constructor(
                     val request = shareTapCandidate?.takeIf {
                         it == remoteShareRequest && event.eventTime - event.downTime in 0L until 450L && !holdVibrated
                     }
-                    if (!holdVibrated && remoteDetail != null && remoteUserAction == null) detailVisible = !detailVisible
+                    if (!holdVibrated && remoteDetail != null && remoteUserAction == null) {
+                        detailVisible = !detailVisible
+                        syncWindowSizeIfNeeded()
+                    }
                     persistPosition(); cancelTouch()
                     request?.let(onShareRequestTap)
                 }
@@ -319,9 +373,12 @@ class IslandOverlayHost internal constructor(
 
     private fun createLayoutParams(): WindowManager.LayoutParams {
         val statusBarHeight = getStatusBarHeight()
+        val desired = resolveWindowSize()
+        val lpWidth = if (desired.wrapContent) WindowManager.LayoutParams.WRAP_CONTENT else desired.widthPx
+        val lpHeight = if (desired.wrapContent) WindowManager.LayoutParams.WRAP_CONTENT else desired.heightPx
         return WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            lpWidth,
+            lpHeight,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
             } else {
@@ -340,12 +397,23 @@ class IslandOverlayHost internal constructor(
             // full-display layout prevents double-applying that origin to requested y.
             setFitInsetsTypes(0)
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-            // Initial placement is provisional until the real Compose root is measured.
-            val size = composeHost.measuredSize() ?: (0 to 0)
-            val maxX = (service.resources.displayMetrics.widthPixels - size.first).coerceAtLeast(0)
-            val maxY = (service.resources.displayMetrics.heightPixels - size.second).coerceAtLeast(0)
-            x = (if (islandX < 0) maxX / 2 else islandX).coerceIn(0, maxX)
-            y = (if (islandY < 0) statusBarHeight + dp(88) else islandY).coerceIn(0, maxY)
+            val size = if (!desired.wrapContent) desired.widthPx to desired.heightPx
+                else composeHost.measuredSize() ?: (0 to 0)
+            val metrics = service.resources.displayMetrics
+            val maxX = (metrics.widthPixels - size.first).coerceAtLeast(0)
+            val maxY = (metrics.heightPixels - size.second).coerceAtLeast(0)
+            val initialX = (if (islandX < 0) maxX / 2 else islandX).coerceIn(0, maxX)
+            val initialY = (if (islandY < 0) statusBarHeight + dp(88) else islandY).coerceIn(0, maxY)
+            val placed = if (size.first > 0 && size.second > 0) {
+                val stop = stopBounds()
+                ai.closepaw.ui.overlay.OverlayPositionPolicy.place(
+                    initialX, initialY, size.first, size.second,
+                    metrics.widthPixels, metrics.heightPixels,
+                    stop.left, stop.top, stop.width(), stop.height(),
+                )
+            } else null
+            x = placed?.first ?: initialX
+            y = placed?.second ?: initialY
         }
     }
 

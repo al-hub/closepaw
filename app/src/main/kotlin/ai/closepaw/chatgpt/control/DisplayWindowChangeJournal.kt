@@ -19,7 +19,7 @@ internal class DisplayWindowChangeJournal(private val nowNs: () -> Long = System
     }
     // Diagnostic only. An ID match never authorizes a touch or exempts a window event.
     enum class WindowMatch(val code: String) {
-        APPLICATION("application"), IME("ime"), OTHER("other"), UNKNOWN("unknown"),
+        APPLICATION("application"), IME("ime"), CONTROL_OVERLAY("control_overlay"), OTHER("other"), UNKNOWN("unknown"),
     }
 
     companion object {
@@ -51,10 +51,12 @@ internal class DisplayWindowChangeJournal(private val nowNs: () -> Long = System
     }
 
     @Synchronized fun record(generation: Long, type: Type, owner: Owner,
-        eventWindowId: Int = -1, windowChanges: Int = 0, eventDisplayId: Int = -1) {
+        eventWindowId: Int = -1, windowChanges: Int = 0, eventDisplayId: Int = -1,
+        isControlOverlay: Boolean = false) {
         val at = nowNs()
         // Stale or absent evidence remains unknown; never infer harmlessness from a category.
         val match = when {
+            isControlOverlay -> WindowMatch.CONTROL_OVERLAY
             eventWindowId < 0 || knownAtNs < 0 || at < knownAtNs ||
                 at - knownAtNs > 30_000_000_000L -> WindowMatch.UNKNOWN
             eventWindowId == knownApplicationWindow -> WindowMatch.APPLICATION

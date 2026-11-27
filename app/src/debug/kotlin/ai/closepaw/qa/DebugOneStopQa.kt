@@ -385,13 +385,28 @@ internal object DebugOneStopQa {
      * blank toolbar when [requireToolbarRestored] is true (after Back #2). Any key input still
      * requires opening and verifying a fresh New Tab afterwards.
      */
+    private fun isPriorBenchmarkToolbarOmnibox(
+        after: ControlFrame,
+        priorVerifiedBenchmarkText: String?,
+    ): Boolean {
+        val expected = SixKey.expected(6)
+        if (priorVerifiedBenchmarkText != expected) return false
+        if (!safeChromeFrame(after) || isIncognitoChromeWindow(after)) return false
+        val bar = ownedChromeNodes(after)
+            .filter { it.resourceId == "$CHROME:id/url_bar" }.singleOrNull() ?: return false
+        return !bar.focused && !bar.password && bar.text == expected
+    }
+
     private fun isValidPostBackChromeState(
         after: ControlFrame,
         requireToolbarRestored: Boolean = false,
+        priorVerifiedBenchmarkText: String? = null,
     ): Boolean {
-        val blankToolbarRestored = chromeMenuButton(after) != null && blankOmnibox(after) != null
-        return if (requireToolbarRestored) blankToolbarRestored
-        else blankToolbarRestored || isGuardedBlankFocusedOmnibox(after)
+        val toolbarRestored = chromeMenuButton(after) != null &&
+            (blankOmnibox(after) != null || isPriorBenchmarkToolbarOmnibox(after, priorVerifiedBenchmarkText))
+        return if (requireToolbarRestored) toolbarRestored
+        else toolbarRestored || isGuardedBlankFocusedOmnibox(after) ||
+            isGuardedPriorBenchmarkFocusedOmnibox(after, priorVerifiedBenchmarkText)
     }
 
     /**
@@ -405,6 +420,7 @@ internal object DebugOneStopQa {
         before: ControlFrame,
         after: ControlFrame,
         requireToolbarRestored: Boolean = false,
+        priorVerifiedBenchmarkText: String? = null,
     ): String? {
         if (!sameChromeWindow(before, after)) return "chrome_window_or_revision_changed"
         if (before.foregroundWindowId != before.windowId || after.foregroundWindowId != after.windowId)
@@ -416,21 +432,25 @@ internal object DebugOneStopQa {
         return when {
             bKb != null && aKb == null -> {
                 ControlWindowContinuity.imeDismissalRefusal(before, after, bKb.windowId, CHROME)
-                    ?: if (isValidPostBackChromeState(after, requireToolbarRestored)) null
+                    ?: if (isValidPostBackChromeState(after, requireToolbarRestored, priorVerifiedBenchmarkText)) null
                     else "unexpected_post_back_chrome_state"
             }
             aKb != null && aKb != bKb -> "unexpected_ime_transition"
             before.windowContext == after.windowContext -> {
                 ControlWindowContinuity.exactSnapshotRefusal(before, after, CHROME)
-                    ?: if (isValidPostBackChromeState(after, requireToolbarRestored)) null
+                    ?: if (isValidPostBackChromeState(after, requireToolbarRestored, priorVerifiedBenchmarkText)) null
                     else "unexpected_post_back_chrome_state"
             }
             else -> "unexpected_window_context_change"
         }
     }
 
-    internal fun sameChromeBackContext(before: ControlFrame, after: ControlFrame): Boolean =
-        chromeBackContextRefusal(before, after) == null
+    internal fun sameChromeBackContext(
+        before: ControlFrame,
+        after: ControlFrame,
+        priorVerifiedBenchmarkText: String? = null,
+    ): Boolean =
+        chromeBackContextRefusal(before, after, priorVerifiedBenchmarkText = priorVerifiedBenchmarkText) == null
 
     internal fun hasChromeOmniboxSuggestions(frame: ControlFrame): Boolean =
         safeChromeFrame(frame) && ownedChromeNodes(frame).any {
@@ -460,17 +480,50 @@ internal object DebugOneStopQa {
         return true
     }
 
+    /**
+     * Narrow Repetition #2/#3 gate ONLY when immediately preceded by an in-batch
+     * verified PASS of the exact 6-key benchmark ("가 나 ", caret 4/4).
+     * Never weakens [isGuardedBlankFocusedOmnibox] and never touches arbitrary user drafts.
+     */
+    internal fun isGuardedPriorBenchmarkFocusedOmnibox(
+        frame: ControlFrame,
+        priorVerifiedBenchmarkText: String?,
+    ): Boolean {
+        val expected = SixKey.expected(6)
+        if (priorVerifiedBenchmarkText != expected) return false
+        if (!safeChromeFrame(frame) || frame.windowId != frame.foregroundWindowId) return false
+        if (isIncognitoChromeWindow(frame)) return false
+        if (chromeMenuButton(frame) != null || chromeTabCount(frame) != null) return false
+        val owned = ownedChromeNodes(frame)
+        if (owned.any { it.resourceId == "$CHROME:id/search_box_text" }) return false
+        val bar = owned.filter { it.resourceId == "$CHROME:id/url_bar" }.singleOrNull() ?: return false
+        val expectedLen = expected.length
+        if (!bar.focused || !bar.editable || !bar.enabled || bar.password ||
+            bar.text != expected || bar.selectionStart != expectedLen || bar.selectionEnd != expectedLen)
+            return false
+        val editor = frame.inputTarget ?: return false
+        if (editor.sourcePackage != CHROME || editor.sourceWindowId != frame.windowId ||
+            editor.resourceId != "$CHROME:id/url_bar" || !editor.focused || !editor.editable ||
+            editor.password || editor.text != expected ||
+            editor.selectionStart != expectedLen || editor.selectionEnd != expectedLen) return false
+        return true
+    }
+
     /** Back #1 requires active IME or open omnibox suggestions dropdown.
      * Back #2 requires a verified distinct state transition: IME hidden by Back #1
-     * on the same Chrome window/revision/context with blank focused omnibox + suggestions retained. */
+     * on the same Chrome window/revision/context with focused omnibox + suggestions retained. */
     internal fun mayDispatchGuardedOmniboxBack(
-        frame: ControlFrame, priorBackFrame: ControlFrame? = null,
+        frame: ControlFrame,
+        priorBackFrame: ControlFrame? = null,
+        priorVerifiedBenchmarkText: String? = null,
     ): Boolean {
-        if (!isGuardedBlankFocusedOmnibox(frame)) return false
+        val eligible = isGuardedBlankFocusedOmnibox(frame) ||
+            isGuardedPriorBenchmarkFocusedOmnibox(frame, priorVerifiedBenchmarkText)
+        if (!eligible) return false
         return if (priorBackFrame == null) {
             frame.keyboard != null || hasChromeOmniboxSuggestions(frame)
         } else {
-            sameChromeBackContext(priorBackFrame, frame) &&
+            sameChromeBackContext(priorBackFrame, frame, priorVerifiedBenchmarkText) &&
                 priorBackFrame.keyboard != null && frame.keyboard == null &&
                 hasChromeOmniboxSuggestions(frame)
         }
@@ -481,8 +534,15 @@ internal object DebugOneStopQa {
     )
 
     /** Revalidates guarded-omnibox invariants on the exact fresh observation used for Back. */
-    internal fun guardedBackObservationMatches(frame: ControlFrame, observed: JsonObject): Boolean {
-        if (!isGuardedBlankFocusedOmnibox(frame)) return false
+    internal fun guardedBackObservationMatches(
+        frame: ControlFrame,
+        observed: JsonObject,
+        priorVerifiedBenchmarkText: String? = null,
+    ): Boolean {
+        val blankMode = isGuardedBlankFocusedOmnibox(frame)
+        val priorBenchmarkMode = !blankMode &&
+            isGuardedPriorBenchmarkFocusedOmnibox(frame, priorVerifiedBenchmarkText)
+        if (!blankMode && !priorBenchmarkMode) return false
         val expectedBar = ownedChromeNodes(frame)
             .filter { it.resourceId == "$CHROME:id/url_bar" }.singleOrNull() ?: return false
         val navActions = (observed["navigation_actions"] as? JsonArray)
@@ -515,10 +575,18 @@ internal object DebugOneStopQa {
                     it["resource_id"]?.jsonPrimitive?.contentOrNull == "$CHROME:id/url_bar"
             }.orEmpty()
         val liveBar = bars.singleOrNull() ?: return false
+        val textMatches = if (blankMode) {
+            liveBar["text"]?.jsonPrimitive?.contentOrNull == ""
+        } else {
+            val expectedText = SixKey.expected(6)
+            liveBar["text"]?.jsonPrimitive?.contentOrNull == expectedText &&
+                liveBar["selection_start"]?.jsonPrimitive?.intOrNull == expectedText.length &&
+                liveBar["selection_end"]?.jsonPrimitive?.intOrNull == expectedText.length
+        }
         return liveBar["focused"]?.jsonPrimitive?.booleanOrNull == true &&
             liveBar["editable"]?.jsonPrimitive?.booleanOrNull == true &&
             liveBar["enabled"]?.jsonPrimitive?.booleanOrNull == true &&
-            liveBar["text"]?.jsonPrimitive?.contentOrNull == "" &&
+            textMatches &&
             liveBar["bounds"]?.jsonPrimitive?.contentOrNull == expectedBar.bounds &&
             liveBar["class_name"]?.jsonPrimitive?.contentOrNull == expectedBar.className
     }
@@ -550,6 +618,7 @@ internal object DebugOneStopQa {
         diagnosticOnly: Boolean,
         onPhase: (String) -> Unit,
         pause: suspend (Long) -> Unit = { delay(it) },
+        priorVerifiedBenchmarkText: String? = null,
     ): ChromeReady {
         var nativeRefusal: String? = null
         var diagnostics: ChromeSelectorFacts? = null
@@ -635,12 +704,14 @@ internal object DebugOneStopQa {
 
         // Guarded omnibox normalization (six-key mode only, max 2 distinct states):
         // normal toolbar -> 0 Back; only proven ordinary Chrome empty focused omnibox
-        // with active IME or suggestions dropdown may dismiss focus to reveal toolbar.
-        if (!diagnosticOnly && chromeMenuButton(first) == null && mayDispatchGuardedOmniboxBack(first, null)) {
+        // (or immediately preceded same-batch PASS benchmark text) with active IME or
+        // suggestions dropdown may dismiss focus to reveal toolbar.
+        if (!diagnosticOnly && chromeMenuButton(first) == null &&
+            mayDispatchGuardedOmniboxBack(first, null, priorVerifiedBenchmarkText)) {
             var priorBackFrame: ControlFrame? = null
             for (step in 1..2) {
                 if (!allowed()) return result(failure = "control_authority_revoked")
-                if (!mayDispatchGuardedOmniboxBack(first, priorBackFrame)) break
+                if (!mayDispatchGuardedOmniboxBack(first, priorBackFrame, priorVerifiedBenchmarkText)) break
                 val beforeBack = first
                 val outcome = dispatchBack(beforeBack, "chrome_omnibox_back_${step}_dispatch")
                 if (outcome.attempted) {
@@ -665,7 +736,9 @@ internal object DebugOneStopQa {
                 diagnostics = chromeSelectorFacts(afterBack)
                 toolbarSamples += diagnostics
                 val contextRefusal = chromeBackContextRefusal(
-                    beforeBack, afterBack, requireToolbarRestored = (step == 2),
+                    beforeBack, afterBack,
+                    requireToolbarRestored = (step == 2),
+                    priorVerifiedBenchmarkText = priorVerifiedBenchmarkText,
                 )
                 backStepFacts += buildJsonObject {
                     put("step", step)
@@ -759,7 +832,9 @@ internal object DebugOneStopQa {
 
     private suspend fun prepareChromeEditor(
         port: AndroidControlPort, control: GenericControl, session: ControlSession,
-        allowed: () -> Boolean, diagnosticOnly: Boolean, onPhase: (String) -> Unit,
+        allowed: () -> Boolean, diagnosticOnly: Boolean,
+        priorVerifiedBenchmarkText: String? = null,
+        onPhase: (String) -> Unit,
     ): ChromeReady = prepareChromeEditorWithSeam(
         capture = { port.capture() },
         inspectWindow = { chromeWindowFacts() },
@@ -819,7 +894,8 @@ internal object DebugOneStopQa {
         dispatchBack = { frame, phase ->
             val observed = control.observe(filter = "$CHROME:id/url_bar")
             val observationId = observed.data["observation_id"]?.jsonPrimitive?.contentOrNull
-            if (!observed.success || observationId == null || !guardedBackObservationMatches(frame, observed.data)) {
+            if (!observed.success || observationId == null ||
+                !guardedBackObservationMatches(frame, observed.data, priorVerifiedBenchmarkText)) {
                 ChromeActionOutcome(confirmed = false, attempted = false, unknown = false)
             } else {
                 onPhase(phase)
@@ -841,19 +917,88 @@ internal object DebugOneStopQa {
         diagnosticOnly = diagnosticOnly,
         onPhase = onPhase,
         pause = { delay(it) },
+        priorVerifiedBenchmarkText = priorVerifiedBenchmarkText,
     )
 
     internal fun sameEditor(first: ControlFrame, later: ControlFrame): Boolean {
+        if (first.reason != null || later.reason != null ||
+            first.truncated || later.truncated ||
+            first.navigationOnly || later.navigationOnly) return false
         val a = first.inputTarget ?: return false
         val b = later.inputTarget ?: return false
-        val identity = when {
-            !a.nativeEditorId.isNullOrBlank() -> a.nativeEditorId == b.nativeEditorId
-            a.resourceId.isNotBlank() -> a.resourceId == b.resourceId
-            else -> a.bounds.isNotBlank() && a.bounds == b.bounds && a.parent == b.parent
+        if (!a.focused || !a.editable || !a.enabled || a.password ||
+            !b.focused || !b.editable || !b.enabled || b.password) return false
+        if (first.windowId != later.windowId || first.packageName != later.packageName ||
+            a.className != b.className || a.sourcePackage != b.sourcePackage ||
+            a.sourceWindowId != b.sourceWindowId) return false
+        if (!a.nativeEditorId.isNullOrBlank() || !b.nativeEditorId.isNullOrBlank()) {
+            return a.nativeEditorId == b.nativeEditorId
         }
-        return identity && first.windowId == later.windowId &&
-            a.className == b.className && a.sourcePackage == b.sourcePackage &&
-            a.sourceWindowId == b.sourceWindowId && first.packageName == later.packageName
+        if (a.resourceId.isNotBlank() || b.resourceId.isNotBlank()) {
+            if (a.resourceId != b.resourceId) return false
+            fun sameResourceNode(node: ai.closepaw.chatgpt.control.ControlNode) =
+                node.resourceId == a.resourceId && node.className == a.className &&
+                    node.sourceWindowId == a.sourceWindowId && node.sourcePackage == a.sourcePackage
+            if (first.nodes.count(::sameResourceNode) != 1 || later.nodes.count(::sameResourceNode) != 1) {
+                return false
+            }
+            return a.webEditorContainer == b.webEditorContainer &&
+                a.parent == b.parent &&
+                a.bounds.isNotBlank() && a.bounds == b.bounds
+        }
+        if (a.webEditorContainer != b.webEditorContainer) return false
+        if (a.webEditorContainer >= 0 && a.parent < 0) return false
+        return a.bounds.isNotBlank() && a.bounds == b.bounds && a.parent == b.parent
+    }
+
+    /** Verifies the live ControlSession still has the exact immutable (id, epoch) owned by this QA run. */
+    internal fun ownsActiveSession(
+        session: ControlSession,
+        ownedToken: ControlSession.ActiveToken?,
+    ): Boolean = session.isCurrentActive(ownedToken)
+
+    /**
+     * Starts the session on [mainDispatcher] and records ownership + correlation reference
+     * INSIDE the main-dispatcher block before returning so prompt cancellation during the
+     * dispatcher handoff back to the caller can never orphan an unrecorded active session.
+     */
+    internal suspend fun startSessionAndRecord(
+        mainDispatcher: kotlinx.coroutines.CoroutineDispatcher,
+        startAndSnapshot: () -> ControlSession.ActiveToken?,
+        recordOwned: (ControlSession.ActiveToken) -> Unit,
+    ): ControlSession.ActiveToken? = kotlinx.coroutines.withContext(mainDispatcher) {
+        startAndSnapshot()?.also(recordOwned)
+    }
+
+    /**
+     * Exception- and cancellation-safe nested cleanup so ControlScreenLease.mutex is always
+     * released even if invalidation, indicator teardown, or conditional session end throws/cancels.
+     * Cleanup failures are reported via redacted [onCleanupError] step callbacks, never silently dropped.
+     */
+    internal suspend fun cleanupSessionLease(
+        invalidate: () -> Unit,
+        stopActivity: suspend () -> Unit,
+        endOwnedSession: suspend () -> Unit,
+        unlockMutex: () -> Unit,
+        onCleanupError: (String, Throwable) -> Unit = { _, _ -> },
+    ) {
+        try {
+            try {
+                runCatching { invalidate() }.onFailure { onCleanupError("invalidate", it) }
+            } finally {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    runCatching { stopActivity() }.onFailure { onCleanupError("stop_activity", it) }
+                }
+            }
+        } finally {
+            try {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    runCatching { endOwnedSession() }.onFailure { onCleanupError("end_session", it) }
+                }
+            } finally {
+                unlockMutex()
+            }
+        }
     }
 
     internal val batchFileLock = Any()
@@ -1041,7 +1186,8 @@ internal object DebugOneStopQa {
 
     suspend fun run(context: Context, status: (String) -> Unit, request: DebugQaRunRequest,
                     batchId: String, approvedProjection: ProjectionImageLease,
-                    approvedRun: DebugQaApprovedRun? = null): JsonObject {
+                    approvedRun: DebugQaApprovedRun? = null,
+                    priorVerifiedBenchmarkText: String? = null): JsonObject {
         val diagnosticOnly = request.mode.diagnosticOnly
         require(BuildConfig.DEBUG && context.packageName == CaptureQaAcceptance.CANDIDATE)
         val settings = McpExecutionSettings(context)
@@ -1083,41 +1229,53 @@ internal object DebugOneStopQa {
         ctx.awaitChromeCompletedEpochMs = System.currentTimeMillis()
         ctx.awaitChromeCompletedElapsedMs = SystemClock.elapsedRealtime()
         if (!ControlScreenLease.mutex.tryLock()) return ctx.stop("ui_busy")
-        var active = false
-        val allowed: () -> Boolean = {
-            AgentService.instance === service && settings.enabled && settings.genericControlEnabled &&
-                ProjectionImageTransport.active() === approvedProjection &&
-                approvedProjection.screenObservationAllowed() &&
-                session.explicit && session.state == ControlSession.State.ACTIVE
-        }
-        val port = AndroidControlPort(context, runtime = settings.runtimeControl, allowed = allowed)
-        val control = GenericControl(port, allowed)
+        val ownedTokenRef = java.util.concurrent.atomic.AtomicReference<ControlSession.ActiveToken?>(null)
+        var port: AndroidControlPort? = null
+        var control: GenericControl? = null
         return try {
-            if (!withContext(Dispatchers.Main) { session.start() })
-                return ctx.stop("explicit_session_start_refused")
+            val allowed: () -> Boolean = {
+                AgentService.instance === service && settings.enabled && settings.genericControlEnabled &&
+                    ProjectionImageTransport.active() === approvedProjection &&
+                    approvedProjection.screenObservationAllowed() &&
+                    session.isCurrentActive(ownedTokenRef.get())
+            }
+            val localPort = AndroidControlPort(context, runtime = settings.runtimeControl, allowed = allowed)
+            val localControl = GenericControl(localPort, allowed)
+            port = localPort
+            control = localControl
+            val startedToken = startSessionAndRecord(
+                mainDispatcher = Dispatchers.Main,
+                startAndSnapshot = { session.startAndSnapshot() },
+                recordOwned = { token ->
+                    ownedTokenRef.set(token)
+                    ctx.sessionReference = token.id
+                },
+            ) ?: return ctx.stop("explicit_session_start_refused")
             ctx.sessionStartedEpochMs = System.currentTimeMillis()
             ctx.sessionStartedElapsedMs = SystemClock.elapsedRealtime()
-            active = true
-            port.activity(true)
+            localPort.activity(true)
             // Chrome's accessibility window can be replaced during the first resume
             // animation. Let the foreground settle before a fresh full security scan.
             delay(350L)
             if (!allowed()) return ctx.stop("control_authority_revoked")
             ctx.stage = "editor_preflight"
             ctx.checkpoint("native_preflight")
-            val prepared = prepareChromeEditor(port, control, session, allowed, diagnosticOnly) { phase ->
+            val prepared = prepareChromeEditor(
+                localPort, localControl, session, allowed, diagnosticOnly,
+                priorVerifiedBenchmarkText = priorVerifiedBenchmarkText,
+            ) { phase ->
                 ctx.stage = phase
                 ctx.checkpoint("guarded_chrome_preparation")
             }
             ctx.recordPrepared(prepared)
             val first = prepared.frame
-                ?: return continueAfterFailure(ctx, port, control, session, service, approvedProjection, allowed,
+                ?: return continueAfterFailure(ctx, localPort, localControl, session, service, approvedProjection, allowed,
                     prepared.failure ?: "chrome_preparation_refused")
             // Independent reason codes and booleans are written before any key dispatch.
             val diagnosed = editorPreflightFacts(first)
             ctx.preflightFacts = diagnosed
             editorPreflightReason(diagnosed)?.let {
-                return continueAfterFailure(ctx, port, control, session, service, approvedProjection, allowed, it)
+                return continueAfterFailure(ctx, localPort, localControl, session, service, approvedProjection, allowed, it)
             }
             val observedLayout = NativeKeyboardStructuralCertification.classifyPhysicalLayout(first).code
             ctx.initialPhysicalLayout = observedLayout
@@ -1127,11 +1285,12 @@ internal object DebugOneStopQa {
             // approved session, only for the exact capture-generation refusal.
             // No retry of a touch, no reuse of stale images or relaxed guard.
             if (diagnosticOnly) {
-                return runStructureDiagnostic(ctx, port, control, session, first, allowed)
+                return runStructureDiagnostic(ctx, localPort, localControl, session, first, allowed)
             }
 
             val execution = DebugSixKeyExecution.run(
-                port, control, session, first, allowed,
+                localPort, localControl, session, first, allowed,
+                ownedToken = startedToken,
             ) { progress, reason ->
                 ctx.verifiedKeys = progress.verified
                 ctx.attempts = progress.attempts
@@ -1153,21 +1312,48 @@ internal object DebugOneStopQa {
             ctx.layoutSwitchAttempts = execution.layoutSwitchAttempts
             ctx.layoutSwitchConfirmed = execution.layoutSwitchConfirmed
             ctx.recoveryAttempts += execution.recoveryAttempts
-            if (execution.failure != null) ctx.stop(execution.failure)
-            else ctx.result("PASS", "six_physical_keys_editor_and_caret_confirmed")
-                .also { write(context, it) }
+            if (execution.failure != null) {
+                ctx.stop(execution.failure)
+            } else {
+                // Linearization point: commit PASS only while this run's exact (id, epoch) is ACTIVE.
+                val committedPass = session.commitIfCurrentActive(startedToken) {
+                    if (allowed()) ctx.result("PASS", "six_physical_keys_editor_and_caret_confirmed")
+                    else null
+                }
+                if (committedPass != null) {
+                    committedPass.also { write(context, it) }
+                } else {
+                    ctx.uncertain = ctx.uncertain || ctx.attempts > 0
+                    ctx.stop("control_authority_revoked")
+                }
+            }
         } catch (cancel: CancellationException) {
+            ownedTokenRef.get()?.let { ctx.sessionReference = it.id }
             ctx.uncertain = ctx.uncertain || ctx.stage.endsWith("_dispatch")
             ctx.stop("run_cancelled")
         } catch (_: Exception) {
+            ownedTokenRef.get()?.let { ctx.sessionReference = it.id }
             ctx.uncertain = ctx.uncertain || ctx.stage.endsWith("_dispatch")
             ctx.stop("guarded_qa_failed")
         } finally {
-            control.invalidate()
-            try { port.activity(false) } finally {
-                if (active) withContext(NonCancellable + Dispatchers.Main) { session.end() }
-                ControlScreenLease.mutex.unlock()
-            }
+            val tokenToEnd = ownedTokenRef.get()
+            cleanupSessionLease(
+                invalidate = { control?.invalidate() },
+                stopActivity = {
+                    if (session.isCurrentActive(tokenToEnd)) port?.activity(false)
+                },
+                endOwnedSession = {
+                    if (tokenToEnd != null) {
+                        withContext(NonCancellable + Dispatchers.Main) {
+                            session.endIfCurrentActive(tokenToEnd)
+                        }
+                    }
+                },
+                unlockMutex = { ControlScreenLease.mutex.unlock() },
+                onCleanupError = { step, err ->
+                    android.util.Log.w("ClosePawDebugQA", "cleanup_step_failed step=$step error=${err.javaClass.simpleName}")
+                },
+            )
         }
     }
 

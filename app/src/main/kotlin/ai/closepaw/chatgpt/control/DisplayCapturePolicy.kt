@@ -11,6 +11,27 @@ internal object DisplayCapturePolicy {
     }
 }
 
+internal enum class RecoveryRejectionReason(val code: String) {
+    REASON_NOT_ALLOWLISTED("reason_not_allowlisted"),
+    ACTION_ATTEMPTED("action_attempted"),
+    OUTCOME_UNKNOWN("outcome_unknown"),
+    AUTHORITY_REVOKED("authority_revoked"),
+    ATTEMPT_CAP("attempt_cap"),
+    ELAPSED_BUDGET("elapsed_budget"),
+    COMPLETED_KEYS_NONZERO("completed_keys_nonzero"),
+}
+
+internal data class RecoveryDecision(
+    val allowed: Boolean,
+    val rejectionReason: RecoveryRejectionReason? = null,
+    val used: Int,
+    val maxAttempts: Int,
+    val elapsedMs: Long,
+    val maxElapsedMs: Long,
+    val withinWindow: Boolean,
+    val authorityActive: Boolean,
+)
+
 /**
  * Single bounded read-only pre-execution recovery budget shared across
  * DebugSixKeyExecution and GenericControl.visualKeySequenceAutonomous.
@@ -42,11 +63,57 @@ internal class SharedQaRecoveryBudget(
 
     fun canClaim(): Boolean = used < maxAttempts && withinWindow()
 
-    fun tryClaim(): Boolean {
-        if (!canClaim()) return false
-        used++
-        return true
+    fun claimDetailed(authorityActive: Boolean = true): RecoveryDecision {
+        val elapsed = elapsedMs()
+        val inWindow = elapsed <= maxElapsedMs
+        return when {
+            !authorityActive -> RecoveryDecision(
+                allowed = false,
+                rejectionReason = RecoveryRejectionReason.AUTHORITY_REVOKED,
+                used = used,
+                maxAttempts = maxAttempts,
+                elapsedMs = elapsed,
+                maxElapsedMs = maxElapsedMs,
+                withinWindow = inWindow,
+                authorityActive = false,
+            )
+            used >= maxAttempts -> RecoveryDecision(
+                allowed = false,
+                rejectionReason = RecoveryRejectionReason.ATTEMPT_CAP,
+                used = used,
+                maxAttempts = maxAttempts,
+                elapsedMs = elapsed,
+                maxElapsedMs = maxElapsedMs,
+                withinWindow = inWindow,
+                authorityActive = true,
+            )
+            !inWindow -> RecoveryDecision(
+                allowed = false,
+                rejectionReason = RecoveryRejectionReason.ELAPSED_BUDGET,
+                used = used,
+                maxAttempts = maxAttempts,
+                elapsedMs = elapsed,
+                maxElapsedMs = maxElapsedMs,
+                withinWindow = false,
+                authorityActive = true,
+            )
+            else -> {
+                used++
+                RecoveryDecision(
+                    allowed = true,
+                    rejectionReason = null,
+                    used = used,
+                    maxAttempts = maxAttempts,
+                    elapsedMs = elapsed,
+                    maxElapsedMs = maxElapsedMs,
+                    withinWindow = true,
+                    authorityActive = true,
+                )
+            }
+        }
     }
+
+    fun tryClaim(): Boolean = claimDetailed().allowed
 }
 
 /**
@@ -130,6 +197,50 @@ internal object DisplayObservationRecoveryPolicy {
                 reason, visualSourceStage, visualSourceCondition, recoverableCursorProofRace,
             )
         }
+    }
+
+    /**
+     * Atomically evaluates eligibility and claims from the single shared recovery budget,
+     * preserving the exact rejection reason (e.g. elapsed_budget vs attempt_cap vs
+     * authority_revoked) for redacted diagnostic telemetry.
+     */
+    fun evaluateAndClaimPreExecution(
+        budget: SharedQaRecoveryBudget,
+        reason: String?,
+        actionAttempted: Boolean,
+        outcomeUnknown: Boolean,
+        authorityActive: Boolean,
+        completedKeys: Int = 0,
+        visualSourceStage: String? = null,
+        visualSourceCondition: String? = null,
+        observationOnly: Boolean = false,
+        recoverableCursorProofRace: Boolean = false,
+    ): RecoveryDecision {
+        val elapsed = budget.elapsedMs()
+        val inWindow = elapsed <= budget.maxElapsedMs
+        fun reject(why: RecoveryRejectionReason) = RecoveryDecision(
+            allowed = false,
+            rejectionReason = why,
+            used = budget.used,
+            maxAttempts = budget.maxAttempts,
+            elapsedMs = elapsed,
+            maxElapsedMs = budget.maxElapsedMs,
+            withinWindow = inWindow,
+            authorityActive = authorityActive,
+        )
+        if (actionAttempted) return reject(RecoveryRejectionReason.ACTION_ATTEMPTED)
+        if (outcomeUnknown) return reject(RecoveryRejectionReason.OUTCOME_UNKNOWN)
+        if (completedKeys > 0) return reject(RecoveryRejectionReason.COMPLETED_KEYS_NONZERO)
+        if (!authorityActive) return reject(RecoveryRejectionReason.AUTHORITY_REVOKED)
+        val allowlisted = if (observationOnly) {
+            isRecoverableReadOnlyObservationRefusal(reason, recoverableCursorProofRace)
+        } else {
+            isRecoverablePreDispatchRefusal(
+                reason, visualSourceStage, visualSourceCondition, recoverableCursorProofRace,
+            )
+        }
+        if (!allowlisted) return reject(RecoveryRejectionReason.REASON_NOT_ALLOWLISTED)
+        return budget.claimDetailed(authorityActive = true)
     }
 
     /**

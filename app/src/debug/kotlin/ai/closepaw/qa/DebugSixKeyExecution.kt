@@ -9,11 +9,13 @@ import ai.closepaw.chatgpt.control.DisplayObservationRecoveryPolicy
 import ai.closepaw.chatgpt.control.DisplayWindowCensus
 import ai.closepaw.chatgpt.control.GenericControl
 import ai.closepaw.chatgpt.control.KeyboardContextMismatch
+import ai.closepaw.chatgpt.control.KeyboardEditorContinuity
 import ai.closepaw.chatgpt.control.KoreanLayoutSwitchCandidate
 import ai.closepaw.chatgpt.control.KoreanLayoutSwitchRoute
 import ai.closepaw.chatgpt.control.NativeKeyboardStructuralCertification
 import ai.closepaw.chatgpt.control.PhysicalKeyboardLayout
 import ai.closepaw.chatgpt.control.PixelCertificationOutcome
+import ai.closepaw.chatgpt.control.RecoveryDecision
 import ai.closepaw.chatgpt.control.SharedQaRecoveryBudget
 import ai.closepaw.chatgpt.control.TapBounds
 import ai.closepaw.chatgpt.control.VISUAL_SOURCE_REFUSED
@@ -99,6 +101,10 @@ internal object DebugSixKeyExecution {
         value?.takeIf { it.length in 1..80 && it.matches(Regex("[a-z0-9_]+")) }
             ?: "unavailable"
 
+    private fun extractWindowEvents(sourceFailure: JsonObject?): JsonObject? =
+        (sourceFailure?.get("window_event_interval") as? JsonObject)
+            ?: (sourceFailure?.get("window_events") as? JsonObject)
+
     /**
      * Strictly resolves exactly one unique production physical candidate per
      * required key label from a keyboard-sequence observation. Rejects blocked
@@ -167,6 +173,8 @@ internal object DebugSixKeyExecution {
         },
         invalidateObservation: () -> Unit = {},
         recoveryBudget: SharedQaRecoveryBudget = SharedQaRecoveryBudget(clockMs = clockMs),
+        sessionCurrent: () -> Boolean = allowed,
+        commitPass: () -> Boolean = { allowed() && sessionCurrent() },
     ): Outcome {
         var verified = 0
         var attempts = 0
@@ -192,15 +200,124 @@ internal object DebugSixKeyExecution {
             stage = next
             checkpoint(progress(), reason)
         }
+        fun recordRecoveryDecision(
+            phase: String,
+            refusalReason: String?,
+            decision: RecoveryDecision,
+            actionAttempted: Boolean,
+            outcomeUnknown: Boolean,
+            completedKeys: Int = 0,
+            visualSourceStage: String? = null,
+            visualSourceCondition: String? = null,
+        ) {
+            evidence += buildJsonObject {
+                put("source", "recovery_decision")
+                put("phase", safeCode(phase))
+                put("allowed", decision.allowed)
+                decision.rejectionReason?.let { put("rejection_reason", safeCode(it.code)) }
+                put("refusal_reason", safeCode(refusalReason))
+                put("budget_used", decision.used)
+                put("budget_max", decision.maxAttempts)
+                put("budget_elapsed_ms", decision.elapsedMs)
+                put("budget_max_elapsed_ms", decision.maxElapsedMs)
+                put("within_window", decision.withinWindow)
+                put("authority_active", decision.authorityActive)
+                put("action_attempted", actionAttempted)
+                put("outcome_unknown", outcomeUnknown)
+                put("completed_keys", completedKeys)
+                visualSourceStage?.let { put("visual_source_stage", safeCode(it)) }
+                visualSourceCondition?.let { put("visual_source_condition", safeCode(it)) }
+            }
+        }
+        fun authorityActive(): Boolean = allowed() && sessionCurrent()
+        fun revokeAndFail(markUncertain: Boolean = attempts > 0): Outcome {
+            invalidateObservation()
+            if (markUncertain) uncertain = true
+            return fail("control_authority_revoked")
+        }
+        fun evaluateAndClaimRecovery(
+            phase: String,
+            reason: String?,
+            actionAttempted: Boolean,
+            outcomeUnknown: Boolean,
+            completedKeys: Int = 0,
+            visualSourceStage: String? = null,
+            visualSourceCondition: String? = null,
+            observationOnly: Boolean = false,
+            recoverableCursorProofRace: Boolean = false,
+        ): Boolean {
+            val decision = DisplayObservationRecoveryPolicy.evaluateAndClaimPreExecution(
+                budget = recoveryBudget,
+                reason = reason,
+                actionAttempted = actionAttempted,
+                outcomeUnknown = outcomeUnknown,
+                authorityActive = authorityActive(),
+                completedKeys = completedKeys,
+                visualSourceStage = visualSourceStage,
+                visualSourceCondition = visualSourceCondition,
+                observationOnly = observationOnly,
+                recoverableCursorProofRace = recoverableCursorProofRace,
+            )
+            recordRecoveryDecision(
+                phase = phase,
+                refusalReason = reason,
+                decision = decision,
+                actionAttempted = actionAttempted,
+                outcomeUnknown = outcomeUnknown,
+                completedKeys = completedKeys,
+                visualSourceStage = visualSourceStage,
+                visualSourceCondition = visualSourceCondition,
+            )
+            return decision.allowed
+        }
         suspend fun captureFrameRecoverable(stageName: String): ControlFrame {
+            if (!authorityActive()) {
+                invalidateObservation()
+                return ControlFrame("", -1, "", emptyList(), reason = "control_authority_revoked")
+            }
             var frame = captureFrame()
             while (frame.reason != null &&
-                DisplayObservationRecoveryPolicy.isRecoverableRecaptureReason(frame.reason) &&
-                allowed() && recoveryBudget.tryClaim()
+                DisplayObservationRecoveryPolicy.isRecoverableRecaptureReason(frame.reason)
             ) {
+                val decision = recoveryBudget.claimDetailed(authorityActive = authorityActive())
+                recordRecoveryDecision(
+                    phase = "frame_recapture",
+                    refusalReason = frame.reason,
+                    decision = decision,
+                    actionAttempted = false,
+                    outcomeUnknown = false,
+                )
+                if (!decision.allowed) break
                 checkpointAt(stageName, "read_only_recapture_recovery")
                 invalidateObservation()
                 frame = captureFrame()
+            }
+            if (!authorityActive()) {
+                invalidateObservation()
+                return ControlFrame("", -1, "", emptyList(), reason = "control_authority_revoked")
+            }
+            return frame
+        }
+        // Bounded passive read-only postcondition re-observation: never replays any touch/action
+        // and never consumes pre-dispatch recovery budget; bound to original session/authority
+        // before, during, and after capture; still fails closed as UNKNOWN if unprovable.
+        suspend fun capturePostconditionReadOnly(maxRetries: Int = 2): ControlFrame {
+            if (!authorityActive()) {
+                invalidateObservation()
+                return ControlFrame("", -1, "", emptyList(), reason = "control_authority_revoked")
+            }
+            var frame = captureFrame()
+            var retries = 0
+            while (frame.reason != null &&
+                DisplayObservationRecoveryPolicy.isRecoverableRecaptureReason(frame.reason) &&
+                retries < maxRetries && authorityActive()
+            ) {
+                retries++
+                frame = captureFrame()
+            }
+            if (!authorityActive()) {
+                invalidateObservation()
+                return ControlFrame("", -1, "", emptyList(), reason = "control_authority_revoked")
             }
             return frame
         }
@@ -218,14 +335,22 @@ internal object DebugSixKeyExecution {
                 }
 
         currentCoroutineContext().ensureActive()
-        if (!allowed()) return fail("control_authority_revoked")
+        if (!authorityActive()) return revokeAndFail(markUncertain = false)
         checkpointAt("key_1_preflight", "fresh_keyboard_sequence_observation")
 
-        var before = captureFrame()
-        if (!DebugOneStopQa.sameEditor(first, before)) return fail("editor_identity_changed")
+        var before = captureFrameRecoverable("key_1_preflight")
+        if (!authorityActive()) return revokeAndFail(markUncertain = false)
+        if (before.reason != null || before.truncated || before.navigationOnly) {
+            return fail("editor_checkpoint_changed")
+        }
+        if (!DebugOneStopQa.sameEditor(first, before) ||
+            !KeyboardEditorContinuity.sameFocusedEditor(first, before, allowAnonymousResize = false)) {
+            return fail("editor_identity_changed")
+        }
         val field = before.inputTarget
-        if (before.reason != null || before.packageName != "com.android.chrome" ||
+        if (before.packageName != "com.android.chrome" ||
             before.keyboard?.packageName != "com.samsung.android.honeyboard" || field == null ||
+            !field.focused || !field.editable || !field.focusable || !field.enabled || field.password ||
             !DebugOneStopQa.SixKey.matches(field.text, field.selectionStart, field.selectionEnd, 0))
             return fail("editor_checkpoint_changed")
 
@@ -289,13 +414,17 @@ internal object DebugSixKeyExecution {
                     }
                 while (true) {
                     currentCoroutineContext().ensureActive()
-                    if (!allowed()) {
+                    if (!authorityActive()) {
                         recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
-                        return fail("control_authority_revoked")
+                        return revokeAndFail(markUncertain = layoutSwitchAttempts > 0)
                     }
                     checkpointAt("layout_readiness_switch_dispatch", "guarded_korean_layout_switch")
                     val switched = switchToKoreanLayout(before, switchCandidate, nonceGenerator())
                     if (switched.attempted) layoutSwitchAttempts = 1
+                    if (!authorityActive()) {
+                        recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
+                        return revokeAndFail(markUncertain = switched.attempted || switched.unknown || layoutSwitchAttempts > 0)
+                    }
                     if (switched.success && switched.attempted && !switched.unknown) break
                     val refusal = safeCode(switched.reason ?: "korean_layout_switch_unconfirmed")
                     recordLayoutEvidence(switchCandidate.route.code, refusal, switched)
@@ -303,16 +432,15 @@ internal object DebugSixKeyExecution {
                         uncertain = true
                         return fail(refusal)
                     }
-                    if (!DisplayObservationRecoveryPolicy.mayRecoverPreExecution(
+                    if (!evaluateAndClaimRecovery(
+                            phase = "layout_switch",
                             reason = switched.reason,
-                            recoveriesUsed = recoveryBudget.used,
                             actionAttempted = switched.attempted,
                             outcomeUnknown = switched.unknown,
-                            authorityActive = allowed(),
                             visualSourceStage = switched.visualSourceStage,
                             visualSourceCondition = switched.visualSourceCondition,
                             recoverableCursorProofRace = switched.cursorProofMismatch?.recoverableReadOnlyCursorRace == true,
-                        ) || !recoveryBudget.tryClaim()) {
+                        )) {
                         return fail(refusal)
                     }
                     // Confirmed pre-dispatch non-execution: discard stale observation, acquire fresh
@@ -320,9 +448,9 @@ internal object DebugSixKeyExecution {
                     checkpointAt("layout_readiness_recovery", "read_only_capture_recovery")
                     invalidateObservation()
                     val fresh = captureFrameRecoverable("layout_readiness_recovery")
-                    if (!allowed()) {
+                    if (!authorityActive()) {
                         recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
-                        return fail("control_authority_revoked")
+                        return revokeAndFail(markUncertain = false)
                     }
                     val recertRefusal = recertifyEmptyEditor(before, fresh)
                     if (recertRefusal != null) {
@@ -349,12 +477,17 @@ internal object DebugSixKeyExecution {
                     before = fresh
                     switchCandidate = freshCandidate
                 }
-                if (!allowed()) {
+                if (!authorityActive()) {
                     uncertain = true
                     recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
                     return fail("control_authority_revoked")
                 }
-                val afterSwitch = captureFrame()
+                val afterSwitch = capturePostconditionReadOnly()
+                if (!authorityActive()) {
+                    uncertain = true
+                    recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
+                    return fail("control_authority_revoked")
+                }
                 val afterField = afterSwitch.inputTarget
                 val afterLayout = NativeKeyboardStructuralCertification.classifyPhysicalLayout(afterSwitch)
                 finalLayoutCode = afterLayout.code
@@ -390,10 +523,11 @@ internal object DebugSixKeyExecution {
         var finalSequenceResult: SequencePacket
         while (true) {
             currentCoroutineContext().ensureActive()
-            if (!allowed()) return fail("control_authority_revoked")
+            if (!authorityActive()) return revokeAndFail(markUncertain = false)
             val started = clockMs()
             val observed = observeSequence(sequenceLabels)
             observationMs += (clockMs() - started).coerceAtLeast(0L)
+            if (!authorityActive()) return revokeAndFail(markUncertain = false)
             evidence += DebugKeyboardEvidence.fromObservation(
                 observed.data, observed.success, sequenceLabels,
                 if (observed.success) null else observed.displayPlanRefusal,
@@ -407,17 +541,16 @@ internal object DebugSixKeyExecution {
                 val obsReason = observed.data["reason_code"]?.jsonPrimitive?.contentOrNull
                 val obsAttempted = observed.data["action_attempted"]?.jsonPrimitive?.booleanOrNull == true
                 val obsUnknown = observed.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull == true
-                if (!DisplayObservationRecoveryPolicy.mayRecoverPreExecution(
+                if (!evaluateAndClaimRecovery(
+                        phase = "sequence_observe",
                         reason = obsReason,
-                        recoveriesUsed = recoveryBudget.used,
                         actionAttempted = obsAttempted,
                         outcomeUnknown = obsUnknown,
-                        authorityActive = allowed(),
                         visualSourceStage = observed.visualSourceStage,
                         visualSourceCondition = observed.visualSourceCondition,
                         observationOnly = true,
                         recoverableCursorProofRace = observed.cursorProofMismatch?.recoverableReadOnlyCursorRace == true,
-                    ) || !recoveryBudget.tryClaim()) {
+                    )) {
                     // A refusal could mean protected content, overlay, or revoked consent.
                     // Do not collect another frame after that refusal.
                     afterFailure = "skipped_refused_observation"
@@ -426,7 +559,7 @@ internal object DebugSixKeyExecution {
                 checkpointAt("key_1_preflight", "read_only_observation_recovery")
                 invalidateObservation()
                 val fresh = captureFrameRecoverable("key_1_preflight")
-                if (!allowed()) return fail("control_authority_revoked")
+                if (!authorityActive()) return revokeAndFail(markUncertain = false)
                 val recertRefusal = recertifyEmptyEditor(before, fresh)
                     ?: if (NativeKeyboardStructuralCertification.classifyPhysicalLayout(fresh) != PhysicalKeyboardLayout.HANGUL) {
                         "korean_layout_changed_before_sequence"
@@ -468,19 +601,18 @@ internal object DebugSixKeyExecution {
                         }
                     }
                 }
-                if (DisplayObservationRecoveryPolicy.mayRecoverPreExecution(
+                if (evaluateAndClaimRecovery(
+                        phase = "certified_observation_lookup",
                         reason = VISUAL_SOURCE_REFUSED,
-                        recoveriesUsed = recoveryBudget.used,
                         actionAttempted = false,
                         outcomeUnknown = false,
-                        authorityActive = allowed(),
                         visualSourceStage = observed.visualSourceStage,
                         visualSourceCondition = observed.visualSourceCondition,
-                    ) && recoveryBudget.tryClaim()) {
+                    )) {
                     checkpointAt("key_1_preflight", "read_only_certified_observation_recovery")
                     invalidateObservation()
                     val fresh = captureFrameRecoverable("key_1_preflight")
-                    if (!allowed()) return fail("control_authority_revoked")
+                    if (!authorityActive()) return revokeAndFail(markUncertain = false)
                     val recertRefusal = recertifyEmptyEditor(before, fresh)
                         ?: if (NativeKeyboardStructuralCertification.classifyPhysicalLayout(fresh) != PhysicalKeyboardLayout.HANGUL) {
                             "korean_layout_changed_before_sequence"
@@ -508,8 +640,9 @@ internal object DebugSixKeyExecution {
             var nonDisplayCertFailure = false
             for (candidate in candidates) {
                 currentCoroutineContext().ensureActive()
-                if (!allowed()) return fail("control_authority_revoked")
+                if (!authorityActive()) return revokeAndFail(markUncertain = false)
                 val check = certifyCandidate(visualId, certifiedFrame, candidate, requiredNativeLabels)
+                if (!authorityActive()) return revokeAndFail(markUncertain = false)
                 val crop = check.crop?.takeIf { it.valid }
                 val validMethod = if (candidate.imageOnly) {
                     check.method in setOf("space_glyph", "mlkit_ocr", "cache_reused")
@@ -593,20 +726,19 @@ internal object DebugSixKeyExecution {
             }
             if (!allCandidatesCertified) {
                 if (!nonDisplayCertFailure && certDisplayFailure != null &&
-                    DisplayObservationRecoveryPolicy.mayRecoverPreExecution(
+                    evaluateAndClaimRecovery(
+                        phase = "candidate_certification",
                         reason = VISUAL_SOURCE_REFUSED,
-                        recoveriesUsed = recoveryBudget.used,
                         actionAttempted = false,
                         outcomeUnknown = false,
-                        authorityActive = allowed(),
                         visualSourceStage = certDisplayFailure.stage.code,
                         visualSourceCondition = certDisplayFailure.condition.code,
-                    ) && recoveryBudget.tryClaim()) {
+                    )) {
                     // Discard ALL 4 certifications + old observation; re-observe and re-certify fresh.
                     checkpointAt("key_1_preflight", "read_only_certification_recovery")
                     invalidateObservation()
                     val fresh = captureFrameRecoverable("key_1_preflight")
-                    if (!allowed()) return fail("control_authority_revoked")
+                    if (!authorityActive()) return revokeAndFail(markUncertain = false)
                     val recertRefusal = recertifyEmptyEditor(before, fresh)
                         ?: if (NativeKeyboardStructuralCertification.classifyPhysicalLayout(fresh) != PhysicalKeyboardLayout.HANGUL) {
                             "korean_layout_changed_before_sequence"
@@ -624,7 +756,7 @@ internal object DebugSixKeyExecution {
                 return fail("autonomous_keyboard_certification_unverified")
             }
 
-            if (!allowed()) return fail("control_authority_revoked")
+            if (!authorityActive()) return revokeAndFail(markUncertain = false)
             val proofSteps = mutableListOf<AutonomousCertifiedKeyStep>()
             val steps = JsonArray(DebugOneStopQa.SixKey.labels.map { label ->
                 val (candidate, check) = certifiedStepsByLabel[label]
@@ -676,7 +808,7 @@ internal object DebugSixKeyExecution {
             val seqSourceStage = seqSourceFailure?.get("stage")?.jsonPrimitive?.contentOrNull
             val seqSourceCondition = seqSourceFailure?.get("condition")?.jsonPrimitive?.contentOrNull
             val seqWindowChanges = sequenceResult.captureWindowChanges
-                ?: (seqSourceFailure?.get("window_events") as? JsonObject)
+                ?: extractWindowEvents(seqSourceFailure)
             evidence += buildJsonObject {
                 put("source", "visual_key_sequence_result")
                 put("confirmation_mode", "autonomous_debug_hybrid_structural_and_image")
@@ -710,23 +842,23 @@ internal object DebugSixKeyExecution {
                 }
             }
 
-            if (!sequenceResult.success && !attempted && !unknown && completed == 0 &&
-                DisplayObservationRecoveryPolicy.mayRecoverPreExecution(
+            if (!sequenceResult.success &&
+                evaluateAndClaimRecovery(
+                    phase = "sequence_pre_dispatch",
                     reason = seqReason,
-                    recoveriesUsed = recoveryBudget.used,
-                    actionAttempted = false,
-                    outcomeUnknown = false,
-                    authorityActive = allowed(),
+                    actionAttempted = attempted,
+                    outcomeUnknown = unknown,
+                    completedKeys = completed,
                     visualSourceStage = seqSourceStage,
                     visualSourceCondition = seqSourceCondition,
                     recoverableCursorProofRace = sequenceResult.cursorProofMismatch?.recoverableReadOnlyCursorRace == true,
-                ) && recoveryBudget.tryClaim()) {
+                )) {
                 // Confirmed pre-dispatch non-execution: discard ALL 4 certifications + old observation,
                 // re-observe fresh frame, re-certify all 4 keys, and build a new proof + nonce.
                 checkpointAt("key_1_preflight", "read_only_pre_dispatch_recovery")
                 invalidateObservation()
                 val fresh = captureFrameRecoverable("key_1_preflight")
-                if (!allowed()) return fail("control_authority_revoked")
+                if (!authorityActive()) return revokeAndFail(markUncertain = false)
                 val recertRefusal = recertifyEmptyEditor(before, fresh)
                     ?: if (NativeKeyboardStructuralCertification.classifyPhysicalLayout(fresh) != PhysicalKeyboardLayout.HANGUL) {
                         "korean_layout_changed_before_sequence"
@@ -756,17 +888,26 @@ internal object DebugSixKeyExecution {
         }
 
         stage = "six_key_final"
-        val final = captureFrame()
-        val post = final.inputTarget
-        if (!DebugOneStopQa.sameEditor(first, final)) {
-            uncertain = attempts > 0
-            return fail("final_editor_identity_unverified")
-        }
-        if (final.reason != null || final.packageName != "com.android.chrome" || post == null ||
-            !DebugOneStopQa.SixKey.matches(post.text, post.selectionStart, post.selectionEnd, 6)) {
+        val final = capturePostconditionReadOnly()
+        if (!authorityActive()) return revokeAndFail(markUncertain = attempts > 0)
+        if (final.reason != null || final.truncated || final.navigationOnly ||
+            final.packageName != "com.android.chrome") {
             uncertain = attempts > 0
             return fail("six_key_final_read_unconfirmed")
         }
+        val post = final.inputTarget
+        if (post == null || !post.focused || !post.editable || !post.focusable || !post.enabled || post.password ||
+            !DebugOneStopQa.sameEditor(first, final) ||
+            !KeyboardEditorContinuity.sameFocusedEditor(before, final, allowAnonymousResize = true)) {
+            uncertain = attempts > 0
+            return fail("final_editor_identity_unverified")
+        }
+        if (!DebugOneStopQa.SixKey.matches(post.text, post.selectionStart, post.selectionEnd, 6)) {
+            uncertain = attempts > 0
+            return fail("six_key_final_read_unconfirmed")
+        }
+        // Linearization point: commit PASS only if exact active session token & authority hold atomically.
+        if (!commitPass()) return revokeAndFail(markUncertain = attempts > 0)
         return Outcome(
             progress(), null, evidence.toList(), observationMs, extraReads, afterFailure, followUpEvidence,
             initialLayoutCode, finalLayoutCode, layoutSwitchAttempts, layoutSwitchConfirmed,
@@ -777,8 +918,10 @@ internal object DebugSixKeyExecution {
     suspend fun run(
         port: AndroidControlPort, control: GenericControl,
         session: ControlSession, first: ControlFrame, allowed: () -> Boolean,
+        ownedToken: ControlSession.ActiveToken? = null,
         checkpoint: (Progress, String) -> Unit,
     ): Outcome {
+        val anchorToken = ownedToken ?: ControlSession.ActiveToken(session.id, session.epoch)
         val sharedBudget = SharedQaRecoveryBudget(clockMs = { SystemClock.elapsedRealtime() })
         return runWithSeam(
             captureFrame = { port.capture() },
@@ -829,7 +972,7 @@ internal object DebugSixKeyExecution {
                 )
                 val sourceFailure = res.data["visual_source_failure"] as? JsonObject
                 val windowChanges = if (res.success) null else {
-                    (sourceFailure?.get("window_events") as? JsonObject) ?: port.debugCaptureWindowChangeEvidence()
+                    extractWindowEvents(sourceFailure) ?: port.debugCaptureWindowChangeEvidence()
                 }
                 SequencePacket(
                     success = res.success,
@@ -838,8 +981,8 @@ internal object DebugSixKeyExecution {
                     cursorProofMismatch = if (res.success) null else port.visualKeyboardContextMismatch(),
                 )
             },
-            sessionId = session.id,
-            sessionEpoch = session.epoch,
+            sessionId = anchorToken.id,
+            sessionEpoch = anchorToken.epoch,
             first = first,
             allowed = allowed,
             checkpoint = checkpoint,
@@ -961,7 +1104,7 @@ internal object DebugSixKeyExecution {
                                     displayPlanRefusal = if (res.success) null else port.debugDisplayPlanRefusal(),
                                     displayWindowCensus = if (res.success) null else port.debugDisplayWindowCensus(),
                                     captureWindowChanges = if (res.success) null else {
-                                        (sourceFailure?.get("window_events") as? JsonObject)
+                                        extractWindowEvents(sourceFailure)
                                             ?: port.debugCaptureWindowChangeEvidence()
                                     },
                                     cursorProofMismatch = if (res.success) null else port.visualKeyboardContextMismatch(),
@@ -1009,6 +1152,8 @@ internal object DebugSixKeyExecution {
             },
             invalidateObservation = { control.invalidate() },
             recoveryBudget = sharedBudget,
+            sessionCurrent = { session.isCurrentActive(anchorToken) },
+            commitPass = { session.commitIfCurrentActive(anchorToken) { allowed() } == true },
         )
     }
 }

@@ -1307,7 +1307,17 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         // Read only: a transient echo can be replaced by an autocomplete value
         // even after the last gesture. Never infer the buffer from its prefix.
-        val finalFrame = port.capture()
+        // Separate bounded read-only postcondition re-observation (max 2 passive retries,
+        // zero touch replay, never consumes pre-dispatch budget; fail-closed UNKNOWN if unprovable).
+        var finalFrame = port.capture()
+        var postReadRetries = 0
+        while (finalFrame.reason != null &&
+            DisplayObservationRecoveryPolicy.isRecoverableRecaptureReason(finalFrame.reason) &&
+            postReadRetries < 2 && sessionCurrent()
+        ) {
+            postReadRetries++
+            finalFrame = port.capture()
+        }
         val result = finalFrame.inputTarget
         if (!sessionCurrent() || !KeyboardEditorContinuity.sameFocusedEditor(lastVerified, finalFrame,
                 allowAnonymousResize = true) || !KeyboardEditorContinuity.sameValue(lastVerified, finalFrame) ||

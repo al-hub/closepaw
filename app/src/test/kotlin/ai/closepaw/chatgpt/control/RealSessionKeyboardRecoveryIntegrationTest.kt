@@ -580,4 +580,378 @@ class RealSessionKeyboardRecoveryIntegrationTest {
         assertEquals(3, budget2.used)
         assertEquals(0, budget2.remaining())
     }
+
+    @Test
+    fun recoveryDecision_exact15000msPassesAnd15001msRejectsWithElapsedBudgetTelemetry() {
+        var nowMs = 5_000L
+        val budget = SharedQaRecoveryBudget(maxAttempts = 3, maxElapsedMs = 15_000L, clockMs = { nowMs })
+        // 1st claim at t=0
+        val d1 = DisplayObservationRecoveryPolicy.evaluateAndClaimPreExecution(
+            budget = budget,
+            reason = "display_window_changed_during_capture",
+            actionAttempted = false,
+            outcomeUnknown = false,
+            authorityActive = true,
+            observationOnly = true,
+        )
+        assertTrue(d1.allowed)
+        assertNull(d1.rejectionReason)
+        assertEquals(1, d1.used)
+        assertEquals(0L, d1.elapsedMs)
+        assertTrue(d1.withinWindow)
+
+        // 2nd claim at exact 15_000ms boundary -> STILL within window!
+        nowMs = 5_000L + 15_000L
+        val d2 = DisplayObservationRecoveryPolicy.evaluateAndClaimPreExecution(
+            budget = budget,
+            reason = VISUAL_SOURCE_REFUSED,
+            actionAttempted = false,
+            outcomeUnknown = false,
+            authorityActive = true,
+            visualSourceStage = VisualSourceStage.NATIVE_ACTION_VALIDATION.code,
+            visualSourceCondition = VisualSourceCondition.DISPLAY_WINDOW_CHANGED.code,
+        )
+        assertTrue("15_000ms exact boundary must pass", d2.allowed)
+        assertNull(d2.rejectionReason)
+        assertEquals(2, d2.used)
+        assertEquals(15_000L, d2.elapsedMs)
+        assertTrue(d2.withinWindow)
+
+        // 3rd attempt at 15_001ms -> rejected specifically for ELAPSED_BUDGET (not attempt_cap!)
+        nowMs = 5_000L + 15_001L
+        val d3 = DisplayObservationRecoveryPolicy.evaluateAndClaimPreExecution(
+            budget = budget,
+            reason = "display_window_changed_during_capture",
+            actionAttempted = false,
+            outcomeUnknown = false,
+            authorityActive = true,
+            observationOnly = true,
+        )
+        assertFalse("15_001ms must reject", d3.allowed)
+        assertEquals(RecoveryRejectionReason.ELAPSED_BUDGET, d3.rejectionReason)
+        assertEquals(2, d3.used)
+        assertEquals(15_001L, d3.elapsedMs)
+        assertFalse(d3.withinWindow)
+        assertTrue(d3.authorityActive)
+
+        // Authority revoked takes precedence over budget checks
+        val dAuth = DisplayObservationRecoveryPolicy.evaluateAndClaimPreExecution(
+            budget = budget,
+            reason = "display_window_changed_during_capture",
+            actionAttempted = false,
+            outcomeUnknown = false,
+            authorityActive = false,
+            observationOnly = true,
+        )
+        assertFalse(dAuth.allowed)
+        assertEquals(RecoveryRejectionReason.AUTHORITY_REVOKED, dAuth.rejectionReason)
+        assertFalse(dAuth.authorityActive)
+
+        // PRE_GESTURE is strictly non-recoverable (REASON_NOT_ALLOWLISTED)
+        val freshBudget = SharedQaRecoveryBudget(maxAttempts = 3, maxElapsedMs = 15_000L, clockMs = { 100L })
+        val dPre = DisplayObservationRecoveryPolicy.evaluateAndClaimPreExecution(
+            budget = freshBudget,
+            reason = VISUAL_SOURCE_REFUSED,
+            actionAttempted = false,
+            outcomeUnknown = false,
+            authorityActive = true,
+            visualSourceStage = VisualSourceStage.PRE_GESTURE.code,
+            visualSourceCondition = VisualSourceCondition.DISPLAY_WINDOW_CHANGED.code,
+        )
+        assertFalse(dPre.allowed)
+        assertEquals(RecoveryRejectionReason.REASON_NOT_ALLOWLISTED, dPre.rejectionReason)
+        assertEquals(0, freshBudget.used)
+
+        // 4th attempt within window rejects with ATTEMPT_CAP
+        repeat(3) { assertTrue(freshBudget.tryClaim()) }
+        val dCap = DisplayObservationRecoveryPolicy.evaluateAndClaimPreExecution(
+            budget = freshBudget,
+            reason = "display_window_changed_during_capture",
+            actionAttempted = false,
+            outcomeUnknown = false,
+            authorityActive = true,
+            observationOnly = true,
+        )
+        assertFalse(dCap.allowed)
+        assertEquals(RecoveryRejectionReason.ATTEMPT_CAP, dCap.rejectionReason)
+        assertEquals(3, dCap.used)
+    }
+
+    @Test
+    fun genericControlFinalPostconditionReadOnlyRetriesTransientScreenChanged_andFailsClosedIfPersistent() = runBlocking {
+        val session = ControlSession()
+        assertTrue(session.start())
+        val displayChanges = ControlChangeSignal()
+        val journal = DisplayWindowChangeJournal()
+        journal.observeKnownWindows(10, 20)
+        var editorText = ""
+        var key6PostObserved = false
+        var finalTransientFailuresRemaining = 2 // 2 transient screen_changed on final post-read -> recovers!
+        var keyDispatches = 0
+        val ledger = AutonomousSequenceLedger()
+
+        val port = object : ControlPort {
+            override val validatesAtNativeBoundary: Boolean = true
+            override val allowsAutonomousDebugKeyboardProof: Boolean = true
+            override fun session(): ControlSession = session
+            override fun summarizeDisplayWindowChangesFor(proof: VisualTargetProof?): JsonObject? =
+                proof?.let {
+                    journal.summarize(
+                        DisplayWindowChangeJournal.Mark(it.displayGeneration, 0L, 1, 1),
+                        displayChanges.version(),
+                    )
+                }
+            override fun beginAutonomousKeyboardSequence(sequenceNonce: String, sessionId: String, epoch: Long, totalSteps: Int) =
+                ledger.begin(sequenceNonce, sessionId, epoch, totalSteps)
+            override fun advanceAutonomousKeyboardStep(sequenceNonce: String, completedStepIndex: Int) =
+                ledger.advance(sequenceNonce, completedStepIndex)
+            override fun endAutonomousKeyboardSequence(sequenceNonce: String) =
+                ledger.end(sequenceNonce)
+            override suspend fun apps(filter: String) = buildJsonArray {}
+            override suspend fun capture(): ControlFrame {
+                if (editorText == "가 나 ") {
+                    if (!key6PostObserved) {
+                        key6PostObserved = true
+                        return frame(hangulNodes(), ed = editor(text = editorText))
+                    }
+                    if (finalTransientFailuresRemaining > 0) {
+                        finalTransientFailuresRemaining--
+                        return frame(hangulNodes(), ed = editor(text = editorText)).copy(reason = "screen_changed")
+                    }
+                }
+                return frame(hangulNodes(), ed = editor(text = editorText))
+            }
+            override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof {
+                val g = displayChanges.version()
+                return makeProof(
+                    id = "vis-${System.nanoTime()}",
+                    displayGen = g,
+                    displayValid = { displayChanges.version() == g },
+                    session = session,
+                )
+            }
+            override suspend fun visualKeyboardSequenceFollowUp(frame: ControlFrame, onPostCheckRefusal: (JsonObject) -> Unit): CertifiedKeyboardFrame {
+                val p = visualKeyboard(frame)
+                return CertifiedKeyboardFrame(frame, p)
+            }
+            override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
+                val ctx = currentCoroutineContext()[AutonomousKeyboardDispatchContext]
+                    ?: return ControlEffect(false, false, "visual_proof_invalid_or_expired")
+                val proof = frame.visual ?: return ControlEffect(false, false, "visual_observation_required")
+                val failure = proof.sourceFailure(VisualSourceStage.NATIVE_ACTION_VALIDATION)
+                if (failure != null) {
+                    val enriched = if (failure.condition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED) {
+                        failure.copy(windowEvents = summarizeDisplayWindowChangesFor(proof))
+                    } else failure
+                    return ControlEffect(false, false, VISUAL_SOURCE_REFUSED, enriched)
+                }
+                if (!ledger.verifyAndConsumeDispatch(ctx)) {
+                    return ControlEffect(false, false, "visual_proof_invalid_or_expired")
+                }
+                keyDispatches++
+                editorText = if (ctx.label == "Space") "$editorText " else HangulKeyComposer.append(editorText, ctx.label)
+                return ControlEffect(true, true, "visual_key_dispatched")
+            }
+        }
+
+        val control = GenericControl(port, allowed = { true })
+        val seqLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space")
+        val obs = control.observe(includeImage = true, imageScope = "keyboard", keyboardSequenceLabels = seqLabels)
+        assertTrue(obs.success)
+        val obsId = obs.data["observation_id"]!!.jsonPrimitive.content
+        val visId = obs.data["visual"]!!.jsonObject["visual_id"]!!.jsonPrimitive.content
+        val cert = control.certifiedKeyboardObservationDetailed(obsId, visId, session.epoch).certified!!
+        val nodesByLabel = mapOf(
+            "ㄱ" to cert.frame.nodes.single { it.keyboardKey == "ㄱ" },
+            "ㅏ" to cert.frame.nodes.single { it.keyboardKey == "ㅏ" },
+            "ㄴ" to cert.frame.nodes.single { it.keyboardKey == "ㄴ" },
+            "Space" to cert.frame.nodes.single { it.keyboardImageCandidate },
+        )
+        val cropByLabel = nodesByLabel.mapValues { (label, node) ->
+            if (node.keyboardImageCandidate) {
+                KeyboardImageFallbackPolicy.crop(cert.proof, KeyboardImageFallbackPolicy.bounds(node.bounds)!!)!!
+            } else {
+                NativeKeyboardStructuralCertification.verify(cert.frame, cert.proof, node, label, listOf("ㄱ", "ㅏ", "ㄴ")).crop!!
+            }
+        }
+        val seqKeys = listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space")
+        val proofSteps = seqKeys.map { label ->
+            val n = nodesByLabel.getValue(label)
+            AutonomousCertifiedKeyStep(label, n.id, n.keyboardImageCandidate, cropByLabel.getValue(label),
+                if (n.keyboardImageCandidate) "space_glyph" else "native_structural_and_live_surface")
+        }
+        val stepsJson = JsonArray(proofSteps.map { s ->
+            buildJsonObject {
+                put("label", s.label); put("node_id", s.nodeId)
+                put("image_rect", JsonArray(listOf(s.crop.left, s.crop.top, s.crop.right, s.crop.bottom).map(::JsonPrimitive)))
+            }
+        })
+        val budget = SharedQaRecoveryBudget(maxAttempts = 3)
+        val res = control.visualKeySequenceAutonomous(
+            buildJsonObject {
+                put("session_id", session.id); put("observation_id", obsId); put("visual_id", visId)
+                put("visual_target_confirmed", false); put("text", "가 나 "); put("reuse_key_map", false)
+                put("steps", stepsJson)
+            },
+            AutonomousKeyboardSequenceProof("nonce-post-1", session.id, session.epoch, obsId, visId, proofSteps),
+            recoveryBudget = budget,
+        )
+        assertTrue("2 transient screen_changed on final capture must recover read-only: ${res.data}", res.success)
+        assertEquals(6, keyDispatches) // ZERO touch replay!
+        assertEquals(0, budget.used)   // Does NOT consume pre-dispatch recovery budget!
+        assertEquals(false, res.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull)
+
+        // Now test 3 consecutive screen_changed on final capture -> exceeds max 2 retries -> fail-closed UNKNOWN!
+        editorText = ""
+        key6PostObserved = false
+        keyDispatches = 0
+        finalTransientFailuresRemaining = 5
+        displayChanges.changed()
+        val obs2 = control.observe(includeImage = true, imageScope = "keyboard", keyboardSequenceLabels = seqLabels)
+        val obsId2 = obs2.data["observation_id"]!!.jsonPrimitive.content
+        val visId2 = obs2.data["visual"]!!.jsonObject["visual_id"]!!.jsonPrimitive.content
+        val res2 = control.visualKeySequenceAutonomous(
+            buildJsonObject {
+                put("session_id", session.id); put("observation_id", obsId2); put("visual_id", visId2)
+                put("visual_target_confirmed", false); put("text", "가 나 "); put("reuse_key_map", false)
+                put("steps", stepsJson)
+            },
+            AutonomousKeyboardSequenceProof("nonce-post-2", session.id, session.epoch, obsId2, visId2, proofSteps),
+            recoveryBudget = SharedQaRecoveryBudget(maxAttempts = 3),
+        )
+        assertFalse(res2.success)
+        assertEquals("keyboard_final_text_unconfirmed", res2.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(true, res2.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(6, keyDispatches) // Still ZERO touch replay!
+
+        // Foreign/unknown mask=8 display generation bump STILL invalidates VisualSourceGate fail-closed
+        // even when overlay is classified as control_overlay and endpoint geometry matches!
+        editorText = ""
+        val obs3 = control.observe(includeImage = true, imageScope = "keyboard", keyboardSequenceLabels = seqLabels)
+        val obsId3 = obs3.data["observation_id"]!!.jsonPrimitive.content
+        val visId3 = obs3.data["visual"]!!.jsonObject["visual_id"]!!.jsonPrimitive.content
+        displayChanges.changed()
+        journal.record(displayChanges.version(), DisplayWindowChangeJournal.Type.WINDOWS_CHANGED,
+            DisplayWindowChangeJournal.Owner.UNKNOWN, eventWindowId = 9999, windowChanges = 8,
+            eventDisplayId = 0, isControlOverlay = true)
+        val res3 = control.visualKeySequenceAutonomous(
+            buildJsonObject {
+                put("session_id", session.id); put("observation_id", obsId3); put("visual_id", visId3)
+                put("visual_target_confirmed", false); put("text", "가 나 "); put("reuse_key_map", false)
+                put("steps", stepsJson)
+            },
+            AutonomousKeyboardSequenceProof("nonce-post-3", session.id, session.epoch, obsId3, visId3, proofSteps),
+            recoveryBudget = SharedQaRecoveryBudget(maxAttempts = 3),
+        )
+        assertFalse("control_overlay display bump must STILL fail closed at ACTION_VALIDATION", res3.success)
+        assertEquals(VISUAL_SOURCE_REFUSED, res3.data["reason_code"]?.jsonPrimitive?.content)
+        val failureObj = res3.data["visual_source_failure"]!!.jsonObject
+        val intervalEvents = failureObj["window_event_interval"]!!.jsonObject["events"]!!.jsonArray
+        assertEquals("control_overlay", intervalEvents.last().jsonObject["event_window_match"]!!.jsonPrimitive.content)
+
+        session.end()
+    }
+
+    @Test
+    fun controlSessionActiveToken_enforcesAtomicStartSameIdPauseResumeCommitAndCompareAndEnd() {
+        val session = ControlSession()
+        // 1. Atomic startAndSnapshot returns immutable (id, epoch)
+        val t1 = session.startAndSnapshot()
+        assertNotNull(t1)
+        assertTrue(session.isCurrentActive(t1))
+        assertNull("Cannot start second session while ACTIVE", session.startAndSnapshot())
+
+        // 2. Same-ID pause -> beginResume -> finishResume changes epoch while preserving id!
+        //    Old token t1 MUST be rejected by isCurrentActive, commitIfCurrentActive, and endIfCurrentActive!
+        session.pause()
+        assertFalse(session.isCurrentActive(t1))
+        assertNull(session.commitIfCurrentActive(t1) { "SHOULD_NOT_COMMIT" })
+        assertFalse("Old token must NOT end paused session", session.endIfCurrentActive(t1))
+        assertEquals(ControlSession.State.PAUSED, session.state)
+
+        assertTrue(session.beginResume())
+        val reobservingEpoch = session.epoch
+        session.finishResume(reobservingEpoch, safe = true)
+        assertEquals(ControlSession.State.ACTIVE, session.state)
+        assertEquals(t1!!.id, session.id) // Same ID!
+        assertNotEquals(t1.epoch, session.epoch) // Different epoch!
+        assertFalse("Same-ID resumed session with newer epoch must NOT match t1", session.isCurrentActive(t1))
+        assertNull(session.commitIfCurrentActive(t1) { "SHOULD_NOT_COMMIT" })
+        assertFalse("Old token t1 must NOT end resumed same-ID session", session.endIfCurrentActive(t1))
+        assertEquals(ControlSession.State.ACTIVE, session.state)
+
+        // 3. Manual takeover preserves PAUSED state against stale token endIfCurrentActive
+        val tResumed = ControlSession.ActiveToken(session.id, session.epoch)
+        assertTrue(session.isCurrentActive(tResumed))
+        session.manualTakeover()
+        assertEquals(ControlSession.State.PAUSED, session.state)
+        assertFalse("Takeover pause must NOT be ended by stale token", session.endIfCurrentActive(tResumed))
+        assertEquals(ControlSession.State.PAUSED, session.state)
+
+        // 4. End + replacement startAndSnapshot -> t2 is owned, t1/tResumed cannot touch t2, t2 commits & ends cleanly
+        session.end()
+        val t2 = session.startAndSnapshot()
+        assertNotNull(t2)
+        assertNotEquals(t1.id, t2!!.id)
+        assertFalse(session.isCurrentActive(t1))
+        assertFalse(session.endIfCurrentActive(t1))
+        assertEquals("COMMITTED", session.commitIfCurrentActive(t2) { "COMMITTED" })
+        assertTrue(session.endIfCurrentActive(t2))
+        assertEquals(ControlSession.State.ENDED, session.state)
+        assertFalse(session.endIfCurrentActive(t2))
+    }
+
+    @Test
+    fun keyboardEditorContinuity_rejectsNullIdDuplicateAndStructuralReplacement_andPreservesStableAnonymous() {
+        val baseNullId = ControlNode(
+            id = 1, text = "", resourceId = "$chrome:id/url_bar",
+            clickable = true, editable = true, enabled = true, empty = true,
+            bounds = "0 100 1080 220", parent = 50, className = "android.widget.EditText",
+            focused = true, focusable = true, selectionStart = 0, selectionEnd = 0,
+            sourceWindowId = 10, sourcePackage = chrome, nativeEditorId = null,
+        )
+        val afterSame = baseNullId.copy(text = "가 나 ", empty = false, selectionStart = 4, selectionEnd = 4)
+        val beforeFrame = frame(hangulNodes(), ed = baseNullId)
+        val afterSameFrame = frame(hangulNodes(), ed = afterSame)
+
+        // Normal matching null-ID editor with identical parent/bounds/container and unique resourceId -> true
+        assertTrue(KeyboardEditorContinuity.sameFocusedEditor(beforeFrame, afterSameFrame, allowAnonymousResize = false))
+
+        // Mixed null vs non-null nativeEditorId -> false
+        assertFalse(KeyboardEditorContinuity.sameFocusedEditor(
+            beforeFrame, frame(hangulNodes(), ed = afterSame.copy(nativeEditorId = "different-id")), false,
+        ))
+
+        // Simultaneous duplicate same-resource node in same window -> false
+        val dupPeer = baseNullId.copy(id = 2, focused = false, bounds = "0 300 1080 420")
+        assertFalse(KeyboardEditorContinuity.sameFocusedEditor(
+            beforeFrame, afterSameFrame.copy(nodes = afterSameFrame.nodes + dupPeer), true,
+        ))
+
+        // One-for-one replacement with changed parent -> false!
+        assertFalse(KeyboardEditorContinuity.sameFocusedEditor(
+            beforeFrame, frame(hangulNodes(), ed = afterSame.copy(parent = 99)), true,
+        ))
+
+        // One-for-one replacement with shifted bounds (moved vertically) -> false!
+        assertFalse(KeyboardEditorContinuity.sameFocusedEditor(
+            beforeFrame, frame(hangulNodes(), ed = afterSame.copy(bounds = "0 400 1080 520")), true,
+        ))
+
+        // Genuine stable anonymous WebView editor (blank resourceId, null nativeEditorId, same container/parent/bounds) -> true!
+        val anonBefore = ControlNode(
+            id = 7, text = "", resourceId = "",
+            clickable = true, editable = true, enabled = true, empty = true,
+            bounds = "40 500 1000 620", parent = 70, webEditorContainer = 70,
+            className = "android.widget.EditText", focused = true, focusable = true,
+            selectionStart = 0, selectionEnd = 0, sourceWindowId = 10, sourcePackage = chrome,
+            nativeEditorId = null,
+        )
+        val anonAfter = anonBefore.copy(text = "가 나 ", empty = false, selectionStart = 4, selectionEnd = 4)
+        assertTrue(KeyboardEditorContinuity.sameFocusedEditor(
+            frame(hangulNodes(), ed = anonBefore),
+            frame(hangulNodes(), ed = anonAfter),
+            allowAnonymousResize = true,
+        ))
+    }
 }

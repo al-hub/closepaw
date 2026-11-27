@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -46,6 +47,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ai.closepaw.BuildConfig
 import ai.closepaw.protocol.compactThought
@@ -68,6 +70,8 @@ fun StatusIslandCompose(
     modifier: Modifier = Modifier,
     expanded: Boolean = false,
     userAction: String? = null,
+    fixedWidthDp: Dp? = null,
+    fixedHeightDp: Dp? = null,
 ) {
     val shape = MaterialTheme.shapes.large
     val spacing = MaterialTheme.closePaw.spacing
@@ -106,9 +110,13 @@ fun StatusIslandCompose(
             }
         }
     }
+    val useFixedCompactSize = !expanded && fixedWidthDp != null && fixedHeightDp != null
     Surface(
         modifier = modifier
-            .minimumInteractiveComponentSize()
+            .then(
+                if (useFixedCompactSize) Modifier.size(width = fixedWidthDp!!, height = fixedHeightDp!!)
+                else Modifier.minimumInteractiveComponentSize()
+            )
             .clip(shape)
             .then(if (onDrag != null) Modifier.pointerInput(onDrag) {
                 val screen = IntArray(2)
@@ -172,7 +180,7 @@ fun StatusIslandCompose(
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF8B3600),
                     maxLines = 1,
-                    modifier = Modifier.widthIn(max = 195.dp),
+                    modifier = Modifier.widthIn(max = if (useFixedCompactSize) 110.dp else 195.dp),
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (debugQaErrors > 0) {
@@ -180,6 +188,7 @@ fun StatusIslandCompose(
                         text = "●" + debugQaErrors,
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFFB00020),
+                        maxLines = 1,
                     )
                 }
             }
@@ -187,7 +196,7 @@ fun StatusIslandCompose(
                 color = dotColor,
                 size = 14.dp,
             )
-            val textModifier = Modifier.widthIn(max = 220.dp)
+            val textModifier = if (useFixedCompactSize) Modifier.weight(1f) else Modifier.widthIn(max = 220.dp)
             if (userAction != null || reducedMotion) {
                 Text(
                     text = userAction ?: if (expanded) text else compactThought(text),
