@@ -361,7 +361,7 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
     private var captureWindowChangeEvidence: JsonObject? = null
     private var lastVisualKeyboardContextMismatch: KeyboardContextMismatch? = null
     private var lastKeyboardCaptureMark: DisplayWindowChangeJournal.Mark? = null
-    internal fun resetDebugCaptureEvidence() {
+    override fun resetDebugCaptureEvidence() {
         lastVisualKeyboardContextMismatch = null
         lastKeyboardCaptureMark = null
         if (ai.closepaw.BuildConfig.DEBUG) {
@@ -370,6 +370,8 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
             captureWindowChangeEvidence = null
         }
     }
+    override fun lastFailedDisplayCaptureGeneration(): Long? =
+        lastKeyboardCaptureMark?.generation?.takeIf { it >= 0L }
     override fun visualKeyboardContextMismatch(): KeyboardContextMismatch? = lastVisualKeyboardContextMismatch
     override fun summarizeDisplayWindowChangesFor(proof: VisualTargetProof?): JsonObject? =
         summarizeDisplayWindowChanges(AgentService.instance, proof)
@@ -384,11 +386,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
         if (ai.closepaw.BuildConfig.DEBUG) captureWindowChangeEvidence = evidence
         return evidence
     }
-    internal fun debugCaptureWindowChangeEvidence(): JsonObject? =
+    override fun debugCaptureWindowChangeEvidence(): JsonObject? =
         if (ai.closepaw.BuildConfig.DEBUG) captureWindowChangeEvidence else null
-    internal fun debugDisplayWindowCensus(): DisplayWindowCensus? =
+    override fun debugDisplayWindowCensus(): DisplayWindowCensus? =
         if (ai.closepaw.BuildConfig.DEBUG) displayWindowCensus else null
-    internal fun debugDisplayPlanRefusal(): String? =
+    override fun debugDisplayPlanRefusal(): String? =
         if (ai.closepaw.BuildConfig.DEBUG) displayPlanRefusalCode else null
 
     /**
@@ -1378,35 +1380,46 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                 .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs)).build()
             val eventEpoch = expectedEpoch
             val timing = currentCoroutineContext()[ControlTiming]
+            val dispatchBoundaryRefusal = currentCoroutineContext()[AutonomousKeyboardDispatchContext]?.preTouchBoundaryRefusal
             val gestureId = timing?.nextId() ?: 0
             val step = currentCoroutineContext()[ControlTrace]?.step ?: 0
             return suspendCancellableCoroutine { continuation ->
                 // Cancellation can arrive during final Binder reads. A cancelled continuation
                 // still enters this block, so guard INSIDE it before any OS side effect.
-                if (!continuation.isActive) return@suspendCancellableCoroutine
-                val finalRefusal = GestureDispatchGate.refusal(session(), expectedEpoch, continuation.isActive)
-                    ?: reason(service) ?: mutationBlock(frame.packageName)
-                    ?: if (!packageAllowed(frame.packageName, operation = "interact")) "runtime_interaction_not_allowed" else null
-                if (finalRefusal != null) {
-                    if (continuation.isActive) continuation.resume(ControlEffect(false, false, finalRefusal))
-                    return@suspendCancellableCoroutine
-                }
-                if (!continuation.isActive) return@suspendCancellableCoroutine
-                timing?.mark(ControlTiming.Event.GESTURE_DISPATCH, gestureId, step)
-                val submitted = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
-                    override fun onCompleted(gestureDescription: GestureDescription?) {
-                        timing?.mark(ControlTiming.Event.GESTURE_CALLBACK_OK, gestureId, step)
-                        if (continuation.isActive) continuation.resume(ControlEffect(true, true, "gesture_completed"))
-                    }
-                    override fun onCancelled(gestureDescription: GestureDescription?) {
-                        timing?.mark(ControlTiming.Event.GESTURE_CALLBACK_CANCELLED, gestureId, step)
-                        if (continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_cancelled"))
-                    }
-                }, null)
-                if (submitted && sessionFor(service).epoch == eventEpoch)
-                    service.showRemoteControlTap(targetBounds, point.first.toFloat(), point.second.toFloat())
-                // Even a negative dispatch acknowledgement is conservatively not replayable.
-                if (!submitted && continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_unconfirmed"))
+                // Two-stage gate runs pre-Binder fail-fast, OS/policy Binder guards, then a
+                // post-Binder in-memory recheck right before timing mark and dispatchGesture.
+                GestureDispatchGate.guardAndDispatch(
+                    session = { session() },
+                    expectedEpoch = expectedEpoch,
+                    active = { continuation.isActive },
+                    boundaryRefusal = dispatchBoundaryRefusal,
+                    policyRefusal = {
+                        reason(service) ?: mutationBlock(frame.packageName)
+                            ?: if (!packageAllowed(frame.packageName, operation = "interact")) "runtime_interaction_not_allowed" else null
+                    },
+                    onRefused = { refusal ->
+                        if (continuation.isActive) continuation.resume(ControlEffect(false, false, refusal))
+                    },
+                    onMarkDispatch = {
+                        timing?.mark(ControlTiming.Event.GESTURE_DISPATCH, gestureId, step)
+                    },
+                    onDispatch = {
+                        val submitted = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
+                            override fun onCompleted(gestureDescription: GestureDescription?) {
+                                timing?.mark(ControlTiming.Event.GESTURE_CALLBACK_OK, gestureId, step)
+                                if (continuation.isActive) continuation.resume(ControlEffect(true, true, "gesture_completed"))
+                            }
+                            override fun onCancelled(gestureDescription: GestureDescription?) {
+                                timing?.mark(ControlTiming.Event.GESTURE_CALLBACK_CANCELLED, gestureId, step)
+                                if (continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_cancelled"))
+                            }
+                        }, null)
+                        if (submitted && sessionFor(service).epoch == eventEpoch)
+                            service.showRemoteControlTap(targetBounds, point.first.toFloat(), point.second.toFloat())
+                        // Even a negative dispatch acknowledgement is conservatively not replayable.
+                        if (!submitted && continuation.isActive) continuation.resume(ControlEffect(true, false, "gesture_unconfirmed"))
+                    },
+                )
             }
         } finally { windows.forEach { runCatching { it.recycle() } } }
     }
@@ -1531,6 +1544,11 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     dispatchCtx.epoch == admittedEpoch &&
                     freshKey != null && freshKey.id == node?.id && freshKey.id == dispatchCtx.nodeId &&
                     dispatchCtx.imageOnly == imageOnlyKey && expectedLabelMatches
+                if (dispatchCtx != null && autonomousFieldsMatch) {
+                    dispatchCtx.preTouchBoundaryRefusal()?.let {
+                        return@withTree ControlEffect(false, false, it)
+                    }
+                }
                 val autonomousConfirmed = dispatchCtx != null && autonomousFieldsMatch &&
                     autonomousSequenceLedger.verifyAndConsumeDispatch(dispatchCtx)
                 if (!visualIdAndAgeValid || !(externalConfirmed || autonomousConfirmed))
@@ -1738,7 +1756,9 @@ internal class AndroidControlPort(context: Context, private val mutationBlock: (
                     verified
                 } else rect
                 var preGestureSourceFailure: VisualSourceFailure? = null
+                val dispatchBoundaryRefusal = currentCoroutineContext()[AutonomousKeyboardDispatchContext]?.preTouchBoundaryRefusal
                 val effect = tap(service, fresh, tapRect, fresh.keyboard.windowId, requireWholePatch = action == "visual_key") {
+                    dispatchBoundaryRefusal?.invoke()?.let { return@tap it }
                     if (action == "visual_key" && service.remoteControlCovers(tapRect))
                         return@tap "control_button_covers_target"
                     if (action == "visual_key") {

@@ -19,6 +19,7 @@ internal enum class RecoveryRejectionReason(val code: String) {
     ATTEMPT_CAP("attempt_cap"),
     ELAPSED_BUDGET("elapsed_budget"),
     COMPLETED_KEYS_NONZERO("completed_keys_nonzero"),
+    DEADLINE_EXCEEDED("deadline_exceeded"),
 }
 
 internal data class RecoveryDecision(
@@ -30,12 +31,17 @@ internal data class RecoveryDecision(
     val maxElapsedMs: Long,
     val withinWindow: Boolean,
     val authorityActive: Boolean,
+    val runElapsedMs: Long = elapsedMs,
+    val episodeStarted: Boolean = used > 0,
 )
 
 /**
  * Single bounded read-only pre-execution recovery budget shared across
  * DebugSixKeyExecution and GenericControl.visualKeySequenceAutonomous.
- * Enforces both the hard attempt cap (3) and a bounded wall-clock window.
+ * Enforces both the hard cumulative attempt cap (3) and ONE single bounded
+ * recovery episode window (15_000 ms) lazily started on the FIRST eligible
+ * allowed claim — never started by rejected claims and never reset on key
+ * advancement. Total run duration is bounded separately by the sequence deadline.
  */
 internal class SharedQaRecoveryBudget(
     val maxAttempts: Int = DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES,
@@ -51,20 +57,30 @@ internal class SharedQaRecoveryBudget(
         require(maxElapsedMs >= 0L)
     }
 
-    private val startedAtMs: Long = clockMs()
+    private val createdAtMs: Long = clockMs()
+    private var firstClaimAtMs: Long? = null
     var used: Int = 0
         private set
 
+    fun isEpisodeStarted(): Boolean = firstClaimAtMs != null
+
     fun remaining(): Int = (maxAttempts - used).coerceAtLeast(0)
 
-    fun elapsedMs(): Long = (clockMs() - startedAtMs).coerceAtLeast(0L)
+    /** Elapsed time within the single recovery episode (0 until first allowed claim). */
+    fun elapsedMs(): Long = firstClaimAtMs?.let { (clockMs() - it).coerceAtLeast(0L) } ?: 0L
+
+    /** Total elapsed time since this budget was created (separate from recovery episode clock). */
+    fun totalElapsedMs(): Long = (clockMs() - createdAtMs).coerceAtLeast(0L)
 
     fun withinWindow(): Boolean = elapsedMs() <= maxElapsedMs
 
     fun canClaim(): Boolean = used < maxAttempts && withinWindow()
 
     fun claimDetailed(authorityActive: Boolean = true): RecoveryDecision {
-        val elapsed = elapsedMs()
+        val now = clockMs()
+        val runElapsed = (now - createdAtMs).coerceAtLeast(0L)
+        val started = firstClaimAtMs
+        val elapsed = started?.let { (now - it).coerceAtLeast(0L) } ?: 0L
         val inWindow = elapsed <= maxElapsedMs
         return when {
             !authorityActive -> RecoveryDecision(
@@ -76,6 +92,8 @@ internal class SharedQaRecoveryBudget(
                 maxElapsedMs = maxElapsedMs,
                 withinWindow = inWindow,
                 authorityActive = false,
+                runElapsedMs = runElapsed,
+                episodeStarted = started != null,
             )
             used >= maxAttempts -> RecoveryDecision(
                 allowed = false,
@@ -86,6 +104,8 @@ internal class SharedQaRecoveryBudget(
                 maxElapsedMs = maxElapsedMs,
                 withinWindow = inWindow,
                 authorityActive = true,
+                runElapsedMs = runElapsed,
+                episodeStarted = started != null,
             )
             !inWindow -> RecoveryDecision(
                 allowed = false,
@@ -96,18 +116,24 @@ internal class SharedQaRecoveryBudget(
                 maxElapsedMs = maxElapsedMs,
                 withinWindow = false,
                 authorityActive = true,
+                runElapsedMs = runElapsed,
+                episodeStarted = true,
             )
             else -> {
+                if (firstClaimAtMs == null) firstClaimAtMs = now
                 used++
+                val claimElapsed = if (started == null) 0L else elapsed
                 RecoveryDecision(
                     allowed = true,
                     rejectionReason = null,
                     used = used,
                     maxAttempts = maxAttempts,
-                    elapsedMs = elapsed,
+                    elapsedMs = claimElapsed,
                     maxElapsedMs = maxElapsedMs,
                     withinWindow = true,
                     authorityActive = true,
+                    runElapsedMs = runElapsed,
+                    episodeStarted = true,
                 )
             }
         }
@@ -217,6 +243,8 @@ internal object DisplayObservationRecoveryPolicy {
         recoverableCursorProofRace: Boolean = false,
     ): RecoveryDecision {
         val elapsed = budget.elapsedMs()
+        val runElapsed = budget.totalElapsedMs()
+        val episodeStarted = budget.isEpisodeStarted()
         val inWindow = elapsed <= budget.maxElapsedMs
         fun reject(why: RecoveryRejectionReason) = RecoveryDecision(
             allowed = false,
@@ -227,6 +255,8 @@ internal object DisplayObservationRecoveryPolicy {
             maxElapsedMs = budget.maxElapsedMs,
             withinWindow = inWindow,
             authorityActive = authorityActive,
+            runElapsedMs = runElapsed,
+            episodeStarted = episodeStarted,
         )
         if (actionAttempted) return reject(RecoveryRejectionReason.ACTION_ATTEMPTED)
         if (outcomeUnknown) return reject(RecoveryRejectionReason.OUTCOME_UNKNOWN)

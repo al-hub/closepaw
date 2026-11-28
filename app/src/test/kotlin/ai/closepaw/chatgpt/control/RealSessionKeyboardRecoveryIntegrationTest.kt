@@ -1,5 +1,6 @@
 package ai.closepaw.chatgpt.control
 
+import ai.closepaw.chatgpt.operations.OperationResult
 import ai.closepaw.model.ScreenImage
 import ai.closepaw.model.ScreenImageSource
 import ai.closepaw.security.ImageRevocationAuthority
@@ -953,5 +954,876 @@ class RealSessionKeyboardRecoveryIntegrationTest {
             frame(hangulNodes(), ed = anonAfter),
             allowAnonymousResize = true,
         ))
+    }
+
+    @Test
+    fun lazyRecoveryBudget_lateFirstClaimAt25s_15000Allowed15001DeniedAcrossKeys_4thDenied_rejectedNeverStartsClock() {
+        var nowMs = 1_000L
+        val budget = SharedQaRecoveryBudget(maxAttempts = 3, maxElapsedMs = 15_000L, clockMs = { nowMs })
+        assertFalse(budget.isEpisodeStarted())
+        assertEquals(0L, budget.elapsedMs())
+
+        // Advance normal execution past 25_000ms with 0 claims: rejected calls must NEVER start the clock!
+        nowMs = 26_174L
+        assertEquals(25_174L, budget.totalElapsedMs())
+        assertEquals(0L, budget.elapsedMs())
+        assertTrue(budget.withinWindow())
+
+        val rejNotAllowlisted = DisplayObservationRecoveryPolicy.evaluateAndClaimPreExecution(
+            budget = budget, reason = "secure_window_changed",
+            actionAttempted = false, outcomeUnknown = false, authorityActive = true, observationOnly = true,
+        )
+        assertFalse(rejNotAllowlisted.allowed)
+        assertEquals(RecoveryRejectionReason.REASON_NOT_ALLOWLISTED, rejNotAllowlisted.rejectionReason)
+        assertFalse(budget.isEpisodeStarted())
+        assertEquals(0, budget.used)
+
+        val rejAuth = budget.claimDetailed(authorityActive = false)
+        assertFalse(rejAuth.allowed)
+        assertEquals(RecoveryRejectionReason.AUTHORITY_REVOKED, rejAuth.rejectionReason)
+        assertFalse(budget.isEpisodeStarted())
+        assertEquals(0, budget.used)
+
+        val rejAttempted = DisplayObservationRecoveryPolicy.evaluateAndClaimPreExecution(
+            budget = budget, reason = "display_window_changed_during_capture",
+            actionAttempted = true, outcomeUnknown = false, authorityActive = true, completedKeys = 3,
+        )
+        assertFalse(rejAttempted.allowed)
+        assertEquals(RecoveryRejectionReason.ACTION_ATTEMPTED, rejAttempted.rejectionReason)
+        assertFalse(budget.isEpisodeStarted())
+        assertEquals(0, budget.used)
+
+        // Late 1st eligible claim at runElapsed = 25_174ms -> ALLOWED, starts ONE 15_000ms episode at t=26_174!
+        val c1 = budget.claimDetailed(authorityActive = true)
+        assertTrue(c1.allowed)
+        assertEquals(1, c1.used)
+        assertEquals(0L, c1.elapsedMs)
+        assertEquals(25_174L, c1.runElapsedMs)
+        assertTrue(c1.episodeStarted)
+        assertTrue(budget.isEpisodeStarted())
+
+        // 2nd claim at exact +15_000ms from first claim (41_174ms) -> ALLOWED!
+        nowMs = 26_174L + 15_000L
+        val c2 = budget.claimDetailed(authorityActive = true)
+        assertTrue("Exact +15_000ms from first claim must pass", c2.allowed)
+        assertEquals(2, c2.used)
+        assertEquals(15_000L, c2.elapsedMs)
+        assertEquals(40_174L, c2.runElapsedMs)
+
+        // 3rd claim at +15_001ms from first claim -> REJECTED ELAPSED_BUDGET (no per-key reset!)
+        nowMs = 26_174L + 15_001L
+        val c3 = budget.claimDetailed(authorityActive = true)
+        assertFalse("+15_001ms from first claim must reject", c3.allowed)
+        assertEquals(RecoveryRejectionReason.ELAPSED_BUDGET, c3.rejectionReason)
+        assertEquals(2, c3.used)
+        assertEquals(15_001L, c3.elapsedMs)
+        assertFalse(c3.withinWindow)
+
+        // Separate budget: 4th claim within 15s rejected with ATTEMPT_CAP
+        var t2 = 10_000L
+        val capBudget = SharedQaRecoveryBudget(maxAttempts = 3, maxElapsedMs = 15_000L, clockMs = { t2 })
+        t2 = 40_000L // late start at +30s
+        assertTrue(capBudget.claimDetailed().allowed)
+        t2 += 1_000L
+        assertTrue(capBudget.claimDetailed().allowed)
+        t2 += 1_000L
+        assertTrue(capBudget.claimDetailed().allowed)
+        val c4 = capBudget.claimDetailed()
+        assertFalse(c4.allowed)
+        assertEquals(RecoveryRejectionReason.ATTEMPT_CAP, c4.rejectionReason)
+        assertEquals(3, c4.used)
+    }
+
+    @Test
+    fun code170ExactScenario_lateFirstRecoveryAfter25sRecoversKey4AndCompletes6Of6WithoutPrefixReplay() = runBlocking {
+        val session = ControlSession()
+        assertTrue(session.start())
+        var nowMs = 1_000L
+        var displayGen = 1L
+        var proofSeq = 0
+        var editorText = ""
+        val ledger = AutonomousSequenceLedger()
+        val dispatchedLabels = mutableListOf<String>()
+        var failKey4ObserveOnce = true
+
+        val sharedBudget = SharedQaRecoveryBudget(maxAttempts = 3, maxElapsedMs = 15_000L, clockMs = { nowMs })
+        val port = object : ControlPort {
+            override val validatesAtNativeBoundary: Boolean = true
+            override val allowsAutonomousDebugKeyboardProof: Boolean = true
+            private var lastFail = "visual_observation_unavailable"
+            private var lastFailedGen: Long? = null
+            private var lastWindowChanges: JsonObject? = null
+            override fun session(): ControlSession = session
+            override fun visualFailure(): String = lastFail
+            override fun resetDebugCaptureEvidence() {
+                lastFailedGen = null
+                lastWindowChanges = null
+            }
+            override fun lastFailedDisplayCaptureGeneration(): Long? = lastFailedGen
+            override fun debugCaptureWindowChangeEvidence(): JsonObject? = lastWindowChanges
+            override fun beginAutonomousKeyboardSequence(sequenceNonce: String, sessionId: String, epoch: Long, totalSteps: Int): Boolean =
+                ledger.begin(sequenceNonce, sessionId, epoch, totalSteps)
+            override fun advanceAutonomousKeyboardStep(sequenceNonce: String, completedStepIndex: Int) =
+                ledger.advance(sequenceNonce, completedStepIndex)
+            override fun endAutonomousKeyboardSequence(sequenceNonce: String) =
+                ledger.end(sequenceNonce)
+            override suspend fun capture(): ControlFrame =
+                frame(hangulNodes(), ed = editor(text = editorText, selStart = editorText.length, selEnd = editorText.length), fp = "fp-$editorText")
+            override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? {
+                if (editorText == "가 " && failKey4ObserveOnce) {
+                    failKey4ObserveOnce = false
+                    // Simulate 25.174s normal execution elapsed across keys 1..3 before key 4 observe fails!
+                    nowMs = 26_174L
+                    lastFailedGen = displayGen
+                    displayGen++
+                    lastFail = "display_window_changed_during_capture"
+                    lastWindowChanges = buildJsonObject {
+                        put("elapsed_ms", 12L); put("unrecorded_count", 0L)
+                        put("events", buildJsonArray {
+                            add(buildJsonObject {
+                                put("type", "windows_changed"); put("reported_owner", "unknown")
+                                put("event_window_match", "other"); put("window_change_mask", 8)
+                            })
+                        })
+                    }
+                    return null
+                }
+                val gen = displayGen
+                return makeProof("vis-c170-${++proofSeq}", displayGen = gen, displayValid = { displayGen == gen }, session = session, at = nowMs)
+            }
+            override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
+                val ctx = currentCoroutineContext()[AutonomousKeyboardDispatchContext]
+                    ?: return ControlEffect(false, false, "visual_proof_invalid_or_expired")
+                assertTrue(ledger.verifyAndConsumeDispatch(ctx))
+                dispatchedLabels += ctx.label
+                editorText = if (ctx.label == "Space") "$editorText " else HangulKeyComposer.append(editorText, ctx.label)
+                nowMs += 3_000L
+                return ControlEffect(true, true, "gesture_completed")
+            }
+            override suspend fun apps(filter: String): JsonArray = buildJsonArray {}
+        }
+        val control = GenericControl(port, allowed = { true }, now = { nowMs })
+        val seqLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space")
+        val initialObs = control.observe(includeImage = true, imageScope = "keyboard", keyboardSequenceLabels = seqLabels)
+        assertTrue(initialObs.success)
+        val obsId = initialObs.data["observation_id"]!!.jsonPrimitive.content
+        val visId = initialObs.data["visual"]!!.jsonObject["visual_id"]!!.jsonPrimitive.content
+        val cert = control.certifiedKeyboardObservationDetailed(obsId, visId, session.epoch).certified!!
+        val nodesByLabel = listOf("ㄱ", "ㅏ", "ㄴ", "Space").associateWith { lbl ->
+            if (lbl == "Space") cert.frame.nodes.single { it.keyboardImageCandidate }
+            else cert.frame.nodes.single { it.keyboardKey == lbl }
+        }
+        val sixLabels = listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space")
+        val proofSteps = sixLabels.map { lbl ->
+            val n = nodesByLabel.getValue(lbl)
+            val crop = KeyboardImageFallbackPolicy.crop(cert.proof, KeyboardImageFallbackPolicy.bounds(n.bounds)!!)!!
+            AutonomousCertifiedKeyStep(lbl, n.id, n.keyboardImageCandidate, crop,
+                if (n.keyboardImageCandidate) "space_glyph" else "native_structural_and_live_surface")
+        }
+        val stepsJson = JsonArray(proofSteps.map { s ->
+            buildJsonObject {
+                put("label", s.label); put("node_id", s.nodeId)
+                put("image_rect", JsonArray(listOf(s.crop.left, s.crop.top, s.crop.right, s.crop.bottom).map(::JsonPrimitive)))
+            }
+        })
+        val res = control.visualKeySequenceAutonomous(
+            buildJsonObject {
+                put("session_id", session.id); put("observation_id", obsId); put("visual_id", visId)
+                put("visual_target_confirmed", false); put("text", "가 나 "); put("reuse_key_map", false)
+                put("steps", stepsJson)
+            },
+            AutonomousKeyboardSequenceProof("nonce-c170-repro", session.id, session.epoch, obsId, visId, proofSteps),
+            recoveryBudget = sharedBudget,
+        )
+        assertTrue("Expected late key-4 recovery to complete 6/6, got ${res.data}", res.success)
+        assertEquals(6, res.data["completed_keys"]?.jsonPrimitive?.int)
+        assertEquals(false, res.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals("가 나 ", editorText)
+        assertEquals(sixLabels, dispatchedLabels) // ZERO prefix replay!
+        assertEquals(1, sharedBudget.used)
+        assertEquals("final_read", res.data["pending_step_state"]?.jsonPrimitive?.content)
+        assertNull("Final read must NOT emit pending_key_index (no key 7)", res.data["pending_key_index"])
+        val innerDecisions = res.data["inner_recovery_decisions"]!!.jsonArray
+        assertEquals(1, innerDecisions.size)
+        assertEquals(true, innerDecisions[0].jsonObject["allowed"]?.jsonPrimitive?.boolean)
+        assertEquals(4, innerDecisions[0].jsonObject["pending_key_index"]?.jsonPrimitive?.int)
+        assertEquals("not_dispatched", innerDecisions[0].jsonObject["pending_step_state"]?.jsonPrimitive?.content)
+        assertEquals(0L, innerDecisions[0].jsonObject["budget_elapsed_ms"]?.jsonPrimitive?.long)
+        assertEquals(25_174L, innerDecisions[0].jsonObject["run_elapsed_ms"]?.jsonPrimitive?.long)
+        session.end()
+    }
+
+    @Test
+    fun genericControlPendingStepStates_nonAllowlisted_preTouchRefusal_unknownTouch_finalReadNoKey7_andDeadline() = runBlocking {
+        val sixLabels = listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space")
+        val seqLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space")
+
+        suspend fun runScenario(
+            failKey4ObserveReason: String? = null,
+            failKey4ActionEffect: ControlEffect? = null,
+            corruptFinalRead: Boolean = false,
+            expireDeadlineBeforeKey: Int = -1,
+            crossKeyWindowExpiry: Boolean = false,
+        ): Triple<OperationResult, SharedQaRecoveryBudget, List<String>> {
+            val session = ControlSession().apply { assertTrue(start()) }
+            var nowMs = 1_000L
+            var displayGen = 1L
+            var proofSeq = 0
+            var editorText = ""
+            var finalReads = 0
+            val ledger = AutonomousSequenceLedger()
+            val dispatched = mutableListOf<String>()
+            var deadlineNow = false
+            var crossKeyFailCount = 0
+            val budget = SharedQaRecoveryBudget(maxAttempts = 3, maxElapsedMs = 15_000L, clockMs = { nowMs })
+            val port = object : ControlPort {
+                override val validatesAtNativeBoundary: Boolean = true
+                override val allowsAutonomousDebugKeyboardProof: Boolean = true
+                private var lastFail = "visual_observation_unavailable"
+                private var lastFailedGen: Long? = null
+                override fun session(): ControlSession = session
+                override fun visualFailure(): String = lastFail
+                override fun resetDebugCaptureEvidence() { lastFailedGen = null }
+                override fun lastFailedDisplayCaptureGeneration(): Long? = lastFailedGen
+                override fun beginAutonomousKeyboardSequence(sequenceNonce: String, sessionId: String, epoch: Long, totalSteps: Int): Boolean =
+                    ledger.begin(sequenceNonce, sessionId, epoch, totalSteps)
+                override fun advanceAutonomousKeyboardStep(sequenceNonce: String, completedStepIndex: Int) =
+                    ledger.advance(sequenceNonce, completedStepIndex)
+                override fun endAutonomousKeyboardSequence(sequenceNonce: String) =
+                    ledger.end(sequenceNonce)
+                override suspend fun capture(): ControlFrame {
+                    if (corruptFinalRead && editorText == "가 나 ") {
+                        finalReads++
+                        if (finalReads >= 2) {
+                            return frame(hangulNodes(), ed = editor(text = "가 나!"), fp = "fp-drift")
+                        }
+                    }
+                    return frame(hangulNodes(), ed = editor(text = editorText, selStart = editorText.length, selEnd = editorText.length), fp = "fp-$editorText")
+                }
+                override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? {
+                    if (failKey4ObserveReason != null && editorText == "가 ") {
+                        nowMs = 26_174L
+                        lastFail = failKey4ObserveReason
+                        return null
+                    }
+                    if (crossKeyWindowExpiry) {
+                        if (editorText == "가 " && crossKeyFailCount == 0) {
+                            crossKeyFailCount++
+                            nowMs = 26_000L // 1st claim at t=26s -> starts 15s episode
+                            lastFailedGen = displayGen
+                            displayGen++
+                            lastFail = "display_window_changed_during_capture"
+                            return null
+                        }
+                        if (editorText == "가 ㄴ" && crossKeyFailCount == 1) {
+                            crossKeyFailCount++
+                            nowMs = 26_000L + 15_000L // exact +15_000ms across key 5 -> ALLOWED
+                            lastFailedGen = displayGen
+                            displayGen++
+                            lastFail = "display_window_changed_during_capture"
+                            return null
+                        }
+                        if (editorText == "가 나" && crossKeyFailCount == 2) {
+                            crossKeyFailCount++
+                            nowMs = 26_000L + 15_001L // +15_001ms across key 6 -> DENIED ELAPSED_BUDGET!
+                            lastFailedGen = displayGen
+                            displayGen++
+                            lastFail = "display_window_changed_during_capture"
+                            return null
+                        }
+                    }
+                    val gen = displayGen
+                    return makeProof("vis-s-${++proofSeq}", displayGen = gen, displayValid = { displayGen == gen }, session = session, at = nowMs)
+                }
+                override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
+                    val ctx = currentCoroutineContext()[AutonomousKeyboardDispatchContext]
+                        ?: return ControlEffect(false, false, "visual_proof_invalid_or_expired")
+                    if (failKey4ActionEffect != null && ctx.stepIndex == 3) {
+                        return failKey4ActionEffect
+                    }
+                    assertTrue(ledger.verifyAndConsumeDispatch(ctx))
+                    dispatched += ctx.label
+                    editorText = if (ctx.label == "Space") "$editorText " else HangulKeyComposer.append(editorText, ctx.label)
+                    if (expireDeadlineBeforeKey == dispatched.size + 1) deadlineNow = true
+                    return ControlEffect(true, true, "gesture_completed")
+                }
+                override suspend fun apps(filter: String): JsonArray = buildJsonArray {}
+            }
+            val control = GenericControl(port, allowed = { true }, now = { nowMs })
+            val obs = control.observe(includeImage = true, imageScope = "keyboard", keyboardSequenceLabels = seqLabels)
+            val obsId = obs.data["observation_id"]!!.jsonPrimitive.content
+            val visId = obs.data["visual"]!!.jsonObject["visual_id"]!!.jsonPrimitive.content
+            val cert = control.certifiedKeyboardObservationDetailed(obsId, visId, session.epoch).certified!!
+            val nodesByLabel = seqLabels.associateWith { lbl ->
+                if (lbl == "Space") cert.frame.nodes.single { it.keyboardImageCandidate }
+                else cert.frame.nodes.single { it.keyboardKey == lbl }
+            }
+            val proofSteps = sixLabels.map { lbl ->
+                val n = nodesByLabel.getValue(lbl)
+                val crop = KeyboardImageFallbackPolicy.crop(cert.proof, KeyboardImageFallbackPolicy.bounds(n.bounds)!!)!!
+                AutonomousCertifiedKeyStep(lbl, n.id, n.keyboardImageCandidate, crop,
+                    if (n.keyboardImageCandidate) "space_glyph" else "native_structural_and_live_surface")
+            }
+            val stepsJson = JsonArray(proofSteps.map { s ->
+                buildJsonObject {
+                    put("label", s.label); put("node_id", s.nodeId)
+                    put("image_rect", JsonArray(listOf(s.crop.left, s.crop.top, s.crop.right, s.crop.bottom).map(::JsonPrimitive)))
+                }
+            })
+            if (expireDeadlineBeforeKey == 1) deadlineNow = true
+            val res = control.visualKeySequenceAutonomous(
+                buildJsonObject {
+                    put("session_id", session.id); put("observation_id", obsId); put("visual_id", visId)
+                    put("visual_target_confirmed", false); put("text", "가 나 "); put("reuse_key_map", false)
+                    put("steps", stepsJson)
+                },
+                AutonomousKeyboardSequenceProof("nonce-scen-${System.nanoTime()}", session.id, session.epoch, obsId, visId, proofSteps),
+                recoveryBudget = budget,
+                deadlineExpired = { deadlineNow },
+            )
+            session.end()
+            ai.closepaw.security.ImageRevocationAuthority.grantConsent()
+            return Triple(res, budget, dispatched)
+        }
+
+        // 1. Non-allowlisted key-4 observe refusal -> NO budget claim, clock NEVER started, NOT_DISPATCHED, index=4
+        val (nonAllowRes, nonAllowBudget, nonAllowDispatched) = runScenario(failKey4ObserveReason = "secure_window_changed")
+        assertFalse(nonAllowRes.success)
+        assertEquals("keyboard_sequence_new_image_unavailable", nonAllowRes.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals("secure_window_changed", nonAllowRes.data["observation_reason_code"]?.jsonPrimitive?.content)
+        assertEquals("not_dispatched", nonAllowRes.data["pending_step_state"]?.jsonPrimitive?.content)
+        assertEquals(4, nonAllowRes.data["pending_key_index"]?.jsonPrimitive?.int)
+        assertEquals(false, nonAllowRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals(3, nonAllowRes.data["completed_keys"]?.jsonPrimitive?.int)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space"), nonAllowDispatched)
+        assertEquals(0, nonAllowBudget.used)
+        assertFalse("Rejected non-allowlisted claim must NEVER start recovery episode clock", nonAllowBudget.isEpisodeStarted())
+        assertEquals("reason_not_allowlisted",
+            nonAllowRes.data["last_inner_recovery_decision"]!!.jsonObject["rejection_reason"]?.jsonPrimitive?.content)
+
+        // 2. Pre-touch actionNative refusal on key 4 (attempted=false, acknowledged=false) -> stays NOT_DISPATCHED (not DISPATCHED_UNCONFIRMED!)
+        val (preTouchRes, preTouchBudget, _) = runScenario(
+            failKey4ActionEffect = ControlEffect(false, false, "keyboard_visual_bounds_invalid"),
+        )
+        assertFalse(preTouchRes.success)
+        assertEquals("not_dispatched", preTouchRes.data["pending_step_state"]?.jsonPrimitive?.content)
+        assertEquals(4, preTouchRes.data["pending_key_index"]?.jsonPrimitive?.int)
+        assertEquals(false, preTouchRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals(0, preTouchBudget.used)
+        assertFalse(preTouchBudget.isEpisodeStarted())
+
+        // 3. Unknown touch on key 4 (attempted=true, acknowledged=false) -> DISPATCHED_UNCONFIRMED + outcome_unknown=true, NO duplicate gesture
+        val (unkTouchRes, _, unkDispatched) = runScenario(
+            failKey4ActionEffect = ControlEffect(true, false, "gesture_cancelled"),
+        )
+        assertFalse(unkTouchRes.success)
+        assertEquals("dispatched_unconfirmed", unkTouchRes.data["pending_step_state"]?.jsonPrimitive?.content)
+        assertEquals(4, unkTouchRes.data["pending_key_index"]?.jsonPrimitive?.int)
+        assertEquals(true, unkTouchRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals(3, unkTouchRes.data["completed_keys"]?.jsonPrimitive?.int)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space"), unkDispatched)
+
+        // 4. Final-read failure after 6/6 -> FINAL_READ, pending_key_index=null (NEVER key 7!), outcome_unknown=true
+        val (finalFailRes, _, finalDispatched) = runScenario(corruptFinalRead = true)
+        assertFalse(finalFailRes.success)
+        assertEquals("keyboard_final_text_unconfirmed", finalFailRes.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals("final_read", finalFailRes.data["pending_step_state"]?.jsonPrimitive?.content)
+        assertNull("Must NEVER emit key 7 after final key", finalFailRes.data["pending_key_index"])
+        assertEquals(true, finalFailRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals(6, finalFailRes.data["completed_keys"]?.jsonPrimitive?.int)
+        assertEquals(sixLabels, finalDispatched)
+
+        // 5. Cross-key recovery episode: 1st claim on key 4 at t=26s, 2nd on key 5 at +15_000ms ALLOWED, 3rd on key 6 at +15_001ms DENIED ELAPSED_BUDGET!
+        val (crossRes, crossBudget, crossDispatched) = runScenario(crossKeyWindowExpiry = true)
+        assertFalse(crossRes.success)
+        assertEquals(5, crossRes.data["completed_keys"]?.jsonPrimitive?.int)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ"), crossDispatched)
+        assertEquals(2, crossBudget.used)
+        assertEquals("not_dispatched", crossRes.data["pending_step_state"]?.jsonPrimitive?.content)
+        assertEquals(6, crossRes.data["pending_key_index"]?.jsonPrimitive?.int)
+        assertEquals("elapsed_budget",
+            crossRes.data["last_inner_recovery_decision"]!!.jsonObject["rejection_reason"]?.jsonPrimitive?.content)
+
+        // 6. Cooperative deadline expiry before key 1 (0 touches -> outcome_unknown=false) and before key 4 (no key-4 gesture -> outcome_unknown=true)
+        val (deadBeforeRes, _, deadBeforeDisp) = runScenario(expireDeadlineBeforeKey = 1)
+        assertFalse(deadBeforeRes.success)
+        assertEquals("six_key_sequence_deadline_exceeded", deadBeforeRes.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(false, deadBeforeRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertTrue(deadBeforeDisp.isEmpty())
+
+        val (deadAfterRes, _, deadAfterDisp) = runScenario(expireDeadlineBeforeKey = 4)
+        assertFalse(deadAfterRes.success)
+        assertEquals("six_key_sequence_deadline_exceeded", deadAfterRes.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(true, deadAfterRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space"), deadAfterDisp) // zero key-4 gesture!
+    }
+
+    @Test
+    fun monotonicFailedGeneration_missingGenFailsClosed_perAttemptEvidencePreservedOnPass_andInFlightBoundaryVsNormalKeys() = runBlocking {
+        val sixLabels = listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space")
+        val seqLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space")
+
+        suspend fun runR2Case(
+            mode: String,
+        ): Triple<OperationResult, SharedQaRecoveryBudget, List<String>> {
+            val session = ControlSession().apply { assertTrue(start()) }
+            var nowMs = 1_000L
+            var displayGen = 5L
+            var proofSeq = 0
+            var editorText = ""
+            var key4ObsAttempts = 0
+            val ledger = AutonomousSequenceLedger()
+            val dispatched = mutableListOf<String>()
+            val budget = SharedQaRecoveryBudget(maxAttempts = 3, maxElapsedMs = 15_000L, clockMs = { nowMs })
+            val port = object : ControlPort {
+                override val validatesAtNativeBoundary: Boolean = true
+                override val allowsAutonomousDebugKeyboardProof: Boolean = true
+                private var lastFail = "visual_observation_unavailable"
+                private var lastFailedGen: Long? = null
+                private var lastWinChanges: JsonObject? = null
+                private var lastCursorMismatch: KeyboardContextMismatch? = null
+                override fun session(): ControlSession = session
+                override fun visualFailure(): String = lastFail
+                override fun resetDebugCaptureEvidence() {
+                    lastFailedGen = null
+                    lastWinChanges = null
+                    lastCursorMismatch = null
+                }
+                override fun lastFailedDisplayCaptureGeneration(): Long? = lastFailedGen
+                override fun debugCaptureWindowChangeEvidence(): JsonObject? = lastWinChanges
+                override fun visualKeyboardContextMismatch(): KeyboardContextMismatch? = lastCursorMismatch
+                override fun beginAutonomousKeyboardSequence(sequenceNonce: String, sessionId: String, epoch: Long, totalSteps: Int): Boolean =
+                    ledger.begin(sequenceNonce, sessionId, epoch, totalSteps)
+                override fun advanceAutonomousKeyboardStep(sequenceNonce: String, completedStepIndex: Int) =
+                    ledger.advance(sequenceNonce, completedStepIndex)
+                override fun endAutonomousKeyboardSequence(sequenceNonce: String) =
+                    ledger.end(sequenceNonce)
+                override suspend fun capture(): ControlFrame =
+                    frame(hangulNodes(), ed = editor(text = editorText, selStart = editorText.length, selEnd = editorText.length), fp = "fp-$editorText")
+                override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? {
+                    if (editorText == "가 ") {
+                        key4ObsAttempts++
+                        when (mode) {
+                            "missing_failed_gen" -> {
+                                lastFailedGen = null // Missing failed-capture generation -> MUST fail closed!
+                                lastFail = "display_window_changed_during_capture"
+                                return null
+                            }
+                            "monotonic_stale_gen" -> {
+                                if (key4ObsAttempts == 1) {
+                                    lastFailedGen = 7L // Start gen 7 (above initial 5)
+                                    lastFail = "display_window_changed_during_capture"
+                                    return null
+                                }
+                                if (key4ObsAttempts == 2) {
+                                    lastFailedGen = 9L // Second failure advances floor to > 9!
+                                    lastFail = "display_window_changed_during_capture"
+                                    return null
+                                }
+                                // Attempt 3 returns stale gen 9 (above initial 5 and above first failure 7, but NOT > 9!)
+                                return makeProof("vis-stale-9", displayGen = 9L, displayValid = { true }, session = session, at = nowMs)
+                            }
+                            "multi_attempt_preserved_on_pass" -> {
+                                if (key4ObsAttempts == 1) {
+                                    nowMs = 26_000L
+                                    lastFailedGen = displayGen
+                                    displayGen++
+                                    lastFail = "display_window_changed_during_capture"
+                                    lastWinChanges = buildJsonObject {
+                                        put("elapsed_ms", 11L); put("unrecorded_count", 0L)
+                                        put("events", buildJsonArray {
+                                            add(buildJsonObject {
+                                                put("type", "windows_changed"); put("reported_owner", "unknown")
+                                                put("event_window_match", "other"); put("window_change_mask", 8)
+                                            })
+                                        })
+                                    }
+                                    return null
+                                }
+                                if (key4ObsAttempts == 2) {
+                                    nowMs = 28_000L
+                                    lastFail = "visual_post_keyboard_context_changed"
+                                    lastCursorMismatch = KeyboardContextMismatch(
+                                        kind = KeyboardContextMismatchKind.CURSOR_PROOF_CHANGED,
+                                        location = CursorRaceLocation.AFTER,
+                                        beforeFailure = null,
+                                        afterFailure = CursorProofFailure.SCREEN_CHANGE_RACE,
+                                        recoverableReadOnlyCursorRace = true,
+                                    )
+                                    return null
+                                }
+                                nowMs = 30_000L
+                                displayGen++
+                            }
+                            "in_flight_native_boundary_timeout" -> {
+                                if (key4ObsAttempts == 1) {
+                                    nowMs = 25_000L // 1st claim starts 15s recovery episode at 25_000
+                                    lastFailedGen = displayGen
+                                    displayGen++
+                                    lastFail = "display_window_changed_during_capture"
+                                    return null
+                                }
+                                // Retry observe finishes at +14_999ms (still within 15s when entering actionNative!)
+                                nowMs = 25_000L + 14_999L
+                                displayGen++
+                            }
+                            "normal_key5_after_expired_recovery_episode" -> {
+                                if (key4ObsAttempts == 1) {
+                                    nowMs = 25_000L // 1st claim on key 4 starts 15s episode
+                                    lastFailedGen = displayGen
+                                    displayGen++
+                                    lastFail = "display_window_changed_during_capture"
+                                    return null
+                                }
+                                nowMs = 26_000L // Key 4 recovers cleanly within 1s
+                                displayGen++
+                            }
+                        }
+                    }
+                    if (mode == "normal_key5_after_expired_recovery_episode" && editorText == "가 ㄴ") {
+                        // Key 5 runs normally at +17_000ms (>15s after key 4's first claim!) with zero recovery needed
+                        nowMs = 25_000L + 17_000L
+                    }
+                    val gen = displayGen
+                    return makeProof("vis-r2-${++proofSeq}", displayGen = gen, displayValid = { displayGen == gen }, session = session, at = nowMs)
+                }
+                override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
+                    val ctx = currentCoroutineContext()[AutonomousKeyboardDispatchContext]
+                        ?: return ControlEffect(false, false, "visual_proof_invalid_or_expired")
+                    if (mode == "in_flight_native_boundary_timeout" && ctx.stepIndex == 3) {
+                        // Exercise production GestureDispatchGate.guardAndDispatch across simulated Binder IPC crossing +15_001ms!
+                        var refused: String? = null
+                        var dispatchedHere = false
+                        val admitted = GestureDispatchGate.guardAndDispatch(
+                            session = { session },
+                            expectedEpoch = session.epoch,
+                            active = { true },
+                            boundaryRefusal = ctx.preTouchBoundaryRefusal,
+                            policyRefusal = {
+                                nowMs = 25_000L + 15_001L
+                                null
+                            },
+                            onRefused = { refused = it },
+                            onMarkDispatch = { dispatchedHere = true },
+                            onDispatch = { dispatchedHere = true },
+                        )
+                        assertFalse(admitted)
+                        assertFalse(dispatchedHere)
+                        return ControlEffect(false, false, checkNotNull(refused))
+                    }
+                    assertTrue(ledger.verifyAndConsumeDispatch(ctx))
+                    dispatched += ctx.label
+                    editorText = if (ctx.label == "Space") "$editorText " else HangulKeyComposer.append(editorText, ctx.label)
+                    return ControlEffect(true, true, "gesture_completed")
+                }
+                override suspend fun apps(filter: String): JsonArray = buildJsonArray {}
+            }
+            val control = GenericControl(port, allowed = { true }, now = { nowMs })
+            val obs = control.observe(includeImage = true, imageScope = "keyboard", keyboardSequenceLabels = seqLabels)
+            val obsId = obs.data["observation_id"]!!.jsonPrimitive.content
+            val visId = obs.data["visual"]!!.jsonObject["visual_id"]!!.jsonPrimitive.content
+            val cert = control.certifiedKeyboardObservationDetailed(obsId, visId, session.epoch).certified!!
+            val nodesByLabel = seqLabels.associateWith { lbl ->
+                if (lbl == "Space") cert.frame.nodes.single { it.keyboardImageCandidate }
+                else cert.frame.nodes.single { it.keyboardKey == lbl }
+            }
+            val proofSteps = sixLabels.map { lbl ->
+                val n = nodesByLabel.getValue(lbl)
+                val crop = KeyboardImageFallbackPolicy.crop(cert.proof, KeyboardImageFallbackPolicy.bounds(n.bounds)!!)!!
+                AutonomousCertifiedKeyStep(lbl, n.id, n.keyboardImageCandidate, crop,
+                    if (n.keyboardImageCandidate) "space_glyph" else "native_structural_and_live_surface")
+            }
+            val stepsJson = JsonArray(proofSteps.map { s ->
+                buildJsonObject {
+                    put("label", s.label); put("node_id", s.nodeId)
+                    put("image_rect", JsonArray(listOf(s.crop.left, s.crop.top, s.crop.right, s.crop.bottom).map(::JsonPrimitive)))
+                }
+            })
+            val res = control.visualKeySequenceAutonomous(
+                buildJsonObject {
+                    put("session_id", session.id); put("observation_id", obsId); put("visual_id", visId)
+                    put("visual_target_confirmed", false); put("text", "가 나 "); put("reuse_key_map", false)
+                    put("steps", stepsJson)
+                },
+                AutonomousKeyboardSequenceProof("nonce-r2-$mode", session.id, session.epoch, obsId, visId, proofSteps),
+                recoveryBudget = budget,
+            )
+            session.end()
+            ai.closepaw.security.ImageRevocationAuthority.grantConsent()
+            return Triple(res, budget, dispatched)
+        }
+
+        // 1. Missing failed-capture generation evidence -> FAIL CLOSED (0 claims, episode never started, UNKNOWN, both reasons preserved!)
+        val (missRes, missBudget, missDisp) = runR2Case("missing_failed_gen")
+        assertFalse(missRes.success)
+        assertEquals("failed_capture_generation_missing", missRes.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals("display_window_changed_during_capture", missRes.data["observation_reason_code"]?.jsonPrimitive?.content)
+        assertEquals(true, missRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals(0, missBudget.used)
+        assertFalse(missBudget.isEpisodeStarted())
+        assertEquals("not_dispatched", missRes.data["pending_step_state"]?.jsonPrimitive?.content)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space"), missDisp)
+        assertEquals("failed_capture_generation_missing",
+            missRes.data["last_inner_recovery_decision"]!!.jsonObject["refusal_reason"]?.jsonPrimitive?.content)
+
+        // 2. Repeated failures advance monotonic generation floor (7 -> 9); stale gen 9 is REJECTED!
+        val (staleRes, staleBudget, staleDisp) = runR2Case("monotonic_stale_gen")
+        assertFalse(staleRes.success)
+        assertEquals("keyboard_sequence_window_recheck_stale", staleRes.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(2, staleBudget.used)
+        assertEquals("not_dispatched", staleRes.data["pending_step_state"]?.jsonPrimitive?.content)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space"), staleDisp)
+
+        // 3. Per-attempt immutable evidence preserved across resetDebugCaptureEvidence EVEN ON RECOVERED 6/6 PASS!
+        val (passRes, passBudget, passDisp) = runR2Case("multi_attempt_preserved_on_pass")
+        assertTrue("Expected recovered 6/6 PASS, got ${passRes.data}", passRes.success)
+        assertEquals(2, passBudget.used)
+        assertEquals(sixLabels, passDisp)
+        val attemptsEv = passRes.data["attempt_failure_evidence"]!!.jsonArray
+        assertEquals(2, attemptsEv.size)
+        assertEquals("display_window_changed_during_capture", attemptsEv[0].jsonObject["reason_code"]?.jsonPrimitive?.content)
+        assertNotNull("Attempt 1 window changes must NOT be wiped by attempt 2 reset", attemptsEv[0].jsonObject["capture_window_changes"])
+        assertEquals("visual_post_keyboard_context_changed", attemptsEv[1].jsonObject["reason_code"]?.jsonPrimitive?.content)
+        assertNotNull("Attempt 2 cursor mismatch must be preserved", attemptsEv[1].jsonObject["cursor_proof_mismatch"])
+
+        // 4. In-flight retry crossing +15_001ms at native pre-touch boundary -> REFUSED without gesture!
+        val (inFlightRes, inFlightBudget, inFlightDisp) = runR2Case("in_flight_native_boundary_timeout")
+        assertFalse(inFlightRes.success)
+        assertEquals("keyboard_sequence_recovery_budget_exhausted", inFlightRes.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals("elapsed_budget", inFlightRes.data["observation_reason_code"]?.jsonPrimitive?.content)
+        assertEquals("not_dispatched", inFlightRes.data["pending_step_state"]?.jsonPrimitive?.content)
+        assertEquals(false, inFlightRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals(1, inFlightBudget.used)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space"), inFlightDisp) // ZERO key-4 gesture dispatched!
+
+        // 5. Normal non-recovery key 5/6 after expired 15s recovery episode -> NOT blocked (completes 6/6)!
+        val (normRes, normBudget, normDisp) = runR2Case("normal_key5_after_expired_recovery_episode")
+        assertTrue("Normal non-recovery keys after expired 15s recovery episode must NOT be blocked, got ${normRes.data}", normRes.success)
+        assertEquals(1, normBudget.used)
+        assertEquals(sixLabels, normDisp)
+    }
+
+    @Test
+    fun r3Integrity_simultaneousAuthorityAndElapsedPrecedence_andClaimInternalDeadlineConsistency() = runBlocking {
+        val sixLabels = listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space")
+        val seqLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space")
+
+        suspend fun runR3Case(mode: String): Triple<OperationResult, SharedQaRecoveryBudget, List<String>> {
+            ai.closepaw.security.ImageRevocationAuthority.grantConsent()
+            val session = ControlSession().apply { assertTrue(start()) }
+            var nowMs = 1_000L
+            var displayGen = 5L
+            var proofSeq = 0
+            var editorText = ""
+            var key4ObsAttempts = 0
+            var deadlineChecks = 0
+            var armDeadlineOnClaim = false
+            val ledger = AutonomousSequenceLedger()
+            val dispatched = mutableListOf<String>()
+            val budget = SharedQaRecoveryBudget(maxAttempts = 3, maxElapsedMs = 15_000L, clockMs = { nowMs })
+            val port = object : ControlPort {
+                override val validatesAtNativeBoundary: Boolean = true
+                override val allowsAutonomousDebugKeyboardProof: Boolean = true
+                private var lastFail = "visual_observation_unavailable"
+                private var lastFailedGen: Long? = null
+                override fun session(): ControlSession = session
+                override fun visualFailure(): String = lastFail
+                override fun resetDebugCaptureEvidence() { lastFailedGen = null }
+                override fun lastFailedDisplayCaptureGeneration(): Long? = lastFailedGen
+                override fun beginAutonomousKeyboardSequence(sequenceNonce: String, sessionId: String, epoch: Long, totalSteps: Int): Boolean =
+                    ledger.begin(sequenceNonce, sessionId, epoch, totalSteps)
+                override fun advanceAutonomousKeyboardStep(sequenceNonce: String, completedStepIndex: Int) =
+                    ledger.advance(sequenceNonce, completedStepIndex)
+                override fun endAutonomousKeyboardSequence(sequenceNonce: String) =
+                    ledger.end(sequenceNonce)
+                override suspend fun capture(): ControlFrame =
+                    frame(hangulNodes(), ed = editor(text = editorText, selStart = editorText.length, selEnd = editorText.length), fp = "fp-$editorText")
+                override suspend fun visualKeyboard(frame: ControlFrame): VisualTargetProof? {
+                    if (editorText == "가 ") {
+                        key4ObsAttempts++
+                        when (mode) {
+                            "consent_revoked_and_elapsed_recheck" -> {
+                                if (key4ObsAttempts == 1) {
+                                    nowMs = 25_000L
+                                    lastFailedGen = displayGen
+                                    displayGen++
+                                    lastFail = "display_window_changed_during_capture"
+                                    return null
+                                }
+                                // Retry observe finishes AFTER +15_001ms AND consent revoked simultaneously (with recheckOf active)!
+                                nowMs = 25_000L + 15_001L
+                                ai.closepaw.security.ImageRevocationAuthority.revokeConsent()
+                                displayGen++
+                            }
+                            "consent_revoked_and_elapsed_pre_dispatch" -> {
+                                if (key4ObsAttempts == 1) {
+                                    nowMs = 25_000L
+                                    lastFail = "visual_post_screen_changed"
+                                    return null
+                                }
+                                // Retry observe finishes AFTER +15_001ms AND consent revoked simultaneously (recheckOf == null)!
+                                nowMs = 25_000L + 15_001L
+                                ai.closepaw.security.ImageRevocationAuthority.revokeConsent()
+                            }
+                            "session_revoked_and_elapsed_native" -> {
+                                if (key4ObsAttempts == 1) {
+                                    nowMs = 25_000L
+                                    lastFailedGen = displayGen
+                                    displayGen++
+                                    lastFail = "display_window_changed_during_capture"
+                                    return null
+                                }
+                                nowMs = 25_000L + 14_999L
+                                displayGen++
+                            }
+                            "claim_deadline_on_follow_up" -> {
+                                nowMs = 25_000L
+                                lastFailedGen = displayGen
+                                displayGen++
+                                lastFail = "display_window_changed_during_capture"
+                                armDeadlineOnClaim = true
+                                deadlineChecks = 0
+                                return null
+                            }
+                        }
+                    }
+                    val gen = displayGen
+                    return makeProof("vis-r3-${++proofSeq}", displayGen = gen, displayValid = { displayGen == gen }, session = session, at = nowMs)
+                }
+                override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
+                    val ctx = currentCoroutineContext()[AutonomousKeyboardDispatchContext]
+                        ?: return ControlEffect(false, false, "visual_proof_invalid_or_expired")
+                    if (mode == "session_revoked_and_elapsed_native" && ctx.stepIndex == 3) {
+                        // Simultaneously expire 15s recovery episode AND end control session during Binder inside production GestureDispatchGate!
+                        var refused: String? = null
+                        var dispatchedHere = false
+                        val admitted = GestureDispatchGate.guardAndDispatch(
+                            session = { session },
+                            expectedEpoch = session.epoch,
+                            active = { true },
+                            boundaryRefusal = ctx.preTouchBoundaryRefusal,
+                            policyRefusal = {
+                                nowMs = 25_000L + 15_001L
+                                session.end()
+                                null
+                            },
+                            onRefused = { refused = it },
+                            onMarkDispatch = { dispatchedHere = true },
+                            onDispatch = { dispatchedHere = true },
+                        )
+                        assertFalse(admitted)
+                        assertFalse(dispatchedHere)
+                        return ControlEffect(false, false, checkNotNull(refused))
+                    }
+                    if (mode == "claim_deadline_on_native_retry" && ctx.stepIndex == 3) {
+                        armDeadlineOnClaim = true
+                        deadlineChecks = 0
+                        return ControlEffect(false, false, "display_window_changed_since_observation")
+                    }
+                    assertTrue(ledger.verifyAndConsumeDispatch(ctx))
+                    dispatched += ctx.label
+                    editorText = if (ctx.label == "Space") "$editorText " else HangulKeyComposer.append(editorText, ctx.label)
+                    return ControlEffect(true, true, "gesture_completed")
+                }
+                override suspend fun apps(filter: String): JsonArray = buildJsonArray {}
+            }
+            val control = GenericControl(port, allowed = { true }, now = { nowMs })
+            val obs = control.observe(includeImage = true, imageScope = "keyboard", keyboardSequenceLabels = seqLabels)
+            val obsId = obs.data["observation_id"]!!.jsonPrimitive.content
+            val visId = obs.data["visual"]!!.jsonObject["visual_id"]!!.jsonPrimitive.content
+            val cert = control.certifiedKeyboardObservationDetailed(obsId, visId, session.epoch).certified!!
+            val nodesByLabel = seqLabels.associateWith { lbl ->
+                if (lbl == "Space") cert.frame.nodes.single { it.keyboardImageCandidate }
+                else cert.frame.nodes.single { it.keyboardKey == lbl }
+            }
+            val proofSteps = sixLabels.map { lbl ->
+                val n = nodesByLabel.getValue(lbl)
+                val crop = KeyboardImageFallbackPolicy.crop(cert.proof, KeyboardImageFallbackPolicy.bounds(n.bounds)!!)!!
+                AutonomousCertifiedKeyStep(lbl, n.id, n.keyboardImageCandidate, crop,
+                    if (n.keyboardImageCandidate) "space_glyph" else "native_structural_and_live_surface")
+            }
+            val stepsJson = JsonArray(proofSteps.map { s ->
+                buildJsonObject {
+                    put("label", s.label); put("node_id", s.nodeId)
+                    put("image_rect", JsonArray(listOf(s.crop.left, s.crop.top, s.crop.right, s.crop.bottom).map(::JsonPrimitive)))
+                }
+            })
+            val res = control.visualKeySequenceAutonomous(
+                buildJsonObject {
+                    put("session_id", session.id); put("observation_id", obsId); put("visual_id", visId)
+                    put("visual_target_confirmed", false); put("text", "가 나 "); put("reuse_key_map", false)
+                    put("steps", stepsJson)
+                },
+                AutonomousKeyboardSequenceProof("nonce-r3-$mode", session.id, session.epoch, obsId, visId, proofSteps),
+                recoveryBudget = budget,
+                deadlineExpired = {
+                    if (!armDeadlineOnClaim) {
+                        false
+                    } else {
+                        // First check right before claimPreTouchRetry returns false;
+                        // second check INSIDE claimPreTouchRetry transitions to true!
+                        deadlineChecks++
+                        deadlineChecks >= 2
+                    }
+                },
+            )
+            session.end()
+            ai.closepaw.security.ImageRevocationAuthority.grantConsent()
+            return Triple(res, budget, dispatched)
+        }
+
+        // 1a. Simultaneous consent revocation + recovery elapsed (with recheckOf active) -> keyboard_sequence_window_recheck_consent_changed, UNKNOWN!
+        val (consentRecheckRes, _, consentRecheckDisp) = runR3Case("consent_revoked_and_elapsed_recheck")
+        assertFalse(consentRecheckRes.success)
+        assertEquals("keyboard_sequence_window_recheck_consent_changed", consentRecheckRes.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(true, consentRecheckRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space"), consentRecheckDisp)
+        assertEquals("authority_revoked",
+            consentRecheckRes.data["last_inner_recovery_decision"]!!.jsonObject["rejection_reason"]?.jsonPrimitive?.content)
+
+        // 1b. Simultaneous consent revocation + recovery elapsed at in-flight pre-dispatch (recheckOf == null) -> screen_share_revoked, UNKNOWN!
+        val (consentPreDispRes, _, consentPreDisp) = runR3Case("consent_revoked_and_elapsed_pre_dispatch")
+        assertFalse(consentPreDispRes.success)
+        assertEquals("screen_share_revoked", consentPreDispRes.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(true, consentPreDispRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space"), consentPreDisp)
+        assertEquals("authority_revoked",
+            consentPreDispRes.data["last_inner_recovery_decision"]!!.jsonObject["rejection_reason"]?.jsonPrimitive?.content)
+
+        // 2. Simultaneous session revocation + recovery elapsed at native boundary -> control_session_changed_observe_again, UNKNOWN!
+        val (sessRes, _, sessDisp) = runR3Case("session_revoked_and_elapsed_native")
+        assertFalse(sessRes.success)
+        assertEquals("control_session_changed_observe_again", sessRes.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(true, sessRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space"), sessDisp)
+        assertEquals("authority_revoked",
+            sessRes.data["last_inner_recovery_decision"]!!.jsonObject["rejection_reason"]?.jsonPrimitive?.content)
+
+        // 3. claimPreTouchRetry internal deadline transition on follow_up_observe -> six_key_sequence_deadline_exceeded + action_attempted/unknown preserved!
+        val (deadObsRes, deadObsBudget, deadObsDisp) = runR3Case("claim_deadline_on_follow_up")
+        assertFalse(deadObsRes.success)
+        assertEquals("six_key_sequence_deadline_exceeded", deadObsRes.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals("display_window_changed_during_capture", deadObsRes.data["observation_reason_code"]?.jsonPrimitive?.content)
+        assertEquals(true, deadObsRes.data["action_attempted"]?.jsonPrimitive?.boolean)
+        assertEquals(true, deadObsRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals(3, deadObsRes.data["completed_keys"]?.jsonPrimitive?.int)
+        assertEquals("not_dispatched", deadObsRes.data["pending_step_state"]?.jsonPrimitive?.content)
+        assertEquals(4, deadObsRes.data["pending_key_index"]?.jsonPrimitive?.int)
+        assertEquals(0, deadObsBudget.used)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space"), deadObsDisp)
+        assertEquals("deadline_exceeded",
+            deadObsRes.data["last_inner_recovery_decision"]!!.jsonObject["rejection_reason"]?.jsonPrimitive?.content)
+
+        // 4. claimPreTouchRetry internal deadline transition on native_pre_touch_display_change -> six_key_sequence_deadline_exceeded!
+        val (deadNatRes, deadNatBudget, deadNatDisp) = runR3Case("claim_deadline_on_native_retry")
+        assertFalse(deadNatRes.success)
+        assertEquals("six_key_sequence_deadline_exceeded", deadNatRes.data["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(true, deadNatRes.data["action_attempted"]?.jsonPrimitive?.boolean)
+        assertEquals(true, deadNatRes.data["outcome_unknown"]?.jsonPrimitive?.boolean)
+        assertEquals(3, deadNatRes.data["completed_keys"]?.jsonPrimitive?.int)
+        assertEquals(0, deadNatBudget.used)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space"), deadNatDisp)
+        assertEquals("deadline_exceeded",
+            deadNatRes.data["last_inner_recovery_decision"]!!.jsonObject["rejection_reason"]?.jsonPrimitive?.content)
     }
 }

@@ -104,6 +104,13 @@ internal data class CertifiedKeyboardLookup(
     val captureWindowChanges: JsonObject? = null,
 )
 
+internal enum class PendingKeyStepState(val code: String) {
+    NOT_DISPATCHED("not_dispatched"),
+    DISPATCHED_UNCONFIRMED("dispatched_unconfirmed"),
+    CONFIRMED("confirmed"),
+    FINAL_READ("final_read"),
+}
+
 internal interface ControlPort : IslandControlPort {
     override fun islandRefusal(sessionId: String): String? = "island_control_unavailable"
     override suspend fun observeIsland(): IslandBounds? = null
@@ -114,6 +121,11 @@ internal interface ControlPort : IslandControlPort {
     val allowsAutonomousDebugKeyboardProof: Boolean get() = false
     fun visualKeyboardContextMismatch(): KeyboardContextMismatch? = null
     fun summarizeDisplayWindowChangesFor(proof: VisualTargetProof?): JsonObject? = null
+    fun resetDebugCaptureEvidence() {}
+    fun lastFailedDisplayCaptureGeneration(): Long? = null
+    fun debugCaptureWindowChangeEvidence(): JsonObject? = null
+    fun debugDisplayPlanRefusal(): String? = null
+    fun debugDisplayWindowCensus(): DisplayWindowCensus? = null
     fun beginAutonomousKeyboardSequence(sequenceNonce: String, sessionId: String, epoch: Long, totalSteps: Int): Boolean = false
     fun advanceAutonomousKeyboardStep(sequenceNonce: String, completedStepIndex: Int) {}
     fun endAutonomousKeyboardSequence(sequenceNonce: String) {}
@@ -207,6 +219,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         val visualEpoch = port.session()?.epoch
         port.presentation(ControlSession.VisualPhase.OBSERVING, visualEpoch)
         val followUpDiagnostic = onKeyboardPostCheckRefusal?.takeIf { includeImage && imageScope == "keyboard" }
+        port.resetDebugCaptureEvidence()
         var frame = if (followUpDiagnostic == null) port.capture() else port.captureKeyboardSequenceFrame()
         if (includeImage && frame.reason == null && !frame.truncated && !frame.navigationOnly) {
             val certified = followUpDiagnostic?.let { port.visualKeyboardSequenceFollowUp(frame, it) }
@@ -441,8 +454,13 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         autonomousProof: AutonomousKeyboardSequenceProof,
         expectedEpoch: Long? = null,
         recoveryBudget: SharedQaRecoveryBudget? = null,
+        deadlineExpired: () -> Boolean = { false },
     ): OperationResult = visualKeySequenceInternal(
-        input, expectedEpoch, autonomousProof = autonomousProof, externalRecoveryBudget = recoveryBudget,
+        input,
+        expectedEpoch,
+        autonomousProof = autonomousProof,
+        externalRecoveryBudget = recoveryBudget,
+        deadlineExpired = deadlineExpired,
     )
 
     /**
@@ -602,6 +620,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         expectedEpoch: Long? = null,
         autonomousProof: AutonomousKeyboardSequenceProof? = null,
         externalRecoveryBudget: SharedQaRecoveryBudget? = null,
+        deadlineExpired: () -> Boolean = { false },
     ): OperationResult {
         val autonomous = autonomousProof != null
         val externalVisualReviewConfirmed = !autonomous &&
@@ -616,6 +635,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var imageOnlyConfirmed = 0
         var expectedImageOnlyCount = 0
         var touched = false
+        var pendingStepState = PendingKeyStepState.NOT_DISPATCHED
+        var pendingKeyIndex: Int? = 1
         val reuseMaps = input["reuse_key_map"]?.jsonPrimitive?.booleanOrNull == true
         var reusedKeySteps = 0
         var mapHits = 0
@@ -633,24 +654,227 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         var initialProofRenewals = 0
         var initialProofReason: String? = null
         var initialProofAgeMs: Long? = null
+        val innerRecoveryDecisions = mutableListOf<JsonObject>()
+        val attemptFailureEvidence = mutableListOf<JsonObject>()
+        var attemptFailureSeq = 0
+        fun sanitizeReasonCode(value: String?): String =
+            value?.takeIf { it.length in 1..80 && it.matches(Regex("[a-z0-9_]+")) } ?: "unavailable"
+        fun addBoundedPreservingEnds(list: MutableList<JsonObject>, item: JsonObject, limit: Int = 16) {
+            if (list.size < limit) {
+                list.add(item)
+            } else {
+                list[limit - 1] = item
+            }
+        }
+        fun recordAttemptFailure(
+            source: String,
+            keyIndex: Int,
+            readAttempt: Int,
+            reasonCode: String?,
+            postCheck: JsonObject? = null,
+            sourceFailure: JsonObject? = null,
+        ) {
+            attemptFailureSeq++
+            val safeReason = sanitizeReasonCode(reasonCode)
+            val failedGen = port.lastFailedDisplayCaptureGeneration()
+            val planRefusal = port.debugDisplayPlanRefusal()
+            val census = if (planRefusal == "display_unowned_window" && safeReason == "display_surface_unverified") {
+                port.debugDisplayWindowCensus()
+            } else null
+            val sourceCondition = sourceFailure?.get("condition")?.jsonPrimitive?.contentOrNull
+            val isDisplayChange = safeReason == "display_window_changed_during_capture" ||
+                safeReason == "display_window_changed_since_observation" ||
+                sourceCondition == VisualSourceCondition.DISPLAY_WINDOW_CHANGED.code
+            val windowChanges = if (isDisplayChange) {
+                (sourceFailure?.get("window_event_interval") as? JsonObject)
+                    ?: (sourceFailure?.get("window_events") as? JsonObject)
+                    ?: port.debugCaptureWindowChangeEvidence()
+            } else null
+            val cursorMismatch = if (safeReason == "visual_post_keyboard_context_changed") {
+                port.visualKeyboardContextMismatch()
+            } else null
+            val entry = buildJsonObject {
+                put("attempt_seq", attemptFailureSeq)
+                put("key_index", keyIndex)
+                put("read_attempt", readAttempt)
+                put("source", sanitizeReasonCode(source))
+                put("reason_code", safeReason)
+                put("pending_step_state", pendingStepState.code)
+                put("failed_generation_recorded", failedGen != null && failedGen >= 0L)
+                planRefusal?.let { put("display_plan_refusal", sanitizeReasonCode(it)) }
+                census?.let { c ->
+                    put("display_window_census", buildJsonObject {
+                        put("total_windows", c.total)
+                        put("content_windows", c.content)
+                        put("empty_content", c.content == 0)
+                        put("duplicate_content_ids", c.duplicates)
+                        put("unowned_content_windows", c.unowned)
+                        put("rows_truncated", c.total > c.rows.take(DisplayWindowCensus.MAX_ROWS).size)
+                        put("windows", JsonArray(c.rows.take(DisplayWindowCensus.MAX_ROWS).map { row ->
+                            buildJsonObject {
+                                put("type", row.kind.name.lowercase())
+                                put("ownership", row.owner.name.lowercase())
+                                put("included_in_policy", row.included)
+                                put("layer_relative_to_ime", row.imeLayer.name.lowercase())
+                                row.overlapsImeBounds?.let { put("overlaps_ime_bounds", it) }
+                                put("active", row.active)
+                                put("focused", row.focused)
+                            }
+                        }))
+                    })
+                }
+                windowChanges?.let { put("capture_window_changes", it) }
+                cursorMismatch?.let { m ->
+                    put("cursor_proof_mismatch", buildJsonObject {
+                        put("kind", sanitizeReasonCode(m.kind.code))
+                        put("location", sanitizeReasonCode(m.location.code))
+                        m.beforeFailure?.let { put("before_cause", sanitizeReasonCode(it.code)) }
+                        m.afterFailure?.let { put("after_cause", sanitizeReasonCode(it.code)) }
+                        put("recoverable", m.recoverableReadOnlyCursorRace)
+                    })
+                }
+                postCheck?.let { put("post_check", it) }
+            }
+            addBoundedPreservingEnds(attemptFailureEvidence, entry)
+        }
+        fun recordInnerRecoveryDecision(
+            phase: String,
+            refusalReason: String?,
+            decision: RecoveryDecision,
+        ) {
+            addBoundedPreservingEnds(innerRecoveryDecisions, buildJsonObject {
+                put("phase", sanitizeReasonCode(phase))
+                put("allowed", decision.allowed)
+                decision.rejectionReason?.let { put("rejection_reason", it.code) }
+                put("refusal_reason", sanitizeReasonCode(refusalReason))
+                put("budget_used", decision.used)
+                put("budget_max", decision.maxAttempts)
+                put("budget_elapsed_ms", decision.elapsedMs)
+                put("budget_max_elapsed_ms", decision.maxElapsedMs)
+                put("run_elapsed_ms", decision.runElapsedMs)
+                put("recovery_episode_started", decision.episodeStarted)
+                put("within_window", decision.withinWindow)
+                put("authority_active", decision.authorityActive)
+                pendingKeyIndex?.let { put("pending_key_index", it) }
+                put("pending_step_state", pendingStepState.code)
+            })
+        }
+        fun snapshotRejectionDecision(
+            rejectionReason: RecoveryRejectionReason,
+            authorityActive: Boolean,
+        ): RecoveryDecision {
+            val ext = externalRecoveryBudget
+            return if (ext != null) {
+                val elapsed = ext.elapsedMs()
+                RecoveryDecision(
+                    allowed = false,
+                    rejectionReason = rejectionReason,
+                    used = ext.used,
+                    maxAttempts = ext.maxAttempts,
+                    elapsedMs = elapsed,
+                    maxElapsedMs = ext.maxElapsedMs,
+                    withinWindow = elapsed <= ext.maxElapsedMs,
+                    authorityActive = authorityActive,
+                    runElapsedMs = ext.totalElapsedMs(),
+                    episodeStarted = ext.isEpisodeStarted(),
+                )
+            } else {
+                val usedNow = sharedRecoveryBudget?.used ?: 0
+                RecoveryDecision(
+                    allowed = false,
+                    rejectionReason = rejectionReason,
+                    used = usedNow,
+                    maxAttempts = DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES,
+                    elapsedMs = 0L,
+                    maxElapsedMs = SharedQaRecoveryBudget.DEFAULT_RECOVERY_WINDOW_MS,
+                    withinWindow = true,
+                    authorityActive = authorityActive,
+                    runElapsedMs = 0L,
+                    episodeStarted = usedNow > 0,
+                )
+            }
+        }
         // One shared budget for every pre-dispatch recovery within the request.
-        fun claimPreTouchRetry(): Boolean {
+        // Explicit precedence: Authority/Consent Revocation > Hard Deadline > Attempt Cap / Elapsed Budget.
+        var lastClaimRejection: RecoveryRejectionReason? = null
+        var liveSessionCheck: () -> Boolean = { true }
+        var liveConsentCheck: () -> Boolean = { true }
+        fun authorityRevokedReason(): String =
+            if (!liveSessionCheck()) "control_session_changed_observe_again" else "screen_share_revoked"
+        fun claimPreTouchRetry(
+            phase: String = "pre_touch_retry",
+            refusalReason: String? = null,
+            authorityActive: Boolean = true,
+        ): Boolean {
+            lastClaimRejection = null
+            val effectiveAuth = authorityActive && liveSessionCheck() && liveConsentCheck()
+            if (!effectiveAuth) {
+                lastClaimRejection = RecoveryRejectionReason.AUTHORITY_REVOKED
+                recordInnerRecoveryDecision(
+                    phase, refusalReason,
+                    snapshotRejectionDecision(RecoveryRejectionReason.AUTHORITY_REVOKED, false),
+                )
+                return false
+            }
+            if (deadlineExpired()) {
+                lastClaimRejection = RecoveryRejectionReason.DEADLINE_EXCEEDED
+                recordInnerRecoveryDecision(
+                    phase, refusalReason,
+                    snapshotRejectionDecision(RecoveryRejectionReason.DEADLINE_EXCEEDED, true),
+                )
+                return false
+            }
             val budget = sharedRecoveryBudget ?: return false
             if (externalRecoveryBudget != null) {
-                if (budget.used >= DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES) return false
-                if (!externalRecoveryBudget.tryClaim()) return false
+                if (budget.used >= DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES) {
+                    lastClaimRejection = RecoveryRejectionReason.ATTEMPT_CAP
+                    recordInnerRecoveryDecision(
+                        phase, refusalReason,
+                        snapshotRejectionDecision(RecoveryRejectionReason.ATTEMPT_CAP, true),
+                    )
+                    return false
+                }
+                val decision = externalRecoveryBudget.claimDetailed(authorityActive = true)
+                recordInnerRecoveryDecision(phase, refusalReason, decision)
+                if (!decision.allowed) {
+                    lastClaimRejection = decision.rejectionReason
+                    return false
+                }
                 budget.used++
                 preTouchRetries++
                 return true
             }
-            if (budget.used >= DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES) return false
+            if (budget.used >= DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES) {
+                lastClaimRejection = RecoveryRejectionReason.ATTEMPT_CAP
+                recordInnerRecoveryDecision(
+                    phase, refusalReason,
+                    snapshotRejectionDecision(RecoveryRejectionReason.ATTEMPT_CAP, true),
+                )
+                return false
+            }
             budget.used++
             preTouchRetries++
+            recordInnerRecoveryDecision(
+                phase, refusalReason,
+                RecoveryDecision(
+                    allowed = true,
+                    rejectionReason = null,
+                    used = budget.used,
+                    maxAttempts = DisplayObservationRecoveryPolicy.MAX_READ_ONLY_RECOVERIES,
+                    elapsedMs = 0L,
+                    maxElapsedMs = SharedQaRecoveryBudget.DEFAULT_RECOVERY_WINDOW_MS,
+                    withinWindow = true,
+                    authorityActive = true,
+                    runElapsedMs = 0L,
+                    episodeStarted = true,
+                ),
+            )
             return true
         }
         // Categorical proof failure only. Never retain pixels, text or geometry.
         var pixelFailureStage: String? = null
         var pixelFailureKey: Int? = null
+        val postCheckRefusals = mutableListOf<JsonObject>()
         fun JsonObjectBuilder.metrics() {
             put("pre_touch_retries", preTouchRetries)
             sharedRecoveryBudget?.let { put("recovery_budget_total", it.used) }
@@ -660,6 +884,18 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             initialProofAgeMs?.let { put("initial_proof_age_ms", it) }
             displayWindowRecheckKey?.let { put("display_window_recheck_key", it) }
             put("display_window_rechecks", displayWindowRechecks)
+            put("pending_step_state", pendingStepState.code)
+            pendingKeyIndex?.let { put("pending_key_index", it) }
+            if (innerRecoveryDecisions.isNotEmpty()) {
+                put("inner_recovery_decisions", JsonArray(innerRecoveryDecisions))
+                put("last_inner_recovery_decision", innerRecoveryDecisions.last())
+            }
+            if (attemptFailureEvidence.isNotEmpty()) {
+                put("attempt_failure_evidence", JsonArray(attemptFailureEvidence))
+            }
+            if (postCheckRefusals.isNotEmpty()) {
+                put("keyboard_post_check_refusals", JsonArray(postCheckRefusals))
+            }
             if (!reuseMaps) return
             put("reused_key_steps", reusedKeySteps)
             put("key_map_hits", mapHits)
@@ -669,7 +905,6 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             put("fallback_used", usedFallback)
             put("resolved_acknowledgements", resolvedAcknowledgements)
         }
-        val postCheckRefusals = mutableListOf<JsonObject>()
         fun stop(reason: String, unknown: Boolean = false, observationReason: String? = null,
             visualSourceFailure: JsonObject? = null): OperationResult {
             VisualImageCache.remove(current?.frame?.visual?.id)
@@ -681,7 +916,6 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 pixelFailureStage?.let { put("pixel_failure_stage", it) }
                 pixelFailureKey?.let { put("pixel_failure_key", it) }
                 observationReason?.let { put("observation_reason_code", it) }
-                if (postCheckRefusals.isNotEmpty()) put("keyboard_post_check_refusals", JsonArray(postCheckRefusals))
                 observationRetryReason?.let { put("observation_retry_reason_code", it) }
                 visualSourceFailure?.let { put("visual_source_failure", it) }
                 put("confirmed_image_fallback_spaces", imageFallbackSpaces)
@@ -718,6 +952,29 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             session.id == input["session_id"]?.jsonPrimitive?.content && session.epoch == anchorEpoch
         val consent = ai.closepaw.security.ImageRevocationAuthority.currentEpoch
         fun sameImageConsent() = ai.closepaw.security.ImageRevocationAuthority.currentEpoch == consent
+        liveSessionCheck = ::sessionCurrent
+        liveConsentCheck = ::sameImageConsent
+        fun stopForClaimRejection(
+            fallbackReason: String,
+            observationReason: String? = null,
+            visualSourceFailure: JsonObject? = null,
+        ): OperationResult = when {
+            lastClaimRejection == RecoveryRejectionReason.AUTHORITY_REVOKED || !sessionCurrent() || !sameImageConsent() ->
+                stop(
+                    authorityRevokedReason(),
+                    unknown = true,
+                    observationReason = observationReason,
+                    visualSourceFailure = visualSourceFailure,
+                )
+            lastClaimRejection == RecoveryRejectionReason.DEADLINE_EXCEEDED || deadlineExpired() ->
+                stop(
+                    "six_key_sequence_deadline_exceeded",
+                    unknown = touched,
+                    observationReason = observationReason,
+                    visualSourceFailure = visualSourceFailure,
+                )
+            else -> stop(fallbackReason, observationReason = observationReason, visualSourceFailure = visualSourceFailure)
+        }
         val continuingGoal = input["expected_prefix"]?.jsonPrimitive?.contentOrNull != null
         val oldBudget = sequenceRecoveryBudget
         // An invalid "new" request against a nonempty editor cannot zero
@@ -793,8 +1050,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             if (anchorCandidates.any { it.id !in originallyDisclosedNodeIds })
                 return stop("keyboard_sequence_candidate_undisclosed")
             while (true) {
-                if (!sessionCurrent() || !sameImageConsent()) return stop("control_session_changed_observe_again")
-                if (!claimPreTouchRetry()) return stop("keyboard_sequence_recovery_budget_exhausted")
+                if (!sessionCurrent() || !sameImageConsent()) return stop(authorityRevokedReason(), unknown = true)
+                if (!claimPreTouchRetry("initial_proof_renewal", initialProofReason))
+                    return stopForClaimRejection("keyboard_sequence_recovery_budget_exhausted")
                 initialProofRenewals++
                 renewals++
                 usedFallback = true
@@ -986,7 +1244,8 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             if (resolved != crop && previouslyResolved == null) {
                 // No action has started. The replacement is rechecked by the
                 // native selector; it is not a bypass of a masked pixel.
-                if (!claimPreTouchRetry()) return stop("keyboard_sequence_recovery_budget_exhausted")
+                if (!claimPreTouchRetry("initial_crop_recovery", "partial_crop_adjusted"))
+                    return stopForClaimRejection("keyboard_sequence_recovery_budget_exhausted")
                 partialCropRecoveries++
                 usedFallback = true
             }
@@ -1049,6 +1308,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
             return Observation(UUID.randomUUID().toString(), now(), fresh.copy(nodes = listOf(candidate)), session.epoch, fresh)
         }
         data class InvalidatedDisplayProof(val id: String, val generation: Long)
+        var lastConfirmedProofId = firstProof.id
+        var lastConfirmedDisplayGeneration = firstProof.displayGeneration
+        val invalidatedProofIds = mutableSetOf<String>()
         var refresh = false
         if (autonomousProof != null && !port.beginAutonomousKeyboardSequence(
                 autonomousProof.nonce, session.id, session.epoch, planned.size,
@@ -1057,14 +1319,18 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         }
         try {
         for ((index, step) in planned.withIndex()) {
+            pendingStepState = PendingKeyStepState.NOT_DISPATCHED
+            pendingKeyIndex = index + 1
+            var pendingKeyInRecovery = false
             var touchCrop = step.crop
             var followUpAttempt = 0
             var recheckOf: InvalidatedDisplayProof? = null
             while (true) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                if (!sessionCurrent()) return stop("control_session_changed_observe_again")
+                if (!sessionCurrent()) return stop("control_session_changed_observe_again", unknown = touched)
+                if (deadlineExpired()) return stop("six_key_sequence_deadline_exceeded", unknown = touched)
                 if (recheckOf != null && !sameImageConsent())
-                    return stop("keyboard_sequence_window_recheck_consent_changed")
+                    return stop("keyboard_sequence_window_recheck_consent_changed", unknown = touched)
                 val cached = if (refresh && reuseMaps && !usedFallback) cachedFollowUp(step) else null
                 if (cached != null) current = cached
                 if (refresh && cached == null) {
@@ -1079,7 +1345,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                             onKeyboardPostCheckRefusal = { postCheck = it })
                     }
                     postCheck?.let { change ->
-                        postCheckRefusals.add(buildJsonObject {
+                        addBoundedPreservingEnds(postCheckRefusals, buildJsonObject {
                             put("key_index", index + 1)
                             put("read_attempt", followUpAttempt)
                             put("read_elapsed_ms", ((System.nanoTime() - startedNs) / 1_000_000L).coerceAtLeast(0L))
@@ -1089,6 +1355,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     if (!fresh.success) {
                         val reason = (fresh.data["reason_code"] as? JsonPrimitive)?.contentOrNull
                             ?.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,79}")) }
+                        recordAttemptFailure("follow_up_observe", index + 1, followUpAttempt, reason, postCheck, null)
                         // observe is read-only. Retry only the known post-capture tree race
                         // and share the request budget with pre-touch dispatch refusals.
                         // The next iteration still verifies the editor, value/caret, key
@@ -1096,27 +1363,86 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         val recoverableCursorRace =
                             reason == "visual_post_keyboard_context_changed" &&
                                 port.visualKeyboardContextMismatch()?.recoverableReadOnlyCursorRace == true
-                        if (DisplayObservationRecoveryPolicy.isRecoverableReadOnlyObservationRefusal(
+                        val liveAuth = sessionCurrent() && sameImageConsent()
+                        if (!liveAuth) {
+                            recordInnerRecoveryDecision(
+                                "follow_up_observe", reason,
+                                snapshotRejectionDecision(RecoveryRejectionReason.AUTHORITY_REVOKED, false),
+                            )
+                            return stop(authorityRevokedReason(), unknown = true, observationReason = reason)
+                        }
+                        if (deadlineExpired()) {
+                            recordInnerRecoveryDecision(
+                                "follow_up_observe", reason,
+                                snapshotRejectionDecision(RecoveryRejectionReason.DEADLINE_EXCEEDED, true),
+                            )
+                            return stop("six_key_sequence_deadline_exceeded", unknown = touched, observationReason = reason)
+                        }
+                        if (!DisplayObservationRecoveryPolicy.isRecoverableReadOnlyObservationRefusal(
                                 reason, recoverableCursorProofRace = recoverableCursorRace,
-                            ) && sessionCurrent() && sameImageConsent() && claimPreTouchRetry()) {
+                            )) {
+                            recordInnerRecoveryDecision(
+                                "follow_up_observe", reason,
+                                snapshotRejectionDecision(RecoveryRejectionReason.REASON_NOT_ALLOWLISTED, true),
+                            )
+                            return stop("keyboard_sequence_new_image_unavailable", observationReason = reason)
+                        }
+                        val failedStartGen = if (reason == "display_window_changed_during_capture") {
+                            port.lastFailedDisplayCaptureGeneration()
+                        } else null
+                        if (reason == "display_window_changed_during_capture" &&
+                            failedStartGen == null && (autonomous || recheckOf == null)) {
+                            // Fail closed when no failed-capture start generation evidence exists:
+                            // preserve raw observe reason and terminal integrity reason separately, UNKNOWN.
+                            recordInnerRecoveryDecision(
+                                "follow_up_observe", "failed_capture_generation_missing",
+                                snapshotRejectionDecision(RecoveryRejectionReason.REASON_NOT_ALLOWLISTED, true),
+                            )
+                            return stop("failed_capture_generation_missing", unknown = true, observationReason = reason)
+                        }
+                        if (claimPreTouchRetry("follow_up_observe", reason, authorityActive = true)) {
                             // The capture was read-only. Discard the failed image, and
-                            // on a window event demand a new, later display generation.
-                            // Never replay the already verified preceding key.
-                            if (reason == "display_window_changed_during_capture" && recheckOf == null)
-                                recheckOf = InvalidatedDisplayProof(firstProof.id, firstProof.displayGeneration)
+                            // on a window event demand a strictly newer generation than
+                            // max(lastConfirmedDisplayGeneration, failedStartGen, prior recheck floor)
+                            // and a fresh proof ID. Never replay the already verified preceding key.
+                            pendingKeyInRecovery = true
+                            if (reason == "display_window_changed_during_capture" && failedStartGen != null) {
+                                val floorGen = maxOf(lastConfirmedDisplayGeneration, failedStartGen, recheckOf?.generation ?: -1L)
+                                invalidatedProofIds.add(lastConfirmedProofId)
+                                recheckOf = InvalidatedDisplayProof(lastConfirmedProofId, floorGen)
+                            }
                             observationRetryReason = reason
                             continue
                         }
-                        return stop("keyboard_sequence_new_image_unavailable", observationReason = reason)
+                        return stopForClaimRejection("keyboard_sequence_new_image_unavailable", observationReason = reason)
                     }
                 }
                 val active = current ?: return stop("keyboard_observation_lost")
                 val proof = active.frame.visual ?: return stop("keyboard_visual_required")
-                if (!sessionCurrent() || active.epoch != original.epoch)
-                    return stop("control_session_changed_observe_again")
+                if (!sessionCurrent() || active.epoch != original.epoch) {
+                    recordInnerRecoveryDecision(
+                        "in_flight_recovery_authority", "control_session_changed_observe_again",
+                        snapshotRejectionDecision(RecoveryRejectionReason.AUTHORITY_REVOKED, false),
+                    )
+                    return stop("control_session_changed_observe_again", unknown = true)
+                }
+                if (!sameImageConsent()) {
+                    val consentReason = if (recheckOf != null) {
+                        "keyboard_sequence_window_recheck_consent_changed"
+                    } else {
+                        "screen_share_revoked"
+                    }
+                    recordInnerRecoveryDecision(
+                        if (recheckOf != null) "window_recheck_consent" else "in_flight_recovery_consent",
+                        consentReason,
+                        snapshotRejectionDecision(RecoveryRejectionReason.AUTHORITY_REVOKED, false),
+                    )
+                    return stop(consentReason, unknown = true)
+                }
+                if (deadlineExpired()) return stop("six_key_sequence_deadline_exceeded", unknown = touched)
                 recheckOf?.let {
-                    if (!sameImageConsent()) return stop("keyboard_sequence_window_recheck_consent_changed")
-                    if (!DisplayObservationRecoveryPolicy.isFreshDisplayProof(it.id, it.generation, proof))
+                    if (proof.id in invalidatedProofIds ||
+                        !DisplayObservationRecoveryPolicy.isFreshDisplayProof(it.id, it.generation, proof))
                         return stop("keyboard_sequence_window_recheck_stale")
                 }
                 if (active.frame.touchContext != original.frame.touchContext ||
@@ -1153,7 +1479,9 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     return stop("keyboard_sequence_pixels_unverified")
                 }
                 if (resolved != touchCrop) {
-                    if (!claimPreTouchRetry()) return stop("keyboard_sequence_recovery_budget_exhausted")
+                    if (!claimPreTouchRetry("partial_crop_recovery", "partial_crop_adjusted", authorityActive = sessionCurrent() && sameImageConsent()))
+                        return stopForClaimRejection("keyboard_sequence_recovery_budget_exhausted")
+                    pendingKeyInRecovery = true
                     touchCrop = resolved
                     partialCropRecoveries++
                     usedFallback = true
@@ -1168,6 +1496,23 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         return stop("keyboard_autonomous_structural_recheck_failed", unknown = touched)
                     }
                 }
+                // Explicit precedence: Authority/Consent Revocation > Hard Deadline > In-flight Recovery Elapsed.
+                if (!sessionCurrent() || !sameImageConsent()) {
+                    val authReason = authorityRevokedReason()
+                    recordInnerRecoveryDecision(
+                        "in_flight_recovery_pre_dispatch", authReason,
+                        snapshotRejectionDecision(RecoveryRejectionReason.AUTHORITY_REVOKED, false),
+                    )
+                    return stop(authReason, unknown = true)
+                }
+                if (deadlineExpired()) return stop("six_key_sequence_deadline_exceeded", unknown = touched)
+                if (pendingKeyInRecovery && externalRecoveryBudget != null && !externalRecoveryBudget.withinWindow()) {
+                    recordInnerRecoveryDecision(
+                        "in_flight_recovery_pre_dispatch", observationRetryReason ?: "recovery_episode_elapsed_budget",
+                        snapshotRejectionDecision(RecoveryRejectionReason.ELAPSED_BUDGET, true),
+                    )
+                    return stop("keyboard_sequence_recovery_budget_exhausted", observationReason = "elapsed_budget")
+                }
                 keyboardCheckpoint = null // Uncertain dispatch or cancellation must leave no resume authority.
                 val actionInput = buildJsonObject {
                     put("session_id", session.id); put("observation_id", active.id)
@@ -1176,6 +1521,17 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     put("image_rect", JsonArray(listOf(touchCrop.left, touchCrop.top,
                         touchCrop.right, touchCrop.bottom).map { JsonPrimitive(it) }))
                     if (node.keyboardImageCandidate) put("image_key_label", step.label)
+                }
+                val isCurrentKeyRecovering = pendingKeyInRecovery
+                val nativeBoundaryRefusal: () -> String? = {
+                    when {
+                        !sessionCurrent() -> "control_session_changed_observe_again"
+                        !sameImageConsent() -> "screen_share_revoked"
+                        deadlineExpired() -> "six_key_sequence_deadline_exceeded"
+                        isCurrentKeyRecovering && externalRecoveryBudget != null && !externalRecoveryBudget.withinWindow() ->
+                            "recovery_episode_elapsed_budget"
+                        else -> null
+                    }
                 }
                 val dispatchContext: kotlin.coroutines.CoroutineContext = if (autonomousProof != null) {
                     KeyboardWindowTrace(index + 1, followUpAttempt, reuseMaps) + AutonomousKeyboardDispatchContext(
@@ -1190,12 +1546,19 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                         label = step.label,
                         imageOnly = node.keyboardImageCandidate,
                         expectedNativeLabels = nativeSequenceLabels.toSet(),
+                        preTouchBoundaryRefusal = nativeBoundaryRefusal,
                     )
                 } else {
                     KeyboardWindowTrace(index + 1, followUpAttempt, reuseMaps)
                 }
-                val result = kotlinx.coroutines.withContext(dispatchContext) {
-                    actionNative(actionInput, active)
+                val result = try {
+                    kotlinx.coroutines.withContext(dispatchContext) {
+                        actionNative(actionInput, active)
+                    }
+                } catch (t: Throwable) {
+                    // Conservative: an exception or cancellation during native dispatch cannot prove no touch occurred.
+                    pendingStepState = PendingKeyStepState.DISPATCHED_UNCONFIRMED
+                    throw t
                 }
                 val attempted = result.data["action_attempted"]?.jsonPrimitive?.booleanOrNull
                 val unknown = result.data["outcome_unknown"]?.jsonPrimitive?.booleanOrNull
@@ -1216,43 +1579,112 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 val recoverableCursorRace =
                     reason == "visual_post_keyboard_context_changed" &&
                         port.visualKeyboardContextMismatch()?.recoverableReadOnlyCursorRace == true
+                // Only classify DISPATCHED_UNCONFIRMED from actual native attempted/unknown evidence,
+                // never from invoking actionNative alone (pre-touch refusals stay NOT_DISPATCHED).
+                if (attempted != false || unknown != false) {
+                    pendingStepState = PendingKeyStepState.DISPATCHED_UNCONFIRMED
+                }
                 touched = touched || attempted == true
                 var verified = current?.verificationFrame
                 if (!result.success || result.data["app_result_verified"]?.jsonPrimitive?.booleanOrNull != true) {
+                    recordAttemptFailure("native_action", index + 1, followUpAttempt, reason, null, sourceFailure)
                     if (attempted == false && unknown == false) {
                         checkpoint(lastVerified)
+                        val liveAuth = sessionCurrent() && sameImageConsent()
+                        if (!liveAuth || reason == "control_session_changed_observe_again" || reason == "screen_share_revoked") {
+                            val authReason = when {
+                                reason == VISUAL_SOURCE_REFUSED -> VISUAL_SOURCE_REFUSED
+                                !sessionCurrent() || reason == "control_session_changed_observe_again" -> "control_session_changed_observe_again"
+                                else -> "screen_share_revoked"
+                            }
+                            recordInnerRecoveryDecision(
+                                "native_pre_touch_authority", authReason,
+                                snapshotRejectionDecision(RecoveryRejectionReason.AUTHORITY_REVOKED, false),
+                            )
+                            return stop(authReason, unknown = true, visualSourceFailure = sourceFailure)
+                        }
+                        if (reason == "six_key_sequence_deadline_exceeded" || deadlineExpired()) {
+                            recordInnerRecoveryDecision(
+                                "native_pre_touch_deadline", reason,
+                                snapshotRejectionDecision(RecoveryRejectionReason.DEADLINE_EXCEEDED, true),
+                            )
+                            return stop("six_key_sequence_deadline_exceeded", unknown = touched, visualSourceFailure = sourceFailure)
+                        }
+                        if (reason == "recovery_episode_elapsed_budget") {
+                            recordInnerRecoveryDecision(
+                                "native_pre_touch_in_flight_recovery", reason,
+                                snapshotRejectionDecision(RecoveryRejectionReason.ELAPSED_BUDGET, true),
+                            )
+                            return stop("keyboard_sequence_recovery_budget_exhausted", observationReason = "elapsed_budget")
+                        }
                         // Share the bounded request budget with other pre-touch retries.
                         // Do not rescue a lost callback or reuse the invalidated image.
                         // Both sequence modes may recertify a confirmed no-touch refusal.
                         // Multiple display invalidations may use the remaining
                         // request budget. Each loop must recapture a NEW image with a newer
                         // generation and reverify editor, caret, IME, window, geometry and pixels.
-                        if (nativeDisplayInvalidation && port.validatesAtNativeBoundary &&
-                            sessionCurrent() && sameImageConsent() && claimPreTouchRetry()) {
-                            displayWindowRechecks++
-                            displayWindowRecheckKey = index + 1
-                            recheckOf = InvalidatedDisplayProof(proof.id, proof.displayGeneration)
-                            usedFallback = true
-                            refresh = true
-                            continue
-                        }
-                        if ((reason == "visual_post_screen_changed" || recoverableCursorRace) &&
-                            port.validatesAtNativeBoundary &&
-                            sessionCurrent() && sameImageConsent() && claimPreTouchRetry()) {
-                            usedFallback = true
-                            refresh = true
-                            continue
-                        }
-                        if (cached != null && reason in setOf("screen_changed", "visual_pixels_or_geometry_changed",
-                                "visual_revalidation_failed") && claimPreTouchRetry()) {
-                            usedFallback = true
-                            refresh = true
-                            continue
-                        }
-                        if (reason == "screen_changed" && sessionCurrent() &&
-                            sameImageConsent() && claimPreTouchRetry()) {
-                            refresh = true
-                            continue
+                        if (nativeDisplayInvalidation && port.validatesAtNativeBoundary) {
+                            val failedGen = maxOf(
+                                proof.displayGeneration,
+                                port.lastFailedDisplayCaptureGeneration() ?: -1L,
+                                lastConfirmedDisplayGeneration,
+                                recheckOf?.generation ?: -1L,
+                            )
+                            if (failedGen < 0L) {
+                                recordInnerRecoveryDecision(
+                                    "native_pre_touch_display_change", "failed_capture_generation_missing",
+                                    snapshotRejectionDecision(RecoveryRejectionReason.REASON_NOT_ALLOWLISTED, true),
+                                )
+                                return stop("failed_capture_generation_missing", unknown = true, observationReason = reason, visualSourceFailure = sourceFailure)
+                            } else if (claimPreTouchRetry("native_pre_touch_display_change", reason, authorityActive = true)) {
+                                pendingKeyInRecovery = true
+                                displayWindowRechecks++
+                                displayWindowRecheckKey = index + 1
+                                invalidatedProofIds.add(proof.id)
+                                recheckOf = InvalidatedDisplayProof(proof.id, failedGen)
+                                usedFallback = true
+                                refresh = true
+                                continue
+                            } else if (lastClaimRejection == RecoveryRejectionReason.AUTHORITY_REVOKED ||
+                                lastClaimRejection == RecoveryRejectionReason.DEADLINE_EXCEEDED) {
+                                return stopForClaimRejection(reason, visualSourceFailure = sourceFailure)
+                            }
+                        } else if ((reason == "visual_post_screen_changed" || recoverableCursorRace) &&
+                            port.validatesAtNativeBoundary) {
+                            if (claimPreTouchRetry("native_pre_touch_post_check", reason, authorityActive = true)) {
+                                pendingKeyInRecovery = true
+                                usedFallback = true
+                                refresh = true
+                                continue
+                            } else if (lastClaimRejection == RecoveryRejectionReason.AUTHORITY_REVOKED ||
+                                lastClaimRejection == RecoveryRejectionReason.DEADLINE_EXCEEDED) {
+                                return stopForClaimRejection(reason, visualSourceFailure = sourceFailure)
+                            }
+                        } else if (cached != null && reason in setOf("screen_changed", "visual_pixels_or_geometry_changed",
+                                "visual_revalidation_failed")) {
+                            if (claimPreTouchRetry("native_pre_touch_cached_fallback", reason, authorityActive = true)) {
+                                pendingKeyInRecovery = true
+                                usedFallback = true
+                                refresh = true
+                                continue
+                            } else if (lastClaimRejection == RecoveryRejectionReason.AUTHORITY_REVOKED ||
+                                lastClaimRejection == RecoveryRejectionReason.DEADLINE_EXCEEDED) {
+                                return stopForClaimRejection(reason, visualSourceFailure = sourceFailure)
+                            }
+                        } else if (reason == "screen_changed") {
+                            if (claimPreTouchRetry("native_pre_touch_screen_changed", reason, authorityActive = true)) {
+                                pendingKeyInRecovery = true
+                                refresh = true
+                                continue
+                            } else if (lastClaimRejection == RecoveryRejectionReason.AUTHORITY_REVOKED ||
+                                lastClaimRejection == RecoveryRejectionReason.DEADLINE_EXCEEDED) {
+                                return stopForClaimRejection(reason, visualSourceFailure = sourceFailure)
+                            }
+                        } else {
+                            recordInnerRecoveryDecision(
+                                "native_pre_touch_refusal", reason,
+                                snapshotRejectionDecision(RecoveryRejectionReason.REASON_NOT_ALLOWLISTED, true),
+                            )
                         }
                     }
                     // An exact ASCII echo can settle a lost acknowledgement, never
@@ -1273,7 +1705,7 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                                 confirmsPending(it)
                         }
                     } else null
-                    if (verified == null) return stop(reason, unknown = attempted != false || unknown != false,
+                    if (verified == null) return stop(reason, unknown = attempted != false || unknown != false || !sessionCurrent() && touched,
                         visualSourceFailure = sourceFailure)
                     resolvedAcknowledgements++
                     usedFallback = true
@@ -1283,8 +1715,11 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                     ?: return stop("keyboard_postcondition_unavailable", unknown = attempted == true)
                 if (!sessionCurrent()) return stop("control_session_changed_observe_again", unknown = true)
                 lastVerified = confirmedFrame
+                lastConfirmedProofId = proof.id
+                lastConfirmedDisplayGeneration = maxOf(lastConfirmedDisplayGeneration, proof.displayGeneration)
                 checkpoint(confirmedFrame)
                 confirmed++
+                pendingStepState = PendingKeyStepState.CONFIRMED
                 if (autonomousProof != null) {
                     port.advanceAutonomousKeyboardStep(autonomousProof.nonce, index)
                 }
@@ -1309,11 +1744,14 @@ internal class GenericControl(private val port: ControlPort, private val allowed
         // even after the last gesture. Never infer the buffer from its prefix.
         // Separate bounded read-only postcondition re-observation (max 2 passive retries,
         // zero touch replay, never consumes pre-dispatch budget; fail-closed UNKNOWN if unprovable).
+        pendingStepState = PendingKeyStepState.FINAL_READ
+        pendingKeyIndex = null
+        if (deadlineExpired()) return stop("six_key_sequence_deadline_exceeded", unknown = true)
         var finalFrame = port.capture()
         var postReadRetries = 0
         while (finalFrame.reason != null &&
             DisplayObservationRecoveryPolicy.isRecoverableRecaptureReason(finalFrame.reason) &&
-            postReadRetries < 2 && sessionCurrent()
+            postReadRetries < 2 && sessionCurrent() && !deadlineExpired()
         ) {
             postReadRetries++
             finalFrame = port.capture()
@@ -1341,7 +1779,6 @@ internal class GenericControl(private val port: ControlPort, private val allowed
                 put("action_attempted", touched); put("outcome_unknown", false)
                 put("app_result_verified", true); put("completed_keys", confirmed)
                 observationRetryReason?.let { put("observation_retry_reason_code", it) }
-                if (postCheckRefusals.isNotEmpty()) put("keyboard_post_check_refusals", JsonArray(postCheckRefusals))
                 put("confirmed_image_fallback_spaces", imageFallbackSpaces)
                 current?.let { put("observation_id", it.id) }
             })

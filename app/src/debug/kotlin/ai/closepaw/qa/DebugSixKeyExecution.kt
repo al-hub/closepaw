@@ -13,6 +13,7 @@ import ai.closepaw.chatgpt.control.KeyboardEditorContinuity
 import ai.closepaw.chatgpt.control.KoreanLayoutSwitchCandidate
 import ai.closepaw.chatgpt.control.KoreanLayoutSwitchRoute
 import ai.closepaw.chatgpt.control.NativeKeyboardStructuralCertification
+import ai.closepaw.chatgpt.control.PendingKeyStepState
 import ai.closepaw.chatgpt.control.PhysicalKeyboardLayout
 import ai.closepaw.chatgpt.control.PixelCertificationOutcome
 import ai.closepaw.chatgpt.control.RecoveryDecision
@@ -27,6 +28,7 @@ import android.os.SystemClock
 import java.util.UUID
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.*
 
 /**
@@ -39,6 +41,14 @@ import kotlinx.serialization.json.*
  * among duplicates, weakens native guards, or replays UNKNOWN outcomes.
  */
 internal object DebugSixKeyExecution {
+    /**
+     * Explicit bounded total wall-clock deadline for one complete six-key sequence
+     * execution (preflight, optional layout switch, certification, up to 6 guarded
+     * keys, bounded read-only recovery episode, and final verification). Strictly
+     * separate from SharedQaRecoveryBudget's 15_000 ms recovery episode window and
+     * aligned with LocalVerifiedInput's 120_000 ms bounded input precedent.
+     */
+    internal const val DEFAULT_TOTAL_SEQUENCE_DEADLINE_MS = 120_000L
     private val sequenceLabels = listOf("ㄱ", "ㅏ", "ㄴ", "Space")
     private val allowedLabels = sequenceLabels.toSet()
 
@@ -95,11 +105,167 @@ internal object DebugSixKeyExecution {
         val data: JsonObject,
         val captureWindowChanges: JsonObject? = null,
         val cursorProofMismatch: KeyboardContextMismatch? = null,
+        val displayPlanRefusal: String? = null,
     )
 
     private fun safeCode(value: String?): String =
         value?.takeIf { it.length in 1..80 && it.matches(Regex("[a-z0-9_]+")) }
             ?: "unavailable"
+
+    private fun boundedPreservingFirstAndLast(raw: JsonArray?, maxItems: Int = 8): Pair<List<JsonObject>, Int> {
+        val objects = raw?.mapNotNull { it as? JsonObject }.orEmpty()
+        if (objects.size <= maxItems) return objects to 0
+        val headCount = (maxItems - 1).coerceAtLeast(1)
+        val kept = objects.take(headCount) + objects.last()
+        return kept to (objects.size - kept.size)
+    }
+
+    private fun safeInnerRecoveryDecisions(raw: JsonArray?): Pair<JsonArray?, Int> {
+        val (kept, dropped) = boundedPreservingFirstAndLast(raw, maxItems = 8)
+        if (kept.isEmpty()) return null to 0
+        val sanitized = kept.map { obj ->
+            buildJsonObject {
+                put("phase", safeCode(obj["phase"]?.jsonPrimitive?.contentOrNull))
+                obj["allowed"]?.jsonPrimitive?.booleanOrNull?.let { put("allowed", it) }
+                obj["rejection_reason"]?.jsonPrimitive?.contentOrNull?.let { put("rejection_reason", safeCode(it)) }
+                put("refusal_reason", safeCode(obj["refusal_reason"]?.jsonPrimitive?.contentOrNull))
+                obj["budget_used"]?.jsonPrimitive?.intOrNull?.takeIf { it >= 0 }?.let { put("budget_used", it) }
+                obj["budget_max"]?.jsonPrimitive?.intOrNull?.takeIf { it >= 0 }?.let { put("budget_max", it) }
+                obj["budget_elapsed_ms"]?.jsonPrimitive?.longOrNull?.takeIf { it >= 0L }?.let { put("budget_elapsed_ms", it) }
+                obj["budget_max_elapsed_ms"]?.jsonPrimitive?.longOrNull?.takeIf { it >= 0L }?.let { put("budget_max_elapsed_ms", it) }
+                obj["run_elapsed_ms"]?.jsonPrimitive?.longOrNull?.takeIf { it >= 0L }?.let { put("run_elapsed_ms", it) }
+                obj["recovery_episode_started"]?.jsonPrimitive?.booleanOrNull?.let { put("recovery_episode_started", it) }
+                obj["within_window"]?.jsonPrimitive?.booleanOrNull?.let { put("within_window", it) }
+                obj["authority_active"]?.jsonPrimitive?.booleanOrNull?.let { put("authority_active", it) }
+                obj["pending_key_index"]?.jsonPrimitive?.intOrNull
+                    ?.takeIf { it in 1..DebugOneStopQa.SixKey.labels.size }
+                    ?.let { put("pending_key_index", it) }
+                obj["pending_step_state"]?.jsonPrimitive?.contentOrNull?.let { put("pending_step_state", safeCode(it)) }
+            }
+        }
+        return JsonArray(sanitized) to dropped
+    }
+
+    private fun safePostCheckChange(change: JsonObject?): JsonObject? {
+        if (change == null) return null
+        return buildJsonObject {
+            change["source"]?.jsonPrimitive?.contentOrNull?.let { put("source", safeCode(it)) }
+            for (flag in listOf(
+                "app_identity_changed", "target_window_changed", "foreground_window_changed",
+                "frame_context_changed", "app_tree_changed", "ime_tree_changed",
+                "chrome_editor_changed", "chrome_suggestions_changed", "chrome_other_changed",
+            )) {
+                change[flag]?.jsonPrimitive?.booleanOrNull?.let { put(flag, it) }
+            }
+        }
+    }
+
+    private fun safePostCheckRefusals(raw: JsonArray?): Pair<JsonArray?, Int> {
+        val (kept, dropped) = boundedPreservingFirstAndLast(raw, maxItems = 8)
+        if (kept.isEmpty()) return null to 0
+        val sanitized = kept.map { obj ->
+            buildJsonObject {
+                obj["key_index"]?.jsonPrimitive?.intOrNull
+                    ?.takeIf { it in 1..DebugOneStopQa.SixKey.labels.size }
+                    ?.let { put("key_index", it) }
+                obj["read_attempt"]?.jsonPrimitive?.intOrNull?.takeIf { it >= 0 }?.let { put("read_attempt", it) }
+                obj["read_elapsed_ms"]?.jsonPrimitive?.longOrNull?.takeIf { it >= 0L }?.let { put("read_elapsed_ms", it) }
+                safePostCheckChange(obj["change"] as? JsonObject)?.let { put("change", it) }
+            }
+        }
+        return JsonArray(sanitized) to dropped
+    }
+
+    private fun safeCensusJson(raw: JsonObject?): JsonObject? {
+        if (raw == null) return null
+        return buildJsonObject {
+            raw["total_windows"]?.jsonPrimitive?.intOrNull?.takeIf { it >= 0 }?.let { put("total_windows", it) }
+            raw["content_windows"]?.jsonPrimitive?.intOrNull?.takeIf { it >= 0 }?.let { put("content_windows", it) }
+            raw["empty_content"]?.jsonPrimitive?.booleanOrNull?.let { put("empty_content", it) }
+            raw["duplicate_content_ids"]?.jsonPrimitive?.intOrNull?.takeIf { it >= 0 }?.let { put("duplicate_content_ids", it) }
+            raw["unowned_content_windows"]?.jsonPrimitive?.intOrNull?.takeIf { it >= 0 }?.let { put("unowned_content_windows", it) }
+            raw["rows_truncated"]?.jsonPrimitive?.booleanOrNull?.let { put("rows_truncated", it) }
+            (raw["windows"] as? JsonArray)?.let { rows ->
+                put("windows", JsonArray(rows.take(DisplayWindowCensus.MAX_ROWS).mapNotNull { elem ->
+                    val r = elem as? JsonObject ?: return@mapNotNull null
+                    buildJsonObject {
+                        r["type"]?.jsonPrimitive?.contentOrNull?.let { put("type", safeCode(it)) }
+                        r["ownership"]?.jsonPrimitive?.contentOrNull?.let { put("ownership", safeCode(it)) }
+                        r["included_in_policy"]?.jsonPrimitive?.booleanOrNull?.let { put("included_in_policy", it) }
+                        r["layer_relative_to_ime"]?.jsonPrimitive?.contentOrNull?.let { put("layer_relative_to_ime", safeCode(it)) }
+                        r["overlaps_ime_bounds"]?.jsonPrimitive?.booleanOrNull?.let { put("overlaps_ime_bounds", it) }
+                        r["active"]?.jsonPrimitive?.booleanOrNull?.let { put("active", it) }
+                        r["focused"]?.jsonPrimitive?.booleanOrNull?.let { put("focused", it) }
+                    }
+                }))
+            }
+        }
+    }
+
+    private fun safeAttemptFailureEvidence(raw: JsonArray?): Pair<JsonArray?, Int> {
+        val (kept, dropped) = boundedPreservingFirstAndLast(raw, maxItems = 8)
+        if (kept.isEmpty()) return null to 0
+        val sanitized = kept.map { obj ->
+            buildJsonObject {
+                obj["attempt_seq"]?.jsonPrimitive?.intOrNull?.takeIf { it >= 1 }?.let { put("attempt_seq", it) }
+                obj["key_index"]?.jsonPrimitive?.intOrNull
+                    ?.takeIf { it in 1..DebugOneStopQa.SixKey.labels.size }
+                    ?.let { put("key_index", it) }
+                obj["read_attempt"]?.jsonPrimitive?.intOrNull?.takeIf { it >= 0 }?.let { put("read_attempt", it) }
+                put("source", safeCode(obj["source"]?.jsonPrimitive?.contentOrNull))
+                put("reason_code", safeCode(obj["reason_code"]?.jsonPrimitive?.contentOrNull))
+                obj["pending_step_state"]?.jsonPrimitive?.contentOrNull?.let { put("pending_step_state", safeCode(it)) }
+                obj["failed_generation_recorded"]?.jsonPrimitive?.booleanOrNull?.let { put("failed_generation_recorded", it) }
+                DebugKeyboardEvidence.safeDisplayRefusal(obj["display_plan_refusal"]?.jsonPrimitive?.contentOrNull)?.let {
+                    put("display_plan_refusal", it)
+                }
+                safeCensusJson(obj["display_window_census"] as? JsonObject)?.let { put("display_window_census", it) }
+                (obj["capture_window_changes"] as? JsonObject)?.let {
+                    put("capture_window_changes", DebugKeyboardEvidence.safeWindowChanges(it))
+                }
+                (obj["cursor_proof_mismatch"] as? JsonObject)?.let { cm ->
+                    put("cursor_proof_mismatch", buildJsonObject {
+                        cm["kind"]?.jsonPrimitive?.contentOrNull?.let { put("kind", safeCode(it)) }
+                        cm["location"]?.jsonPrimitive?.contentOrNull?.let { put("location", safeCode(it)) }
+                        cm["before_cause"]?.jsonPrimitive?.contentOrNull?.let { put("before_cause", safeCode(it)) }
+                        cm["after_cause"]?.jsonPrimitive?.contentOrNull?.let { put("after_cause", safeCode(it)) }
+                        cm["recoverable"]?.jsonPrimitive?.booleanOrNull?.let { put("recoverable", it) }
+                    })
+                }
+                safePostCheckChange(obj["post_check"] as? JsonObject)?.let { put("post_check", it) }
+            }
+        }
+        return JsonArray(sanitized) to dropped
+    }
+
+    /**
+     * Explicit narrow safe allowlist for post-stop independent prefix verification.
+     * NEVER performs additional observation after security, privacy, unowned-window,
+     * lock, revocation, cursor/keyboard-context change, integrity failure, target-change,
+     * or unknown refusals — those stay strictly UNKNOWN.
+     */
+    private val safePartialPrefixObservationReasons = setOf(
+        "display_window_changed_during_capture",
+        "visual_post_screen_changed",
+        "elapsed_budget",
+    )
+
+    private val safePartialPrefixSequenceReasons = setOf(
+        "display_window_changed_during_capture",
+        "display_window_changed_since_observation",
+        "visual_post_screen_changed",
+        "screen_changed",
+        "keyboard_sequence_recovery_budget_exhausted",
+        "recovery_episode_elapsed_budget",
+    )
+
+    internal fun mayVerifyPartialPrefixAfter(seqReason: String?, obsReason: String?): Boolean = when {
+        seqReason == "keyboard_sequence_new_image_unavailable" ->
+            obsReason != null && obsReason in safePartialPrefixObservationReasons
+        seqReason != null && seqReason in safePartialPrefixSequenceReasons ->
+            obsReason == null || obsReason in safePartialPrefixObservationReasons
+        else -> false
+    }
 
     private fun extractWindowEvents(sourceFailure: JsonObject?): JsonObject? =
         (sourceFailure?.get("window_event_interval") as? JsonObject)
@@ -175,7 +341,12 @@ internal object DebugSixKeyExecution {
         recoveryBudget: SharedQaRecoveryBudget = SharedQaRecoveryBudget(clockMs = clockMs),
         sessionCurrent: () -> Boolean = allowed,
         commitPass: () -> Boolean = { allowed() && sessionCurrent() },
+        totalSequenceDeadlineMs: Long = DEFAULT_TOTAL_SEQUENCE_DEADLINE_MS,
     ): Outcome {
+        require(totalSequenceDeadlineMs > 0L)
+        val sequenceStartedAtMs = clockMs()
+        fun totalRunElapsedMs(): Long = (clockMs() - sequenceStartedAtMs).coerceAtLeast(0L)
+        fun isDeadlineExpired(): Boolean = totalRunElapsedMs() >= totalSequenceDeadlineMs
         var verified = 0
         var attempts = 0
         var uncertain = false
@@ -188,6 +359,8 @@ internal object DebugSixKeyExecution {
         var finalLayoutCode = PhysicalKeyboardLayout.UNVERIFIED.code
         var layoutSwitchAttempts = 0
         var layoutSwitchConfirmed = false
+        var layoutSwitchDispatchPending = false
+        var sequenceDispatchPending = false
         val evidence = mutableListOf<JsonObject>()
         fun progress() = Progress(verified, attempts, uncertain, stage)
         fun fail(reason: String) = Outcome(
@@ -196,6 +369,30 @@ internal object DebugSixKeyExecution {
             initialLayoutCode, finalLayoutCode, layoutSwitchAttempts, layoutSwitchConfirmed,
             recoveryBudget.used,
         )
+        fun hasDispatchedMutation(): Boolean =
+            attempts > 0 || verified > 0 || layoutSwitchAttempts > 0 ||
+                sequenceDispatchPending || layoutSwitchDispatchPending || uncertain
+        fun failDeadline(phase: String, afterDispatch: Boolean): Outcome {
+            invalidateObservation()
+            if (afterDispatch) uncertain = true
+            evidence += buildJsonObject {
+                put("source", "sequence_deadline_exceeded")
+                put("phase", safeCode(phase))
+                put("run_elapsed_ms", totalRunElapsedMs())
+                put("total_sequence_deadline_ms", totalSequenceDeadlineMs)
+                put("recovery_budget_used", recoveryBudget.used)
+                put("recovery_budget_max", recoveryBudget.maxAttempts)
+                put("recovery_budget_elapsed_ms", recoveryBudget.elapsedMs())
+                put("recovery_episode_started", recoveryBudget.isEpisodeStarted())
+                put("after_dispatch", afterDispatch)
+                put("layout_switch_attempted", layoutSwitchAttempts > 0)
+                put("layout_switch_confirmed", layoutSwitchConfirmed)
+                put("layout_switch_dispatch_pending", layoutSwitchDispatchPending)
+                put("completed_keys", verified)
+                put("attempts", attempts)
+            }
+            return fail("six_key_sequence_deadline_exceeded")
+        }
         fun checkpointAt(next: String, reason: String) {
             stage = next
             checkpoint(progress(), reason)
@@ -220,6 +417,8 @@ internal object DebugSixKeyExecution {
                 put("budget_max", decision.maxAttempts)
                 put("budget_elapsed_ms", decision.elapsedMs)
                 put("budget_max_elapsed_ms", decision.maxElapsedMs)
+                put("run_elapsed_ms", decision.runElapsedMs)
+                put("recovery_episode_started", decision.episodeStarted)
                 put("within_window", decision.withinWindow)
                 put("authority_active", decision.authorityActive)
                 put("action_attempted", actionAttempted)
@@ -246,6 +445,32 @@ internal object DebugSixKeyExecution {
             observationOnly: Boolean = false,
             recoverableCursorProofRace: Boolean = false,
         ): Boolean {
+            if (isDeadlineExpired()) {
+                val elapsed = recoveryBudget.elapsedMs()
+                val decision = RecoveryDecision(
+                    allowed = false,
+                    rejectionReason = ai.closepaw.chatgpt.control.RecoveryRejectionReason.DEADLINE_EXCEEDED,
+                    used = recoveryBudget.used,
+                    maxAttempts = recoveryBudget.maxAttempts,
+                    elapsedMs = elapsed,
+                    maxElapsedMs = recoveryBudget.maxElapsedMs,
+                    withinWindow = elapsed <= recoveryBudget.maxElapsedMs,
+                    authorityActive = authorityActive(),
+                    runElapsedMs = recoveryBudget.totalElapsedMs(),
+                    episodeStarted = recoveryBudget.isEpisodeStarted(),
+                )
+                recordRecoveryDecision(
+                    phase = phase,
+                    refusalReason = reason,
+                    decision = decision,
+                    actionAttempted = actionAttempted,
+                    outcomeUnknown = outcomeUnknown,
+                    completedKeys = completedKeys,
+                    visualSourceStage = visualSourceStage,
+                    visualSourceCondition = visualSourceCondition,
+                )
+                return false
+            }
             val decision = DisplayObservationRecoveryPolicy.evaluateAndClaimPreExecution(
                 budget = recoveryBudget,
                 reason = reason,
@@ -275,9 +500,14 @@ internal object DebugSixKeyExecution {
                 invalidateObservation()
                 return ControlFrame("", -1, "", emptyList(), reason = "control_authority_revoked")
             }
+            if (isDeadlineExpired()) {
+                invalidateObservation()
+                return ControlFrame("", -1, "", emptyList(), reason = "six_key_sequence_deadline_exceeded")
+            }
             var frame = captureFrame()
             while (frame.reason != null &&
-                DisplayObservationRecoveryPolicy.isRecoverableRecaptureReason(frame.reason)
+                DisplayObservationRecoveryPolicy.isRecoverableRecaptureReason(frame.reason) &&
+                !isDeadlineExpired()
             ) {
                 val decision = recoveryBudget.claimDetailed(authorityActive = authorityActive())
                 recordRecoveryDecision(
@@ -306,11 +536,15 @@ internal object DebugSixKeyExecution {
                 invalidateObservation()
                 return ControlFrame("", -1, "", emptyList(), reason = "control_authority_revoked")
             }
+            if (isDeadlineExpired()) {
+                invalidateObservation()
+                return ControlFrame("", -1, "", emptyList(), reason = "six_key_sequence_deadline_exceeded")
+            }
             var frame = captureFrame()
             var retries = 0
             while (frame.reason != null &&
                 DisplayObservationRecoveryPolicy.isRecoverableRecaptureReason(frame.reason) &&
-                retries < maxRetries && authorityActive()
+                retries < maxRetries && authorityActive() && !isDeadlineExpired()
             ) {
                 retries++
                 frame = captureFrame()
@@ -334,25 +568,30 @@ internal object DebugSixKeyExecution {
                     else -> null
                 }
 
+        return withTimeoutOrNull(totalSequenceDeadlineMs) {
         currentCoroutineContext().ensureActive()
-        if (!authorityActive()) return revokeAndFail(markUncertain = false)
+        if (!authorityActive()) return@withTimeoutOrNull revokeAndFail(markUncertain = false)
+        if (isDeadlineExpired()) return@withTimeoutOrNull failDeadline("key_1_preflight", afterDispatch = false)
         checkpointAt("key_1_preflight", "fresh_keyboard_sequence_observation")
 
         var before = captureFrameRecoverable("key_1_preflight")
-        if (!authorityActive()) return revokeAndFail(markUncertain = false)
+        if (!authorityActive()) return@withTimeoutOrNull revokeAndFail(markUncertain = false)
+        if (before.reason == "six_key_sequence_deadline_exceeded" || isDeadlineExpired()) {
+            return@withTimeoutOrNull failDeadline("key_1_preflight", afterDispatch = false)
+        }
         if (before.reason != null || before.truncated || before.navigationOnly) {
-            return fail("editor_checkpoint_changed")
+            return@withTimeoutOrNull fail("editor_checkpoint_changed")
         }
         if (!DebugOneStopQa.sameEditor(first, before) ||
             !KeyboardEditorContinuity.sameFocusedEditor(first, before, allowAnonymousResize = false)) {
-            return fail("editor_identity_changed")
+            return@withTimeoutOrNull fail("editor_identity_changed")
         }
         val field = before.inputTarget
         if (before.packageName != "com.android.chrome" ||
             before.keyboard?.packageName != "com.samsung.android.honeyboard" || field == null ||
             !field.focused || !field.editable || !field.focusable || !field.enabled || field.password ||
             !DebugOneStopQa.SixKey.matches(field.text, field.selectionStart, field.selectionEnd, 0))
-            return fail("editor_checkpoint_changed")
+            return@withTimeoutOrNull fail("editor_checkpoint_changed")
 
         // Post-focus target-layout readiness check: distinguish physical keys from suggestion
         // captions and allow at most one guarded LATIN -> HANGUL switch before sequence acquisition.
@@ -400,37 +639,45 @@ internal object DebugSixKeyExecution {
             }
             PhysicalKeyboardLayout.SYMBOLS_OR_NUMBERS -> {
                 recordLayoutEvidence("none", "korean_layout_switch_unsupported_page")
-                return fail("korean_layout_switch_unsupported_page")
+                return@withTimeoutOrNull fail("korean_layout_switch_unsupported_page")
             }
             PhysicalKeyboardLayout.UNVERIFIED -> {
                 recordLayoutEvidence("none", "korean_layout_unverified")
-                return fail("korean_layout_unverified")
+                return@withTimeoutOrNull fail("korean_layout_unverified")
             }
             PhysicalKeyboardLayout.LATIN -> {
                 var switchCandidate = NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(before)
                     ?: run {
                         recordLayoutEvidence("none", "korean_layout_switch_unavailable")
-                        return fail("korean_layout_switch_unavailable")
+                        return@withTimeoutOrNull fail("korean_layout_switch_unavailable")
                     }
                 while (true) {
                     currentCoroutineContext().ensureActive()
                     if (!authorityActive()) {
                         recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
-                        return revokeAndFail(markUncertain = layoutSwitchAttempts > 0)
+                        return@withTimeoutOrNull revokeAndFail(markUncertain = layoutSwitchAttempts > 0)
+                    }
+                    if (isDeadlineExpired()) {
+                        recordLayoutEvidence(switchCandidate.route.code, "six_key_sequence_deadline_exceeded")
+                        return@withTimeoutOrNull failDeadline("layout_switch", afterDispatch = layoutSwitchAttempts > 0)
                     }
                     checkpointAt("layout_readiness_switch_dispatch", "guarded_korean_layout_switch")
+                    layoutSwitchDispatchPending = true
                     val switched = switchToKoreanLayout(before, switchCandidate, nonceGenerator())
+                    if (!switched.attempted && !switched.unknown) {
+                        layoutSwitchDispatchPending = false
+                    }
                     if (switched.attempted) layoutSwitchAttempts = 1
                     if (!authorityActive()) {
                         recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
-                        return revokeAndFail(markUncertain = switched.attempted || switched.unknown || layoutSwitchAttempts > 0)
+                        return@withTimeoutOrNull revokeAndFail(markUncertain = switched.attempted || switched.unknown || layoutSwitchAttempts > 0)
                     }
                     if (switched.success && switched.attempted && !switched.unknown) break
                     val refusal = safeCode(switched.reason ?: "korean_layout_switch_unconfirmed")
                     recordLayoutEvidence(switchCandidate.route.code, refusal, switched)
                     if (switched.attempted || switched.unknown) {
                         uncertain = true
-                        return fail(refusal)
+                        return@withTimeoutOrNull fail(refusal)
                     }
                     if (!evaluateAndClaimRecovery(
                             phase = "layout_switch",
@@ -441,7 +688,8 @@ internal object DebugSixKeyExecution {
                             visualSourceCondition = switched.visualSourceCondition,
                             recoverableCursorProofRace = switched.cursorProofMismatch?.recoverableReadOnlyCursorRace == true,
                         )) {
-                        return fail(refusal)
+                        if (isDeadlineExpired()) return@withTimeoutOrNull failDeadline("layout_switch", afterDispatch = hasDispatchedMutation())
+                        return@withTimeoutOrNull fail(refusal)
                     }
                     // Confirmed pre-dispatch non-execution: discard stale observation, acquire fresh
                     // observation, re-authenticate target/editor/IME/layout, and re-resolve switch key.
@@ -450,13 +698,17 @@ internal object DebugSixKeyExecution {
                     val fresh = captureFrameRecoverable("layout_readiness_recovery")
                     if (!authorityActive()) {
                         recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
-                        return revokeAndFail(markUncertain = false)
+                        return@withTimeoutOrNull revokeAndFail(markUncertain = hasDispatchedMutation())
+                    }
+                    if (fresh.reason == "six_key_sequence_deadline_exceeded" || isDeadlineExpired()) {
+                        recordLayoutEvidence(switchCandidate.route.code, "six_key_sequence_deadline_exceeded")
+                        return@withTimeoutOrNull failDeadline("layout_readiness_recovery", afterDispatch = hasDispatchedMutation())
                     }
                     val recertRefusal = recertifyEmptyEditor(before, fresh)
                     if (recertRefusal != null) {
                         val safe = safeCode(recertRefusal)
                         recordLayoutEvidence(switchCandidate.route.code, safe)
-                        return fail(safe)
+                        return@withTimeoutOrNull fail(safe)
                     }
                     val freshLayout = NativeKeyboardStructuralCertification.classifyPhysicalLayout(fresh)
                     finalLayoutCode = freshLayout.code
@@ -467,12 +719,12 @@ internal object DebugSixKeyExecution {
                             "korean_layout_changed_before_switch"
                         }
                         recordLayoutEvidence(switchCandidate.route.code, layoutRefusal)
-                        return fail(layoutRefusal)
+                        return@withTimeoutOrNull fail(layoutRefusal)
                     }
                     val freshCandidate = NativeKeyboardStructuralCertification.findUniqueKoreanLayoutSwitchCandidate(fresh)
                     if (freshCandidate == null) {
                         recordLayoutEvidence("none", "korean_layout_switch_unavailable")
-                        return fail("korean_layout_switch_unavailable")
+                        return@withTimeoutOrNull fail("korean_layout_switch_unavailable")
                     }
                     before = fresh
                     switchCandidate = freshCandidate
@@ -480,13 +732,17 @@ internal object DebugSixKeyExecution {
                 if (!authorityActive()) {
                     uncertain = true
                     recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
-                    return fail("control_authority_revoked")
+                    return@withTimeoutOrNull fail("control_authority_revoked")
                 }
                 val afterSwitch = capturePostconditionReadOnly()
                 if (!authorityActive()) {
                     uncertain = true
                     recordLayoutEvidence(switchCandidate.route.code, "control_authority_revoked")
-                    return fail("control_authority_revoked")
+                    return@withTimeoutOrNull fail("control_authority_revoked")
+                }
+                if (afterSwitch.reason == "six_key_sequence_deadline_exceeded" || isDeadlineExpired()) {
+                    recordLayoutEvidence(switchCandidate.route.code, "six_key_sequence_deadline_exceeded")
+                    return@withTimeoutOrNull failDeadline("layout_post_switch", afterDispatch = true)
                 }
                 val afterField = afterSwitch.inputTarget
                 val afterLayout = NativeKeyboardStructuralCertification.classifyPhysicalLayout(afterSwitch)
@@ -507,9 +763,10 @@ internal object DebugSixKeyExecution {
                 if (!switchedCleanly) {
                     uncertain = true
                     recordLayoutEvidence(switchCandidate.route.code, "korean_layout_post_switch_unverified")
-                    return fail("korean_layout_post_switch_unverified")
+                    return@withTimeoutOrNull fail("korean_layout_post_switch_unverified")
                 }
                 layoutSwitchConfirmed = true
+                layoutSwitchDispatchPending = false
                 recordLayoutEvidence(switchCandidate.route.code)
                 before = afterSwitch
                 checkpointAt("key_1_preflight", "korean_layout_ready")
@@ -523,11 +780,12 @@ internal object DebugSixKeyExecution {
         var finalSequenceResult: SequencePacket
         while (true) {
             currentCoroutineContext().ensureActive()
-            if (!authorityActive()) return revokeAndFail(markUncertain = false)
+            if (!authorityActive()) return@withTimeoutOrNull revokeAndFail(markUncertain = hasDispatchedMutation())
+            if (isDeadlineExpired()) return@withTimeoutOrNull failDeadline("sequence_observe", afterDispatch = hasDispatchedMutation())
             val started = clockMs()
             val observed = observeSequence(sequenceLabels)
             observationMs += (clockMs() - started).coerceAtLeast(0L)
-            if (!authorityActive()) return revokeAndFail(markUncertain = false)
+            if (!authorityActive()) return@withTimeoutOrNull revokeAndFail(markUncertain = hasDispatchedMutation())
             evidence += DebugKeyboardEvidence.fromObservation(
                 observed.data, observed.success, sequenceLabels,
                 if (observed.success) null else observed.displayPlanRefusal,
@@ -554,26 +812,30 @@ internal object DebugSixKeyExecution {
                     // A refusal could mean protected content, overlay, or revoked consent.
                     // Do not collect another frame after that refusal.
                     afterFailure = "skipped_refused_observation"
-                    return fail("keyboard_observation_refused")
+                    if (isDeadlineExpired()) return@withTimeoutOrNull failDeadline("sequence_observe", afterDispatch = hasDispatchedMutation())
+                    return@withTimeoutOrNull fail("keyboard_observation_refused")
                 }
                 checkpointAt("key_1_preflight", "read_only_observation_recovery")
                 invalidateObservation()
                 val fresh = captureFrameRecoverable("key_1_preflight")
-                if (!authorityActive()) return revokeAndFail(markUncertain = false)
+                if (!authorityActive()) return@withTimeoutOrNull revokeAndFail(markUncertain = hasDispatchedMutation())
+                if (fresh.reason == "six_key_sequence_deadline_exceeded" || isDeadlineExpired()) {
+                    return@withTimeoutOrNull failDeadline("sequence_observe_recovery", afterDispatch = hasDispatchedMutation())
+                }
                 val recertRefusal = recertifyEmptyEditor(before, fresh)
                     ?: if (NativeKeyboardStructuralCertification.classifyPhysicalLayout(fresh) != PhysicalKeyboardLayout.HANGUL) {
                         "korean_layout_changed_before_sequence"
                     } else null
                 if (recertRefusal != null) {
                     afterFailure = "skipped_refused_observation"
-                    return fail(safeCode(recertRefusal))
+                    return@withTimeoutOrNull fail(safeCode(recertRefusal))
                 }
                 before = fresh
                 continue
             }
 
             val observationId = observed.data["observation_id"]?.jsonPrimitive?.contentOrNull
-                ?: return fail("observation_id_missing")
+                ?: return@withTimeoutOrNull fail("observation_id_missing")
             val visualId = (observed.data["visual"] as? JsonObject)?.get("visual_id")?.jsonPrimitive?.contentOrNull
             val candidates = resolveUniqueSequenceCandidates(observed.data, sequenceLabels)
             if (visualId.isNullOrBlank() || candidates == null) {
@@ -583,7 +845,7 @@ internal object DebugSixKeyExecution {
                 afterFailure = followUp.status
                 followUpEvidence = followUp.evidence
                 extraReads += followUp.reads
-                return fail("unique_physical_key_not_proven")
+                return@withTimeoutOrNull fail("unique_physical_key_not_proven")
             }
 
             val certifiedFrame = observed.certifiedFrame
@@ -612,19 +874,23 @@ internal object DebugSixKeyExecution {
                     checkpointAt("key_1_preflight", "read_only_certified_observation_recovery")
                     invalidateObservation()
                     val fresh = captureFrameRecoverable("key_1_preflight")
-                    if (!authorityActive()) return revokeAndFail(markUncertain = false)
+                    if (!authorityActive()) return@withTimeoutOrNull revokeAndFail(markUncertain = hasDispatchedMutation())
+                    if (fresh.reason == "six_key_sequence_deadline_exceeded" || isDeadlineExpired()) {
+                        return@withTimeoutOrNull failDeadline("certified_observation_lookup", afterDispatch = hasDispatchedMutation())
+                    }
                     val recertRefusal = recertifyEmptyEditor(before, fresh)
                         ?: if (NativeKeyboardStructuralCertification.classifyPhysicalLayout(fresh) != PhysicalKeyboardLayout.HANGUL) {
                             "korean_layout_changed_before_sequence"
                         } else null
-                    if (recertRefusal != null) return fail(safeCode(recertRefusal))
+                    if (recertRefusal != null) return@withTimeoutOrNull fail(safeCode(recertRefusal))
                     before = fresh
                     continue
                 }
-                return fail("certified_observation_unavailable")
+                if (isDeadlineExpired()) return@withTimeoutOrNull failDeadline("certified_observation_lookup", afterDispatch = hasDispatchedMutation())
+                return@withTimeoutOrNull fail("certified_observation_unavailable")
             }
             if (!DebugOneStopQa.sameEditor(first, certifiedFrame) || certifiedFrame.keyboard != before.keyboard) {
-                return fail("editor_identity_changed")
+                return@withTimeoutOrNull fail("editor_identity_changed")
             }
 
             // Strict fail-closed hybrid certification against the EXACT observed certified frame
@@ -640,9 +906,10 @@ internal object DebugSixKeyExecution {
             var nonDisplayCertFailure = false
             for (candidate in candidates) {
                 currentCoroutineContext().ensureActive()
-                if (!authorityActive()) return revokeAndFail(markUncertain = false)
+                if (!authorityActive()) return@withTimeoutOrNull revokeAndFail(markUncertain = hasDispatchedMutation())
+                if (isDeadlineExpired()) return@withTimeoutOrNull failDeadline("candidate_certification", afterDispatch = hasDispatchedMutation())
                 val check = certifyCandidate(visualId, certifiedFrame, candidate, requiredNativeLabels)
-                if (!authorityActive()) return revokeAndFail(markUncertain = false)
+                if (!authorityActive()) return@withTimeoutOrNull revokeAndFail(markUncertain = hasDispatchedMutation())
                 val crop = check.crop?.takeIf { it.valid }
                 val validMethod = if (candidate.imageOnly) {
                     check.method in setOf("space_glyph", "mlkit_ocr", "cache_reused")
@@ -738,30 +1005,35 @@ internal object DebugSixKeyExecution {
                     checkpointAt("key_1_preflight", "read_only_certification_recovery")
                     invalidateObservation()
                     val fresh = captureFrameRecoverable("key_1_preflight")
-                    if (!authorityActive()) return revokeAndFail(markUncertain = false)
+                    if (!authorityActive()) return@withTimeoutOrNull revokeAndFail(markUncertain = hasDispatchedMutation())
+                    if (fresh.reason == "six_key_sequence_deadline_exceeded" || isDeadlineExpired()) {
+                        return@withTimeoutOrNull failDeadline("candidate_certification", afterDispatch = hasDispatchedMutation())
+                    }
                     val recertRefusal = recertifyEmptyEditor(before, fresh)
                         ?: if (NativeKeyboardStructuralCertification.classifyPhysicalLayout(fresh) != PhysicalKeyboardLayout.HANGUL) {
                             "korean_layout_changed_before_sequence"
                         } else null
-                    if (recertRefusal != null) return fail(safeCode(recertRefusal))
+                    if (recertRefusal != null) return@withTimeoutOrNull fail(safeCode(recertRefusal))
                     before = fresh
                     continue
                 }
+                if (isDeadlineExpired()) return@withTimeoutOrNull failDeadline("candidate_certification", afterDispatch = hasDispatchedMutation())
                 val followUp = DebugKeyboardEvidence.inspectAmbiguousCandidates(
                     capture = captureFrame, baseline = first, keyIndex = 0, allowed = allowed,
                 )
                 afterFailure = followUp.status
                 followUpEvidence = followUp.evidence
                 extraReads += followUp.reads
-                return fail("autonomous_keyboard_certification_unverified")
+                return@withTimeoutOrNull fail("autonomous_keyboard_certification_unverified")
             }
 
-            if (!authorityActive()) return revokeAndFail(markUncertain = false)
+            if (!authorityActive()) return@withTimeoutOrNull revokeAndFail(markUncertain = hasDispatchedMutation())
+            if (isDeadlineExpired()) return@withTimeoutOrNull failDeadline("sequence_pre_dispatch", afterDispatch = hasDispatchedMutation())
             val proofSteps = mutableListOf<AutonomousCertifiedKeyStep>()
             val steps = JsonArray(DebugOneStopQa.SixKey.labels.map { label ->
                 val (candidate, check) = certifiedStepsByLabel[label]
-                    ?: return fail("autonomous_keyboard_certification_unverified")
-                val crop = check.crop ?: return fail("autonomous_keyboard_certification_unverified")
+                    ?: return@withTimeoutOrNull fail("autonomous_keyboard_certification_unverified")
+                val crop = check.crop ?: return@withTimeoutOrNull fail("autonomous_keyboard_certification_unverified")
                 proofSteps += AutonomousCertifiedKeyStep(
                     label = label,
                     nodeId = candidate.nodeId,
@@ -784,6 +1056,7 @@ internal object DebugSixKeyExecution {
                 steps = proofSteps.toList(),
             )
             checkpointAt("key_1_dispatch", "guarded_visual_key_sequence")
+            sequenceDispatchPending = true
             val sequenceResult = dispatchSequence(
                 buildJsonObject {
                     put("session_id", sessionId)
@@ -804,11 +1077,28 @@ internal object DebugSixKeyExecution {
                 .coerceIn(0, DebugOneStopQa.SixKey.labels.size)
             val fallbackSpaces = sequenceResult.data["confirmed_image_fallback_spaces"]?.jsonPrimitive?.intOrNull ?: 0
             val seqReason = sequenceResult.data["reason_code"]?.jsonPrimitive?.contentOrNull
+            val obsReason = sequenceResult.data["observation_reason_code"]?.jsonPrimitive?.contentOrNull
+            val pendingStepState = sequenceResult.data["pending_step_state"]?.jsonPrimitive?.contentOrNull
+            val pendingKeyIndex = sequenceResult.data["pending_key_index"]?.jsonPrimitive?.intOrNull
+                ?.takeIf { it in 1..DebugOneStopQa.SixKey.labels.size }
+            if (!attempted && !unknown && completed == 0 &&
+                pendingStepState != PendingKeyStepState.DISPATCHED_UNCONFIRMED.code) {
+                sequenceDispatchPending = false
+            }
             val seqSourceFailure = sequenceResult.data["visual_source_failure"] as? JsonObject
             val seqSourceStage = seqSourceFailure?.get("stage")?.jsonPrimitive?.contentOrNull
             val seqSourceCondition = seqSourceFailure?.get("condition")?.jsonPrimitive?.contentOrNull
             val seqWindowChanges = sequenceResult.captureWindowChanges
                 ?: extractWindowEvents(seqSourceFailure)
+            val (safeInnerDecisions, droppedInnerDecisions) = safeInnerRecoveryDecisions(
+                sequenceResult.data["inner_recovery_decisions"] as? JsonArray,
+            )
+            val (safePostRefusals, droppedPostRefusals) = safePostCheckRefusals(
+                sequenceResult.data["keyboard_post_check_refusals"] as? JsonArray,
+            )
+            val (safeAttemptEvidence, droppedAttemptEvidence) = safeAttemptFailureEvidence(
+                sequenceResult.data["attempt_failure_evidence"] as? JsonArray,
+            )
             evidence += buildJsonObject {
                 put("source", "visual_key_sequence_result")
                 put("confirmation_mode", "autonomous_debug_hybrid_structural_and_image")
@@ -820,20 +1110,38 @@ internal object DebugSixKeyExecution {
                 put("app_result_verified", appVerified)
                 put("confirmed_image_fallback_spaces", fallbackSpaces)
                 put("read_only_recovery_attempts", recoveryBudget.used)
+                put("recovery_budget_elapsed_ms", recoveryBudget.elapsedMs())
+                put("recovery_episode_started", recoveryBudget.isEpisodeStarted())
+                put("run_elapsed_ms", totalRunElapsedMs())
+                pendingStepState?.let { put("pending_step_state", safeCode(it)) }
+                pendingKeyIndex?.let { put("pending_key_index", it) }
                 if (!sequenceResult.success) {
                     put("native_refusal_reason", safeCode(seqReason))
+                    obsReason?.let { put("observation_reason_code", safeCode(it)) }
+                    DebugKeyboardEvidence.safeDisplayRefusal(sequenceResult.displayPlanRefusal)?.let {
+                        put("display_plan_refusal", it)
+                    }
                     seqSourceStage?.let { put("visual_source_stage", safeCode(it)) }
                     seqSourceCondition?.let { put("visual_source_condition", safeCode(it)) }
-                    if (DebugKeyboardEvidence.shouldAttachWindowChanges(seqReason, seqSourceCondition) &&
+                    if ((DebugKeyboardEvidence.shouldAttachWindowChanges(seqReason, seqSourceCondition) ||
+                            DebugKeyboardEvidence.shouldAttachWindowChanges(obsReason, seqSourceCondition)) &&
                         seqWindowChanges != null) {
                         put("capture_window_changes", DebugKeyboardEvidence.safeWindowChanges(seqWindowChanges))
                     }
-                    if (seqReason == "visual_post_keyboard_context_changed" &&
+                    if ((seqReason == "visual_post_keyboard_context_changed" ||
+                            obsReason == "visual_post_keyboard_context_changed") &&
                         sequenceResult.cursorProofMismatch != null) {
                         put("cursor_proof_mismatch",
                             DebugKeyboardEvidence.safeCursorProofMismatch(sequenceResult.cursorProofMismatch))
                     }
                 }
+                // Preserve bounded per-attempt recovery diagnostics even when the sequence succeeds!
+                safeInnerDecisions?.let { put("inner_recovery_decisions", it) }
+                if (droppedInnerDecisions > 0) put("inner_recovery_decisions_truncated_middle_count", droppedInnerDecisions)
+                safePostRefusals?.let { put("keyboard_post_check_refusals", it) }
+                if (droppedPostRefusals > 0) put("keyboard_post_check_refusals_truncated_middle_count", droppedPostRefusals)
+                safeAttemptEvidence?.let { put("attempt_failure_evidence", it) }
+                if (droppedAttemptEvidence > 0) put("attempt_failure_evidence_truncated_middle_count", droppedAttemptEvidence)
                 sequenceResult.data["pixel_failure_stage"]?.jsonPrimitive?.contentOrNull?.let {
                     put("pixel_failure_stage", safeCode(it))
                 }
@@ -858,12 +1166,15 @@ internal object DebugSixKeyExecution {
                 checkpointAt("key_1_preflight", "read_only_pre_dispatch_recovery")
                 invalidateObservation()
                 val fresh = captureFrameRecoverable("key_1_preflight")
-                if (!authorityActive()) return revokeAndFail(markUncertain = false)
+                if (!authorityActive()) return@withTimeoutOrNull revokeAndFail(markUncertain = hasDispatchedMutation())
+                if (fresh.reason == "six_key_sequence_deadline_exceeded" || isDeadlineExpired()) {
+                    return@withTimeoutOrNull failDeadline("sequence_pre_dispatch_recovery", afterDispatch = hasDispatchedMutation())
+                }
                 val recertRefusal = recertifyEmptyEditor(before, fresh)
                     ?: if (NativeKeyboardStructuralCertification.classifyPhysicalLayout(fresh) != PhysicalKeyboardLayout.HANGUL) {
                         "korean_layout_changed_before_sequence"
                     } else null
-                if (recertRefusal != null) return fail(safeCode(recertRefusal))
+                if (recertRefusal != null) return@withTimeoutOrNull fail(safeCode(recertRefusal))
                 before = fresh
                 continue
             }
@@ -878,40 +1189,142 @@ internal object DebugSixKeyExecution {
         val completed = (sequenceResult.data["completed_keys"]?.jsonPrimitive?.intOrNull ?: 0)
             .coerceIn(0, DebugOneStopQa.SixKey.labels.size)
         val seqReason = sequenceResult.data["reason_code"]?.jsonPrimitive?.contentOrNull
+        val obsReason = sequenceResult.data["observation_reason_code"]?.jsonPrimitive?.contentOrNull
+        val pendingStepState = sequenceResult.data["pending_step_state"]?.jsonPrimitive?.contentOrNull
+        val pendingKeyIndex = sequenceResult.data["pending_key_index"]?.jsonPrimitive?.intOrNull
+            ?.takeIf { it in 1..DebugOneStopQa.SixKey.labels.size }
 
-        attempts = if (attempted) maxOf(completed, 1) else 0
         verified = completed
-        uncertain = uncertain || unknown || (attempted && !sequenceResult.success)
+        attempts = when {
+            completed > 0 && pendingStepState == PendingKeyStepState.DISPATCHED_UNCONFIRMED.code ->
+                (completed + 1).coerceAtMost(DebugOneStopQa.SixKey.labels.size)
+            completed > 0 -> completed
+            attempted -> 1
+            else -> 0
+        }
+        stage = when (pendingStepState) {
+            PendingKeyStepState.FINAL_READ.code -> "six_key_final"
+            PendingKeyStepState.DISPATCHED_UNCONFIRMED.code ->
+                pendingKeyIndex?.let { "key_${it}_dispatch" } ?: "key_1_dispatch"
+            PendingKeyStepState.NOT_DISPATCHED.code ->
+                pendingKeyIndex?.let { "key_${it}_preflight" } ?: "key_1_preflight"
+            PendingKeyStepState.CONFIRMED.code ->
+                if (completed >= DebugOneStopQa.SixKey.labels.size) "six_key_final"
+                else pendingKeyIndex?.let { "key_${it}_confirmed" } ?: stage
+            else -> stage
+        }
         if (!sequenceResult.success || unknown || !attempted || !appVerified ||
             completed != DebugOneStopQa.SixKey.labels.size) {
-            return fail(if (seqReason != null) safeCode(seqReason) else "visual_key_sequence_unconfirmed")
+            val noTouchAtAll = completed == 0 && !attempted && !unknown &&
+                pendingStepState != PendingKeyStepState.DISPATCHED_UNCONFIRMED.code
+            val authorityRevokedResult = !authorityActive() || seqReason in setOf(
+                "control_session_changed_observe_again",
+                "screen_share_revoked",
+                "keyboard_sequence_window_recheck_consent_changed",
+            )
+            if (authorityRevokedResult) {
+                invalidateObservation()
+                uncertain = true
+                return@withTimeoutOrNull fail(
+                    if (!authorityActive() && seqReason == null) "control_authority_revoked"
+                    else if (!authorityActive() && seqReason !in setOf("control_session_changed_observe_again", "screen_share_revoked", "keyboard_sequence_window_recheck_consent_changed")) "control_authority_revoked"
+                    else safeCode(seqReason),
+                )
+            }
+            if (seqReason == "six_key_sequence_deadline_exceeded" || isDeadlineExpired()) {
+                return@withTimeoutOrNull failDeadline(
+                    phase = stage,
+                    afterDispatch = hasDispatchedMutation() || !noTouchAtAll || unknown,
+                )
+            }
+            if (noTouchAtAll) {
+                // Zero touches dispatched across the entire sequence -> terminal BLOCKED.
+            } else if (completed in 1 until DebugOneStopQa.SixKey.labels.size &&
+                pendingStepState == PendingKeyStepState.NOT_DISPATCHED.code &&
+                !unknown && !uncertain && authorityActive() && !isDeadlineExpired()) {
+                if (!mayVerifyPartialPrefixAfter(seqReason, obsReason)) {
+                    // Refusal may indicate security/privacy/unowned-window/lock/revocation/unknown cause:
+                    // do NOT perform extra observation; stay conservatively UNKNOWN.
+                    uncertain = true
+                    evidence += buildJsonObject {
+                        put("source", "partial_prefix_verification")
+                        put("completed_keys", completed)
+                        put("pending_step_state", safeCode(pendingStepState))
+                        pendingKeyIndex?.let { put("pending_key_index", it) }
+                        put("verified", false)
+                        put("skipped_unsafe_or_unknown_refusal", true)
+                        put("authority_active", authorityActive())
+                    }
+                } else {
+                    // Partial known prefix with explicit NOT_DISPATCHED on a safe allowlisted refusal:
+                    // downgrade UNKNOWN -> BLOCKED ONLY after an independent fresh read proves exact
+                    // touchContext, keyboard, completeness, same-editor identity, prefix, and caret.
+                    val prefixCheck = capturePostconditionReadOnly()
+                    val prefixTarget = prefixCheck.inputTarget
+                    val prefixVerified = authorityActive() && !isDeadlineExpired() &&
+                        prefixCheck.reason == null && !prefixCheck.truncated && !prefixCheck.navigationOnly &&
+                        prefixCheck.packageName == "com.android.chrome" &&
+                        prefixCheck.touchContext.isNotEmpty() && prefixCheck.touchContext == before.touchContext &&
+                        prefixCheck.keyboard == before.keyboard &&
+                        prefixTarget != null && prefixTarget.focused && prefixTarget.editable &&
+                        prefixTarget.focusable && prefixTarget.enabled && !prefixTarget.password &&
+                        DebugOneStopQa.sameEditor(first, prefixCheck) &&
+                        KeyboardEditorContinuity.sameFocusedEditor(before, prefixCheck, allowAnonymousResize = true) &&
+                        DebugOneStopQa.SixKey.matches(
+                            prefixTarget.text, prefixTarget.selectionStart, prefixTarget.selectionEnd, completed,
+                        )
+                    evidence += buildJsonObject {
+                        put("source", "partial_prefix_verification")
+                        put("completed_keys", completed)
+                        put("pending_step_state", safeCode(pendingStepState))
+                        pendingKeyIndex?.let { put("pending_key_index", it) }
+                        put("verified", prefixVerified)
+                        put("skipped_unsafe_or_unknown_refusal", false)
+                        put("touch_context_matched", prefixCheck.touchContext.isNotEmpty() && prefixCheck.touchContext == before.touchContext)
+                        put("authority_active", authorityActive())
+                        prefixCheck.reason?.let { put("read_reason_code", safeCode(it)) }
+                    }
+                    if (!prefixVerified) uncertain = true
+                }
+            } else {
+                uncertain = true
+            }
+            return@withTimeoutOrNull fail(if (seqReason != null) safeCode(seqReason) else "visual_key_sequence_unconfirmed")
         }
 
         stage = "six_key_final"
+        if (isDeadlineExpired()) return@withTimeoutOrNull failDeadline("six_key_final", afterDispatch = true)
         val final = capturePostconditionReadOnly()
-        if (!authorityActive()) return revokeAndFail(markUncertain = attempts > 0)
+        if (!authorityActive()) return@withTimeoutOrNull revokeAndFail(markUncertain = attempts > 0)
+        if (final.reason == "six_key_sequence_deadline_exceeded" || isDeadlineExpired()) {
+            return@withTimeoutOrNull failDeadline("six_key_final", afterDispatch = true)
+        }
         if (final.reason != null || final.truncated || final.navigationOnly ||
             final.packageName != "com.android.chrome") {
             uncertain = attempts > 0
-            return fail("six_key_final_read_unconfirmed")
+            return@withTimeoutOrNull fail("six_key_final_read_unconfirmed")
         }
         val post = final.inputTarget
         if (post == null || !post.focused || !post.editable || !post.focusable || !post.enabled || post.password ||
             !DebugOneStopQa.sameEditor(first, final) ||
             !KeyboardEditorContinuity.sameFocusedEditor(before, final, allowAnonymousResize = true)) {
             uncertain = attempts > 0
-            return fail("final_editor_identity_unverified")
+            return@withTimeoutOrNull fail("final_editor_identity_unverified")
         }
         if (!DebugOneStopQa.SixKey.matches(post.text, post.selectionStart, post.selectionEnd, 6)) {
             uncertain = attempts > 0
-            return fail("six_key_final_read_unconfirmed")
+            return@withTimeoutOrNull fail("six_key_final_read_unconfirmed")
         }
         // Linearization point: commit PASS only if exact active session token & authority hold atomically.
-        if (!commitPass()) return revokeAndFail(markUncertain = attempts > 0)
-        return Outcome(
+        if (!commitPass()) return@withTimeoutOrNull revokeAndFail(markUncertain = attempts > 0)
+        Outcome(
             progress(), null, evidence.toList(), observationMs, extraReads, afterFailure, followUpEvidence,
             initialLayoutCode, finalLayoutCode, layoutSwitchAttempts, layoutSwitchConfirmed,
             recoveryBudget.used,
+        )
+        } ?: failDeadline(
+            phase = stage,
+            afterDispatch = hasDispatchedMutation(),
         )
     }
 
@@ -923,6 +1336,10 @@ internal object DebugSixKeyExecution {
     ): Outcome {
         val anchorToken = ownedToken ?: ControlSession.ActiveToken(session.id, session.epoch)
         val sharedBudget = SharedQaRecoveryBudget(clockMs = { SystemClock.elapsedRealtime() })
+        val runStartedAtMs = SystemClock.elapsedRealtime()
+        val deadlineExpired: () -> Boolean = {
+            (SystemClock.elapsedRealtime() - runStartedAtMs).coerceAtLeast(0L) >= DEFAULT_TOTAL_SEQUENCE_DEADLINE_MS
+        }
         return runWithSeam(
             captureFrame = { port.capture() },
             observeSequence = { labels ->
@@ -968,7 +1385,10 @@ internal object DebugSixKeyExecution {
             dispatchSequence = { payload, autonomousProof ->
                 port.resetDebugCaptureEvidence()
                 val res = control.visualKeySequenceAutonomous(
-                    payload, autonomousProof, recoveryBudget = sharedBudget,
+                    payload,
+                    autonomousProof,
+                    recoveryBudget = sharedBudget,
+                    deadlineExpired = deadlineExpired,
                 )
                 val sourceFailure = res.data["visual_source_failure"] as? JsonObject
                 val windowChanges = if (res.success) null else {
@@ -979,6 +1399,7 @@ internal object DebugSixKeyExecution {
                     data = res.data,
                     captureWindowChanges = windowChanges,
                     cursorProofMismatch = if (res.success) null else port.visualKeyboardContextMismatch(),
+                    displayPlanRefusal = if (res.success) null else port.debugDisplayPlanRefusal(),
                 )
             },
             sessionId = anchorToken.id,

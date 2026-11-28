@@ -1251,4 +1251,648 @@ class DebugSixKeyRealSessionRecoveryTest {
         assertTrue("KeyboardEditorContinuity must also accept stable anonymous WebView editor",
             KeyboardEditorContinuity.sameFocusedEditor(anonBeforeFrame, anonAfterFrame, allowAnonymousResize = true))
     }
+
+    @Test
+    fun partialPrefixClassification_blockedOnlyWithFreshExactProof_propagatesRedactedInnerDiagnostics_andStaysUnknownOnDriftUnavailableAuthorityOrFinalRead() = runBlocking {
+        val f0 = hangulFrame("fp-0", text = "", sel = 0)
+        val fPrefixExact = hangulFrame("fp-prefix-3", text = "가 ", sel = 2)
+        val fPrefixDrift = hangulFrame("fp-prefix-drift", text = "가 나", sel = 3)
+        val journal = buildJsonObject {
+            put("elapsed_ms", 14L)
+            put("unrecorded_count", 0L)
+            put("events", buildJsonArray {
+                add(buildJsonObject {
+                    put("type", "windows_changed")
+                    put("reported_owner", "unknown")
+                    put("event_window_match", "other")
+                    put("event_display_class", "default")
+                    put("window_change_mask", 8)
+                    put("unknown_change_bits", false)
+                    put("secret_user_text", "DO_NOT_LEAK_URL")
+                })
+            })
+        }
+        val rawPostCheck = buildJsonArray {
+            add(buildJsonObject {
+                put("key_index", 4)
+                put("read_attempt", 1)
+                put("read_elapsed_ms", 180L)
+                put("change", buildJsonObject {
+                    put("source", "full_fingerprint")
+                    put("chrome_other_changed", true)
+                    put("raw_bounds", "0 0 1080 2400")
+                })
+            })
+        }
+        val rawInnerDecisions = buildJsonArray {
+            add(buildJsonObject {
+                put("phase", "follow_up_observe")
+                put("allowed", false)
+                put("rejection_reason", "elapsed_budget")
+                put("refusal_reason", "display_window_changed_during_capture")
+                put("budget_used", 2)
+                put("budget_max", 3)
+                put("budget_elapsed_ms", 15_001L)
+                put("budget_max_elapsed_ms", 15_000L)
+                put("run_elapsed_ms", 40_175L)
+                put("recovery_episode_started", true)
+                put("within_window", false)
+                put("authority_active", true)
+                put("pending_key_index", 4)
+                put("pending_step_state", "not_dispatched")
+                put("leaked_url", "https://private.example")
+            })
+        }
+
+        fun seqPacket(
+            completed: Int = 3,
+            pendingState: String? = PendingKeyStepState.NOT_DISPATCHED.code,
+            pendingIndex: Int? = 4,
+            unknown: Boolean = false,
+            reason: String = "keyboard_sequence_new_image_unavailable",
+            obsReason: String? = "display_window_changed_during_capture",
+            displayPlan: String? = "display_unowned_window",
+            cursorMismatch: KeyboardContextMismatch? = null,
+        ) = DebugSixKeyExecution.SequencePacket(
+            success = false,
+            data = buildJsonObject {
+                put("reason_code", reason)
+                obsReason?.let { put("observation_reason_code", it) }
+                pendingState?.let { put("pending_step_state", it) }
+                pendingIndex?.let { put("pending_key_index", it) }
+                put("action_attempted", true)
+                put("outcome_unknown", unknown)
+                put("app_result_verified", false)
+                put("completed_keys", completed)
+                put("inner_recovery_decisions", rawInnerDecisions)
+                put("keyboard_post_check_refusals", rawPostCheck)
+            },
+            captureWindowChanges = journal,
+            cursorProofMismatch = cursorMismatch,
+            displayPlanRefusal = displayPlan,
+        )
+
+        // Subcase A: Explicit NOT_DISPATCHED + !unknown + authority active + fresh exact prefix "가 " (2/2) -> terminal BLOCKED + full redacted telemetry!
+        val framesExact = ArrayDeque(listOf(f0, fPrefixExact))
+        val outBlocked = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { framesExact.removeFirst() },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ -> seqPacket() },
+            sessionId = "s-blocked", sessionEpoch = 1L, first = f0, allowed = { true }, checkpoint = { _, _ -> },
+        )
+        assertEquals("keyboard_sequence_new_image_unavailable", outBlocked.failure)
+        assertFalse("Fresh verified prefix + NOT_DISPATCHED must classify BLOCKED (uncertain=false)", outBlocked.progress.uncertain)
+        assertEquals("key_4_preflight", outBlocked.progress.stage)
+        assertEquals(3, outBlocked.progress.verified)
+        assertEquals(3, outBlocked.progress.attempts)
+        val seqEv = outBlocked.evidence.single { it["source"]?.jsonPrimitive?.contentOrNull == "visual_key_sequence_result" }
+        assertEquals("display_window_changed_during_capture", seqEv["observation_reason_code"]?.jsonPrimitive?.content)
+        assertEquals("not_dispatched", seqEv["pending_step_state"]?.jsonPrimitive?.content)
+        assertEquals(4, seqEv["pending_key_index"]?.jsonPrimitive?.int)
+        assertEquals("display_unowned_window", seqEv["display_plan_refusal"]?.jsonPrimitive?.content)
+        assertNotNull("capture_window_changes must attach when observation_reason_code is display_window_changed_during_capture",
+            seqEv["capture_window_changes"])
+        assertNotNull("inner_recovery_decisions must propagate", seqEv["inner_recovery_decisions"])
+        assertNotNull("keyboard_post_check_refusals must propagate", seqEv["keyboard_post_check_refusals"])
+        val serializedEv = outBlocked.evidence.toString()
+        assertFalse("Redaction must drop secret_user_text", serializedEv.contains("DO_NOT_LEAK_URL"))
+        assertFalse("Redaction must drop raw_bounds", serializedEv.contains("raw_bounds"))
+        assertFalse("Redaction must drop leaked_url", serializedEv.contains("private.example"))
+        val prefixEv = outBlocked.evidence.single { it["source"]?.jsonPrimitive?.contentOrNull == "partial_prefix_verification" }
+        assertEquals(true, prefixEv["verified"]?.jsonPrimitive?.boolean)
+
+        // Subcase B: Fresh prefix read unavailable/truncated -> stays conservatively UNKNOWN!
+        val framesUnavail = ArrayDeque(listOf(f0, fPrefixExact.copy(truncated = true)))
+        val outUnavail = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { framesUnavail.removeFirst() },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ -> seqPacket() },
+            sessionId = "s-unavail", sessionEpoch = 1L, first = f0, allowed = { true }, checkpoint = { _, _ -> },
+        )
+        assertTrue("Truncated fresh prefix read must stay UNKNOWN", outUnavail.progress.uncertain)
+
+        // Subcase C: Fresh prefix read shows text drift ("가 나" instead of "가 ") -> stays UNKNOWN!
+        val framesDrift = ArrayDeque(listOf(f0, fPrefixDrift))
+        val outDrift = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { framesDrift.removeFirst() },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ -> seqPacket() },
+            sessionId = "s-drift", sessionEpoch = 1L, first = f0, allowed = { true }, checkpoint = { _, _ -> },
+        )
+        assertTrue("Drifted prefix must stay UNKNOWN", outDrift.progress.uncertain)
+
+        // Subcase D: Authority revoked before prefix check -> stays UNKNOWN!
+        var authLive = true
+        val outRevoked = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { f0 },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ ->
+                authLive = false
+                seqPacket()
+            },
+            sessionId = "s-rev", sessionEpoch = 1L, first = f0, allowed = { authLive }, checkpoint = { _, _ -> },
+        )
+        assertTrue("Revoked authority on partial sequence must stay UNKNOWN", outRevoked.progress.uncertain)
+
+        // Subcase E: DISPATCHED_UNCONFIRMED on key 4 -> UNKNOWN + stage=key_4_dispatch + attempts=4!
+        val outDispatched = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { f0 },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ ->
+                seqPacket(pendingState = PendingKeyStepState.DISPATCHED_UNCONFIRMED.code, pendingIndex = 4, unknown = true, reason = "gesture_cancelled")
+            },
+            sessionId = "s-disp", sessionEpoch = 1L, first = f0, allowed = { true }, checkpoint = { _, _ -> },
+        )
+        assertTrue(outDispatched.progress.uncertain)
+        assertEquals("key_4_dispatch", outDispatched.progress.stage)
+        assertEquals(4, outDispatched.progress.attempts)
+
+        // Subcase F: FINAL_READ failure after 6/6 -> UNKNOWN + stage=six_key_final + no key 7!
+        val outFinal = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { f0 },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ ->
+                seqPacket(completed = 6, pendingState = PendingKeyStepState.FINAL_READ.code, pendingIndex = null, unknown = true, reason = "keyboard_final_text_unconfirmed")
+            },
+            sessionId = "s-final", sessionEpoch = 1L, first = f0, allowed = { true }, checkpoint = { _, _ -> },
+        )
+        assertTrue(outFinal.progress.uncertain)
+        assertEquals("six_key_final", outFinal.progress.stage)
+        val finalSeqEv = outFinal.evidence.single { it["source"]?.jsonPrimitive?.contentOrNull == "visual_key_sequence_result" }
+        assertNull(finalSeqEv["pending_key_index"])
+
+        // Subcase G: Wrapped observation_reason_code = visual_post_keyboard_context_changed attaches cursor_proof_mismatch,
+        // performs ZERO extra prefix read (removed from safe allowlist), and stays conservatively UNKNOWN!
+        var cursorCaptures = 0
+        val outCursor = DebugSixKeyExecution.runWithSeam(
+            captureFrame = {
+                cursorCaptures++
+                if (cursorCaptures > 1) error("Must NOT run extra prefix capture on visual_post_keyboard_context_changed")
+                f0
+            },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ ->
+                seqPacket(
+                    obsReason = "visual_post_keyboard_context_changed",
+                    cursorMismatch = KeyboardContextMismatch(
+                        kind = KeyboardContextMismatchKind.CURSOR_PROOF_CHANGED,
+                        location = CursorRaceLocation.AFTER,
+                        beforeFailure = null,
+                        afterFailure = CursorProofFailure.SCREEN_CHANGE_RACE,
+                        recoverableReadOnlyCursorRace = true,
+                    ),
+                )
+            },
+            sessionId = "s-cursor", sessionEpoch = 1L, first = f0, allowed = { true }, checkpoint = { _, _ -> },
+        )
+        assertEquals(1, cursorCaptures)
+        assertTrue("visual_post_keyboard_context_changed must stay conservatively UNKNOWN", outCursor.progress.uncertain)
+        val cursorEv = outCursor.evidence.single { it["source"]?.jsonPrimitive?.contentOrNull == "visual_key_sequence_result" }
+        assertNotNull("Wrapped visual_post_keyboard_context_changed must attach cursor_proof_mismatch",
+            cursorEv["cursor_proof_mismatch"])
+        val cursorSkipEv = outCursor.evidence.single { it["source"]?.jsonPrimitive?.contentOrNull == "partial_prefix_verification" }
+        assertEquals(true, cursorSkipEv["skipped_unsafe_or_unknown_refusal"]?.jsonPrimitive?.boolean)
+    }
+
+    @Test
+    fun totalSequenceDeadline_failClosedBeforeAndAfterDispatch_andPropagatesExternalCancellation() = runBlocking {
+        val f0 = hangulFrame("fp-0", text = "", sel = 0)
+
+        // 1. Cooperative deadline expired BEFORE any dispatch -> BLOCKED (uncertain=false), 0 dispatches, invalidateObservation called!
+        var clockA = 1_000L
+        var invalidatedA = 0
+        var dispatchCallsA = 0
+        val outBefore = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { f0 },
+            observeSequence = {
+                clockA += 120_000L
+                DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0)
+            },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ ->
+                dispatchCallsA++
+                error("must not dispatch past deadline")
+            },
+            sessionId = "s-dead-before", sessionEpoch = 1L, first = f0,
+            allowed = { true }, checkpoint = { _, _ -> },
+            clockMs = { clockA },
+            invalidateObservation = { invalidatedA++ },
+            totalSequenceDeadlineMs = 120_000L,
+        )
+        assertEquals("six_key_sequence_deadline_exceeded", outBefore.failure)
+        assertFalse("Deadline before any dispatch must be BLOCKED (uncertain=false)", outBefore.progress.uncertain)
+        assertEquals(0, dispatchCallsA)
+        assertTrue(invalidatedA >= 1)
+        val deadEvA = outBefore.evidence.last { it["source"]?.jsonPrimitive?.contentOrNull == "sequence_deadline_exceeded" }
+        assertEquals(false, deadEvA["after_dispatch"]?.jsonPrimitive?.boolean)
+
+        // 2. Hard wall-clock withTimeoutOrNull during a hung dispatchSequence -> cancels, invalidates, UNKNOWN (uncertain=true), no duplicate dispatch!
+        var invalidatedB = 0
+        var dispatchCallsB = 0
+        val outDuring = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { f0 },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ ->
+                dispatchCallsB++
+                kotlinx.coroutines.delay(5_000L)
+                error("should have been cancelled by withTimeoutOrNull")
+            },
+            sessionId = "s-dead-during", sessionEpoch = 1L, first = f0,
+            allowed = { true }, checkpoint = { _, _ -> },
+            invalidateObservation = { invalidatedB++ },
+            totalSequenceDeadlineMs = 80L,
+        )
+        assertEquals("six_key_sequence_deadline_exceeded", outDuring.failure)
+        assertTrue("Deadline during hung dispatch must fail closed UNKNOWN", outDuring.progress.uncertain)
+        assertEquals(1, dispatchCallsB)
+        assertTrue(invalidatedB >= 1)
+        val deadEvB = outDuring.evidence.last { it["source"]?.jsonPrimitive?.contentOrNull == "sequence_deadline_exceeded" }
+        assertEquals(true, deadEvB["after_dispatch"]?.jsonPrimitive?.boolean)
+
+        // 3. External CancellationException (user Stop / job.cancel) MUST propagate (never swallowed as timeout!)
+        var externalCancelled = false
+        val job = launch {
+            try {
+                DebugSixKeyExecution.runWithSeam(
+                    captureFrame = { f0 },
+                    observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+                    certifyCandidate = { _, _, cand, _ ->
+                        PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                            if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+                    },
+                    dispatchSequence = { _, _ ->
+                        kotlinx.coroutines.delay(5_000L)
+                        error("should be cancelled externally")
+                    },
+                    sessionId = "s-ext-cancel", sessionEpoch = 1L, first = f0,
+                    allowed = { true }, checkpoint = { _, _ -> },
+                    totalSequenceDeadlineMs = 60_000L,
+                )
+            } catch (cancel: kotlinx.coroutines.CancellationException) {
+                externalCancelled = true
+                throw cancel
+            }
+        }
+        kotlinx.coroutines.delay(50L)
+        job.cancel()
+        job.join()
+        assertTrue("External CancellationException must propagate untouched", externalCancelled)
+    }
+
+    @Test
+    fun partialPrefixTouchContextAndUnsafeAllowlist_boundedFirstAndLastRetention_andUnifiedDeadlineEvidence() = runBlocking {
+        val f0 = hangulFrame("fp-0", text = "", sel = 0)
+        val fPrefixExact = hangulFrame("fp-prefix-3", text = "가 ", sel = 2)
+        val fPrefixChangedTouchCtx = fPrefixExact.copy(touchContext = "rot1-changed-overlay")
+
+        // 1. touchContext changed on fresh prefix check -> stays UNKNOWN!
+        val framesTouchCtx = ArrayDeque(listOf(f0, fPrefixChangedTouchCtx))
+        val outTouchCtx = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { framesTouchCtx.removeFirst() },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ ->
+                DebugSixKeyExecution.SequencePacket(false, buildJsonObject {
+                    put("reason_code", "keyboard_sequence_new_image_unavailable")
+                    put("observation_reason_code", "display_window_changed_during_capture")
+                    put("pending_step_state", PendingKeyStepState.NOT_DISPATCHED.code)
+                    put("pending_key_index", 4)
+                    put("action_attempted", true); put("outcome_unknown", false)
+                    put("app_result_verified", false); put("completed_keys", 3)
+                })
+            },
+            sessionId = "s-tctx", sessionEpoch = 1L, first = f0, allowed = { true }, checkpoint = { _, _ -> },
+        )
+        assertTrue("Changed touchContext on prefix read must stay UNKNOWN", outTouchCtx.progress.uncertain)
+        val tctxEv = outTouchCtx.evidence.single { it["source"]?.jsonPrimitive?.contentOrNull == "partial_prefix_verification" }
+        assertEquals(false, tctxEv["touch_context_matched"]?.jsonPrimitive?.boolean)
+        assertEquals(false, tctxEv["verified"]?.jsonPrimitive?.boolean)
+
+        // 2. Security/privacy/unowned-window/lock/revoked/unknown refusals -> ZERO extra captureFrame() call + UNKNOWN!
+        for ((seqR, obsR) in listOf(
+            "keyboard_sequence_new_image_unavailable" to "secure_window",
+            "keyboard_sequence_new_image_unavailable" to "display_surface_unverified",
+            "keyboard_sequence_new_image_unavailable" to "visual_sensitive_editor",
+            "keyboard_sequence_new_image_unavailable" to "device_locked",
+            "keyboard_sequence_new_image_unavailable" to "screen_share_revoked",
+            "keyboard_sequence_new_image_unavailable" to null,
+            "keyboard_sequence_layout_or_target_changed" to null,
+        )) {
+            var captureCalls = 0
+            val outUnsafe = DebugSixKeyExecution.runWithSeam(
+                captureFrame = {
+                    captureCalls++
+                    if (captureCalls > 1) error("Must NOT perform extra observation after unsafe/unknown refusal ($seqR/$obsR)")
+                    f0
+                },
+                observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+                certifyCandidate = { _, _, cand, _ ->
+                    PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                        if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+                },
+                dispatchSequence = { _, _ ->
+                    DebugSixKeyExecution.SequencePacket(false, buildJsonObject {
+                        put("reason_code", seqR)
+                        obsR?.let { put("observation_reason_code", it) }
+                        put("pending_step_state", PendingKeyStepState.NOT_DISPATCHED.code)
+                        put("pending_key_index", 4)
+                        put("action_attempted", true); put("outcome_unknown", false)
+                        put("app_result_verified", false); put("completed_keys", 3)
+                    })
+                },
+                sessionId = "s-unsafe", sessionEpoch = 1L, first = f0, allowed = { true }, checkpoint = { _, _ -> },
+            )
+            assertEquals("Only initial before capture allowed for $seqR/$obsR", 1, captureCalls)
+            assertTrue("Unsafe/unknown refusal ($seqR/$obsR) must stay UNKNOWN", outUnsafe.progress.uncertain)
+            val skipEv = outUnsafe.evidence.single { it["source"]?.jsonPrimitive?.contentOrNull == "partial_prefix_verification" }
+            assertEquals(true, skipEv["skipped_unsafe_or_unknown_refusal"]?.jsonPrimitive?.boolean)
+        }
+
+        // 3. >8 attempt_failure_evidence + inner_recovery_decisions preserved even on 6/6 PASS without losing LAST entry!
+        val tenAttempts = JsonArray((1..10).map { i ->
+            buildJsonObject {
+                put("attempt_seq", i); put("key_index", 4); put("read_attempt", i)
+                put("source", "follow_up_observe")
+                put("reason_code", if (i == 10) "final_terminal_code" else "attempt_$i")
+                put("pending_step_state", "not_dispatched")
+                put("failed_generation_recorded", true)
+            }
+        })
+        val framesPass = ArrayDeque(listOf(f0, hangulFrame("fp-final", text = "가 나 ", sel = 4)))
+        val outPassDiag = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { framesPass.removeFirst() },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ ->
+                DebugSixKeyExecution.SequencePacket(true, buildJsonObject {
+                    put("action_attempted", true); put("outcome_unknown", false)
+                    put("app_result_verified", true); put("completed_keys", 6)
+                    put("pending_step_state", PendingKeyStepState.FINAL_READ.code)
+                    put("attempt_failure_evidence", tenAttempts)
+                })
+            },
+            sessionId = "s-pass-diag", sessionEpoch = 1L, first = f0, allowed = { true }, checkpoint = { _, _ -> },
+        )
+        assertNull("Expected 6/6 PASS", outPassDiag.failure)
+        val passSeqEv = outPassDiag.evidence.single { it["source"]?.jsonPrimitive?.contentOrNull == "visual_key_sequence_result" }
+        val keptAttempts = passSeqEv["attempt_failure_evidence"]!!.jsonArray
+        assertEquals(8, keptAttempts.size)
+        assertEquals(1, keptAttempts.first().jsonObject["attempt_seq"]?.jsonPrimitive?.int)
+        assertEquals("final_terminal_code", keptAttempts.last().jsonObject["reason_code"]?.jsonPrimitive?.content)
+        assertEquals(2, passSeqEv["attempt_failure_evidence_truncated_middle_count"]?.jsonPrimitive?.int)
+
+        // 4. Unified deadline path from inside GenericControl: preserves BOTH visual_key_sequence_result AND sequence_deadline_exceeded!
+        val outInnerDead = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { f0 },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1", "vis-1"), certifiedFrame = f0) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ ->
+                DebugSixKeyExecution.SequencePacket(false, buildJsonObject {
+                    put("reason_code", "six_key_sequence_deadline_exceeded")
+                    put("pending_step_state", PendingKeyStepState.NOT_DISPATCHED.code)
+                    put("pending_key_index", 4)
+                    put("action_attempted", true); put("outcome_unknown", true)
+                    put("app_result_verified", false); put("completed_keys", 3)
+                })
+            },
+            sessionId = "s-inner-dead", sessionEpoch = 1L, first = f0, allowed = { true }, checkpoint = { _, _ -> },
+        )
+        assertEquals("six_key_sequence_deadline_exceeded", outInnerDead.failure)
+        assertTrue(outInnerDead.progress.uncertain)
+        assertEquals("key_4_preflight", outInnerDead.progress.stage)
+        assertEquals(3, outInnerDead.progress.verified)
+        assertNotNull(outInnerDead.evidence.singleOrNull { it["source"]?.jsonPrimitive?.contentOrNull == "visual_key_sequence_result" })
+        val innerDeadEv = outInnerDead.evidence.single { it["source"]?.jsonPrimitive?.contentOrNull == "sequence_deadline_exceeded" }
+        assertEquals(true, innerDeadEv["after_dispatch"]?.jsonPrimitive?.boolean)
+        assertEquals(3, innerDeadEv["completed_keys"]?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun r3LayoutSwitchDeadlineConsistency_cursorContextRemovedFromAllowlist_missingGenUnknown_andAuthorityPrecedence() = runBlocking {
+        val fLatin = latinFrame("fp-latin-0")
+        val fHangul = hangulFrame("fp-hangul-0")
+
+        // 1a. Confirmed layout switch -> cooperative deadline BEFORE observeSequence -> UNKNOWN + after_dispatch=true!
+        var clock1a = 1_000L
+        val frames1a = ArrayDeque(listOf(fLatin, fHangul))
+        var obsCalls1a = 0
+        val outConfirmBeforeObs = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { frames1a.removeFirst() },
+            observeSequence = { obsCalls1a++; error("must not observe past deadline") },
+            certifyCandidate = { _, _, _, _ -> error("not reached") },
+            dispatchSequence = { _, _ -> error("not reached") },
+            sessionId = "s-ls-dead-1a", sessionEpoch = 1L, first = fLatin, allowed = { true },
+            checkpoint = { _, reason ->
+                if (reason == "korean_layout_ready") clock1a += 120_000L
+            },
+            switchToKoreanLayout = { _, _, _ ->
+                DebugSixKeyExecution.LayoutSwitchPacket(
+                    success = true, attempted = true, unknown = false,
+                )
+            },
+            clockMs = { clock1a },
+            totalSequenceDeadlineMs = 120_000L,
+        )
+        assertEquals("six_key_sequence_deadline_exceeded", outConfirmBeforeObs.failure)
+        assertTrue("Confirmed layout switch followed by cooperative deadline must classify UNKNOWN", outConfirmBeforeObs.progress.uncertain)
+        assertEquals(0, obsCalls1a)
+        assertEquals(1, outConfirmBeforeObs.layoutSwitchAttempts)
+        assertTrue(outConfirmBeforeObs.layoutSwitchConfirmed)
+        val ev1a = outConfirmBeforeObs.evidence.last { it["source"]?.jsonPrimitive?.contentOrNull == "sequence_deadline_exceeded" }
+        assertEquals(true, ev1a["after_dispatch"]?.jsonPrimitive?.boolean)
+        assertEquals(true, ev1a["layout_switch_attempted"]?.jsonPrimitive?.boolean)
+        assertEquals(true, ev1a["layout_switch_confirmed"]?.jsonPrimitive?.boolean)
+        assertEquals(false, ev1a["layout_switch_dispatch_pending"]?.jsonPrimitive?.boolean)
+
+        // 1b. Confirmed layout switch -> cooperative deadline right BEFORE sequence_pre_dispatch -> UNKNOWN + after_dispatch=true!
+        var clock1b = 1_000L
+        val frames1b = ArrayDeque(listOf(fLatin, fHangul))
+        var seqDispatches1b = 0
+        val outConfirmBeforeDisp = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { frames1b.removeFirst() },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-1b", "vis-1b"), certifiedFrame = fHangul) },
+            certifyCandidate = { _, _, cand, _ ->
+                if (cand.imageOnly) clock1b += 120_000L // expire right after final 4th key certification, before sequence_pre_dispatch
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ -> seqDispatches1b++; error("must not dispatch past deadline") },
+            sessionId = "s-ls-dead-1b", sessionEpoch = 1L, first = fLatin, allowed = { true },
+            checkpoint = { _, _ -> },
+            switchToKoreanLayout = { _, _, _ ->
+                DebugSixKeyExecution.LayoutSwitchPacket(success = true, attempted = true, unknown = false)
+            },
+            clockMs = { clock1b },
+            totalSequenceDeadlineMs = 120_000L,
+        )
+        assertEquals("six_key_sequence_deadline_exceeded", outConfirmBeforeDisp.failure)
+        assertTrue("Confirmed layout switch followed by pre-dispatch cooperative deadline must classify UNKNOWN", outConfirmBeforeDisp.progress.uncertain)
+        assertEquals(0, seqDispatches1b)
+        val ev1b = outConfirmBeforeDisp.evidence.last { it["source"]?.jsonPrimitive?.contentOrNull == "sequence_deadline_exceeded" }
+        assertEquals(true, ev1b["after_dispatch"]?.jsonPrimitive?.boolean)
+        assertEquals(true, ev1b["layout_switch_confirmed"]?.jsonPrimitive?.boolean)
+        assertEquals(false, ev1b["layout_switch_dispatch_pending"]?.jsonPrimitive?.boolean)
+
+        // 2. Hung switchToKoreanLayout -> hard withTimeoutOrNull -> UNKNOWN + layout_switch_dispatch_pending=true!
+        val outHungSwitch = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { fLatin },
+            observeSequence = { error("not reached") },
+            certifyCandidate = { _, _, _, _ -> error("not reached") },
+            dispatchSequence = { _, _ -> error("not reached") },
+            sessionId = "s-ls-hung", sessionEpoch = 1L, first = fLatin, allowed = { true },
+            checkpoint = { _, _ -> },
+            switchToKoreanLayout = { _, _, _ ->
+                kotlinx.coroutines.delay(5_000L)
+                error("should have timed out")
+            },
+            totalSequenceDeadlineMs = 80L,
+        )
+        assertEquals("six_key_sequence_deadline_exceeded", outHungSwitch.failure)
+        assertTrue(outHungSwitch.progress.uncertain)
+        val evHung = outHungSwitch.evidence.last { it["source"]?.jsonPrimitive?.contentOrNull == "sequence_deadline_exceeded" }
+        assertEquals(true, evHung["after_dispatch"]?.jsonPrimitive?.boolean)
+        assertEquals(true, evHung["layout_switch_dispatch_pending"]?.jsonPrimitive?.boolean)
+        assertEquals(false, evHung["layout_switch_confirmed"]?.jsonPrimitive?.boolean)
+
+        // 3. Pre-dispatch no-touch layout switch refusal + cooperative deadline -> BLOCKED (uncertain=false)!
+        var clock3 = 1_000L
+        val outPreSwitchDead = DebugSixKeyExecution.runWithSeam(
+            captureFrame = { fLatin },
+            observeSequence = { error("not reached") },
+            certifyCandidate = { _, _, _, _ -> error("not reached") },
+            dispatchSequence = { _, _ -> error("not reached") },
+            sessionId = "s-ls-notouch", sessionEpoch = 1L, first = fLatin, allowed = { true },
+            checkpoint = { _, _ -> },
+            switchToKoreanLayout = { _, _, _ ->
+                clock3 += 120_000L
+                DebugSixKeyExecution.LayoutSwitchPacket(
+                    success = false, attempted = false, unknown = false,
+                    reason = "display_window_changed_during_capture",
+                )
+            },
+            clockMs = { clock3 },
+            totalSequenceDeadlineMs = 120_000L,
+        )
+        assertEquals("six_key_sequence_deadline_exceeded", outPreSwitchDead.failure)
+        assertFalse("Zero-touch pre-switch deadline must remain BLOCKED (uncertain=false)", outPreSwitchDead.progress.uncertain)
+        val ev3 = outPreSwitchDead.evidence.last { it["source"]?.jsonPrimitive?.contentOrNull == "sequence_deadline_exceeded" }
+        assertEquals(false, ev3["after_dispatch"]?.jsonPrimitive?.boolean)
+        assertEquals(false, ev3["layout_switch_attempted"]?.jsonPrimitive?.boolean)
+        assertEquals(false, ev3["layout_switch_dispatch_pending"]?.jsonPrimitive?.boolean)
+
+        // 4. visual_post_keyboard_context_changed removed from BOTH allowlists & unsafe obsReason precedence
+        assertFalse(DebugSixKeyExecution.mayVerifyPartialPrefixAfter("keyboard_sequence_new_image_unavailable", "visual_post_keyboard_context_changed"))
+        assertFalse(DebugSixKeyExecution.mayVerifyPartialPrefixAfter("visual_post_keyboard_context_changed", null))
+        assertFalse(DebugSixKeyExecution.mayVerifyPartialPrefixAfter("keyboard_sequence_recovery_budget_exhausted", "visual_post_keyboard_context_changed"))
+        assertFalse(DebugSixKeyExecution.mayVerifyPartialPrefixAfter("keyboard_sequence_recovery_budget_exhausted", "secure_window"))
+        assertFalse(DebugSixKeyExecution.mayVerifyPartialPrefixAfter("failed_capture_generation_missing", "display_window_changed_during_capture"))
+        assertTrue(DebugSixKeyExecution.mayVerifyPartialPrefixAfter("keyboard_sequence_new_image_unavailable", "display_window_changed_during_capture"))
+
+        // 5. failed_capture_generation_missing with raw display_window_changed_during_capture -> 0 extra read, UNKNOWN, both reasons preserved!
+        var missGenCaps = 0
+        val outMissGen = DebugSixKeyExecution.runWithSeam(
+            captureFrame = {
+                missGenCaps++
+                if (missGenCaps > 1) error("Must NOT perform extra read on failed_capture_generation_missing")
+                fHangul
+            },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-mg", "vis-mg"), certifiedFrame = fHangul) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ ->
+                DebugSixKeyExecution.SequencePacket(false, buildJsonObject {
+                    put("reason_code", "failed_capture_generation_missing")
+                    put("observation_reason_code", "display_window_changed_during_capture")
+                    put("pending_step_state", PendingKeyStepState.NOT_DISPATCHED.code)
+                    put("pending_key_index", 4)
+                    put("action_attempted", true); put("outcome_unknown", true)
+                    put("app_result_verified", false); put("completed_keys", 3)
+                })
+            },
+            sessionId = "s-mg", sessionEpoch = 1L, first = fHangul, allowed = { true }, checkpoint = { _, _ -> },
+        )
+        assertEquals(1, missGenCaps)
+        assertEquals("failed_capture_generation_missing", outMissGen.failure)
+        assertTrue(outMissGen.progress.uncertain)
+        val mgEv = outMissGen.evidence.single { it["source"]?.jsonPrimitive?.contentOrNull == "visual_key_sequence_result" }
+        assertEquals("failed_capture_generation_missing", mgEv["native_refusal_reason"]?.jsonPrimitive?.content)
+        assertEquals("display_window_changed_during_capture", mgEv["observation_reason_code"]?.jsonPrimitive?.content)
+
+        // 6. Simultaneous authority/consent revocation + elapsed_budget -> UNKNOWN, 0 extra capture, authority precedence!
+        var revCaps = 0
+        var authActive6 = true
+        val outRevOverElapsed = DebugSixKeyExecution.runWithSeam(
+            captureFrame = {
+                revCaps++
+                if (revCaps > 1) error("Must NOT perform extra capture after authority revocation")
+                fHangul
+            },
+            observeSequence = { DebugSixKeyExecution.ObservePacket(true, obsData("obs-rev", "vis-rev"), certifiedFrame = fHangul) },
+            certifyCandidate = { _, _, cand, _ ->
+                PixelCertificationOutcome(TapBounds(10, 10, 80, 80),
+                    if (cand.imageOnly) "space_glyph" else "native_structural_and_live_surface")
+            },
+            dispatchSequence = { _, _ ->
+                authActive6 = false
+                DebugSixKeyExecution.SequencePacket(false, buildJsonObject {
+                    put("reason_code", "keyboard_sequence_recovery_budget_exhausted")
+                    put("observation_reason_code", "elapsed_budget")
+                    put("pending_step_state", PendingKeyStepState.NOT_DISPATCHED.code)
+                    put("pending_key_index", 4)
+                    put("action_attempted", true); put("outcome_unknown", false)
+                    put("app_result_verified", false); put("completed_keys", 3)
+                })
+            },
+            sessionId = "s-rev-elap", sessionEpoch = 1L, first = fHangul, allowed = { authActive6 }, checkpoint = { _, _ -> },
+        )
+        assertEquals(1, revCaps)
+        assertEquals("control_authority_revoked", outRevOverElapsed.failure)
+        assertTrue(outRevOverElapsed.progress.uncertain)
+    }
 }

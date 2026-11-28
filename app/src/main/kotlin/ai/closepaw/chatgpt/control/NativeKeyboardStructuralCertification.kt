@@ -73,6 +73,7 @@ internal data class AutonomousKeyboardDispatchContext(
     val imageOnly: Boolean,
     val expectedNativeLabels: Set<String>,
     val kind: AutonomousDispatchKind = AutonomousDispatchKind.SEQUENCE_KEY,
+    val preTouchBoundaryRefusal: () -> String? = { null },
 ) : AbstractCoroutineContextElement(Key) {
     companion object Key : CoroutineContext.Key<AutonomousKeyboardDispatchContext>
 }
