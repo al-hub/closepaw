@@ -52,10 +52,14 @@ class OverlayComposeHost(
             }
             // Route active-island gestures before Compose's local-coordinate recognizers.
             // Other overlays and idle content retain their usual Compose event dispatch.
+            val childWidth = if (layoutParams.width > 0) FrameLayout.LayoutParams.MATCH_PARENT
+                else FrameLayout.LayoutParams.WRAP_CONTENT
+            val childHeight = if (layoutParams.height > 0) FrameLayout.LayoutParams.MATCH_PARENT
+                else FrameLayout.LayoutParams.WRAP_CONTENT
             val root = if (onTouch == null) view else object : FrameLayout(context) {
                 override fun dispatchTouchEvent(event: MotionEvent): Boolean =
                     onTouch(this, event) || super.dispatchTouchEvent(event)
-            }.apply { addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT)) }
+            }.apply { addView(view, FrameLayout.LayoutParams(childWidth, childHeight)) }
             // Compose's window recomposer resolves owners from the outermost view.
             // The gesture wrapper is the WindowManager root, so it must carry them too.
             root.setViewTreeLifecycleOwner(lifecycleOwner)
@@ -85,17 +89,44 @@ class OverlayComposeHost(
         val layoutParams = params ?: return false
         val oldX = layoutParams.x
         val oldY = layoutParams.y
+        val oldWidth = layoutParams.width
+        val oldHeight = layoutParams.height
         update(layoutParams)
+        if (layoutParams.x == oldX && layoutParams.y == oldY &&
+            layoutParams.width == oldWidth && layoutParams.height == oldHeight) {
+            return true
+        }
+        val child = if (view is FrameLayout && view.childCount > 0) view.getChildAt(0) else null
+        val childLp = child?.layoutParams as? FrameLayout.LayoutParams
+        val oldChildW = childLp?.width
+        val oldChildH = childLp?.height
+        if (child != null && childLp != null &&
+            (layoutParams.width != oldWidth || layoutParams.height != oldHeight)) {
+            childLp.width = if (layoutParams.width > 0) FrameLayout.LayoutParams.MATCH_PARENT
+                else FrameLayout.LayoutParams.WRAP_CONTENT
+            childLp.height = if (layoutParams.height > 0) FrameLayout.LayoutParams.MATCH_PARENT
+                else FrameLayout.LayoutParams.WRAP_CONTENT
+            child.layoutParams = childLp
+        }
         return try {
             windowManager.updateViewLayout(view, layoutParams)
             true
         } catch (e: Exception) {
             layoutParams.x = oldX
             layoutParams.y = oldY
+            layoutParams.width = oldWidth
+            layoutParams.height = oldHeight
+            if (child != null && childLp != null && oldChildW != null && oldChildH != null) {
+                childLp.width = oldChildW
+                childLp.height = oldChildH
+                child.layoutParams = childLp
+            }
             Log.w(tag, "Failed to update Compose overlay params", e)
             false
         }
     }
+
+    internal fun currentLayoutSize(): Pair<Int, Int>? = params?.let { it.width to it.height }
 
     /** The exact attached root, never a screen or another overlay target. Main-thread only. */
     internal fun attachedRoot(): View? = composeView?.takeIf { it.isAttachedToWindow && it.width > 0 && it.height > 0 }

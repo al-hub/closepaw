@@ -71,4 +71,56 @@ class DisplayWindowChangeJournalTest {
         assertEquals(16, entries.last().jsonObject.getValue("window_change_mask").jsonPrimitive.int)
         assertTrue(entries.last().jsonObject.getValue("unknown_change_bits").jsonPrimitive.boolean)
     }
+
+    @Test fun controlOverlayMatchIsDiagnosticOnlyAndPreservesGlobalGenerationTracking() {
+        var now = 100_000_000L
+        val displayChanges = ControlChangeSignal()
+        val j = DisplayWindowChangeJournal { now }
+        j.observeKnownWindows(1101, 2202)
+        val genBefore = displayChanges.version()
+        val mark = DisplayWindowChangeJournal.Mark(genBefore, now, 1, 1)
+
+        // Simulate own control overlay relayout event with null/unknown Android reported packageName.
+        // Global remoteDisplayChanges MUST STILL increment (never exempted!).
+        now += 2_000_000L
+        displayChanges.changed()
+        val genAfterOverlay = displayChanges.version()
+        j.record(
+            generation = genAfterOverlay,
+            type = DisplayWindowChangeJournal.Type.WINDOWS_CHANGED,
+            owner = DisplayWindowChangeJournal.Owner.UNKNOWN,
+            eventWindowId = 3303,
+            windowChanges = 8,
+            eventDisplayId = 0,
+            isControlOverlay = true,
+        )
+        // Simulate foreign unknown-owner bounds event -> remains "other", never control_overlay.
+        now += 2_000_000L
+        displayChanges.changed()
+        val genAfterForeign = displayChanges.version()
+        j.record(
+            generation = genAfterForeign,
+            type = DisplayWindowChangeJournal.Type.WINDOWS_CHANGED,
+            owner = DisplayWindowChangeJournal.Owner.UNKNOWN,
+            eventWindowId = 4404,
+            windowChanges = 8,
+            eventDisplayId = 0,
+            isControlOverlay = false,
+        )
+
+        assertEquals(genBefore + 2L, genAfterForeign)
+        assertEquals(
+            "display_window_changed_during_capture",
+            DisplayCapturePolicy.interveningChange(genBefore, genAfterOverlay),
+        )
+        val summary = j.summarize(mark, genAfterForeign)
+        val items = summary.getValue("events").jsonArray.map { it.jsonObject }
+        assertEquals(2, items.size)
+        assertEquals("control_overlay", items[0].getValue("event_window_match").jsonPrimitive.content)
+        assertEquals("unknown", items[0].getValue("reported_owner").jsonPrimitive.content)
+        assertEquals(8, items[0].getValue("window_change_mask").jsonPrimitive.int)
+        assertEquals("other", items[1].getValue("event_window_match").jsonPrimitive.content)
+        assertFalse(summary.toString().contains("3303"))
+        assertFalse(summary.toString().contains("4404"))
+    }
 }

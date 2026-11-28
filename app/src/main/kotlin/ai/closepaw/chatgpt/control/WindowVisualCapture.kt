@@ -104,8 +104,10 @@ internal object WindowVisualCapture {
                 val source = bitmap ?: return@withContext failure("screenshot_bitmap_copy_failed")
                 val coordinates = geometry?.frame ?: window
                 if (source.width != coordinates.right-coordinates.left || source.height != coordinates.bottom-coordinates.top) {
+                    // Local-authority geometry is private and may not enter shared diagnostics.
                     if (captureRefusal == null)
-                        recordGeometryMismatch(service, if (display) "display" else "window", source.width, source.height, window)
+                        recordGeometryMismatch(service, if (display) "display" else "window",
+                            source.width, source.height, coordinates)
                     return@withContext failure("screenshot_buffer_geometry_mismatch")
                 }
                 if (source.width.toLong()*source.height > 8_000_000) return@withContext failure("screenshot_pixel_limit")
@@ -202,8 +204,7 @@ internal object WindowVisualCapture {
             put("scope", scope)
             put("buffer_width", bufferWidth); put("buffer_height", bufferHeight)
             put("bounds_width", bounds.right - bounds.left); put("bounds_height", bounds.bottom - bounds.top)
-            put("bounds_left", bounds.left); put("bounds_top", bounds.top)
-            put("bounds_right", bounds.right); put("bounds_bottom", bounds.bottom)
+            // Never persist absolute screen coordinates, pixels or app contents.
             displayInfo?.let { (width,height,rotation) ->
                 if (width > 0 && height > 0) { put("display_width", width); put("display_height", height) }
                 if (rotation != null) put("display_rotation", rotation)
@@ -245,6 +246,7 @@ internal object WindowVisualCapture {
             val buffer=captured.hardwareBuffer
             val width=buffer.width;val height=buffer.height
             if(minimumUptimeMs < 0 && (width!=bounds.right-bounds.left || height!=bounds.bottom-bounds.top)) {
+                // Local-authority geometry is private and may not enter shared diagnostics.
                 if (captureRefusal == null)
                     recordGeometryMismatch(service, "isolated_window", buffer.width, buffer.height, bounds)
                 return PixelResult(reason="screenshot_buffer_geometry_mismatch")

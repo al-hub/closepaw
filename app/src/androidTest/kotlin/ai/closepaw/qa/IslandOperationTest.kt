@@ -68,11 +68,12 @@ class IslandOperationTest {
                 android.os.ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command)).use { it.readBytes() }
             }
             val power = service.getSystemService(android.os.PowerManager::class.java)
+            val keyguard = service.getSystemService(android.app.KeyguardManager::class.java)
             fun field(owner: Any, name: String): Any? = owner.javaClass.getDeclaredField(name).run { isAccessible = true; get(owner) }
             val controller = requireNotNull(field(service, "overlayController"))
             val host = field(controller, "statusIslandManager") as ai.closepaw.ui.overlay.compose.IslandOverlayHost
-            suspend fun awaitCondition(description: String, condition: suspend () -> Boolean) {
-                val until = SystemClock.uptimeMillis() + 5_000
+            suspend fun awaitCondition(description: String, timeoutMs: Long = 5_000L, condition: suspend () -> Boolean) {
+                val until = SystemClock.uptimeMillis() + timeoutMs
                 // Keep sampling within the original deadline instead of checking once
                 // to leave the loop and again to assert (a transient window reattach
                 // could flip between those calls and fail before the deadline).
@@ -126,7 +127,12 @@ class IslandOperationTest {
                 assertEquals(epoch, service.remoteControlSession.epoch)
                 shell("input keyevent 224")
                 shell("wm dismiss-keyguard")
-                awaitCondition("same session restores island after unlock") { port.observeIsland() != null }
+                awaitCondition("emulator actually unlocked", timeoutMs = 9_000L) {
+                    power.isInteractive && !keyguard.isKeyguardLocked
+                }
+                awaitCondition("same session restores island after unlock", timeoutMs = 9_000L) {
+                    port.observeIsland() != null
+                }
                 i.waitForIdleSync()
                 assertEquals(session, service.remoteControlSession.id)
                 assertEquals(epoch, service.remoteControlSession.epoch)

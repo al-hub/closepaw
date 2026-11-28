@@ -8,6 +8,18 @@
             android:name="ai.closepaw.qa.LocalCaptureQaActivity"
             android:enabled="${captureQaEnabled}"
             android:exported="false" />
+        <!-- Candidate-only started FGS. No exported start, no reboot, no auto-resume
+             after process death, and no projection/Accessibility permission bypass. -->
+        <service
+            android:name="ai.closepaw.qa.DebugQaRunnerService"
+            android:enabled="${captureQaEnabled}"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Locally armed bounded on-device physical keyboard QA, continuing during Chrome screen transitions with persistent results and a visible Stop action" />
+        </service>
         <provider
             android:name="ai.closepaw.qa.CaptureQaFileProvider"
             android:authorities="${applicationId}.captureqa"

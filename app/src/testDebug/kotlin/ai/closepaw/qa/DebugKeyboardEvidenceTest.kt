@@ -1,0 +1,195 @@
+package ai.closepaw.qa
+
+import ai.closepaw.chatgpt.control.ControlFrame
+import kotlinx.serialization.json.*
+import org.junit.Assert.*
+import org.junit.Test
+
+class DebugKeyboardEvidenceTest {
+    private fun observed() = buildJsonObject {
+        put("keyboard", buildJsonObject {
+            put("scan", buildJsonObject {
+                put("visited", 120)
+                put("candidate_list_limit", 40)
+                put("candidate_list_omitted", 9)
+                put("tracked_key_counts", buildJsonObject {
+                    put("ㄱ", buildJsonObject {
+                        put("semantic_seen", 2)
+                        put("visible", 2)
+                        put("enabled", 1)
+                        put("disabled", 1)
+                        put("native_recognized", 0)
+                    })
+                })
+            })
+        })
+        put("matched_node_count", 2)
+        put("output_truncated", true)
+        put("security_scan_complete", true)
+        put("visual", buildJsonObject { put("scope", "keyboard"); put("secret", "PRIVATE_PIXEL_PATH") })
+        put("keyboard_preflight", buildJsonObject {
+            put("status", "BLOCKED")
+            put("reason_code", "physical_keys_not_unique")
+        })
+        put("nodes", buildJsonArray {
+            add(buildJsonObject {
+                put("keyboard_key", "ㄱ"); put("enabled", true); put("node_id", 11)
+                put("text", "PRIVATE_EDITOR_CONTENT")
+                put("bounds", "1 2 3 4")
+                put("keyboard_image_candidate", false)
+            })
+        })
+        put("url", "https://private.invalid")
+    }
+
+    @Test fun candidateAuditSeparatesFullScanFromLimitedReturnedNodes() {
+        val result = DebugKeyboardEvidence.fromObservation(observed(), true, listOf("ㄱ"))
+        assertEquals(120, result.getValue("full_scan_visited").jsonPrimitive.int)
+        assertEquals(9, result.getValue("scan_list_omitted").jsonPrimitive.int)
+        assertEquals(2, result.getValue("matched_full_frame_count").jsonPrimitive.int)
+        assertEquals(1, result.getValue("returned_candidate_count").jsonPrimitive.int)
+        assertTrue(result.getValue("presentation_limited").jsonPrimitive.boolean)
+        assertTrue(result.getValue("visual_scope_proof_present").jsonPrimitive.boolean)
+        assertFalse(result.getValue("pixel_role_certified").jsonPrimitive.boolean)
+        assertFalse(result.getValue("native_touch_authorized_by_diagnostic").jsonPrimitive.boolean)
+        assertEquals(1, result.getValue("full_scan_key_counts").jsonObject
+            .getValue("ㄱ").jsonObject.getValue("disabled").jsonPrimitive.int)
+        assertEquals("physical_keys_not_unique", result.getValue("structural_preflight_reason").jsonPrimitive.content)
+    }
+
+    @Test fun auditNeverPersistsNodeIdsPixelsPrivateContentOrUntrustedLabels() {
+        val result = DebugKeyboardEvidence.fromObservation(observed(), false,
+            listOf("ㄱ", "SECRET", "ㄱ"))
+        assertEquals(listOf("ㄱ"), result.getValue("requested_keys").jsonArray.map { it.jsonPrimitive.content })
+        for (secret in listOf("PRIVATE", "private.invalid", "node_id", "bounds", "SECRET", "11", "1 2 3 4")) {
+            assertFalse(secret, result.toString().contains(secret))
+        }
+        assertFalse(result.getValue("observation_succeeded").jsonPrimitive.boolean)
+        assertFalse(DebugQaBatchPolicy.mayProceedAfter(buildJsonObject {
+            put("outcome", "DIAGNOSTIC_COMPLETE"); put("goal_verified", false)
+            put("completed_keys", 0); put("touch_attempts", 0)
+        }))
+    }
+
+    @Test fun displayPlanStageIsFixedCodeOnlyAndNeverOverwritesNativeRefusal() {
+        val data = buildJsonObject { put("reason_code", "display_surface_unverified") }
+        val detail = DebugKeyboardEvidence.fromObservation(data, false, listOf("ㄱ"),
+            "display_ime_window_unverified")
+        assertEquals("display_surface_unverified",
+            detail.getValue("native_refusal_reason").jsonPrimitive.content)
+        assertEquals("display_ime_window_unverified",
+            detail.getValue("display_plan_refusal").jsonPrimitive.content)
+        val unsafe = DebugKeyboardEvidence.fromObservation(data, false, listOf("ㄱ"),
+            "https://private.invalid/secret")
+        assertFalse(unsafe.containsKey("display_plan_refusal"))
+        assertFalse(unsafe.toString().contains("private.invalid"))
+        assertFalse(DebugKeyboardEvidence.fromObservation(data, true, listOf("ㄱ"),
+            "display_ime_window_unverified").containsKey("display_plan_refusal"))
+        assertNull(DebugKeyboardEvidence.safeDisplayRefusal("unexpected_private_field"))
+    }
+
+    @Test fun windowJournalIsBoundedAndOnlyAttachedToMatchingRefusal() {
+        val event = buildJsonObject {
+            put("type", "windows_changed"); put("reported_owner", "closepaw")
+            put("event_window_match", "other"); put("window_change_mask", 8)
+            put("event_display_class", "default"); put("window_id", 12345)
+            put("package_name", "PRIVATE"); put("unknown_change_bits", false)
+        }
+        val journal = buildJsonObject {
+            put("elapsed_ms", 100); put("unrecorded_count", 0)
+            put("events", JsonArray(List(20) { event })); put("private", "SECRET")
+        }
+        val data = buildJsonObject { put("reason_code", "display_window_changed_during_capture") }
+        val evidence = DebugKeyboardEvidence.fromObservation(data, false, listOf("ㄱ"), windowChanges = journal)
+        val safe = evidence.getValue("capture_window_changes").jsonObject
+        assertEquals(16, safe.getValue("events").jsonArray.size)
+        assertFalse(safe.toString().contains("PRIVATE"))
+        assertFalse(safe.toString().contains("SECRET"))
+        assertFalse(safe.toString().contains("window_id"))
+        assertFalse(evidence.getValue("native_touch_authorized_by_diagnostic").jsonPrimitive.boolean)
+        assertFalse(DebugKeyboardEvidence.fromObservation(data, true, listOf("ㄱ"),
+            windowChanges = journal).containsKey("capture_window_changes"))
+        assertFalse(DebugKeyboardEvidence.fromObservation(buildJsonObject { put("reason_code", "screen_changed") },
+            false, listOf("ㄱ"), windowChanges = journal).containsKey("capture_window_changes"))
+    }
+    @Test fun structureRetryOnlyForExactReadOnlyGenerationFailureAndBudget() {
+        val reason = "display_window_changed_during_capture"
+        assertTrue(DebugKeyboardEvidence.mayRetryStructure(reason, 1, true, false))
+        assertTrue(DebugKeyboardEvidence.mayRetryStructure(reason, 2, true, false))
+        assertFalse(DebugKeyboardEvidence.mayRetryStructure(reason, 3, true, false))
+        assertFalse(DebugKeyboardEvidence.mayRetryStructure(reason, 1, false, false))
+        assertFalse(DebugKeyboardEvidence.mayRetryStructure(reason, 1, true, true))
+        assertFalse(DebugKeyboardEvidence.mayRetryStructure("display_surface_unverified", 1, true, false))
+    }
+    @Test fun rejectedWindowCensusIsBoundedRedactedAndNeverAuthorizesTouch() {
+        val row = ai.closepaw.chatgpt.control.CensusRow(
+            ai.closepaw.chatgpt.control.CensusKind.ACCESSIBILITY_OVERLAY,
+            ai.closepaw.chatgpt.control.CensusOwner.UNOWNED, true,
+            ai.closepaw.chatgpt.control.CensusLayer.ABOVE, false, false, false)
+        val census = ai.closepaw.chatgpt.control.DisplayWindowCensus(70, 69, 1, 2, List(70) { row })
+        val data = buildJsonObject { put("reason_code", "display_surface_unverified") }
+        val evidence = DebugKeyboardEvidence.fromObservation(data, false, listOf("ㄱ"),
+            "display_unowned_window", census)
+        val report = evidence.getValue("display_window_census").jsonObject
+        assertEquals(1, report.getValue("duplicate_content_ids").jsonPrimitive.int)
+        assertEquals(2, report.getValue("unowned_content_windows").jsonPrimitive.int)
+        assertTrue(report.getValue("rows_truncated").jsonPrimitive.boolean)
+        val windows = report.getValue("windows").jsonArray
+        assertEquals(64, windows.size)
+        assertEquals("unowned", windows.first().jsonObject.getValue("ownership").jsonPrimitive.content)
+        assertFalse(evidence.getValue("native_touch_authorized_by_diagnostic").jsonPrimitive.boolean)
+        assertFalse(DebugKeyboardEvidence.fromObservation(data, true, listOf("ㄱ"),
+            "display_unowned_window", census).containsKey("display_window_census"))
+        assertFalse(DebugKeyboardEvidence.fromObservation(data, false, listOf("ㄱ"),
+            "display_geometry_unverified", census).containsKey("display_window_census"))
+        assertFalse(DebugKeyboardEvidence.fromObservation(buildJsonObject { put("reason_code", "screen_changed") },
+            false, listOf("ㄱ"), "display_unowned_window", census).containsKey("display_window_census"))
+        for (field in listOf("package_name", "window_id", "title", "node_id", "pixels", "coordinates")) {
+            assertFalse(report.toString().contains(field))
+        }
+    }
+
+    @Test fun displayCapturePolicyReasonIsRecordedWithoutInputAuthorityOrPrivateData() {
+        val data = buildJsonObject { put("reason_code", "display_surface_unverified") }
+        for (reason in listOf("display_geometry_unverified", "display_unowned_window")) {
+            val evidence = DebugKeyboardEvidence.fromObservation(data, false, listOf("ㄱ"), reason)
+            assertEquals(reason, evidence.getValue("display_plan_refusal").jsonPrimitive.content)
+            assertEquals("display_surface_unverified",
+                evidence.getValue("native_refusal_reason").jsonPrimitive.content)
+            assertFalse(evidence.getValue("native_touch_authorized_by_diagnostic").jsonPrimitive.boolean)
+            assertFalse(evidence.toString().contains("node_id"))
+            assertFalse(evidence.toString().contains("bounds"))
+        }
+    }
+
+    @Test fun followUpNeverStartsWithoutAuthorityAndNeverInputs() =
+        kotlinx.coroutines.runBlocking {
+            val baseline = ControlFrame("com.android.chrome", 42, "baseline", emptyList())
+            var captures = 0
+            val blocked = DebugKeyboardEvidence.inspectAmbiguousCandidates(
+                capture = { captures++; baseline }, baseline = baseline, keyIndex = 0,
+                allowed = { false })
+            assertEquals(0, captures)
+            assertEquals(0, blocked.reads)
+            assertNull(blocked.evidence)
+
+            val accepted = DebugKeyboardEvidence.inspectAmbiguousCandidates(
+                capture = { captures++; baseline }, baseline = baseline, keyIndex = 0,
+                allowed = { true })
+            assertEquals(1, captures)
+            assertEquals(1, accepted.reads)
+            assertEquals("captured_read_only", accepted.status)
+            assertFalse(accepted.evidence!!.getValue("touch_attempted").jsonPrimitive.boolean)
+        }
+
+    @Test fun followUpDoesNotTurnPassiveNativeReadIntoKeyAuthority() {
+        val frame = ControlFrame("com.android.chrome", 42, "PRIVATE_NATIVE_FINGERPRINT",
+            emptyList(), reason = "foreground_application_required")
+        val result = DebugKeyboardEvidence.fromFollowUp(frame, editorSame = false, prefixSame = false)
+        assertEquals("foreground_application_required",
+            result.getValue("capture_refusal").jsonPrimitive.content)
+        assertFalse(result.getValue("touch_attempted").jsonPrimitive.boolean)
+        assertFalse(result.getValue("image_or_pixel_recertified").jsonPrimitive.boolean)
+        assertFalse(result.toString().contains("PRIVATE_NATIVE_FINGERPRINT"))
+    }
+}

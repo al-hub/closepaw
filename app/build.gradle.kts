@@ -38,6 +38,17 @@ android {
     // we fall back to null and the release variant simply won't be signed —
     // debug builds use Android's default debug keystore and are unaffected.
     signingConfigs {
+        // Candidate-only identity. CI restores this *separate* protected key; the
+        // production keystore and ordinary debug variant remain untouched.
+        create("qaDebug") {
+            val path = System.getenv("QA_DEBUG_KEYSTORE_PATH")
+            if (!path.isNullOrBlank() && file(path).isFile) {
+                storeFile = file(path)
+                storePassword = System.getenv("QA_DEBUG_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("QA_DEBUG_KEY_ALIAS")
+                keyPassword = System.getenv("QA_DEBUG_KEY_PASSWORD")
+            }
+        }
         create("release") {
             val keystorePath = System.getenv("KEYSTORE_PATH")
             if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
@@ -51,12 +62,25 @@ android {
 
     buildTypes {
         debug {
+            // Every debug build is visually branded; no production resource is changed.
+            manifestPlaceholders["closepawAppLabel"] = "ClosePaw DEBUG"
             buildConfigField("String", "CAPTURE_QA_SOURCE_SHA", "\"${providers.environmentVariable("GITHUB_SHA").orNull ?: "unavailable"}\"")
             // Opt-in side-by-side physical capture acceptance, never a production update.
             if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
                 applicationIdSuffix = ".capturecandidate"
                 versionNameSuffix = "-capturecandidate"
-                manifestPlaceholders["closepawAppLabel"] = "ClosePaw Capture Candidate"
+                // Stable signer is mandatory for CI candidate packaging; a
+                // missing key must never silently become another throwaway key.
+                val qaSigning = signingConfigs.getByName("qaDebug")
+                if (providers.environmentVariable("CI").orNull == "true") {
+                    require(qaSigning.storeFile != null) { "qa_debug_signing_key_required" }
+                    require(!qaSigning.storePassword.isNullOrBlank() &&
+                        !qaSigning.keyAlias.isNullOrBlank() && !qaSigning.keyPassword.isNullOrBlank()) {
+                        "qa_debug_signing_credentials_required"
+                    }
+                }
+                if (qaSigning.storeFile != null) signingConfig = qaSigning
+                manifestPlaceholders["closepawAppLabel"] = "ClosePaw DEBUG"
                 manifestPlaceholders["captureQaEnabled"] = "true"
                 ndk { abiFilters += "arm64-v8a" }
             }
@@ -95,6 +119,12 @@ android {
             // Force extraction at install time so applicationInfo.nativeLibraryDir contains
             // a real executable file, matching the proven Android MCP tunnel pattern.
             useLegacyPackaging = true
+            // Conscrypt 2.5.2 ships a 4KiB-aligned JNI ELF. Only the isolated
+            // capture candidate omits it: the QA path does not perform ADB pairing.
+            // Production and ordinary debug continue shipping the dependency.
+            if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
+                excludes += "**/libconscrypt_jni.so"
+            }
         }
         resources {
             excludes += "META-INF/DEPENDENCIES"
@@ -132,10 +162,29 @@ android {
     }
 }
 
+// Stage the exact ABI-aware debug package installed by AGP in emulator CI.
+// Never guess an APK filename or pull a multi-hundred-MB installed base.apk.
+// The consuming script still independently verifies on-device SHA-256.
+androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) { variant ->
+    tasks.register<org.gradle.api.tasks.Sync>("stagePackageReplacementFixture") {
+        from(variant.artifacts.get(SingleArtifact.APK)) {
+            include("*.apk")
+            rename { "base.apk" }
+        }
+        duplicatesStrategy = org.gradle.api.file.DuplicatesStrategy.FAIL
+        into(rootProject.layout.buildDirectory.dir("package-replacement-input"))
+    }
+}
+
 // AGP may place IDE/ABI-optimized APKs outside outputs/apk. Consume its public
 // artifact providers, never infer a deployable file from a conventional path.
 if (providers.gradleProperty("closepawCaptureCandidate").orNull == "true") {
     androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) { variant ->
+        // Keep the side-by-side candidate updateable without changing the release version.
+        variant.outputs.forEach { output ->
+            output.versionCode.set(170)
+            output.versionName.set("0.1.169-capturecandidate")
+        }
         val testVariant = requireNotNull(variant.androidTest)
         tasks.register<org.gradle.api.tasks.Sync>("stageCaptureCandidate") {
             from(variant.artifacts.get(SingleArtifact.APK)) {

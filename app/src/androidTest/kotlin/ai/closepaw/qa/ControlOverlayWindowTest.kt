@@ -227,7 +227,20 @@ class ControlOverlayWindowTest {
                 x = requireNotNull(view(remoteX))
                 assertNull(view(modernX))
                 assertEquals(expectedX, params(x).x)
-                assertEquals(expectedY, params(island).y)
+                // Status expansion can increase island height; the safety
+                // position policy then deliberately moves the island away
+                // from emergency X. Verify the corrected saved position.
+                val correctedY = params(island).y
+                assertEquals("corrected island position persisted", correctedY,
+                    service.getSharedPreferences("closepaw_island_position", 0).getInt("y", -1))
+                assertTrue("corrected island remains on display", correctedY >= 0 &&
+                    correctedY + island.height <= service.resources.displayMetrics.heightPixels)
+                val ix = IntArray(2); val xx = IntArray(2)
+                island.getLocationOnScreen(ix); x.getLocationOnScreen(xx)
+                val islandRect = android.graphics.Rect(ix[0], ix[1], ix[0] + island.width, ix[1] + island.height)
+                val stopRect = android.graphics.Rect(xx[0], xx[1], xx[0] + x.width, xx[1] + x.height)
+                assertFalse("status island must never cover emergency stop",
+                    android.graphics.Rect.intersects(islandRect, stopRect))
             }
             var tapX = 0f; var tapY = 0f
             main { val xy = IntArray(2); x.getLocationOnScreen(xy); tapX = xy[0] + x.width / 2f; tapY = xy[1] + x.height / 2f }

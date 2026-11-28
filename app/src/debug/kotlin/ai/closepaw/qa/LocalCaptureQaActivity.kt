@@ -1,11 +1,13 @@
 package ai.closepaw.qa
 
 import ai.closepaw.BuildConfig
+import ai.closepaw.app.AgentService
 import ai.closepaw.app.MainActivity
 import ai.closepaw.platform.virtualdisplay.MediaProjectionCaptureService
 import ai.closepaw.platform.virtualdisplay.ProjectionConsentState
 import ai.closepaw.platform.virtualdisplay.ProjectionImageTransport
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ClipData
 import android.content.Intent
 import android.graphics.Bitmap
@@ -15,20 +17,26 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.ViewGroup
 import android.widget.*
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import java.io.File
 import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
@@ -39,6 +47,13 @@ class LocalCaptureQaActivity : ComponentActivity() {
     private lateinit var fixture: Spinner
     private lateinit var scope: Spinner
     private lateinit var save: CheckBox
+    private lateinit var exportSetting: Button
+    private var selectedMode: DebugQaMode? = null
+    private var pendingRequest: DebugQaRunRequest? = null
+    private var consentGeneration: Long? = null
+    private var savedConsentRequestId: String? = null
+    private var savedConsentModeCode: String? = null
+    private lateinit var resultSummary: TextView
     private lateinit var status: TextView
     private lateinit var report: TextView
     private lateinit var preview: ImageView
@@ -48,19 +63,79 @@ class LocalCaptureQaActivity : ComponentActivity() {
 
     private val consent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val gate = MediaProjectionCaptureService.consentGate
-        val id = UUID.randomUUID().toString()
-        val granted = result.resultCode == Activity.RESULT_OK && result.data != null
-        when (gate.onDecision(granted, id.takeIf { granted })) {
-            is ProjectionConsentState.Granted -> MediaProjectionCaptureService.startFromConsent(this, result.resultCode, result.data!!, id)
-            is ProjectionConsentState.Denied -> status.text = "Observation approval denied; no run started."
-            else -> gate.onCancelled()
+        val generation = consentGeneration
+        val request = pendingRequest
+        val staleRequestId = savedConsentRequestId
+        val staleModeCode = savedConsentModeCode
+        consentGeneration = null
+        pendingRequest = null
+        savedConsentRequestId = null
+        savedConsentModeCode = null
+        if (generation == null || gate.generation != generation) {
+            if (request != null) {
+                reject(request, "DENIED", "stale_android_consent", stage = "android_observation_approval")
+            } else if (staleRequestId != null) {
+                val staleMode = DebugQaMode.entries.firstOrNull { it.code == staleModeCode } ?: selectedMode
+                DebugQaRunnerService.recordUnreservedPreRunOutcome(
+                    context = this,
+                    mode = staleMode,
+                    requestId = staleRequestId,
+                    exportGrant = DebugQaDownloadExport.grant(this),
+                    state = "INTERRUPTED",
+                    reason = "stale_android_consent_process_restarted",
+                    stage = "android_observation_approval",
+                    admissionOutcome = DebugQaAdmissionOutcome.DENIED,
+                )
+                status.text = "INTERRUPTED · stale android consent after process restart (no automatic replay)"
+            }
+            return@registerForActivityResult
         }
-        refreshSetup()
+
+        val data = result.data
+        val granted = result.resultCode == Activity.RESULT_OK && data != null
+        val id = UUID.randomUUID().toString()
+        when (gate.onDecision(granted, id.takeIf { granted })) {
+            is ProjectionConsentState.Granted -> {
+                try {
+                    MediaProjectionCaptureService.startFromConsent(this, result.resultCode, checkNotNull(data), id)
+                    request?.let {
+                        launchQa(DebugQaApprovedRun(
+                            request = it,
+                            consent = DebugQaConsent.NEW_OS_APPROVAL,
+                            projectionGeneration = generation,
+                            approvedAtEpochMs = System.currentTimeMillis(),
+                            approvedAtElapsedMs = SystemClock.elapsedRealtime(),
+                        ))
+                    }
+                    if (request == null) status.text = "Android observation approved."
+                } catch (_: Exception) {
+                    gate.onRevoked()
+                    if (request != null) reject(request, "FAILED", "projection_service_unavailable")
+                    else status.text = "Android projection service unavailable."
+                }
+            }
+            else -> {
+                if (request != null) reject(request, "DENIED", "android_observation_denied")
+                else status.text = "Android observation approval denied."
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record("debug_qa_activity", "created")
         if (!BuildConfig.DEBUG || packageName != CaptureQaAcceptance.CANDIDATE) { finish(); return }
+        selectedMode = DebugQaMode.entries.firstOrNull { it.code == savedInstanceState?.getString("qa_selected_mode") }
+        val sameProcess = savedInstanceState?.getString("qa_process") == DebugQaRunnerService.processId
+        if (sameProcess && savedInstanceState?.containsKey("qa_consent_generation") == true) {
+            consentGeneration = savedInstanceState.getLong("qa_consent_generation")
+            pendingRequest = DebugQaRunnerService.admission.pendingConsent(
+                savedInstanceState.getString("qa_request_id"), savedInstanceState.getString("qa_request_mode"),
+                checkNotNull(consentGeneration))
+        } else if (!sameProcess && savedInstanceState?.containsKey("qa_request_id") == true) {
+            savedConsentRequestId = savedInstanceState.getString("qa_request_id")
+            savedConsentModeCode = savedInstanceState.getString("qa_request_mode")
+        }
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 36, 24, 24) }
         column.setOnApplyWindowInsetsListener { view, insets ->
             val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
@@ -74,10 +149,14 @@ class LocalCaptureQaActivity : ComponentActivity() {
             if (guarded) guardedButtons += this
         }
         text("Local capture QA · ${BuildConfig.GIT_SHA}")
-        text("Candidate only. No ADB, LLM key or network is needed. Use only a NEW blank Chrome tab or NEW empty Notes editor with Samsung keyboard. Notifications/other overlays may be visible. No typing, taps or submissions are dispatched to fixtures.")
+        text("Candidate only. No ADB, LLM key or network is needed. Use only a NEW blank Chrome tab or NEW empty Notes editor with Samsung keyboard. Read-only capture and structural QA do not type keys. The guarded six-key mode attempts test input after local confirmation.")
         status = text("Setup not checked")
+        resultSummary = text("QA result: none")
         button("Refresh setup") { refreshSetup() }
-        button("Main settings / app access / screen control") { startActivity(Intent(this, MainActivity::class.java)) }
+        button("Main settings / app access / screen control") {
+            startActivity(Intent(this, MainActivity::class.java)
+                .putExtra("closepaw_debug_qa_show_main", true))
+        }
         button("Accessibility settings (local approval)") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
         button("Overlay settings (local approval)") {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
@@ -96,9 +175,45 @@ class LocalCaptureQaActivity : ComponentActivity() {
             text = "Save one private HISTORICAL masked test image (overlays may be visible)"
             isChecked = false; column.addView(this)
         }
-        text("Approve setup first. Arm ONE run, then open the selected blank fixture and show Samsung keyboard for at least 10 seconds. Pause/X/end, lock, service loss or projection changes stop the run. No automatic retry. Returning to this page shows the historical result.")
+        text("Approve setup first. Read-only capture remains one run. The separate guarded INPUT QA uses its own foreground runner. Stop/pause, lock, service loss or projection revocation stop it; no unverified key is replayed.")
         button("Arm one run · wait up to 10 minutes") { arm() }
-        button("Cancel my waiting run", guarded = false) { job?.cancel() }
+        text("Choose a Debug QA mode")
+        val modes = RadioGroup(this).apply { column.addView(this) }
+        DebugQaMode.entries.forEach { mode ->
+            val choice = RadioButton(this).apply {
+                id = android.view.View.generateViewId()
+                text = mode.label
+            }
+            modes.addView(choice)
+            if (selectedMode == mode) modes.check(choice.id)
+            choice.setOnClickListener { selectedMode = mode }
+        }
+        button("Review and start selected mode", guarded = false) { confirmRun() }
+        exportSetting = Button(this).apply {
+            setOnClickListener { changeExportSetting() }
+            column.addView(this)
+        }
+        refreshExportSetting()
+        button("Revoke Samsung keyboard interaction · Debug only", guarded = false) {
+            if (DebugImeInteractConsent.updateFromLocalConsent(this, grant = false)) {
+                refreshSetup()
+                status.text = "Debug-only Samsung IME interaction revoked. Native permission checks remain enforced."
+            } else {
+                status.text = "No matching Debug-only Samsung IME grant to revoke."
+            }
+        }
+        button("View saved Debug QA evidence", guarded = false) { showOneStopResult() }
+        button("Share redacted Debug QA JSON · no screenshots", guarded = false) { shareOneStopJson() }
+        button("Stop local QA", guarded = false) {
+            pendingRequest?.let { request ->
+                pendingRequest = null
+                val gate = MediaProjectionCaptureService.consentGate
+                if (gate.generation == consentGeneration) gate.onCancelled()
+                reject(request, "CANCELLED", "local_stop")
+            }
+            job?.cancel()
+            DebugQaRunnerService.cancel(this)
+        }
         button("View historical local result") { showResult("local") }
         button("Compare same-source local / ADB contract") { compare() }
         button("Export selected historical result ZIP (may contain saved pixels)") { export() }
@@ -109,31 +224,114 @@ class LocalCaptureQaActivity : ComponentActivity() {
             column.addView(this, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         refreshSetup()
+        if (!sameProcess && savedInstanceState?.containsKey("qa_request_id") == true) {
+            val staleId = savedConsentRequestId
+            val staleMode = DebugQaMode.entries.firstOrNull { it.code == savedConsentModeCode } ?: selectedMode
+            savedConsentRequestId = null
+            savedConsentModeCode = null
+            DebugQaRunnerService.recordUnreservedPreRunOutcome(
+                context = this,
+                mode = staleMode,
+                requestId = staleId,
+                exportGrant = DebugQaDownloadExport.grant(this),
+                state = "INTERRUPTED",
+                reason = "stale_android_consent_process_restarted",
+                stage = "android_observation_approval",
+                admissionOutcome = DebugQaAdmissionOutcome.DENIED,
+            )
+            status.text = "Pending QA interrupted after process restart. No run was resumed."
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                DebugQaRunnerStatusStore.updates.collect { current ->
+                    resultSummary.text = current?.description() ?: withContext(Dispatchers.IO) {
+                        DebugQaRunnerStatusStore.savedDescription(this@LocalCaptureQaActivity)
+                    }
+                }
+            }
+        }
     }
-    override fun onResume() { super.onResume(); if (::status.isInitialized && job?.isActive != true) refreshSetup() }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("qa_selected_mode", selectedMode?.code)
+        outState.putString("qa_process", DebugQaRunnerService.processId)
+        consentGeneration?.let { outState.putLong("qa_consent_generation", it) }
+        pendingRequest?.let {
+            outState.putString("qa_request_id", it.id)
+            outState.putString("qa_request_mode", it.mode.code)
+        }
+        super.onSaveInstanceState(outState)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record("debug_qa_activity", "resumed")
+        if (::status.isInitialized && job?.isActive != true && DebugQaRunnerStatusStore.updates.value == null)
+            refreshSetup()
+    }
+
+    override fun onStop() {
+        // Do not stop the independent OS-approved projection when Chrome opens.
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record("debug_qa_activity", "stopped")
+        super.onStop()
+    }
     override fun onDestroy() {
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record(
+            "debug_qa_activity", if (job?.isActive == true) "destroyed_with_run" else "destroyed_idle")
+        if (!isChangingConfigurations || consentGeneration == null) {
+            val gate = MediaProjectionCaptureService.consentGate
+            if (gate.generation == consentGeneration) gate.onCancelled()
+            pendingRequest?.let { reject(it, "CANCELLED", "consent_screen_closed") }
+        }
+        // The read-only capture remains Activity-owned. Do not cancel the
+        // independently approved foreground INPUT QA service here.
         job?.cancel(); previewIfReadyClear(); super.onDestroy()
     }
     private fun refreshSetup() {
         if (!::status.isInitialized) return
-        status.text = "Setup: ${CaptureQaAcceptance.setup(this)}; observation=${ProjectionImageTransport.active()?.screenObservationAllowed() == true}; qa_busy=${CaptureQaAcceptance.isRunning()}"
+        val sessionState = AgentService.instance?.remoteControlSession?.state?.name ?: "unavailable"
+        status.text = "Setup: ${CaptureQaAcceptance.setup(this)}; observation=${ProjectionImageTransport.active()?.screenObservationAllowed() == true}; control_session=$sessionState; qa_busy=${CaptureQaAcceptance.isRunning()}; independent_input_qa=${DebugQaRunnerService.isRunning()}; samsung_ime_selected=${DebugImeInteractConsent.selectedSamsungIme(this)}; ime_interact_explicit=${DebugImeInteractConsent.explicitlyGranted(this)}"
     }
-    private fun requestObservation() {
-        if (Build.VERSION.SDK_INT < 34) { status.text = "Android 14+ required"; return }
+    private fun requestObservation(request: DebugQaRunRequest? = null): Boolean {
+        if (consentGeneration != null || (request == null && DebugQaRunnerService.isBusy())) {
+            status.text = "Busy · finish the current QA request or Android approval first."
+            return false
+        }
+        if (Build.VERSION.SDK_INT < 34) { status.text = "Android 14+ required"; return false }
         val gate = MediaProjectionCaptureService.consentGate
         if (gate.state == ProjectionConsentState.Consumed) {
             status.text = "Stop existing sharing using the SYSTEM sharing indicator first; this screen never upgrades a live share."
-            return
+            return false
         }
-        if (!gate.onRequestStarted(screenObservation = true)) { status.text = "Existing approval round preserved"; return }
-        try {
-            consent.launch(getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay()))
-        } catch (_: Exception) { gate.onCancelled(); status.text = "Android approval request unavailable" }
+        if (!gate.onRequestStarted(screenObservation = true)) {
+            status.text = "Existing approval round preserved"; return false
+        }
+        return try {
+            consentGeneration = gate.generation
+            pendingRequest = request
+            request?.let {
+                DebugQaRunnerService.admission.waitForConsent(it, gate.generation)
+                DebugQaRunnerService.audit(it, "WAITING", "android_observation_approval")
+                DebugQaRunnerStatusStore.publish(this, DebugQaStatus(it, "WAITING", "android_observation_approval"))
+            }
+            consent.launch(getSystemService(MediaProjectionManager::class.java)
+                .createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay()))
+            true
+        } catch (_: Exception) {
+            consentGeneration = null
+            pendingRequest = null
+            gate.onCancelled()
+            status.text = "Android approval request unavailable"
+            false
+        }
     }
     private fun selectedFixture() = CaptureQaAcceptance.fixtures[fixture.selectedItemPosition]
     private fun selectedScope() = CaptureQaAcceptance.scopes[scope.selectedItemPosition]
     private fun arm() {
-        if (job?.isActive == true) return
+        if (job?.isActive == true || DebugQaRunnerService.isBusy() || consentGeneration != null) {
+            status.text = "Busy · finish the current QA request or Android approval first."
+            return
+        }
         val pkg = selectedFixture(); val mode = selectedScope(); val saveImage = save.isChecked
         previewIfReadyClear(); report.text = "New run requested; previous evidence is not this run."
         guardedButtons.forEach { it.isEnabled = false }; fixture.isEnabled = false; scope.isEnabled = false; save.isEnabled = false
@@ -156,6 +354,213 @@ class LocalCaptureQaActivity : ComponentActivity() {
                 }
             }
         }
+    }
+    private fun showOneStopResult() {
+        val checkpoint = DebugOneStopQa.lastResult(this)
+        val batch = DebugOneStopQa.lastBatchResult(this)
+        val runnerStatus = DebugQaRunnerStatusStore.savedStatusJson(this)
+        report.text = if (checkpoint == null && batch == null && runnerStatus == null)
+            "No matching-source saved Debug QA checkpoint."
+            else "PRIVATE DEBUG QA HISTORY; stage events and causal status are evidence, not input success.\n" +
+                "Batch: " + (batch?.toString() ?: "none") + "\nLast run: " +
+                (checkpoint?.toString() ?: "none") +
+                (runnerStatus?.let { "\nRunner status: $it" } ?: "")
+    }
+
+    /** Explicit local export only: no pixels, user text, URLs or native node data.
+     * Debug private files remain separate from the production package. */
+    private fun shareOneStopJson() {
+        if (DebugQaRunnerService.isRunning()) {
+            status.text = "QA still running; sharing is available after the batch finishes."
+            return
+        }
+        val run = DebugOneStopQa.lastResult(this)
+        val batch = DebugOneStopQa.lastBatchResult(this)
+        val runnerStatus = DebugQaRunnerStatusStore.savedStatusJson(this)
+        if (run == null && batch == null && runnerStatus == null) {
+            report.text = "No saved same-source Debug QA evidence to share."
+            return
+        }
+        try {
+            val exports = File(cacheDir, "capture-qa/exports").apply { mkdirs() }
+            val file = File(exports, "debug-qa-${UUID.randomUUID()}.json")
+            file.writeText(buildJsonObject {
+                put("format", "debug_qa_redacted_v1")
+                run?.let { put("last_run", it) }
+                batch?.let { put("last_batch", it) }
+                runnerStatus?.let { put("runner_status", it) }
+            }.toString(), Charsets.UTF_8)
+            val uri = FileProvider.getUriForFile(this, "$packageName.captureqa", file)
+            startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = ClipData.newRawUri("Redacted Debug QA evidence", uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }, "Share Debug QA diagnostic JSON"))
+            status.text = "Redacted JSON prepared for user-selected sharing."
+        } catch (_: Exception) {
+            status.text = "Debug QA JSON sharing unavailable; no export claimed."
+        }
+    }
+
+    private fun confirmRun() {
+        val mode = selectedMode ?: run {
+            status.text = "Select one Debug QA mode first."
+            return
+        }
+        val details = if (mode.diagnosticOnly) {
+            "Open Chrome for read-only keyboard evidence. No keyboard keys will be pressed."
+        } else {
+            "Open Chrome and attempt the six-key benchmark only in a verified new blank editor. " +
+                "Only a fully verified pass can start another repetition, up to three total."
+        }
+        AlertDialog.Builder(this).setTitle(mode.label).setMessage(details)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Confirm this mode") { _, _ ->
+                val request = DebugQaRunRequest(
+                    mode = mode,
+                    exportGrant = DebugQaDownloadExport.grant(this),
+                    confirmedAtEpochMs = System.currentTimeMillis(),
+                    confirmedAtElapsedMs = SystemClock.elapsedRealtime(),
+                )
+                val admission = DebugQaRunnerService.admission.reserve(request,
+                    CaptureQaAcceptance.isRunning() || consentGeneration != null)
+                DebugQaRunnerService.audit(request, admission.name, "local_confirmation")
+                if (admission != DebugQaAdmissionOutcome.ACCEPTED) {
+                    DebugQaRunnerService.recordUnreservedPreRunOutcome(
+                        context = this,
+                        mode = mode,
+                        requestId = request.id,
+                        exportGrant = request.exportGrant,
+                        state = admission.name,
+                        reason = "admission_${admission.name.lowercase()}",
+                        stage = "local_confirmation",
+                        admissionOutcome = admission,
+                    )
+                    status.text = "${admission.name} · ${mode.label} · Request ${request.id}"
+                } else if (DebugQaRunAdmission.blocksForActiveControlSession(
+                        AgentService.instance?.remoteControlSession?.state)) {
+                    reject(request, "BUSY", "external_control_session_still_active", stage = "local_confirmation",
+                        admissionOutcome = DebugQaAdmissionOutcome.BUSY)
+                } else if (!DebugImeInteractConsent.selectedSamsungIme(this)) {
+                    reject(request, "DENIED", "samsung_ime_not_selected", stage = "local_confirmation")
+                } else if (DebugImeInteractConsent.explicitlyGranted(this)) {
+                    continueConfirmed(request)
+                } else {
+                    requestImeConsent(request)
+                }
+            }.show()
+    }
+
+    private fun requestImeConsent(request: DebugQaRunRequest) {
+        pendingRequest = request
+        DebugQaRunnerStatusStore.publish(this, DebugQaStatus(request, "WAITING", "samsung_ime_approval"))
+        AlertDialog.Builder(this)
+            .setTitle("Samsung keyboard interaction · Debug only")
+            .setMessage("Allow narrowly scoped Samsung keyboard interaction for ${request.mode.label}. " +
+                "Android accessibility and screen-sharing approvals remain separate. You can revoke this grant here.")
+            .setNegativeButton("Deny") { _, _ -> denyImeConsent(request) }
+            .setOnCancelListener { denyImeConsent(request) }
+            .setPositiveButton("Allow for Debug QA") { _, _ ->
+                pendingRequest = null
+                if (DebugImeInteractConsent.updateFromLocalConsent(this, grant = true)) continueConfirmed(request)
+                else reject(request, "DENIED", "samsung_ime_grant_refused")
+            }.show()
+    }
+
+    private fun denyImeConsent(request: DebugQaRunRequest) {
+        pendingRequest = null
+        reject(request, "DENIED", "samsung_ime_approval_denied")
+    }
+
+    private fun continueConfirmed(request: DebugQaRunRequest) {
+        if (DebugQaRunnerService.admission.current != request) return
+        if (ProjectionImageTransport.active()?.screenObservationAllowed() == true) {
+            launchQa(DebugQaApprovedRun(
+                request = request,
+                consent = DebugQaConsent.EXISTING_OS_APPROVAL,
+                projectionGeneration = MediaProjectionCaptureService.consentGate.generation,
+                approvedAtEpochMs = System.currentTimeMillis(),
+                approvedAtElapsedMs = SystemClock.elapsedRealtime(),
+            ))
+        } else if (!requestObservation(request)) {
+            reject(request, "DENIED", "android_consent_request_unavailable")
+        }
+    }
+
+    private fun launchQa(run: DebugQaApprovedRun) {
+        val request = run.request
+        if (DebugQaRunnerService.admission.current != request) return
+        if (isDestroyed || isFinishing) {
+            reject(request, "CANCELLED", "activity_destroyed_before_launch", stage = "chrome_launch", consent = run.consent)
+            return
+        }
+        if (CaptureQaAcceptance.isRunning()) {
+            reject(request, "BUSY", "capture_qa_busy", stage = "chrome_launch",
+                admissionOutcome = DebugQaAdmissionOutcome.BUSY, consent = run.consent)
+            return
+        }
+        if (DebugQaRunAdmission.blocksForActiveControlSession(
+                AgentService.instance?.remoteControlSession?.state)) {
+            reject(request, "BUSY", "external_control_session_still_active", stage = "chrome_launch",
+                admissionOutcome = DebugQaAdmissionOutcome.BUSY, consent = run.consent)
+            return
+        }
+        // Android restricts background launches; the visible QA Activity opens Chrome.
+        val chrome = packageManager.getLaunchIntentForPackage("com.android.chrome")
+        if (chrome == null) {
+            reject(request, "DENIED", "chrome_launch_unavailable", stage = "chrome_launch", consent = run.consent)
+            return
+        }
+        previewIfReadyClear()
+        if (!DebugQaRunnerService.start(this, run)) {
+            reject(request, "FAILED", "foreground_service_request_failed", stage = "foreground_service_start",
+                consent = run.consent)
+            return
+        }
+        try {
+            startActivity(chrome)
+            DebugQaRunnerStatusStore.publish(this, DebugQaStatus(request, "WAITING", "service_admission"))
+        } catch (_: Exception) {
+            reject(request, "FAILED", "chrome_launch_failed", stage = "chrome_launch", consent = run.consent)
+        }
+    }
+
+    private fun reject(
+        request: DebugQaRunRequest,
+        state: String,
+        reason: String,
+        stage: String = reason,
+        admissionOutcome: DebugQaAdmissionOutcome = DebugQaAdmissionOutcome.DENIED,
+        consent: DebugQaConsent? = null,
+    ) {
+        DebugQaRunnerService.reject(this, request, state, reason, stage, admissionOutcome, consent)
+        status.text = "$state · ${reason.replace('_', ' ')}"
+    }
+
+    private fun refreshExportSetting() {
+        exportSetting.text = if (DebugQaDownloadExport.grant(this) != null) {
+            "Revoke automatic redacted JSON export"
+        } else "Allow automatic redacted JSON export"
+    }
+
+    private fun changeExportSetting() {
+        if (DebugQaDownloadExport.grant(this) != null) {
+            DebugQaDownloadExport.setEnabled(this, false)
+            refreshExportSetting()
+            status.text = "Automatic Downloads export revoked. Previously saved files remain in Downloads/ClosePawQA."
+            return
+        }
+        AlertDialog.Builder(this).setTitle("Save redacted QA JSON to shared Downloads?")
+            .setMessage("Future confirmed runs can save mode, status and benchmark evidence to Downloads/ClosePawQA. " +
+                "The JSON contains no screenshots, user input or URLs. Other apps with access to Downloads may read it. " +
+                "This setting persists and can be revoked here.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Allow future exports") { _, _ ->
+                DebugQaDownloadExport.setEnabled(this, true)
+                refreshExportSetting()
+                status.text = "Automatic redacted JSON export enabled for future confirmed runs."
+            }.show()
     }
     private fun readResult(runner: String): Pair<File, JsonObject>? {
         val dir = CaptureQaAcceptance.directory(this, runner, selectedFixture(), selectedScope())
@@ -225,11 +630,26 @@ class LocalCaptureQaActivity : ComponentActivity() {
         }, "Share selected historical QA evidence"))
     }
     private fun clear() {
+        if (DebugQaRunnerService.isBusy()) {
+            status.text = "Guarded Debug QA active; stop the local run before deleting stored results."
+            return
+        }
         try {
             when (CaptureQaAcceptance.deleteEvidence(this, ::revokeAndDelete)) {
                 null -> status.text = "QA engine busy; delete refused. Stop that run first."
                 false -> status.text = "Evidence deletion incomplete; no cleanup success claimed."
-                true -> { previewIfReadyClear(); report.text = "QA evidence deleted while the shared engine was idle." }
+                true -> {
+                    val privateResultsDeleted = File(filesDir, "debug-qa").let {
+                        !it.exists() || it.deleteRecursively()
+                    }
+                    DebugQaDownloadExport.setEnabled(this, false)
+                    refreshExportSetting()
+                    DebugQaRunnerStatusStore.clear()
+                    previewIfReadyClear()
+                    report.text = if (privateResultsDeleted)
+                        "Capture and persistent Debug QA evidence deleted while both runners were idle."
+                    else "Capture evidence deleted; persistent Debug QA evidence deletion incomplete."
+                }
             }
         } catch (_: Exception) { status.text = "Evidence deletion failed; no cleanup success claimed." }
     }

@@ -49,7 +49,7 @@ class VisualKeyMapSequenceTest {
         var initialProofAgeMs = 0L
         var wrongInitialProofId = false
         var onNextSequenceCapture: (() -> Unit)? = null
-        private var windowVersion = 1L
+        var windowVersion = 1L
         private var rejectedProofId: String? = null
         var keyOffset = 0
         var keyNodeIdRevision = 0
@@ -607,6 +607,42 @@ class VisualKeyMapSequenceTest {
         assertEquals(3, f.currentEditor().selectionEnd)
     }
 
+    @Test fun confirmedFourOfSixCanResumeOnlyUnsentSuffixWithinExhaustedGoalBudget() = runBlocking {
+        // Reproduce the Galaxy v0.1.144 4/6 split with three no-touch
+        // recovery charges. This fixture has *known* editor identity, text,
+        // caret, IME layout, and native proof. Never blindly replay the prefix.
+        val f = pendingFifth(refusals = 3)
+        val interrupted = f.run("가 나 ")
+        assertFalse(interrupted.summary, interrupted.success)
+        assertEquals(JsonPrimitive(4), interrupted.data["completed_keys"])
+        assertEquals(JsonPrimitive(3), interrupted.data["pre_touch_retries"])
+        assertEquals(JsonPrimitive(false), interrupted.data["outcome_unknown"])
+        assertEquals("가 ㄴ", f.currentEditor().text)
+        assertEquals(3, f.currentEditor().selectionEnd)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+
+        // A supplied prefix which differs from the confirmed editor state
+        // must refuse before even one additional physical key is sent.
+        val wrongPrefix = f.run("ㅏ ", prefix = "가 ㄷ")
+        assertEquals("keyboard_sequence_prefix_unverified", wrongPrefix.summary)
+        assertEquals(JsonPrimitive(false), wrongPrefix.data["action_attempted"])
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ"), f.touched)
+
+        // The remaining suffix is a separate, explicitly prefix-verified
+        // action under the SAME session/consent and the SAME exhausted ledger.
+        // It may proceed only if its fresh native proof needs no further retry.
+        val resumed = f.run("ㅏ ", prefix = "가 ㄴ")
+        assertTrue("verified suffix: ${resumed.summary}", resumed.success)
+        assertEquals(JsonPrimitive(2), resumed.data["completed_keys"])
+        assertEquals(JsonPrimitive(0), resumed.data["pre_touch_retries"])
+        assertEquals(JsonPrimitive(3), resumed.data["recovery_budget_total"])
+        assertEquals(JsonPrimitive(false), resumed.data["outcome_unknown"])
+        assertEquals("가 나 ", f.currentEditor().text)
+        assertEquals(4, f.currentEditor().selectionStart)
+        assertEquals(4, f.currentEditor().selectionEnd)
+        assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), f.touched)
+    }
+
     @Test fun repeatedWindowRecertificationStillBlocksChangedEditorAndGesture() = runBlocking {
         for (change in listOf<Fixture.() -> Unit>(
             { replaceEditor() },
@@ -818,5 +854,54 @@ class VisualKeyMapSequenceTest {
         assertEquals(deliveredBefore + "ㄱ", f.touched)
         // A Korean final consonant composes into the preceding syllable ("바" + ㄱ = "박").
         assertEquals(HangulKeyComposer.append(prefix, "ㄱ"), f.currentEditor().text)
+    }
+
+    @Test fun preDispatchNativeRevalidationDisplayRefusalRecoversWithFreshGenerationAndNoReplay() = runBlocking {
+        for (reason in listOf("display_window_changed_during_capture", "display_window_changed_since_observation")) {
+            val base = Fixture()
+            var injected = 0
+            val port = object : ControlPort by base {
+                override suspend fun perform(frame: ControlFrame, input: JsonObject, node: ControlNode?): ControlEffect {
+                    if (injected == 0 && base.currentEditor().text == "가 ㄴ") {
+                        injected++
+                        base.windowVersion++
+                        return ControlEffect(false, false, reason)
+                    }
+                    return base.perform(frame, input, node)
+                }
+            }
+            val control = GenericControl(port, { true })
+            val obs = control.observe(includeImage = true, imageScope = "keyboard",
+                keyboardSequenceLabels = listOf("ㄱ", "ㅏ", "Space", "ㄴ"))
+            assertTrue(obs.summary, obs.success)
+            val obsData = obs.data
+            val nodes = obsData.getValue("nodes").jsonArray.map { it.jsonObject }
+            fun stepOf(label: String): JsonObject {
+                val n = nodes.single { it["keyboard_key"]?.jsonPrimitive?.contentOrNull == label }
+                val b = n.getValue("bounds").jsonPrimitive.content.split(' ').map { it.toInt() }
+                return buildJsonObject {
+                    put("label", label); put("node_id", n.getValue("node_id").jsonPrimitive.int)
+                    put("image_rect", JsonArray(b.map(::JsonPrimitive)))
+                }
+            }
+            val result = control.visualKeySequence(buildJsonObject {
+                put("session_id", base.session().id)
+                put("observation_id", obsData.getValue("observation_id").jsonPrimitive.content)
+                put("visual_id", obsData.getValue("visual").jsonObject.getValue("visual_id").jsonPrimitive.content)
+                put("visual_target_confirmed", true)
+                put("text", "가 나 ")
+                put("reuse_key_map", false)
+                put("steps", JsonArray(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space").map(::stepOf)))
+            })
+            assertTrue("$reason: ${result.summary}", result.success)
+            assertEquals(1, injected)
+            assertEquals(JsonPrimitive(1), result.data["display_window_rechecks"])
+            assertEquals(JsonPrimitive(5), result.data["display_window_recheck_key"])
+            assertEquals(JsonPrimitive(6), result.data["completed_keys"])
+            assertEquals(JsonPrimitive(false), result.data["outcome_unknown"])
+            assertEquals("가 나 ", base.currentEditor().text)
+            assertEquals(4, base.currentEditor().selectionEnd)
+            assertEquals(listOf("ㄱ", "ㅏ", "Space", "ㄴ", "ㅏ", "Space"), base.touched)
+        }
     }
 }

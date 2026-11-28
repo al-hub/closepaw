@@ -462,13 +462,16 @@ class AgentService : AccessibilityService() {
             if (remoteControlSession.state == ControlSession.State.ACTIVE) {
                 val type = if (event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED)
                     DisplayWindowChangeJournal.Type.WINDOWS_CHANGED else DisplayWindowChangeJournal.Type.WINDOW_STATE_CHANGED
+                val eventWindowId = event?.windowId ?: -1
+                val isOwnOverlay = eventWindowId >= 0 && ownsRemoteControlIndicatorWindow(eventWindowId)
                 remoteDisplayJournal.record(remoteDisplayChanges.version(), type,
                     DisplayWindowChangeJournal.ownerOf(event?.packageName?.toString(), packageName),
-                    eventWindowId = event?.windowId ?: -1,
+                    eventWindowId = eventWindowId,
                     windowChanges = if (event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED &&
                         Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) event.windowChanges else 0,
                     eventDisplayId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                        event?.displayId ?: -1 else -1)
+                        event?.displayId ?: -1 else -1,
+                    isControlOverlay = isOwnOverlay)
             }
         }
         // No node reads or text copying in the callback; events only wake the bounded observer.

@@ -125,8 +125,21 @@ internal object KeyboardEditorContinuity {
         if (!sameIdentity(fresh)) return false
         if (old.nativeEditorId != null || fresh.nativeEditorId != null)
             return old.nativeEditorId == fresh.nativeEditorId
-        if (old.resourceId.isNotEmpty())
-            return before.nodes.count(::sameIdentity) == 1 && after.nodes.count(::sameIdentity) == 1
+        if (old.resourceId.isNotEmpty()) {
+            // When platform uniqueId (API 33+) is unavailable, reject simultaneous duplicates
+            // and structural one-for-one replacements (changed parent, WebView ancestry, or
+            // vertical/disjoint bounds). Single-edge horizontal resize (e.g. Chrome URL bar
+            // showing/hiding the clear button on typing or Backspace) remains permitted.
+            // Two sequential OS nodes with 100% identical accessible metadata remain inherently
+            // indistinguishable without platform uniqueId.
+            if (before.nodes.count(::sameIdentity) != 1 || after.nodes.count(::sameIdentity) != 1) return false
+            if (old.webEditorContainer != fresh.webEditorContainer || old.parent != fresh.parent) return false
+            if (fresh.bounds == old.bounds) return true
+            val a = KeyboardImageFallbackPolicy.bounds(old.bounds) ?: return false
+            val b = KeyboardImageFallbackPolicy.bounds(fresh.bounds) ?: return false
+            return a.top == b.top && a.bottom == b.bottom && (a.left == b.left || a.right == b.right) &&
+                2L * (minOf(a.right, b.right) - maxOf(a.left, b.left)) >= maxOf(a.right - a.left, b.right - b.left)
+        }
         // Anonymous WebViews can expose no native unique ID. In that case
         // require the same owned WebView ancestry and tightly bounded geometry.
         if (old.webEditorContainer >= 0 || fresh.webEditorContainer >= 0) {

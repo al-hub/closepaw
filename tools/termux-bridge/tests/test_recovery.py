@@ -38,23 +38,41 @@ def pid(home):
     return json.loads((home / '.closepaw/bridge.pid').read_text())['pid']
 
 
-def test_supervisor_maintenance_does_not_bind_mcp_port(tmp_path, free_port):
+def test_supervisor_maintenance_does_not_bind_mcp_port(tmp_path):
     import socket
     from contextlib import ExitStack
-    # Keep MCP, tunnel health and control proxy ports occupied.
-    with ExitStack() as stack:
-        for offset in (2, 3, 4):
-            listener = stack.enter_context(socket.socket())
-            listener.bind(('127.0.0.1', free_port + offset))
-            listener.listen()
-        supervisor = launch_supervisor(tmp_path, free_port)
-        try:
-            wait_for_health(BridgeProcess(free_port, tmp_path, supervisor))
-            result = request_json(free_port + 5, 'GET', '/v1/maintenance/status')
-            assert result.status == 200
-            assert result.body['supervisor'] == 'running'
-        finally:
-            stop_process(supervisor)
+    # The ordinary free_port fixture only reserves the base briefly: its
+    # adjacent offsets can belong to another service. Select a complete free
+    # range before intentionally occupying the three MCP-related ports.
+    for _ in range(3):
+        with ExitStack() as stack:
+            base = stack.enter_context(socket.socket())
+            base.bind(('127.0.0.1', 0))
+            free_port = base.getsockname()[1]
+            if free_port > 65530:
+                continue
+            occupied = []
+            try:
+                for offset in (2, 3, 4, 5):
+                    listener = stack.enter_context(socket.socket())
+                    listener.bind(('127.0.0.1', free_port + offset))
+                    listener.listen()
+                    occupied.append(listener)
+            except OSError:
+                continue  # A genuinely busy neighboring port; choose another range.
+            # The supervisor must own +5 itself; keep +2..+4 reserved.
+            occupied[-1].close()
+            base.close()
+            supervisor = launch_supervisor(tmp_path, free_port)
+            try:
+                wait_for_health(BridgeProcess(free_port, tmp_path, supervisor))
+                result = request_json(free_port + 5, 'GET', '/v1/maintenance/status')
+                assert result.status == 200
+                assert result.body['supervisor'] == 'running'
+            finally:
+                stop_process(supervisor)
+            return
+    pytest.fail('no_free_contiguous_test_port_range')
 
 
 def test_killed_daemon_recovers_and_retains_pairing(tmp_path, free_port):

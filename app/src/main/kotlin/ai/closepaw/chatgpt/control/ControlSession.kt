@@ -5,6 +5,8 @@ import java.util.UUID
 /** User priority state machine. No Context, screen content, command queue or automatic replay. */
 internal class ControlSession(initial: String = "idle", private val persist: (String) -> Unit = {}) {
     enum class State { IDLE, ACTIVE, WAITING, PAUSED, REOBSERVING, ENDED }
+    /** Immutable ownership token bound to one exact ACTIVE session instance (ID + epoch). */
+    data class ActiveToken(val id: String, val epoch: Long)
     enum class UserAction(val id: String, val label: String) {
         ALLOW_SCREEN_SHARE("allow_screen_share", "공유를 허용하세요"),
         STOP_SCREEN_SHARE("stop_screen_share", "공유를 중지하세요"),
@@ -117,6 +119,32 @@ internal class ControlSession(initial: String = "idle", private val persist: (St
         shareRequestState = null
         visualSearchReserved = false
         transition(State.ACTIVE, "AI 제어 중")
+        return true
+    }
+
+    /** Atomically starts a new session and snapshots its immutable (id, epoch) under this monitor. */
+    @Synchronized fun startAndSnapshot(): ActiveToken? {
+        if (!start()) return null
+        return ActiveToken(id, epoch)
+    }
+
+    /** Exact active-token check under this monitor; rejects replacement IDs and same-ID epoch changes (pause/resume). */
+    @Synchronized fun isCurrentActive(token: ActiveToken?): Boolean =
+        token != null && explicit && state == State.ACTIVE && id == token.id && epoch == token.epoch
+
+    /**
+     * Linearization point for non-suspending PASS commit: validates exact (id, epoch, ACTIVE)
+     * under this monitor and executes [commit] atomically. Returns null if token is no longer current.
+     */
+    @Synchronized fun <T> commitIfCurrentActive(token: ActiveToken?, commit: () -> T): T? {
+        if (!isCurrentActive(token)) return null
+        return commit()
+    }
+
+    /** Atomic compare-and-end: terminates ONLY if [token] is still the live ACTIVE session. */
+    @Synchronized fun endIfCurrentActive(token: ActiveToken?): Boolean {
+        if (!isCurrentActive(token)) return false
+        end()
         return true
     }
     @Synchronized fun activateLegacy() {

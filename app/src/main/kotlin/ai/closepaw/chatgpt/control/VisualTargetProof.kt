@@ -54,6 +54,10 @@ internal data class VisualTargetProof(val image: ScreenImage, val pixelHash: Str
 /** At most two private screenshots, memory only. Retrieval rechecks live consent/
  * session and expiration; invalidation removes the old image. Never in task ledger. */
 internal data class EncodedVisualImage(val mimeType: String, val data: String)
+internal data class VisualCacheLookup(
+    val proof: VisualTargetProof? = null,
+    val failure: VisualSourceFailure? = null,
+)
 internal object VisualImageCache {
     private data class Entry(val proof: VisualTargetProof, val allowed: () -> Boolean, val imageEpoch: Long)
     private val images = linkedMapOf<String, Entry>()
@@ -76,6 +80,51 @@ internal object VisualImageCache {
             image.mimeType != "image/jpeg" || image.bytes.size !in 1..1_500_000) return null
         val data = java.util.Base64.getEncoder().encodeToString(image.bytes)
         return if (imageFor(result) === image) EncodedVisualImage(image.mimeType, data) else null
+    }
+    @Synchronized fun proofFor(id: String): VisualTargetProof? {
+        prune()
+        val entry = images[id] ?: return null
+        if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(entry.imageEpoch)) {
+            images.remove(id)
+            return null
+        }
+        return entry.proof
+    }
+    /**
+     * Resolves a live proof or preserves the structured [VisualSourceFailure] that caused
+     * eviction/revocation without ever disclosing evicted or revoked pixels.
+     * Consent revocation always takes precedence over [VisualSourceCondition.DISPLAY_WINDOW_CHANGED].
+     */
+    @Synchronized fun proofForOrFailure(
+        id: String,
+        fallbackProof: VisualTargetProof? = null,
+        stage: VisualSourceStage = VisualSourceStage.ACTION_VALIDATION,
+    ): VisualCacheLookup {
+        val prePrune = images[id]
+        prune()
+        val entry = images[id]
+        if (entry != null) {
+            if (!ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(entry.imageEpoch)) {
+                images.remove(id)
+                return VisualCacheLookup(
+                    failure = VisualSourceFailure(stage, VisualSourceCondition.IMAGE_CONSENT_CHANGED),
+                )
+            }
+            entry.proof.sourceFailure(stage)?.let { failure ->
+                images.remove(id)
+                return VisualCacheLookup(failure = failure)
+            }
+            return VisualCacheLookup(proof = entry.proof)
+        }
+        val inspected = prePrune?.proof ?: fallbackProof?.takeIf { it.id == id }
+        val failure = if (prePrune != null &&
+            !ai.closepaw.security.ImageRevocationAuthority.isConsentStillValid(prePrune.imageEpoch)
+        ) {
+            VisualSourceFailure(stage, VisualSourceCondition.IMAGE_CONSENT_CHANGED)
+        } else {
+            inspected?.sourceFailure(stage)
+        }
+        return VisualCacheLookup(proof = null, failure = failure)
     }
     @Synchronized fun imageFor(result: JsonObject): ScreenImage? {
         prune()

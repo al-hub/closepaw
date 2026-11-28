@@ -105,11 +105,13 @@ class MediaProjectionCaptureService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record("projection_lifecycle", "service_created")
         projectionManager = getSystemService(MediaProjectionManager::class.java)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP_SHARING) {
+            ai.closepaw.chatgpt.control.ControlDiagnostics.record("projection_lifecycle", "notification_stop_requested")
             val owner = sessionOwner
             if (owner != null) {
                 owner.stopSharingIfCurrent(sessionOwner, activeRound, intent.identifier) {
@@ -126,6 +128,7 @@ class MediaProjectionCaptureService : Service() {
         // independently user-approved session or reuse its one-shot OS token.
         if (projection != null) {
             Log.i(TAG, "Duplicate projection start ignored while session is active")
+            ai.closepaw.chatgpt.control.ControlDiagnostics.record("projection_lifecycle", "duplicate_start_ignored")
             return START_NOT_STICKY
         }
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Int.MIN_VALUE) ?: Int.MIN_VALUE
@@ -191,6 +194,7 @@ class MediaProjectionCaptureService : Service() {
             }
             startForegroundWithRequiredType(sessionId)
             Log.i(TAG, "MediaProjection consent round consumed; one-session mirror scope opened")
+            ai.closepaw.chatgpt.control.ControlDiagnostics.record("projection_lifecycle", "share_active")
         } catch (e: Exception) {
             Log.w(TAG, "getMediaProjection failed; failing closed", e)
             owner.runIfCurrent(sessionOwner) { revokeImageConsent() }
@@ -224,6 +228,8 @@ class MediaProjectionCaptureService : Service() {
                         if (projection !== newProjection) return@runIfCurrent
                         val scope = frameScope ?: return@runIfCurrent
                         if (scope.reader.width != width || scope.reader.height != height) {
+                            ai.closepaw.chatgpt.control.ControlDiagnostics.record(
+                                "projection_lifecycle", "content_resize_requires_reapproval")
                             // A resize invalidates coordinates and every in-flight bitmap.
                             // Require a new OS round instead of silently reusing geometry.
                             framePolicy?.invalidate()
@@ -238,6 +244,8 @@ class MediaProjectionCaptureService : Service() {
                     owner.runIfCurrent(sessionOwner) {
                         if (projection !== newProjection) return@runIfCurrent
                         Log.i(TAG, "MediaProjection.onStop: tearing down owning capture session")
+                        ai.closepaw.chatgpt.control.ControlDiagnostics.record(
+                            "projection_lifecycle", "os_or_user_projection_stop")
                         revokeImageConsent()
                         framePolicy?.invalidate()
                         mainHandler.post {
@@ -313,6 +321,8 @@ class MediaProjectionCaptureService : Service() {
 
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: final capture teardown")
+        ai.closepaw.chatgpt.control.ControlDiagnostics.record("projection_lifecycle",
+            if (projection == null) "service_destroyed_idle" else "service_destroyed_active")
         teardownCaptureResources()
         super.onDestroy()
     }
